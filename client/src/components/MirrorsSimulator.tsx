@@ -14,6 +14,14 @@ import { ITAOpticsTheory } from "@/content/optics/ita_optics_theory";
 
 type MirrorType = "concavo" | "convexo";
 
+type MirrorClassicCase =
+  | "beyondC"
+  | "atC"
+  | "betweenCF"
+  | "atF"
+  | "betweenFV"
+  | "convex";
+
 type ImageStatus = {
   label: string;
   description: string;
@@ -88,6 +96,7 @@ export const MirrorsSimulator: React.FC = () => {
 
   const imageSizeLabel = useMemo(() => {
     if (isImageAtInfinity) return "imprópria";
+
     const absA = Math.abs(magnification);
 
     if (Math.abs(absA - 1) < 0.03) return "igual";
@@ -130,6 +139,56 @@ export const MirrorsSimulator: React.FC = () => {
     setShowNotablePoints(true);
     setShowExtensions(true);
     setShowTable(true);
+  };
+
+  const applyClassicCase = (caseId: MirrorClassicCase) => {
+    const fAbs = focalMagnitude;
+
+    setShowRays(true);
+    setShowNotablePoints(true);
+    setShowExtensions(true);
+    setShowTable(true);
+
+    switch (caseId) {
+      case "beyondC":
+        setMirrorType("concavo");
+        setObjectDistance(clamp(2.6 * fAbs, 20, 300));
+        setObjectHeight(50);
+        break;
+
+      case "atC":
+        setMirrorType("concavo");
+        setObjectDistance(clamp(2 * fAbs, 20, 300));
+        setObjectHeight(50);
+        break;
+
+      case "betweenCF":
+        setMirrorType("concavo");
+        setObjectDistance(clamp(1.5 * fAbs, 20, 300));
+        setObjectHeight(50);
+        break;
+
+      case "atF":
+        setMirrorType("concavo");
+        setObjectDistance(clamp(fAbs, 20, 300));
+        setObjectHeight(50);
+        break;
+
+      case "betweenFV":
+        setMirrorType("concavo");
+        setObjectDistance(clamp(0.55 * fAbs, 20, 300));
+        setObjectHeight(50);
+        break;
+
+      case "convex":
+        setMirrorType("convexo");
+        setObjectDistance(clamp(2 * fAbs, 20, 300));
+        setObjectHeight(50);
+        break;
+
+      default:
+        break;
+    }
   };
 
   return (
@@ -223,6 +282,43 @@ export const MirrorsSimulator: React.FC = () => {
                   className="w-full"
                 />
               </ControlRow>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="mb-2 text-sm font-bold text-amber-900">
+                  Casos clássicos
+                </p>
+
+                <p className="mb-4 text-xs leading-relaxed text-amber-800">
+                  Clique em um caso para configurar automaticamente a posição do
+                  objeto.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <QuickCaseButton onClick={() => applyClassicCase("beyondC")}>
+                    Além de C
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("atC")}>
+                    Em C
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("betweenCF")}>
+                    Entre C e F
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("atF")}>
+                    Em F
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("betweenFV")}>
+                    Entre F e V
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("convex")}>
+                    Convexo
+                  </QuickCaseButton>
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <ToggleButton
@@ -374,7 +470,6 @@ export const MirrorsSimulator: React.FC = () => {
                     objectHeight={objectHeight}
                     imageDistance={imageDistance}
                     imageHeight={imageHeight}
-                    magnification={magnification}
                     isImageAtInfinity={isImageAtInfinity}
                     isVirtual={isVirtual}
                     showRays={showRays}
@@ -423,16 +518,37 @@ export const MirrorsSimulator: React.FC = () => {
                     "A",
                     isImageAtInfinity ? "∞" : formatNumber(magnification, 2),
                   ],
-                  ["natureza", isImageAtInfinity ? "imprópria" : isVirtual ? "virtual" : "real"],
+                  [
+                    "natureza",
+                    isImageAtInfinity
+                      ? "imprópria"
+                      : isVirtual
+                      ? "virtual"
+                      : "real",
+                  ],
                 ]}
               />
 
               <CalcMiniCard
                 title="Características"
                 values={[
-                  ["orientação", isImageAtInfinity ? "imprópria" : isUpright ? "direita" : "invertida"],
+                  [
+                    "orientação",
+                    isImageAtInfinity
+                      ? "imprópria"
+                      : isUpright
+                      ? "direita"
+                      : "invertida",
+                  ],
                   ["tamanho", imageSizeLabel],
-                  ["posição", isImageAtInfinity ? "infinito" : imageDistance > 0 ? "frente" : "atrás"],
+                  [
+                    "posição",
+                    isImageAtInfinity
+                      ? "infinito"
+                      : imageDistance > 0
+                      ? "frente"
+                      : "atrás",
+                  ],
                   ["caso", status.label],
                 ]}
               />
@@ -558,7 +674,6 @@ function MirrorDiagram({
   objectHeight,
   imageDistance,
   imageHeight,
-  magnification,
   isImageAtInfinity,
   isVirtual,
   showRays,
@@ -572,7 +687,6 @@ function MirrorDiagram({
   objectHeight: number;
   imageDistance: number;
   imageHeight: number;
-  magnification: number;
   isImageAtInfinity: boolean;
   isVirtual: boolean;
   showRays: boolean;
@@ -613,10 +727,6 @@ function MirrorDiagram({
 
   const objectX = distanceToX(p);
   const objectTipY = heightToY(objectHeight);
-
-  const finiteImageDistance = Number.isFinite(imageDistance)
-    ? imageDistance
-    : 5000;
 
   const displayImageDistance = Number.isFinite(imageDistance)
     ? clamp(imageDistance, -300, 380)
@@ -1130,6 +1240,24 @@ function ControlRow({
 
       {children}
     </div>
+  );
+}
+
+function QuickCaseButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
+    >
+      {children}
+    </button>
   );
 }
 
