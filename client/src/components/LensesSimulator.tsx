@@ -14,6 +14,14 @@ import { ITAOpticsTheory } from "@/content/optics/ita_optics_theory";
 
 type LensType = "convergente" | "divergente";
 
+type LensClassicCase =
+  | "beyond2F"
+  | "at2F"
+  | "betweenF2F"
+  | "atF"
+  | "betweenFO"
+  | "divergent";
+
 type ImageStatus = {
   label: string;
   description: string;
@@ -135,6 +143,51 @@ export const LensesSimulator: React.FC = () => {
     setShowTable(true);
   };
 
+  const applyClassicCase = (caseId: LensClassicCase) => {
+    const fAbs = focalMagnitude;
+
+    setShowRays(true);
+    setShowNotablePoints(true);
+    setShowExtensions(true);
+    setShowTable(true);
+    setObjectHeight(50);
+
+    switch (caseId) {
+      case "beyond2F":
+        setLensType("convergente");
+        setObjectDistance(clamp(2.6 * fAbs, 20, 300));
+        break;
+
+      case "at2F":
+        setLensType("convergente");
+        setObjectDistance(clamp(2 * fAbs, 20, 300));
+        break;
+
+      case "betweenF2F":
+        setLensType("convergente");
+        setObjectDistance(clamp(1.5 * fAbs, 20, 300));
+        break;
+
+      case "atF":
+        setLensType("convergente");
+        setObjectDistance(clamp(fAbs, 20, 300));
+        break;
+
+      case "betweenFO":
+        setLensType("convergente");
+        setObjectDistance(clamp(0.55 * fAbs, 20, 300));
+        break;
+
+      case "divergent":
+        setLensType("divergente");
+        setObjectDistance(clamp(2 * fAbs, 20, 300));
+        break;
+
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="w-full space-y-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
@@ -227,6 +280,43 @@ export const LensesSimulator: React.FC = () => {
                   className="w-full"
                 />
               </ControlRow>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="mb-2 text-sm font-bold text-amber-900">
+                  Casos clássicos
+                </p>
+
+                <p className="mb-4 text-xs leading-relaxed text-amber-800">
+                  Clique em um caso para configurar automaticamente a posição do
+                  objeto.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <QuickCaseButton onClick={() => applyClassicCase("beyond2F")}>
+                    Além de 2F
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("at2F")}>
+                    Em 2F
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("betweenF2F")}>
+                    Entre F e 2F
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("atF")}>
+                    Em F
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("betweenFO")}>
+                    Entre F e O
+                  </QuickCaseButton>
+
+                  <QuickCaseButton onClick={() => applyClassicCase("divergent")}>
+                    Divergente
+                  </QuickCaseButton>
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <ToggleButton
@@ -651,11 +741,6 @@ function LensDiagram({
 
   const lensTopY = 70;
   const lensBottomY = 390;
-
-  const rayParallelLensPoint = {
-    x: lensX,
-    y: objectTipY,
-  };
 
   const centralRayRightX = width - 55;
   const centralRaySlope = (axisY - objectTipY) / (lensX - objectX);
@@ -1187,6 +1272,24 @@ function ControlRow({
 
       {children}
     </div>
+  );
+}
+
+function QuickCaseButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
+    >
+      {children}
+    </button>
   );
 }
 
