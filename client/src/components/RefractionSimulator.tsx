@@ -25,6 +25,8 @@ type RefractionStatus = {
   className: string;
 };
 
+const SPEED_OF_LIGHT = 299_792_458;
+
 const MEDIA: OpticalMedium[] = [
   {
     id: "air",
@@ -64,6 +66,14 @@ const formatNumber = (value: number, digits = 2) => {
   });
 };
 
+const formatSpeed = (value: number) => {
+  if (!Number.isFinite(value)) return "—";
+
+  const scientific = value.toExponential(2).replace(".", ",");
+
+  return `${scientific} m/s`;
+};
+
 export const RefractionSimulator: React.FC = () => {
   const [medium1Id, setMedium1Id] = useState("air");
   const [medium2Id, setMedium2Id] = useState("water");
@@ -71,6 +81,7 @@ export const RefractionSimulator: React.FC = () => {
   const [showReflection, setShowReflection] = useState(true);
   const [showAngles, setShowAngles] = useState(true);
   const [showNormal, setShowNormal] = useState(true);
+  const [showCriticalMarker, setShowCriticalMarker] = useState(true);
 
   const medium1 = useMemo(
     () => MEDIA.find((medium) => medium.id === medium1Id) ?? MEDIA[0],
@@ -104,6 +115,25 @@ export const RefractionSimulator: React.FC = () => {
     if (n1 <= n2) return null;
     return radToDeg(Math.asin(n2 / n1));
   }, [n1, n2]);
+
+  const speed1 = useMemo(() => SPEED_OF_LIGHT / n1, [n1]);
+  const speed2 = useMemo(() => SPEED_OF_LIGHT / n2, [n2]);
+
+  const criticalStatus = useMemo(() => {
+    if (criticalAngle === null) {
+      return "Não existe ângulo crítico para essa passagem.";
+    }
+
+    if (angleIncidence > criticalAngle) {
+      return `θ₁ > θc, então ocorre reflexão total.`;
+    }
+
+    if (Math.abs(angleIncidence - criticalAngle) < 0.5) {
+      return `θ₁ está praticamente no ângulo crítico.`;
+    }
+
+    return `θ₁ < θc, então ainda existe raio refratado.`;
+  }, [angleIncidence, criticalAngle]);
 
   const status = useMemo<RefractionStatus>(() => {
     if (isTotalReflection) {
@@ -141,6 +171,16 @@ export const RefractionSimulator: React.FC = () => {
     };
   }, [n1, n2, isTotalReflection]);
 
+  const resetDefault = () => {
+    setMedium1Id("air");
+    setMedium2Id("water");
+    setAngleIncidence(45);
+    setShowReflection(true);
+    setShowAngles(true);
+    setShowNormal(true);
+    setShowCriticalMarker(true);
+  };
+
   return (
     <div className="w-full space-y-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
@@ -150,6 +190,7 @@ export const RefractionSimulator: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-900">
                 Controles da Refração
               </h3>
+
               <p className="mt-1 text-sm text-slate-600">
                 Ajuste os meios ópticos e o ângulo de incidência para visualizar
                 a Lei de Snell-Descartes.
@@ -220,6 +261,32 @@ export const RefractionSimulator: React.FC = () => {
                 />
               </ControlRow>
 
+              {criticalAngle !== null && (
+                <div
+                  className={`rounded-xl border p-4 ${
+                    isTotalReflection
+                      ? "border-red-200 bg-red-50"
+                      : "border-purple-200 bg-purple-50"
+                  }`}
+                >
+                  <p
+                    className={`text-sm font-bold ${
+                      isTotalReflection ? "text-red-900" : "text-purple-900"
+                    }`}
+                  >
+                    Ângulo crítico
+                  </p>
+
+                  <p
+                    className={`mt-2 text-xs leading-relaxed ${
+                      isTotalReflection ? "text-red-800" : "text-purple-800"
+                    }`}
+                  >
+                    θc = {formatNumber(criticalAngle, 2)}°. {criticalStatus}
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <ToggleButton
                   active={showReflection}
@@ -242,19 +309,21 @@ export const RefractionSimulator: React.FC = () => {
                   Normal
                 </ToggleButton>
 
+                <ToggleButton
+                  active={showCriticalMarker}
+                  onClick={() =>
+                    setShowCriticalMarker((previous) => !previous)
+                  }
+                >
+                  Crítico
+                </ToggleButton>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    setMedium1Id("air");
-                    setMedium2Id("water");
-                    setAngleIncidence(45);
-                    setShowReflection(true);
-                    setShowAngles(true);
-                    setShowNormal(true);
-                  }}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  onClick={resetDefault}
+                  className="col-span-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
                 >
-                  Padrão
+                  Restaurar padrão
                 </button>
               </div>
             </div>
@@ -290,6 +359,20 @@ export const RefractionSimulator: React.FC = () => {
               />
 
               <MetricCard
+                label="Velocidade no meio 1"
+                value={formatSpeed(speed1)}
+                description={`v₁ = c/n₁`}
+                valueClassName="text-blue-700"
+              />
+
+              <MetricCard
+                label="Velocidade no meio 2"
+                value={formatSpeed(speed2)}
+                description={`v₂ = c/n₂`}
+                valueClassName="text-indigo-700"
+              />
+
+              <MetricCard
                 label="Ângulo de incidência"
                 value={`θ₁ = ${formatNumber(angleIncidence, 2)}°`}
               />
@@ -321,7 +404,7 @@ export const RefractionSimulator: React.FC = () => {
                 description={
                   criticalAngle === null
                     ? "Só existe quando a luz vai de um meio mais refringente para um menos refringente."
-                    : "Acima desse ângulo, ocorre reflexão total interna."
+                    : criticalStatus
                 }
                 valueClassName={
                   criticalAngle === null ? "text-slate-700" : "text-purple-700"
@@ -337,9 +420,11 @@ export const RefractionSimulator: React.FC = () => {
               <h4 className="text-base font-bold text-slate-900">
                 Visualização da Refração
               </h4>
+
               <p className="mt-1 text-sm text-slate-500">
                 O raio incidente chega à interface. Parte reflete, parte refrata,
-                exceto quando a física resolve fechar a porta e fazer reflexão total.
+                exceto quando a física resolve fechar a porta e fazer reflexão
+                total.
               </p>
             </div>
 
@@ -358,6 +443,7 @@ export const RefractionSimulator: React.FC = () => {
                     showReflection={showReflection}
                     showAngles={showAngles}
                     showNormal={showNormal}
+                    showCriticalMarker={showCriticalMarker}
                   />
                 </div>
               </div>
@@ -403,22 +489,25 @@ export const RefractionSimulator: React.FC = () => {
               />
 
               <CalcMiniCard
-                title="Leitura física"
+                title="Velocidade da luz"
                 values={[
-                  ["n₂ > n₁", n2 > n1 ? "sim" : "não"],
-                  ["n₂ < n₁", n2 < n1 ? "sim" : "não"],
-                  ["aproxima da normal", !isTotalReflection && n2 > n1 ? "sim" : "não"],
-                  ["reflexão total", isTotalReflection ? "sim" : "não"],
+                  ["v₁ = c/n₁", formatSpeed(speed1)],
+                  ["v₂ = c/n₂", formatSpeed(speed2)],
+                  ["meio mais lento", n1 > n2 ? medium1.name : medium2.name],
+                  ["meio mais rápido", n1 < n2 ? medium1.name : medium2.name],
                 ]}
               />
 
               <CalcMiniCard
-                title="Velocidade relativa"
+                title="Leitura física"
                 values={[
-                  ["v ∝ 1/n", "quanto maior n, menor v"],
-                  ["meio mais lento", n1 > n2 ? medium1.name : medium2.name],
-                  ["meio mais rápido", n1 < n2 ? medium1.name : medium2.name],
-                  ["desvio", n1 === n2 ? "nulo" : "existe"],
+                  ["n₂ > n₁", n2 > n1 ? "sim" : "não"],
+                  ["n₂ < n₁", n2 < n1 ? "sim" : "não"],
+                  [
+                    "aproxima da normal",
+                    !isTotalReflection && n2 > n1 ? "sim" : "não",
+                  ],
+                  ["reflexão total", isTotalReflection ? "sim" : "não"],
                 ]}
               />
             </div>
@@ -496,12 +585,28 @@ export const RefractionSimulator: React.FC = () => {
               />
 
               <FormulaSection
-                title="Interpretação"
+                title="Velocidade da luz no meio"
                 formulas={[
                   String.raw`n = \frac{c}{v}`,
+                  String.raw`v = \frac{c}{n}`,
+                  String.raw`v_1 = \frac{3{,}00\cdot 10^8}{${formatNumber(
+                    n1,
+                    2
+                  )}} \approx ${formatNumber(speed1 / 100000000, 3)}\cdot 10^8\,\text{m/s}`,
+                  String.raw`v_2 = \frac{3{,}00\cdot 10^8}{${formatNumber(
+                    n2,
+                    2
+                  )}} \approx ${formatNumber(speed2 / 100000000, 3)}\cdot 10^8\,\text{m/s}`,
+                ]}
+              />
+
+              <FormulaSection
+                title="Interpretação"
+                formulas={[
                   String.raw`\text{Maior índice de refração } \Rightarrow \text{ menor velocidade da luz no meio.}`,
                   String.raw`n_2 > n_1 \Rightarrow \text{ raio aproxima da normal.}`,
                   String.raw`n_2 < n_1 \Rightarrow \text{ raio afasta da normal.}`,
+                  String.raw`\theta_1 > \theta_c \Rightarrow \text{ reflexão total interna.}`,
                 ]}
               />
             </div>
@@ -530,6 +635,7 @@ function RefractionDiagram({
   showReflection,
   showAngles,
   showNormal,
+  showCriticalMarker,
 }: {
   n1: number;
   n2: number;
@@ -542,6 +648,7 @@ function RefractionDiagram({
   showReflection: boolean;
   showAngles: boolean;
   showNormal: boolean;
+  showCriticalMarker: boolean;
 }) {
   const width = 900;
   const height = 460;
@@ -569,6 +676,11 @@ function RefractionDiagram({
     angleRefraction === null
       ? ""
       : arcPath(centerX, interfaceY, 62, 90, 90 - angleRefraction);
+
+  const criticalArc =
+    criticalAngle === null
+      ? ""
+      : arcPath(centerX, interfaceY, 105, -90, -90 - criticalAngle);
 
   return (
     <svg
@@ -610,6 +722,17 @@ function RefractionDiagram({
         >
           <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
         </marker>
+
+        <marker
+          id="arrow-purple"
+          markerWidth="10"
+          markerHeight="7"
+          refX="9"
+          refY="3.5"
+          orient="auto"
+        >
+          <polygon points="0 0, 10 3.5, 0 7" fill="#a855f7" />
+        </marker>
       </defs>
 
       <rect x="0" y="0" width={width} height={interfaceY} fill="#0f172a" />
@@ -638,7 +761,13 @@ function RefractionDiagram({
         n₁ = {formatNumber(n1, 2)}
       </text>
 
-      <text x="24" y={interfaceY + 34} fill="#e5e7eb" fontSize="16" fontWeight="700">
+      <text
+        x="24"
+        y={interfaceY + 34}
+        fill="#e5e7eb"
+        fontSize="16"
+        fontWeight="700"
+      >
         Meio 2: {medium2Name}
       </text>
 
@@ -659,8 +788,48 @@ function RefractionDiagram({
             opacity="0.65"
           />
 
-          <text x={centerX + 12} y="55" fill="#cbd5e1" fontSize="13" fontWeight="700">
+          <text
+            x={centerX + 12}
+            y="55"
+            fill="#cbd5e1"
+            fontSize="13"
+            fontWeight="700"
+          >
             normal
+          </text>
+        </>
+      )}
+
+      {showCriticalMarker && criticalAngle !== null && (
+        <>
+          <path
+            d={criticalArc}
+            fill="none"
+            stroke="#a855f7"
+            strokeWidth="3"
+            strokeDasharray="6 6"
+          />
+
+          <line
+            x1={centerX}
+            y1={interfaceY}
+            x2={centerX - rayLength * Math.sin(degToRad(criticalAngle))}
+            y2={interfaceY - rayLength * Math.cos(degToRad(criticalAngle))}
+            stroke="#a855f7"
+            strokeWidth="2"
+            strokeDasharray="6 8"
+            markerEnd="url(#arrow-purple)"
+            opacity="0.75"
+          />
+
+          <text
+            x={centerX - 165}
+            y={interfaceY - 112}
+            fill="#d8b4fe"
+            fontSize="13"
+            fontWeight="800"
+          >
+            θc = {formatNumber(criticalAngle, 1)}°
           </text>
         </>
       )}
@@ -740,10 +909,10 @@ function RefractionDiagram({
       {isTotalReflection && (
         <g>
           <rect
-            x={centerX - 150}
-            y={height - 72}
-            width="300"
-            height="38"
+            x={centerX - 170}
+            y={height - 78}
+            width="340"
+            height="46"
             rx="12"
             fill="rgba(239, 68, 68, 0.16)"
             stroke="#ef4444"
@@ -751,7 +920,7 @@ function RefractionDiagram({
 
           <text
             x={centerX}
-            y={height - 48}
+            y={height - 58}
             textAnchor="middle"
             fill="#fecaca"
             fontSize="15"
@@ -759,13 +928,30 @@ function RefractionDiagram({
           >
             REFLEXÃO TOTAL INTERNA
           </text>
+
+          <text
+            x={centerX}
+            y={height - 41}
+            textAnchor="middle"
+            fill="#fecaca"
+            fontSize="12"
+            fontWeight="700"
+          >
+            θ₁ ultrapassou o ângulo crítico
+          </text>
         </g>
       )}
 
       {showAngles && (
         <>
           <path d={incidentArc} fill="none" stroke="#facc15" strokeWidth="3" />
-          <text x={centerX - 82} y={interfaceY - 55} fill="#facc15" fontSize="14" fontWeight="700">
+          <text
+            x={centerX - 82}
+            y={interfaceY - 55}
+            fill="#facc15"
+            fontSize="14"
+            fontWeight="700"
+          >
             θ₁ = {formatNumber(angleIncidence, 1)}°
           </text>
 
@@ -810,29 +996,29 @@ function RefractionDiagram({
       )}
 
       <rect
-        x={width - 270}
+        x={width - 282}
         y="24"
-        width="240"
-        height={criticalAngle === null ? 108 : 132}
+        width="252"
+        height={criticalAngle === null ? 128 : 154}
         rx="16"
         fill="rgba(15, 23, 42, 0.82)"
         stroke="#334155"
       />
 
-      <text x={width - 250} y="52" fill="#f8fafc" fontSize="14" fontWeight="800">
+      <text x={width - 260} y="52" fill="#f8fafc" fontSize="14" fontWeight="800">
         Diagnóstico
       </text>
 
-      <text x={width - 250} y="78" fill="#cbd5e1" fontSize="13">
+      <text x={width - 260} y="78" fill="#cbd5e1" fontSize="13">
         n₁senθ₁ = {formatNumber(n1 * Math.sin(degToRad(angleIncidence)), 4)}
       </text>
 
-      <text x={width - 250} y="100" fill="#cbd5e1" fontSize="13">
+      <text x={width - 260} y="100" fill="#cbd5e1" fontSize="13">
         senθ₂ = {formatNumber((n1 * Math.sin(degToRad(angleIncidence))) / n2, 4)}
       </text>
 
       <text
-        x={width - 250}
+        x={width - 260}
         y="122"
         fill={isTotalReflection ? "#fca5a5" : "#86efac"}
         fontSize="13"
@@ -842,9 +1028,21 @@ function RefractionDiagram({
       </text>
 
       {criticalAngle !== null && (
-        <text x={width - 250} y="144" fill="#c4b5fd" fontSize="13" fontWeight="700">
-          θc = {formatNumber(criticalAngle, 2)}°
-        </text>
+        <>
+          <text x={width - 260} y="144" fill="#c4b5fd" fontSize="13" fontWeight="700">
+            θc = {formatNumber(criticalAngle, 2)}°
+          </text>
+
+          <text
+            x={width - 260}
+            y="166"
+            fill={isTotalReflection ? "#fca5a5" : "#cbd5e1"}
+            fontSize="12"
+            fontWeight="700"
+          >
+            {angleIncidence > criticalAngle ? "θ₁ > θc" : "θ₁ < θc"}
+          </text>
+        </>
       )}
     </svg>
   );
