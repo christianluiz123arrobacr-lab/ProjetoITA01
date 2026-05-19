@@ -188,6 +188,20 @@ export const LensesSimulator: React.FC = () => {
     }
   };
 
+  const applyLensPower = (power: number) => {
+    if (Math.abs(power) < 1e-9) return;
+
+    const focalInMeters = 1 / Math.abs(power);
+    const focalInCentimeters = clamp(focalInMeters * 100, 20, 150);
+
+    setLensType(power > 0 ? "convergente" : "divergente");
+    setFocalMagnitude(focalInCentimeters);
+    setShowRays(true);
+    setShowNotablePoints(true);
+    setShowExtensions(true);
+    setShowTable(true);
+  };
+
   return (
     <div className="w-full space-y-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
@@ -315,6 +329,48 @@ export const LensesSimulator: React.FC = () => {
                   <QuickCaseButton onClick={() => applyClassicCase("divergent")}>
                     Divergente
                   </QuickCaseButton>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                <p className="mb-2 text-sm font-bold text-purple-900">
+                  Potência da lente
+                </p>
+
+                <p className="mb-4 text-xs leading-relaxed text-purple-800">
+                  Use atalhos em dioptrias. Potência positiva indica lente
+                  convergente; potência negativa indica lente divergente.
+                </p>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <QuickPowerButton onClick={() => applyLensPower(1)}>
+                    +1 di
+                  </QuickPowerButton>
+
+                  <QuickPowerButton onClick={() => applyLensPower(2)}>
+                    +2 di
+                  </QuickPowerButton>
+
+                  <QuickPowerButton onClick={() => applyLensPower(4)}>
+                    +4 di
+                  </QuickPowerButton>
+
+                  <QuickPowerButton onClick={() => applyLensPower(-1)}>
+                    -1 di
+                  </QuickPowerButton>
+
+                  <QuickPowerButton onClick={() => applyLensPower(-2)}>
+                    -2 di
+                  </QuickPowerButton>
+
+                  <QuickPowerButton onClick={() => applyLensPower(-4)}>
+                    -4 di
+                  </QuickPowerButton>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-purple-200 bg-white p-3 text-xs leading-relaxed text-purple-800">
+                  <strong>Atual:</strong> P = {formatNumber(lensPower, 2)} di,
+                  com f = {formatNumber(f / 100, 3)} m.
                 </div>
               </div>
 
@@ -459,7 +515,6 @@ export const LensesSimulator: React.FC = () => {
                 <div className="overflow-x-auto">
                   <LensDiagram
                     lensType={lensType}
-                    f={f}
                     focalMagnitude={focalMagnitude}
                     p={p}
                     objectHeight={objectHeight}
@@ -660,7 +715,6 @@ export const LensesSimulator: React.FC = () => {
 
 function LensDiagram({
   lensType,
-  f,
   focalMagnitude,
   p,
   objectHeight,
@@ -673,7 +727,6 @@ function LensDiagram({
   showExtensions,
 }: {
   lensType: LensType;
-  f: number;
   focalMagnitude: number;
   p: number;
   objectHeight: number;
@@ -1119,16 +1172,12 @@ function LensDiagram({
       </text>
 
       <text x={width - 248} y="100" fill="#cbd5e1" fontSize="13">
-        f = {formatNumber(f, 1)} cm
-      </text>
-
-      <text x={width - 248} y="122" fill="#cbd5e1" fontSize="13">
         p' = {isImageAtInfinity ? "∞" : `${formatNumber(imageDistance, 1)} cm`}
       </text>
 
       <text
         x={width - 248}
-        y="144"
+        y="122"
         fill={isImageAtInfinity ? "#fde68a" : isVirtual ? "#c4b5fd" : "#86efac"}
         fontSize="13"
         fontWeight="800"
@@ -1287,6 +1336,24 @@ function QuickCaseButton({
       type="button"
       onClick={onClick}
       className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
+    >
+      {children}
+    </button>
+  );
+}
+
+function QuickPowerButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-purple-300 bg-white px-3 py-2 text-xs font-bold text-purple-800 transition hover:bg-purple-100"
     >
       {children}
     </button>
