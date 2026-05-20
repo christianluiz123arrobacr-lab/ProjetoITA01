@@ -206,48 +206,66 @@ export default function DinamicaTopicPrimeiraLei() {
           </div>
         </div>
 
-        {/* ===================== EXEMPLOS RESOLVIDOS ===================== */}
+                {/* ===================== EXEMPLOS RESOLVIDOS ===================== */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-slate-200">
-          <h2 className="text-3xl font-bold text-slate-900 mb-6">📝 Exemplos Resolvidos</h2>
-
+          <h2 className="text-3xl font-bold text-slate-900 mb-6">📝 Exemplos Resolvidos: Primeira Lei</h2>
           <div className="space-y-8">
             {/* Exemplo 1 */}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="bg-slate-50 p-4 border-b border-slate-200">
                 <h5 className="font-bold text-slate-800 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-emerald-600" />
-                  Exemplo 1: O Paraquedista
+                  Exemplo 1: O Paraquedista e a Velocidade Terminal
                 </h5>
               </div>
               <div className="p-6 space-y-4">
-                <p className="text-slate-700">
-                  Um paraquedista de 80 kg salta de um avião. Após alguns segundos, ele abre o paraquedas e atinge a chamada "velocidade terminal", caindo com velocidade constante de 5 m/s. Qual é a força resultante sobre o paraquedista neste momento?
+                <p className="text-slate-700 leading-relaxed">
+                  Um paraquedista de 80 kg salta de um avião. Após alguns segundos de queda livre acelerada, ele abre o paraquedas. A resistência do ar aumenta drasticamente até que ele atinge a chamada "velocidade terminal", passando a cair com uma velocidade constante de 5 m/s em linha reta. Qual é a força resultante sobre o paraquedista neste exato momento?
                 </p>
-                
-                <div className="bg-emerald-50/50 p-4 rounded-lg border border-emerald-100 space-y-3">
-                  <p className="font-semibold text-emerald-900">Resolução Passo a Passo:</p>
+                <div className="bg-emerald-50/50 p-5 rounded-lg border border-emerald-100 space-y-4">
+                  <p className="font-semibold text-emerald-900">Resolução Passo a Passo e Análise Física:</p>
                   <p className="text-slate-700 text-sm leading-relaxed">
-                    1. O problema afirma que ele cai com <strong>velocidade constante</strong> e em linha reta (para baixo).<br/>
-                    2. Movimento em linha reta com velocidade constante é a definição exata de <strong>MRU</strong>.<br/>
-                    3. Pela Primeira Lei de Newton, se um corpo está em MRU, ele está em Equilíbrio Dinâmico.<br/>
-                    4. Portanto, a força resultante sobre ele é obrigatoriamente <strong>ZERO</strong>.
+                    1. <strong>Identificação do Estado de Movimento:</strong> O problema afirma categoricamente que ele cai com <strong>velocidade constante</strong> e em linha reta (para baixo).<br/>
+                    2. <strong>Tradução Cinemática:</strong> Movimento em linha reta com velocidade constante é a definição exata e rigorosa de <strong>Movimento Retilíneo Uniforme (MRU)</strong>.<br/>
+                    3. <strong>Aplicação da Primeira Lei:</strong> Pela Primeira Lei de Newton (Princípio da Inércia), sabemos que se um corpo está em MRU, ele encontra-se em um estado de <strong>Equilíbrio Dinâmico</strong>.<br/>
+                    4. <strong>Conclusão Dinâmica:</strong> A condição necessária e suficiente para o equilíbrio (seja estático ou dinâmico) é que a soma vetorial de todas as forças atuantes seja nula. Portanto, a força resultante sobre ele é obrigatoriamente <strong>ZERO</strong>.
                   </p>
-                  <div className="bg-slate-900 p-3 rounded mt-2 text-center">
-                    <MathFormula formula="\vec{F}_R = 0 \text{ N}" display={true} className="text-emerald-400" />
+                  <div className="bg-slate-900 p-4 rounded-lg mt-4 text-center shadow-inner">
+                    <MathFormula formula="\vec{F}_R = \vec{P} + \vec{F}_{ar} = 0 \text{ N}" display={true} className="text-emerald-400" />
                   </div>
-                  <p className="text-slate-600 text-xs italic mt-2">
-                    *Nota: Isso significa que a força de resistência do ar para cima anulou exatamente a força peso para baixo.
+                  <p className="text-slate-600 text-sm italic mt-4 border-l-2 border-emerald-300 pl-3">
+                    <strong>Aprofundamento:</strong> Isso não significa que não há forças atuando sobre ele! Significa que a força de resistência do ar (que aponta para cima) cresceu até se igualar perfeitamente em módulo à força Peso (que aponta para baixo). Elas se anulam vetorialmente, resultando em uma força líquida nula. O corpo para de acelerar, mas não para de cair.
                   </p>
                 </div>
               </div>
             </div>
-
-                        {/* Exemplo 2 */}
+            
+            {/* Exemplo 2 */}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="bg-slate-50 p-4 border-b border-slate-200">
                 <h5 className="font-bold text-slate-800 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-emerald-600" />
-                  Exemplo 2: A Moeda no Trem
+                  Exemplo 2: A Moeda no Trem-Bala (O Princípio da Relatividade de Galileu)
+                </h5>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-slate-700 leading-relaxed">
+                  Você está em um trem-bala viajando a impressionantes 300 km/h em uma via perfeitamente retilínea e horizontal. Você pega uma moeda e a joga verticalmente para cima. Desprezando a resistência do ar dentro do vagão, onde a moeda vai cair? Ela vai voar para trás e bater no passageiro de trás?
+                </p>
+                <div className="bg-emerald-50/50 p-5 rounded-lg border border-emerald-100 space-y-4">
+                  <p className="font-semibold text-emerald-900">Resolução Passo a Passo e Análise Física:</p>
+                  <p className="text-slate-700 text-sm leading-relaxed">
+                    1. <strong>Estado Inicial:</strong> Antes de ser lançada, a moeda está na sua mão. Portanto, ela já possui a mesma velocidade horizontal do trem: <strong>300 km/h em relação ao solo</strong>.<br/>
+                    2. <strong>O Lançamento:</strong> Ao ser lançada para cima, você aplica uma força apenas na direção vertical. Não há nenhuma força horizontal atuando sobre a moeda enquanto ela está no ar (já que desprezamos o ar interno).<br/>
+                    3. <strong>Aplicação da Inércia:</strong> Pela Primeira Lei de Newton, como a força resultante na direção horizontal é zero, a moeda <strong>mantém sua velocidade horizontal constante</strong> por inércia. Ela continua viajando a 300 km/h para a frente.<br/>
+                    4. <strong>Conclusão Relativa:</strong> Como você, o trem e a moeda continuam se deslocando para a frente exatamente com a mesma velocidade horizontal, a moeda acompanha o seu movimento e cai <strong>exatamente de volta na sua mão</strong>.
+                  </p>
+                  <p className="text-slate-600 text-sm italic mt-4 border-l-2 border-emerald-300 pl-3">
+                    <strong>Aprofundamento:</strong> Este é o famoso Princípio da Relatividade de Galileu. Para um observador dentro do trem (referencial inercial), a moeda faz um movimento puramente vertical de sobe e desce. Para um observador parado fora do trem olhando pela janela, a moeda descreve uma trajetória parabólica (lançamento oblíquo), pois ela sobe e vai para a frente ao mesmo tempo. As leis da física são as mesmas em qualquer referencial inercial!
+                  </p>
+                </div>
+              </div>
+            </div>
                 </h5>
               </div>
               <div className="p-6 space-y-4">
@@ -366,36 +384,41 @@ export default function DinamicaTopicPrimeiraLei() {
               </div>
             </div>
 
-            {/* Exemplo Resolvido da 2ª Lei */}
+                        {/* Exemplo Resolvido da 2ª Lei */}
             <div className="border border-slate-200 rounded-xl overflow-hidden mt-8">
               <div className="bg-slate-50 p-4 border-b border-slate-200">
                 <h5 className="font-bold text-slate-800 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-amber-600" />
-                  Exemplo 3: O Bloco Empurrado (Conexão com a Cinemática)
+                  Exemplo 3: O Bloco Empurrado (A Ponte entre Dinâmica e Cinemática)
                 </h5>
               </div>
               <div className="p-6 space-y-4">
-                <p className="text-slate-700">
-                  Um bloco de massa <strong>m = 5 kg</strong> está em repouso sobre uma superfície horizontal sem atrito. Uma força constante de <strong>20 N</strong> é aplicada sobre ele. Qual será a velocidade do bloco após 4 segundos?
+                <p className="text-slate-700 leading-relaxed">
+                  Um bloco de massa <strong>m = 5 kg</strong> encontra-se inicialmente em repouso (<MathFormula formula="v_0 = 0" display={false} />) sobre uma superfície horizontal perfeitamente lisa (sem atrito). Uma força resultante constante de <strong>20 N</strong> passa a atuar sobre ele na direção horizontal. Qual será a velocidade exata do bloco após 4 segundos de aplicação dessa força?
                 </p>
-                
-                <div className="bg-amber-50/50 p-4 rounded-lg border border-amber-100 space-y-3">
-                  <p className="font-semibold text-amber-900">Resolução Passo a Passo:</p>
+                <div className="bg-amber-50/50 p-5 rounded-lg border border-amber-100 space-y-4">
+                  <p className="font-semibold text-amber-900">Resolução Passo a Passo e Análise Física:</p>
                   <p className="text-slate-700 text-sm leading-relaxed">
-                    1. Primeiro, usamos a <strong>Segunda Lei de Newton</strong> para descobrir a aceleração que essa força gera no bloco. A dinâmica nos dá a "causa".
+                    Este é o problema clássico que conecta os dois mundos da mecânica. A Dinâmica (Força e Massa) descobre a aceleração. A Cinemática (MRUV) pega essa aceleração e descobre o futuro do corpo (velocidade e posição).
                   </p>
-                  <div className="bg-white p-3 rounded border border-slate-200 text-center my-2">
-                    <MathFormula formula="F_R = m \cdot a \implies 20 = 5 \cdot a \implies a = \frac{20}{5} = 4 \text{ m/s}^2" display={true} />
+                  <p className="text-slate-700 text-sm leading-relaxed mt-2">
+                    <strong>Passo 1: O Mundo da Dinâmica (Descobrindo a Aceleração)</strong><br/>
+                    Usamos a Segunda Lei de Newton para descobrir qual aceleração essa força de 20 N consegue impor a essa massa de 5 kg.
+                  </p>
+                  <div className="bg-slate-900 p-3 rounded-lg text-center shadow-inner">
+                    <MathFormula formula="F_R = m \cdot a \implies 20 = 5 \cdot a \implies a = \frac{20}{5} = 4 \text{ m/s}^2" display={true} className="text-amber-400" />
                   </div>
-                  <p className="text-slate-700 text-sm leading-relaxed">
-                    2. Agora que sabemos a aceleração, o problema vira uma questão de <strong>Cinemática (MRUV)</strong>. Queremos a velocidade após 4 segundos, partindo do repouso (<MathFormula formula="v_0 = 0" display={false} />). Usamos a Equação da Velocidade:
+                  <p className="text-slate-700 text-sm leading-relaxed mt-4">
+                    <strong>Passo 2: O Mundo da Cinemática (Prevendo o Futuro)</strong><br/>
+                    Agora que sabemos que a aceleração é constante e vale 4 m/s², o movimento é um MRUV. Queremos a velocidade após um tempo <MathFormula formula="t = 4 \text{ s}" display={false} />. Usamos a Equação Horária da Velocidade:
                   </p>
-                  <div className="bg-white p-3 rounded border border-slate-200 text-center my-2">
-                    <MathFormula formula="v = v_0 + a \cdot t \implies v = 0 + 4 \cdot 4 \implies v = 16 \text{ m/s}" display={true} />
+                  <div className="bg-slate-900 p-3 rounded-lg text-center shadow-inner">
+                    <MathFormula formula="v = v_0 + a \cdot t \implies v = 0 + 4 \cdot 4 \implies v = 16 \text{ m/s}" display={true} className="text-amber-400" />
                   </div>
-                  <p className="text-slate-700 text-sm font-bold mt-2">
-                    Resposta: A velocidade será de 16 m/s.
+                  <p className="text-slate-600 text-sm italic mt-4 border-l-2 border-amber-300 pl-3">
+                    <strong>Aprofundamento:</strong> Se a força parasse de atuar exatamente no instante t = 4s, o que aconteceria? Pela Primeira Lei (Inércia), a aceleração zeraria instantaneamente, e o bloco continuaria viajando para sempre em MRU com a velocidade constante de 16 m/s.
                   </p>
+                </div>
                 </div>
               </div>
             </div>
@@ -476,16 +499,16 @@ export default function DinamicaTopicPrimeiraLei() {
             <div className="bg-gradient-to-r from-rose-50 to-pink-50 border-l-4 border-rose-500 p-6 rounded-r-xl">
               <h3 className="text-xl font-bold text-rose-900 mb-3 flex items-center gap-2">
                 <Lightbulb className="w-5 h-5" />
-                Contexto Histórico: A Simetria do Universo
+                Contexto Histórico: A Simetria do Universo e a Natureza das Interações
               </h3>
               <p className="text-slate-700 leading-relaxed mb-3">
-                A Primeira Lei define a inércia. A Segunda Lei quantifica a força. Mas Newton percebeu que faltava uma peça fundamental no quebra-cabeça: <strong>de onde vêm as forças?</strong>
+                A Primeira Lei define a inércia (o estado natural). A Segunda Lei quantifica a força (a causa da mudança). Mas Newton percebeu que faltava uma peça fundamental no quebra-cabeça mecânico: <strong>de onde vêm as forças e como elas se comportam na origem?</strong>
               </p>
               <p className="text-slate-700 leading-relaxed mb-3">
-                Até então, pensava-se que a força era algo que um corpo "possuía" e simplesmente "jogava" sobre outro, como um raio. Newton, com sua visão genial, percebeu que as forças não são entidades isoladas, mas sim <strong>interações mútuas</strong> entre dois corpos. Não existe força solitária no universo. Toda força nasce de um "aperto de mãos" entre duas massas.
+                Até o século XVII, o pensamento dominante (herança aristotélica) tratava a força como uma propriedade que um corpo "possuía" e simplesmente "jogava" sobre outro, como um raio ou um feitiço unidirecional. Newton, com sua visão genial, percebeu que as forças não são entidades isoladas, mas sim <strong>interações mútuas e simultâneas</strong> entre dois corpos. Não existe força solitária no universo. Toda força nasce de um "aperto de mãos" entre duas massas.
               </p>
               <p className="text-slate-700 leading-relaxed">
-                Essa descoberta revelou uma simetria profunda na natureza: você não pode tocar sem ser tocado. Se você empurra o universo, o universo empurra você de volta com a exata mesma intensidade.
+                Essa descoberta revelou uma simetria profunda e inquebrável na natureza: você não pode tocar sem ser tocado. Se você empurra o universo, o universo empurra você de volta com a exata mesma intensidade, no mesmo instante. Essa lei é tão universal que se aplica desde o choque de duas bolas de bilhar até a atração gravitacional entre a Terra e a Lua.
               </p>
             </div>
 
@@ -592,15 +615,14 @@ export default function DinamicaTopicPrimeiraLei() {
               </div>
             </div>
 
-            {/* Aprofundamento: A Força Normal e o Plano Inclinado */}
+                        {/* Aprofundamento: A Força Normal e o Plano Inclinado */}
             <div className="mt-12 bg-slate-900 rounded-2xl p-8 shadow-xl border border-slate-700 text-slate-100">
               <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
                 <Zap className="w-7 h-7 text-amber-400" />
-                Aprofundamento de Elite: A Força Normal e o Plano Inclinado
+                Aprofundamento: A Força Normal e o Plano Inclinado
               </h3>
-              
               <p className="text-slate-300 leading-relaxed mb-6">
-                A Força Normal (<MathFormula formula="\vec{N}" display={false} />) é a força de contato que uma superfície exerce sobre um corpo apoiado nela. Ela é a <strong>reação</strong> da superfície à compressão que o corpo faz sobre ela. Entender a Normal é o segredo para resolver 90% das questões de dinâmica, especialmente em planos inclinados.
+                A Força Normal (<MathFormula formula="\vec{N}" display={false} />) é a força de contato que uma superfície exerce sobre um corpo apoiado nela. Ela é a <strong>reação</strong> da superfície à compressão que o corpo faz sobre ela. Entender a Normal é o segredo para resolver a grande maioria das questões de dinâmica, especialmente em planos inclinados.
               </p>
 
               <div className="grid md:grid-cols-2 gap-8 mb-8">
@@ -682,13 +704,16 @@ export default function DinamicaTopicPrimeiraLei() {
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-l-4 border-blue-500 p-6 rounded-r-xl">
               <h3 className="text-xl font-bold text-blue-900 mb-3 flex items-center gap-2">
                 <Lightbulb className="w-5 h-5" />
-                Contexto Histórico: A Maçã e a Lua
+                Contexto Histórico: A Maçã, a Lua e a Unificação do Universo
               </h3>
               <p className="text-slate-700 leading-relaxed mb-3">
-                A lenda diz que Newton descobriu a gravidade quando uma maçã caiu em sua cabeça. A verdade é muito mais profunda e revolucionária: a genialidade de Newton não foi descobrir que as coisas caem (qualquer camponês sabia disso), mas sim perceber que <strong>a força que puxa a maçã para o chão é a exata mesma força que mantém a Lua orbitando a Terra</strong>.
+                A lenda popular diz que Isaac Newton descobriu a gravidade quando uma maçã caiu em sua cabeça enquanto ele descansava sob uma árvore. A verdade histórica é muito mais profunda, elegante e revolucionária: a genialidade de Newton não foi descobrir que as coisas caem (qualquer camponês da época sabia disso perfeitamente), mas sim perceber que <strong>a força invisível que puxa a maçã para o chão é a exata mesma força que mantém a Lua orbitando a Terra</strong>.
+              </p>
+              <p className="text-slate-700 leading-relaxed mb-3">
+                Antes de Newton, a ciência (fortemente influenciada por Aristóteles e pela Igreja) acreditava que o universo era dividido em dois reinos com regras completamente distintas: as leis que governavam a Terra (física terrestre, imperfeita e corruptível) eram completamente diferentes das leis que governavam os astros (física celeste, perfeita e eterna).
               </p>
               <p className="text-slate-700 leading-relaxed">
-                Antes de Newton, acreditava-se que as leis que governavam a Terra (física terrestre) eram completamente diferentes das leis que governavam os astros (física celeste). Newton unificou o universo. O Peso que você sente nas suas pernas agora nada mais é do que a Força de Atração Gravitacional que o planeta Terra exerce sobre a sua massa.
+                Newton destruiu essa barreira e unificou o universo com uma única equação. Ele provou matematicamente que a gravidade é universal. O Peso que você sente nas suas pernas empurrando o chão agora nada mais é do que a Força de Atração Gravitacional que a massa colossal do planeta Terra exerce sobre a sua massa.
               </p>
             </div>
 
@@ -856,19 +881,22 @@ export default function DinamicaTopicPrimeiraLei() {
                   <div className="space-y-3">
                     <p className="text-slate-800 font-bold flex items-center gap-2">
                       <span className="bg-purple-100 text-purple-800 w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
-                      Isolar um bloco para achar a Tração (Força Interna)
+                      Isolar um bloco para achar a Tração (A Força Interna Revelada)
                     </p>
                     <p className="text-slate-600 text-sm leading-relaxed pl-8">
-                      Agora que sabemos a aceleração do sistema (2 m/s²), podemos olhar para apenas um bloco isoladamente para "enxergar" a Tração. Vamos escolher o Bloco B. Sabemos que o Bloco A é mais pesado, então o Bloco B está <strong>subindo acelerado</strong> a 2 m/s². Se ele sobe acelerado, a força que puxa para cima (Tração) tem que ser maior que a força que puxa para baixo (Peso de B).
+                      Agora que sabemos a aceleração global do sistema (2 m/s²), podemos aplicar a Segunda Lei de Newton olhando para apenas um bloco isoladamente. Ao fazer isso, a Tração (que antes era interna e invisível) passa a ser uma força externa atuando sobre aquele bloco específico. Vamos escolher o Bloco B.
                     </p>
-                    <div className="bg-slate-50 p-4 rounded-lg text-center ml-8 border border-slate-100">
-                      <MathFormula formula="F_{R(B)} = m_B \cdot a" display={true} className="mb-2" />
-                      <MathFormula formula="T - P_B = m_B \cdot a" display={true} className="mb-2" />
-                      <MathFormula formula="T - 40 = 4 \cdot 2" display={true} className="mb-2" />
-                      <MathFormula formula="T = 40 + 8 \implies T = 48 \text{ N}" display={true} />
+                    <p className="text-slate-600 text-sm leading-relaxed pl-8 mt-2">
+                      Sabemos que o Bloco A é mais pesado, então o Bloco B está <strong>subindo acelerado</strong> a 2 m/s². Se ele sobe acelerado, a força que puxa para cima (Tração) tem que ser obrigatoriamente maior que a força que puxa para baixo (Peso de B). A Força Resultante sobre o Bloco B será a diferença entre elas:
+                    </p>
+                    <div className="bg-slate-50 p-4 rounded-lg text-center ml-8 border border-slate-100 shadow-inner">
+                      <MathFormula formula="F_{R(B)} = m_B \cdot a" display={true} className="mb-2 text-purple-900" />
+                      <MathFormula formula="T - P_B = m_B \cdot a" display={true} className="mb-2 text-purple-900" />
+                      <MathFormula formula="T - 40 = 4 \cdot 2" display={true} className="mb-2 text-purple-900" />
+                      <MathFormula formula="T = 40 + 8 \implies T = 48 \text{ N}" display={true} className="text-purple-900 font-bold" />
                     </div>
-                    <p className="text-slate-500 text-xs italic pl-8 mt-2">
-                      *Dica de prova: Se você fizesse o cálculo isolando o Bloco A (que está descendo, logo <MathFormula formula="P_A - T = m_A \cdot a" display={false} />), o resultado da Tração daria exatamente os mesmos 48 N. Isso prova que o fio é ideal!
+                    <p className="text-slate-600 text-sm italic pl-8 mt-4 border-l-2 border-purple-300 ml-8 pl-3">
+                      <strong>Dica de Ouro para Provas:</strong> Como o fio é ideal, a Tração é a mesma em toda a sua extensão. Se você fizesse o cálculo isolando o Bloco A (que está descendo acelerado, logo o Peso ganha da Tração: <MathFormula formula="P_A - T = m_A \cdot a" display={false} />), a conta seria: <MathFormula formula="60 - T = 6 \cdot 2 \implies T = 60 - 12 = 48 \text{ N}" display={false} />. O resultado é rigorosamente o mesmo! Use o bloco que tiver a conta mais fácil.
                     </p>
                   </div>
                   
