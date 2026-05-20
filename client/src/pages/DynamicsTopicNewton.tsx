@@ -489,9 +489,7 @@ export default function DinamicaTopicPrimeiraLei() {
                 </div>
               </div>
             </div>
-
           </div>
-        </div>
 
         {/* ===================== TERCEIRA LEI DE NEWTON ===================== */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-slate-200 mt-12">
