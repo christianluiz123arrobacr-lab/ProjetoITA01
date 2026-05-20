@@ -206,9 +206,10 @@ export default function DinamicaTopicPrimeiraLei() {
           </div>
         </div>
 
-                {/* ===================== EXEMPLOS RESOLVIDOS ===================== */}
+{/* ===================== EXEMPLOS RESOLVIDOS ===================== */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-slate-200">
           <h2 className="text-3xl font-bold text-slate-900 mb-6">📝 Exemplos Resolvidos: Primeira Lei</h2>
+
           <div className="space-y-8">
             {/* Exemplo 1 */}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -218,74 +219,79 @@ export default function DinamicaTopicPrimeiraLei() {
                   Exemplo 1: O Paraquedista e a Velocidade Terminal
                 </h5>
               </div>
+
               <div className="p-6 space-y-4">
                 <p className="text-slate-700 leading-relaxed">
                   Um paraquedista de 80 kg salta de um avião. Após alguns segundos de queda livre acelerada, ele abre o paraquedas. A resistência do ar aumenta drasticamente até que ele atinge a chamada "velocidade terminal", passando a cair com uma velocidade constante de 5 m/s em linha reta. Qual é a força resultante sobre o paraquedista neste exato momento?
                 </p>
+
                 <div className="bg-emerald-50/50 p-5 rounded-lg border border-emerald-100 space-y-4">
-                  <p className="font-semibold text-emerald-900">Resolução Passo a Passo e Análise Física:</p>
-                  <p className="text-slate-700 text-sm leading-relaxed">
-                    1. <strong>Identificação do Estado de Movimento:</strong> O problema afirma categoricamente que ele cai com <strong>velocidade constante</strong> e em linha reta (para baixo).<br/>
-                    2. <strong>Tradução Cinemática:</strong> Movimento em linha reta com velocidade constante é a definição exata e rigorosa de <strong>Movimento Retilíneo Uniforme (MRU)</strong>.<br/>
-                    3. <strong>Aplicação da Primeira Lei:</strong> Pela Primeira Lei de Newton (Princípio da Inércia), sabemos que se um corpo está em MRU, ele encontra-se em um estado de <strong>Equilíbrio Dinâmico</strong>.<br/>
-                    4. <strong>Conclusão Dinâmica:</strong> A condição necessária e suficiente para o equilíbrio (seja estático ou dinâmico) é que a soma vetorial de todas as forças atuantes seja nula. Portanto, a força resultante sobre ele é obrigatoriamente <strong>ZERO</strong>.
+                  <p className="font-semibold text-emerald-900">
+                    Resolução Passo a Passo e Análise Física:
                   </p>
+
+                  <p className="text-slate-700 text-sm leading-relaxed">
+                    1. <strong>Identificação do Estado de Movimento:</strong> O problema afirma categoricamente que ele cai com <strong>velocidade constante</strong> e em linha reta para baixo.
+                    <br />
+                    2. <strong>Tradução Cinemática:</strong> Movimento em linha reta com velocidade constante é a definição exata e rigorosa de <strong>Movimento Retilíneo Uniforme (MRU)</strong>.
+                    <br />
+                    3. <strong>Aplicação da Primeira Lei:</strong> Pela Primeira Lei de Newton, sabemos que se um corpo está em MRU, ele encontra-se em um estado de <strong>Equilíbrio Dinâmico</strong>.
+                    <br />
+                    4. <strong>Conclusão Dinâmica:</strong> A condição necessária e suficiente para o equilíbrio, seja estático ou dinâmico, é que a soma vetorial de todas as forças atuantes seja nula. Portanto, a força resultante sobre ele é obrigatoriamente <strong>ZERO</strong>.
+                  </p>
+
                   <div className="bg-slate-900 p-4 rounded-lg mt-4 text-center shadow-inner">
-                    <MathFormula formula="\vec{F}_R = \vec{P} + \vec{F}_{ar} = 0 \text{ N}" display={true} className="text-emerald-400" />
+                    <MathFormula
+                      formula="\vec{F}_R = \vec{P} + \vec{F}_{ar} = 0 \text{ N}"
+                      display={true}
+                      className="text-emerald-400"
+                    />
                   </div>
+
                   <p className="text-slate-600 text-sm italic mt-4 border-l-2 border-emerald-300 pl-3">
-                    <strong>Aprofundamento:</strong> Isso não significa que não há forças atuando sobre ele! Significa que a força de resistência do ar (que aponta para cima) cresceu até se igualar perfeitamente em módulo à força Peso (que aponta para baixo). Elas se anulam vetorialmente, resultando em uma força líquida nula. O corpo para de acelerar, mas não para de cair.
+                    <strong>Aprofundamento:</strong> Isso não significa que não há forças atuando sobre ele. Significa que a força de resistência do ar, que aponta para cima, cresceu até se igualar perfeitamente em módulo à força peso, que aponta para baixo. Elas se anulam vetorialmente, resultando em uma força líquida nula. O corpo para de acelerar, mas não para de cair.
                   </p>
                 </div>
               </div>
             </div>
-            
+
             {/* Exemplo 2 */}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="bg-slate-50 p-4 border-b border-slate-200">
                 <h5 className="font-bold text-slate-800 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-emerald-600" />
-                  Exemplo 2: A Moeda no Trem-Bala (O Princípio da Relatividade de Galileu)
+                  Exemplo 2: A Moeda no Trem-Bala
                 </h5>
               </div>
+
               <div className="p-6 space-y-4">
                 <p className="text-slate-700 leading-relaxed">
                   Você está em um trem-bala viajando a impressionantes 300 km/h em uma via perfeitamente retilínea e horizontal. Você pega uma moeda e a joga verticalmente para cima. Desprezando a resistência do ar dentro do vagão, onde a moeda vai cair? Ela vai voar para trás e bater no passageiro de trás?
                 </p>
+
                 <div className="bg-emerald-50/50 p-5 rounded-lg border border-emerald-100 space-y-4">
-                  <p className="font-semibold text-emerald-900">Resolução Passo a Passo e Análise Física:</p>
+                  <p className="font-semibold text-emerald-900">
+                    Resolução Passo a Passo e Análise Física:
+                  </p>
+
                   <p className="text-slate-700 text-sm leading-relaxed">
-                    1. <strong>Estado Inicial:</strong> Antes de ser lançada, a moeda está na sua mão. Portanto, ela já possui a mesma velocidade horizontal do trem: <strong>300 km/h em relação ao solo</strong>.<br/>
-                    2. <strong>O Lançamento:</strong> Ao ser lançada para cima, você aplica uma força apenas na direção vertical. Não há nenhuma força horizontal atuando sobre a moeda enquanto ela está no ar (já que desprezamos o ar interno).<br/>
-                    3. <strong>Aplicação da Inércia:</strong> Pela Primeira Lei de Newton, como a força resultante na direção horizontal é zero, a moeda <strong>mantém sua velocidade horizontal constante</strong> por inércia. Ela continua viajando a 300 km/h para a frente.<br/>
+                    1. <strong>Estado Inicial:</strong> Antes de ser lançada, a moeda está na sua mão. Portanto, ela já possui a mesma velocidade horizontal do trem: <strong>300 km/h em relação ao solo</strong>.
+                    <br />
+                    2. <strong>O Lançamento:</strong> Ao ser lançada para cima, você aplica uma força apenas na direção vertical. Não há nenhuma força horizontal atuando sobre a moeda enquanto ela está no ar, já que desprezamos a resistência do ar.
+                    <br />
+                    3. <strong>Aplicação da Inércia:</strong> Pela Primeira Lei de Newton, como a força resultante na direção horizontal é zero, a moeda <strong>mantém sua velocidade horizontal constante</strong> por inércia. Ela continua viajando a 300 km/h para a frente.
+                    <br />
                     4. <strong>Conclusão Relativa:</strong> Como você, o trem e a moeda continuam se deslocando para a frente exatamente com a mesma velocidade horizontal, a moeda acompanha o seu movimento e cai <strong>exatamente de volta na sua mão</strong>.
                   </p>
+
                   <p className="text-slate-600 text-sm italic mt-4 border-l-2 border-emerald-300 pl-3">
-                    <strong>Aprofundamento:</strong> Este é o famoso Princípio da Relatividade de Galileu. Para um observador dentro do trem (referencial inercial), a moeda faz um movimento puramente vertical de sobe e desce. Para um observador parado fora do trem olhando pela janela, a moeda descreve uma trajetória parabólica (lançamento oblíquo), pois ela sobe e vai para a frente ao mesmo tempo. As leis da física são as mesmas em qualquer referencial inercial!
-                  </p>
-                </div>
-              </div>
-            </div>
-                </h5>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-slate-700">
-                  Um trem viaja em linha reta a uma velocidade constante de 100 km/h. Um passageiro joga uma moeda verticalmente para cima. Onde a moeda cairá? (Despreze a resistência do ar dentro do vagão).
-                </p>
-                <div className="bg-emerald-50/50 p-4 rounded-lg border border-emerald-100 space-y-3">
-                  <p className="font-semibold text-emerald-900">Resolução Passo a Passo:</p>
-                  <p className="text-slate-700 text-sm leading-relaxed">
-                    1. Antes de ser lançada, a moeda está na mão do passageiro, viajando a 100 km/h na horizontal.<br/>
-                    2. Ao ser lançada para cima, a moeda adquire um movimento vertical, mas <strong>por inércia</strong>, ela mantém sua velocidade horizontal de 100 km/h.<br/>
-                    3. Como o trem também continua a 100 km/h, a moeda e a mão do passageiro andam para frente juntos, na mesma velocidade.<br/>
-                    4. Portanto, a moeda cairá <strong>exatamente na mão do passageiro</strong>.
+                    <strong>Aprofundamento:</strong> Este é o famoso Princípio da Relatividade de Galileu. Para um observador dentro do trem, a moeda faz um movimento puramente vertical de sobe e desce. Para um observador parado fora do trem olhando pela janela, a moeda descreve uma trajetória parabólica, pois ela sobe e vai para a frente ao mesmo tempo. As leis da física são as mesmas em qualquer referencial inercial.
                   </p>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
         {/* ===================== SEGUNDA LEI DE NEWTON ===================== */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-slate-200 mt-12">
           <h2 className="text-3xl font-bold text-slate-900 mb-6 flex items-center gap-3">
