@@ -70,7 +70,7 @@ import CinematicaTopicQuedaLivre from "./pages/CinematicaTopicQuedaLivre";
 import DynamicsSimulator from "./pages/DynamicsSimulator";
 import Progress from "./pages/Progress";
 import DynamicsTopicNewton from "./pages/DynamicsTopicNewton";
-import DynamicsTopicForce from "./pages/DynamicsTopicForce";
+import DynamicsTopicFriction from "./pages/DynamicsTopicFriction";
 import DynamicsTopicEnergy from "./pages/DynamicsTopicEnergy";
 import DynamicsTopicMomentum from "./pages/DynamicsTopicMomentum";
 import DynamicsTopicPower from "./pages/DynamicsTopicPower";
@@ -155,14 +155,23 @@ function PrivateRouter() {
         <Route path="/admin/questoes/nova" component={AdminQuestionCreatePage} />
         <Route path="/admin/questoes/:id" component={AdminQuestionEditPage} />
         <Route path="/admin/questoes" component={AdminQuestionsPage} />
-        <Route path="/admin/resolucoes/:questaoId" component={AdminResolutionEditorPage}/>
-        <Route path="/admin/quimica/geometria-molecular" component={AdminMolecularGeometryPrototypePage}/>
+        <Route
+          path="/admin/resolucoes/:questaoId"
+          component={AdminResolutionEditorPage}
+        />
+        <Route
+          path="/admin/quimica/geometria-molecular"
+          component={AdminMolecularGeometryPrototypePage}
+        />
         <Route path="/admin/resolucoes" component={AdminResolutionsPage} />
         <Route path="/admin/uploads" component={AdminUploadsPage} />
         <Route path="/admin/vet" component={AdminVetPage} />
         <Route path="/admin/logs" component={AdminLogsPage} />
         <Route path="/admin/reports" component={AdminQuestionReportsPage} />
-        <Route path="/admin/matematica/geometria-espacial"component={AdminSpatialGeometryPrototypePage}/>
+        <Route
+          path="/admin/matematica/geometria-espacial"
+          component={AdminSpatialGeometryPrototypePage}
+        />
 
         <Route path="/fisica-i" component={FisicaIHome} />
         <Route path="/fisica-ii" component={FisicaIIHome} />
@@ -217,7 +226,13 @@ function PrivateRouter() {
         <Route path="/dinamica/graphs" component={DynamicsGraphs} />
         <Route path="/dinamica/simulator" component={DynamicsSimulator} />
         <Route path="/dinamica/topic/newton" component={DynamicsTopicNewton} />
-        <Route path="/dinamica/topic/force" component={DynamicsTopicForce} />
+
+        {/* Rota nova correta para Atrito */}
+        <Route path="/dinamica/topic/atrito" component={DynamicsTopicFriction} />
+
+        {/* Rota antiga mantida para não quebrar links antigos */}
+        <Route path="/dinamica/topic/force" component={DynamicsTopicFriction} />
+
         <Route path="/dinamica/topic/energy" component={DynamicsTopicEnergy} />
         <Route
           path="/dinamica/topic/momentum"
@@ -305,10 +320,7 @@ function PrivateRouter() {
         />
         <Route path="/ondulatoria/topic/som" component={OndulatóriaTopicSom} />
         <Route path="/ondulatoria/topic/luz" component={OndulatóriaTopicLuz} />
-        <Route
-          path="/ondulatoria/simulator"
-          component={OndulatoriaSimulator}
-        />
+        <Route path="/ondulatoria/simulator" component={OndulatoriaSimulator} />
         <Route path="/ondulatoria/quiz" component={OndulatoriaQuiz} />
         <Route path="/ondulatoria/graphs" component={OndulatoriaGraphs} />
 
