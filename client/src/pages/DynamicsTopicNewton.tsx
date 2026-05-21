@@ -10,12 +10,16 @@ import {
   Zap,
   Shield,
   Calculator,
-  Ruler,
+  Scale,
   Activity,
   Layers,
   Rocket,
   ListChecks,
-  Scale,
+  Compass,
+  Brain,
+  History,
+  Search,
+  Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
@@ -34,14 +38,22 @@ type SectionProps = {
 type NoteBoxProps = {
   title: string;
   children: ReactNode;
-  tone?: "blue" | "green" | "amber" | "red" | "purple" | "slate" | "indigo";
+  tone?: "blue" | "green" | "amber" | "red" | "purple" | "slate" | "indigo" | "rose";
 };
 
 type FormulaStepProps = {
   title: string;
   explanation?: ReactNode;
   formula: string;
-  tone?: "blue" | "green" | "amber" | "purple" | "red" | "slate";
+  tone?: "blue" | "green" | "amber" | "purple" | "red" | "slate" | "rose";
+};
+
+type TopicBlockProps = {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  tone?: "indigo" | "green" | "amber" | "rose" | "blue" | "slate" | "purple";
+  icon?: LucideIcon;
 };
 
 type ExampleItem = {
@@ -100,6 +112,7 @@ function NoteBox({ title, children, tone = "blue" }: NoteBoxProps) {
     purple: "bg-purple-50 border-purple-400 text-purple-900",
     slate: "bg-slate-50 border-slate-400 text-slate-900",
     indigo: "bg-indigo-50 border-indigo-400 text-indigo-900",
+    rose: "bg-rose-50 border-rose-400 text-rose-900",
   };
 
   return (
@@ -117,6 +130,7 @@ function FormulaStep({ title, explanation, formula, tone = "slate" }: FormulaSte
     amber: "bg-amber-400",
     purple: "bg-purple-400",
     red: "bg-red-400",
+    rose: "bg-rose-400",
     slate: "bg-slate-400",
   };
 
@@ -132,6 +146,51 @@ function FormulaStep({ title, explanation, formula, tone = "slate" }: FormulaSte
         </div>
       </div>
       <FormulaBox formula={formula} />
+    </div>
+  );
+}
+
+function TopicBlock({
+  title,
+  subtitle,
+  children,
+  tone = "indigo",
+  icon: Icon,
+}: TopicBlockProps) {
+  const styles = {
+    indigo: "border-indigo-200 bg-indigo-50/50",
+    green: "border-green-200 bg-green-50/50",
+    amber: "border-amber-200 bg-amber-50/50",
+    rose: "border-rose-200 bg-rose-50/50",
+    blue: "border-blue-200 bg-blue-50/50",
+    slate: "border-slate-200 bg-slate-50/70",
+    purple: "border-purple-200 bg-purple-50/50",
+  };
+
+  const iconStyles = {
+    indigo: "text-indigo-600 bg-indigo-100",
+    green: "text-green-600 bg-green-100",
+    amber: "text-amber-600 bg-amber-100",
+    rose: "text-rose-600 bg-rose-100",
+    blue: "text-blue-600 bg-blue-100",
+    slate: "text-slate-600 bg-slate-100",
+    purple: "text-purple-600 bg-purple-100",
+  };
+
+  return (
+    <div className={`rounded-2xl border ${styles[tone]} p-6 space-y-5`}>
+      <div className="flex items-start gap-3">
+        {Icon && (
+          <div className={`rounded-xl p-2 ${iconStyles[tone]}`}>
+            <Icon className="w-5 h-5" />
+          </div>
+        )}
+        <div>
+          <h3 className="text-lg font-black text-slate-900">{title}</h3>
+          {subtitle && <p className="text-sm text-slate-600 mt-1 leading-6">{subtitle}</p>}
+        </div>
+      </div>
+      {children}
     </div>
   );
 }
@@ -180,30 +239,8 @@ function FormulaGrid({ children }: { children: ReactNode }) {
   return <div className="grid md:grid-cols-2 gap-4">{children}</div>;
 }
 
-function TopicBlock({
-  title,
-  children,
-  tone = "indigo",
-}: {
-  title: string;
-  children: ReactNode;
-  tone?: "indigo" | "green" | "amber" | "rose" | "blue" | "slate";
-}) {
-  const styles = {
-    indigo: "border-indigo-200 bg-indigo-50/50",
-    green: "border-green-200 bg-green-50/50",
-    amber: "border-amber-200 bg-amber-50/50",
-    rose: "border-rose-200 bg-rose-50/50",
-    blue: "border-blue-200 bg-blue-50/50",
-    slate: "border-slate-200 bg-slate-50/70",
-  };
-
-  return (
-    <div className={`rounded-2xl border ${styles[tone]} p-6 space-y-5`}>
-      <h3 className="text-lg font-black text-slate-900">{title}</h3>
-      {children}
-    </div>
-  );
+function ThreeGrid({ children }: { children: ReactNode }) {
+  return <div className="grid md:grid-cols-3 gap-4">{children}</div>;
 }
 
 export default function DynamicsTopicNewton() {
@@ -222,17 +259,26 @@ export default function DynamicsTopicNewton() {
         "Um bloco de massa m = 5 kg está sobre uma superfície horizontal sem atrito. Uma força horizontal constante de módulo F = 20 N puxa o bloco para a direita. Determine a aceleração do bloco.",
       content: (
         <div className="space-y-5">
-          <NoteBox title="DCL descrito" tone="slate">
-            As forças sobre o bloco são: peso <InlineFormulaBox formula={String.raw`P = mg`} /> para baixo,
-            normal <InlineFormulaBox formula={String.raw`N`} /> para cima e força aplicada{" "}
-            <InlineFormulaBox formula={String.raw`F`} /> para a direita. Como não há atrito, nenhuma força horizontal se opõe ao movimento.
+          <NoteBox title="Antes de calcular, pense no fenômeno" tone="blue">
+            O bloco está sobre uma superfície horizontal. Verticalmente, ele não sobe nem afunda. Horizontalmente, só existe uma força puxando o bloco. Como não há atrito, essa força aplicada é a própria força resultante horizontal.
           </NoteBox>
+
+          <TopicBlock title="Diagrama de corpo livre" tone="slate" icon={Eye}>
+            <BulletList
+              items={[
+                <>peso <InlineFormulaBox formula={String.raw`P = mg`} /> para baixo;</>,
+                <>normal <InlineFormulaBox formula={String.raw`N`} /> para cima;</>,
+                <>força aplicada <InlineFormulaBox formula={String.raw`F`} /> para a direita;</>,
+                <>nenhum atrito horizontal.</>,
+              ]}
+            />
+          </TopicBlock>
 
           <FormulaGrid>
             <TopicBlock title="Eixo vertical" tone="blue">
               <FormulaStep
                 title="Não há aceleração vertical"
-                explanation="O bloco não sobe nem afunda na superfície."
+                explanation="O bloco não atravessa a mesa nem salta. Logo, a força resultante vertical é zero."
                 formula={String.raw`a_y = 0`}
                 tone="blue"
               />
@@ -245,7 +291,7 @@ export default function DynamicsTopicNewton() {
 
             <TopicBlock title="Eixo horizontal" tone="green">
               <FormulaStep
-                title="A única força horizontal é F"
+                title="Aplicando a Segunda Lei"
                 formula={String.raw`\sum F_x = ma_x`}
                 tone="green"
               />
@@ -262,10 +308,9 @@ export default function DynamicsTopicNewton() {
             </TopicBlock>
           </FormulaGrid>
 
-          <NoteBox title="Ideia física" tone="green">
-            Sem atrito, toda força horizontal aplicada vira força resultante horizontal. Como a massa é{" "}
-            <InlineFormulaBox formula={String.raw`5 \ \text{kg}`} />, uma força de{" "}
-            <InlineFormulaBox formula={String.raw`20 \ \text{N}`} /> produz aceleração de{" "}
+          <NoteBox title="Interpretação física" tone="green">
+            A força de <InlineFormulaBox formula={String.raw`20 \ \text{N}`} /> precisa acelerar uma massa de{" "}
+            <InlineFormulaBox formula={String.raw`5 \ \text{kg}`} />. Como a massa mede resistência à aceleração, a resposta do corpo é uma aceleração de{" "}
             <InlineFormulaBox formula={String.raw`4 \ \text{m/s}^2`} />.
           </NoteBox>
         </div>
@@ -278,33 +323,33 @@ export default function DynamicsTopicNewton() {
         "Um bloco de massa m = 10 kg está sobre uma superfície horizontal. Uma força horizontal de módulo F = 50 N puxa o bloco para a direita. O coeficiente de atrito cinético é μc = 0,2. Considere g = 10 m/s². Determine a aceleração do bloco.",
       content: (
         <div className="space-y-5">
-          <NoteBox title="DCL descrito" tone="slate">
-            As forças são: peso para baixo, normal para cima, força aplicada para a direita e atrito cinético para a esquerda. O atrito aponta contra o deslizamento relativo.
+          <NoteBox title="Ideia física" tone="amber">
+            Aqui a força aplicada não vira toda aceleração. Uma parte dela é combatida pelo atrito cinético. A aceleração vem da força que sobra depois da soma vetorial.
           </NoteBox>
 
           <FormulaStep
             title="Normal no eixo vertical"
-            explanation="Como não há aceleração vertical, normal e peso se equilibram."
+            explanation="Como o bloco não acelera verticalmente, normal e peso se equilibram."
             formula={String.raw`N - mg = 0 \Rightarrow N = mg = 10 \cdot 10 = 100 \ \text{N}`}
             tone="blue"
           />
 
           <FormulaStep
-            title="Cálculo do atrito cinético"
-            explanation="O bloco já está deslizando, então usamos a fórmula do atrito cinético."
+            title="Atrito cinético"
+            explanation="Como já há deslizamento relativo, usamos o atrito cinético."
             formula={String.raw`f_c = \mu_c N = 0{,}2 \cdot 100 = 20 \ \text{N}`}
             tone="amber"
           />
 
           <FormulaStep
-            title="Força resultante horizontal"
+            title="Segunda Lei no eixo horizontal"
             explanation="A força aplicada aponta para a direita; o atrito aponta para a esquerda."
             formula={String.raw`F - f_c = ma \Rightarrow 50 - 20 = 10a`}
             tone="green"
           />
 
           <FormulaStep
-            title="Resultado"
+            title="Aceleração"
             formula={String.raw`30 = 10a \Rightarrow a = 3 \ \text{m/s}^2`}
             tone="green"
           />
@@ -318,147 +363,68 @@ export default function DynamicsTopicNewton() {
         "Um bloco está sobre um plano inclinado sem atrito, com ângulo θ = 30°. Considere g = 10 m/s². Determine a aceleração do bloco ao longo do plano.",
       content: (
         <div className="space-y-5">
-          <NoteBox title="DCL descrito" tone="slate">
-            As forças são peso vertical para baixo e normal perpendicular ao plano. O peso é decomposto em duas componentes: uma paralela à rampa e outra perpendicular à rampa.
+          <NoteBox title="Ideia física" tone="green">
+            O peso aponta verticalmente para baixo, mas o movimento acontece ao longo do plano. Por isso, decompomos o peso em duas partes: uma paralela ao plano e outra perpendicular ao plano.
           </NoteBox>
 
           <FormulaGrid>
-            <TopicBlock title="Eixo perpendicular" tone="blue">
+            <TopicBlock title="Eixo perpendicular ao plano" tone="blue">
               <FormulaStep
-                title="O bloco não sai nem entra no plano"
+                title="O bloco não atravessa o plano"
                 formula={String.raw`a_y = 0`}
                 tone="blue"
               />
               <FormulaStep
-                title="Normal equilibra a componente perpendicular do peso"
+                title="Normal"
                 formula={String.raw`N - mg\cos\theta = 0 \Rightarrow N = mg\cos\theta`}
                 tone="blue"
               />
             </TopicBlock>
 
-            <TopicBlock title="Eixo paralelo" tone="green">
+            <TopicBlock title="Eixo paralelo ao plano" tone="green">
               <FormulaStep
-                title="A componente paralela do peso acelera o bloco"
+                title="Componente que puxa o bloco"
+                formula={String.raw`P_{\parallel} = mg\sin\theta`}
+                tone="green"
+              />
+              <FormulaStep
+                title="Segunda Lei"
                 formula={String.raw`mg\sin\theta = ma`}
                 tone="green"
               />
               <FormulaStep
-                title="A massa cancela"
+                title="Massa cancela"
                 formula={String.raw`a = g\sin\theta`}
                 tone="green"
               />
               <FormulaStep
-                title="Substituindo o ângulo"
+                title="Substituindo"
                 formula={String.raw`a = 10\sin 30^\circ = 10 \cdot \frac{1}{2} = 5 \ \text{m/s}^2`}
                 tone="green"
               />
             </TopicBlock>
           </FormulaGrid>
+
+          <NoteBox title="Por que a massa cancela?" tone="purple">
+            O peso é proporcional à massa. Um corpo mais massivo tem mais peso, mas também tem mais inércia. No plano sem atrito, esses dois efeitos crescem juntos e acabam se cancelando na aceleração.
+          </NoteBox>
         </div>
       ),
     },
     {
       id: "ex4",
-      title: "Sistema de dois blocos",
-      enunciado:
-        "Dois blocos, m₁ = 2 kg e m₂ = 3 kg, estão em contato sobre uma superfície horizontal sem atrito. Uma força horizontal F = 20 N empurra o bloco m₁ para a direita. Determine a aceleração do sistema e a força de contato entre os blocos.",
-      content: (
-        <div className="space-y-5">
-          <NoteBox title="Estratégia" tone="blue">
-            Para achar a aceleração, analisamos o sistema completo. Para achar a força de contato, isolamos um dos blocos.
-          </NoteBox>
-
-          <FormulaGrid>
-            <TopicBlock title="Sistema completo" tone="blue">
-              <FormulaStep
-                title="Massa total"
-                formula={String.raw`M = m_1 + m_2 = 2 + 3 = 5 \ \text{kg}`}
-                tone="blue"
-              />
-              <FormulaStep
-                title="Segunda Lei para o conjunto"
-                formula={String.raw`F = Ma \Rightarrow 20 = 5a`}
-                tone="green"
-              />
-              <FormulaStep
-                title="Aceleração"
-                formula={String.raw`a = 4 \ \text{m/s}^2`}
-                tone="green"
-              />
-            </TopicBlock>
-
-            <TopicBlock title="Isolando o bloco m₂" tone="purple">
-              <FormulaStep
-                title="A força de contato acelera m₂"
-                formula={String.raw`C = m_2a`}
-                tone="purple"
-              />
-              <FormulaStep
-                title="Substituindo"
-                formula={String.raw`C = 3 \cdot 4 = 12 \ \text{N}`}
-                tone="purple"
-              />
-            </TopicBlock>
-          </FormulaGrid>
-        </div>
-      ),
-    },
-    {
-      id: "ex5",
-      title: "Máquina de Atwood",
-      enunciado:
-        "Dois blocos de massas m₁ = 2 kg e m₂ = 3 kg estão ligados por um fio ideal que passa por uma polia ideal. Considere g = 10 m/s². Determine a aceleração do sistema e a tração no fio.",
-      content: (
-        <div className="space-y-5">
-          <NoteBox title="DCL descrito" tone="slate">
-            Como <InlineFormulaBox formula={String.raw`m_2 > m_1`} />, o bloco <InlineFormulaBox formula={String.raw`m_2`} /> desce e o bloco{" "}
-            <InlineFormulaBox formula={String.raw`m_1`} /> sobe. A tração é a mesma no fio ideal.
-          </NoteBox>
-
-          <FormulaGrid>
-            <FormulaStep
-              title="Equação para m₂"
-              explanation="Escolhemos positivo para baixo, pois m₂ desce."
-              formula={String.raw`m_2g - T = m_2a \Rightarrow 30 - T = 3a`}
-              tone="blue"
-            />
-
-            <FormulaStep
-              title="Equação para m₁"
-              explanation="Escolhemos positivo para cima, pois m₁ sobe."
-              formula={String.raw`T - m_1g = m_1a \Rightarrow T - 20 = 2a`}
-              tone="green"
-            />
-          </FormulaGrid>
-
-          <FormulaStep
-            title="Somando as equações"
-            explanation="A tração cancela, pois é força interna ao sistema."
-            formula={String.raw`30 - T + T - 20 = 3a + 2a \Rightarrow 10 = 5a`}
-            tone="purple"
-          />
-
-          <FormulaStep
-            title="Aceleração e tração"
-            formula={String.raw`a = 2 \ \text{m/s}^2 \qquad T = 24 \ \text{N}`}
-            tone="amber"
-          />
-        </div>
-      ),
-    },
-    {
-      id: "ex6",
-      title: "Elevador acelerado",
+      title: "Elevador acelerando para cima",
       enunciado:
         "Uma pessoa de massa m = 70 kg está dentro de um elevador que acelera para cima com a = 2 m/s². Considere g = 10 m/s². Determine a força normal exercida pelo piso sobre a pessoa.",
       content: (
         <div className="space-y-5">
-          <NoteBox title="DCL descrito" tone="slate">
-            As forças sobre a pessoa são peso para baixo e normal para cima. Como o elevador acelera para cima, a pessoa também acelera para cima.
+          <NoteBox title="Ideia física" tone="blue">
+            A pessoa sente o piso empurrando seus pés. Essa força é a normal. Quando o elevador acelera para cima, o piso precisa empurrar a pessoa com força maior que o peso.
           </NoteBox>
 
           <FormulaStep
-            title="Normal para cima e peso para baixo"
+            title="Forças sobre a pessoa"
+            explanation="Normal para cima e peso para baixo. Como a aceleração é para cima, escolhemos para cima como sentido positivo."
             formula={String.raw`N - mg = ma`}
             tone="blue"
           />
@@ -475,41 +441,45 @@ export default function DynamicsTopicNewton() {
             tone="green"
           />
 
-          <NoteBox title="Ideia física" tone="green">
-            O peso real é <InlineFormulaBox formula={String.raw`P = 700 \ \text{N}`} />, mas a normal é{" "}
-            <InlineFormulaBox formula={String.raw`840 \ \text{N}`} />. É a normal que a pessoa “sente” como peso aparente.
+          <NoteBox title="Interpretação" tone="green">
+            O peso real é <InlineFormulaBox formula={String.raw`P = mg = 700 \ \text{N}`} />, mas a normal é{" "}
+            <InlineFormulaBox formula={String.raw`840 \ \text{N}`} />. A balança mede a normal, não o peso gravitacional puro.
           </NoteBox>
         </div>
       ),
     },
     {
-      id: "ex7",
-      title: "Ação e reação, normal e peso",
+      id: "ex5",
+      title: "Ação e reação: livro sobre a mesa",
       enunciado:
         "Um livro de massa m = 2 kg está parado sobre uma mesa horizontal. Considere g = 10 m/s². Determine a normal sobre o livro e identifique corretamente os pares de ação e reação.",
       content: (
         <div className="space-y-5">
           <FormulaStep
             title="Normal sobre o livro"
-            explanation="Como o livro está parado, a força resultante vertical é nula."
+            explanation="Como o livro está parado, a resultante vertical sobre o livro é nula."
             formula={String.raw`N - mg = 0 \Rightarrow N = mg = 2 \cdot 10 = 20 \ \text{N}`}
             tone="green"
           />
 
           <FormulaGrid>
             <NoteBox title="Par de ação e reação do peso" tone="purple">
-              <InlineFormulaBox formula={String.raw`\vec{P}_{\text{Terra} \to \text{livro}}`} /> e{" "}
+              A Terra puxa o livro:
+              <InlineFormulaBox formula={String.raw`\vec{P}_{\text{Terra} \to \text{livro}}`} />.
+              O livro puxa a Terra:
               <InlineFormulaBox formula={String.raw`\vec{P}_{\text{livro} \to \text{Terra}}`} />.
             </NoteBox>
 
             <NoteBox title="Par de ação e reação da normal" tone="purple">
-              <InlineFormulaBox formula={String.raw`\vec{N}_{\text{mesa} \to \text{livro}}`} /> e{" "}
+              A mesa empurra o livro:
+              <InlineFormulaBox formula={String.raw`\vec{N}_{\text{mesa} \to \text{livro}}`} />.
+              O livro empurra a mesa:
               <InlineFormulaBox formula={String.raw`\vec{N}_{\text{livro} \to \text{mesa}}`} />.
             </NoteBox>
           </FormulaGrid>
 
-          <NoteBox title="Cuidado clássico" tone="red">
-            Peso e normal não são par de ação e reação, mesmo que tenham mesmo módulo nesse caso. Eles atuam no mesmo corpo: o livro. Pares de ação e reação atuam em corpos diferentes.
+          <NoteBox title="Cuidado" tone="red">
+            Peso e normal não são par de ação e reação. Eles atuam no mesmo corpo, o livro. Pares de ação e reação atuam em corpos diferentes.
           </NoteBox>
         </div>
       ),
@@ -528,7 +498,9 @@ export default function DynamicsTopicNewton() {
             </Link>
             <div>
               <h1 className="text-xl font-bold text-slate-900">Leis de Newton</h1>
-              <p className="text-xs text-slate-500">Dinâmica — fundamentos organizados por lei</p>
+              <p className="text-xs text-slate-500">
+                Dinâmica — aula profunda, organizada por lei
+              </p>
             </div>
           </div>
 
@@ -554,267 +526,578 @@ export default function DynamicsTopicNewton() {
         {activeTab === "teoria" && (
           <div className="space-y-10">
             <Section
-              icon={BookOpen}
+              icon={History}
               title="Antes das Leis de Newton"
-              subtitle="A diferença entre descrever o movimento e explicar por que ele acontece."
+              subtitle="Por que a humanidade precisou dessas leis para entender o movimento?"
               gradient="bg-gradient-to-r from-amber-500 to-orange-500"
             >
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 p-5 rounded-r-xl">
+              <TopicBlock
+                title="O problema antigo: parecia que força mantinha movimento"
+                tone="amber"
+                icon={History}
+              >
                 <Paragraph>
-                  A <strong>Cinemática</strong> descreve o movimento: posição, velocidade, aceleração, trajetória, tempo e gráficos. Ela responde: <em>“como o corpo se move?”</em>
+                  Antes de Galileu e Newton, a interpretação do movimento era dominada por uma ideia intuitiva: parecia natural imaginar que, para um corpo continuar se movendo, alguma força deveria continuar empurrando esse corpo.
                 </Paragraph>
+
                 <Paragraph>
-                  A <strong>Dinâmica</strong> tenta explicar a causa do movimento. Ela pergunta: <em>“por que o corpo acelera, freia, muda de direção ou permanece em equilíbrio?”</em>
+                  Essa ideia parecia funcionar no cotidiano. Se você empurra uma caixa no chão, ela se move. Se para de empurrar, ela para. Se lança um carrinho, ele anda um pouco e depois também para. Então a conclusão apressada seria:
                 </Paragraph>
-              </div>
 
-              <Paragraph>
-                Durante muito tempo, parecia natural pensar que uma força seria necessária para manter um corpo em movimento. Afinal, quando você empurra uma mesa e para de empurrar, ela para. O cérebro humano vê atrito e inventa filosofia errada, como de costume.
-              </Paragraph>
+                <NoteBox title="Conclusão intuitiva, mas errada" tone="red">
+                  “Se não existe força empurrando, o corpo não continua em movimento.”
+                </NoteBox>
 
-              <Paragraph>
-                O problema é que, no cotidiano, quase sempre há forças resistentes: atrito, resistência do ar e deformações. Galileu percebeu que, quanto menores as resistências, mais tempo o corpo mantém seu movimento. No limite ideal sem resistências, um corpo continuaria em movimento retilíneo uniforme indefinidamente.
-              </Paragraph>
+                <Paragraph>
+                  O erro está em confundir o movimento real do cotidiano com o movimento ideal sem resistências. No mundo comum, quase tudo tem atrito, resistência do ar, deformações e irregularidades. A caixa não para porque “acabou a força do movimento”. Ela para porque existem forças resistivas atuando contra o movimento.
+                </Paragraph>
+              </TopicBlock>
 
-              <div className="bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 rounded-2xl p-7 text-center shadow-inner">
-                <p className="text-amber-600 font-black text-lg mb-2">Ideia que muda tudo</p>
-                <p className="text-slate-900 text-2xl font-black">Força resultante não mantém movimento.</p>
-                <p className="text-green-700 text-2xl font-black mt-1">Força resultante altera movimento.</p>
-              </div>
-
-              <Paragraph>
-                Newton organizou essa visão em três leis fundamentais. Elas conectam força, massa, aceleração, interações entre corpos e equilíbrio.
-              </Paragraph>
-
-              <FormulaStep
-                title="Equação central que aparecerá em quase tudo"
-                explanation="A aceleração vem da força resultante, não de uma força isolada qualquer."
-                formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
+              <TopicBlock
+                title="O papel de Galileu: remover o atrito da cabeça"
+                subtitle="Às vezes o maior avanço da Física é perceber que o cotidiano está mentindo para você. Bem humano, inclusive."
                 tone="blue"
-              />
+                icon={Lightbulb}
+              >
+                <Paragraph>
+                  Galileu percebeu que, quanto menor o atrito, mais tempo um corpo mantém seu movimento. Uma esfera rolando em uma superfície muito lisa percorre uma distância maior do que em uma superfície rugosa. Se a superfície fosse perfeitamente lisa e não houvesse resistência do ar, o corpo continuaria se movendo em linha reta com velocidade constante.
+                </Paragraph>
+
+                <Paragraph>
+                  A ideia revolucionária é esta: o movimento não precisa ser sustentado por força. O que precisa de força resultante é a mudança do movimento.
+                </Paragraph>
+
+                <div className="bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 rounded-2xl p-7 text-center shadow-inner">
+                  <p className="text-amber-600 font-black text-lg mb-2">Ideia central da Dinâmica</p>
+                  <p className="text-slate-900 text-2xl font-black">
+                    Força resultante não mantém movimento.
+                  </p>
+                  <p className="text-green-700 text-2xl font-black mt-1">
+                    Força resultante altera movimento.
+                  </p>
+                </div>
+              </TopicBlock>
+
+              <TopicBlock
+                title="O que Newton fez?"
+                tone="indigo"
+                icon={Brain}
+              >
+                <Paragraph>
+                  Newton organizou essas ideias em três leis que formam a base da Mecânica Clássica. Ele não estava apenas criando três frases bonitas para decorar. Ele estava construindo uma linguagem para responder perguntas como:
+                </Paragraph>
+
+                <BulletList
+                  items={[
+                    <>O que acontece quando não sobra força resultante sobre um corpo?</>,
+                    <>O que acontece quando sobra força resultante?</>,
+                    <>Como as forças aparecem quando dois corpos interagem?</>,
+                    <>Por que corpos diferentes respondem de formas diferentes à mesma força?</>,
+                    <>Como desenhar corretamente as forças que atuam em um corpo?</>,
+                  ]}
+                />
+
+                <Paragraph>
+                  A Dinâmica nasce justamente para explicar a causa das mudanças de movimento. A Cinemática descreve o movimento. A Dinâmica pergunta quem causou aquilo.
+                </Paragraph>
+              </TopicBlock>
             </Section>
 
             <Section
               icon={Shield}
               title="Primeira Lei de Newton — Princípio da Inércia"
-              subtitle="A lei que explica repouso, MRU e equilíbrio sem cair no erro de achar que força mantém movimento."
+              subtitle="A lei que explica o que acontece quando a força resultante é nula."
               gradient="bg-gradient-to-r from-emerald-600 to-green-700"
             >
-              <TopicBlock title="Enunciado e ideia física" tone="green">
+              <TopicBlock
+                title="Por que essa lei foi criada?"
+                tone="green"
+                icon={History}
+              >
                 <Paragraph>
-                  A Primeira Lei de Newton afirma que todo corpo tende a permanecer em repouso ou em movimento retilíneo uniforme, a menos que uma força resultante externa atue sobre ele.
+                  A Primeira Lei foi criada para corrigir o erro antigo de imaginar que a força é necessária para manter o movimento. Newton formalizou a ideia de que, se nada “sobrar” depois da soma das forças, o corpo não muda seu estado de movimento.
                 </Paragraph>
 
-                <FormulaStep
-                  title="Forma matemática da Primeira Lei"
-                  explanation="Se a resultante é nula, a aceleração é nula. Se a aceleração é nula, a velocidade vetorial permanece constante."
-                  formula={String.raw`\vec{F}_{\text{res}} = \vec{0} \Rightarrow \vec{a} = \vec{0} \Rightarrow \vec{v} = \text{constante}`}
-                  tone="green"
-                />
+                <Paragraph>
+                  Ela responde a uma pergunta fundamental:
+                </Paragraph>
 
-                <NoteBox title="Equilíbrio não significa necessariamente repouso" tone="amber">
-                  Se <InlineFormulaBox formula={String.raw`\vec{v} = \vec{0}`} />, o corpo está em repouso. Se{" "}
-                  <InlineFormulaBox formula={String.raw`\vec{v} \neq \vec{0}`} /> e constante, o corpo está em MRU. Nos dois casos, a resultante é nula.
+                <NoteBox title="Pergunta central da Primeira Lei" tone="green">
+                  O que acontece com um corpo quando a força resultante sobre ele é nula?
+                </NoteBox>
+
+                <Paragraph>
+                  A resposta é: ele não acelera. Se estava parado, continua parado. Se estava em movimento retilíneo uniforme, continua em movimento retilíneo uniforme.
+                </Paragraph>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Ideia intuitiva"
+                tone="blue"
+                icon={Lightbulb}
+              >
+                <Paragraph>
+                  Imagine um disco deslizando sobre uma mesa. Em uma mesa áspera, ele para rápido. Em uma mesa mais lisa, ele vai mais longe. Em uma superfície ideal sem atrito e sem resistência do ar, ele continuaria indefinidamente em linha reta com velocidade constante.
+                </Paragraph>
+
+                <Paragraph>
+                  Isso mostra que o movimento não precisa de força para continuar. O que muda o movimento é a força resultante. Se a resultante é zero, nada altera a velocidade vetorial.
+                </Paragraph>
+
+                <NoteBox title="A palavra-chave é velocidade vetorial" tone="blue">
+                  Velocidade vetorial envolve módulo, direção e sentido. Se nenhum desses três aspectos muda, a aceleração é zero.
                 </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Interpretação termo a termo dentro da Primeira Lei" tone="green">
-                <SubTitle>Força resultante nula</SubTitle>
-                <Paragraph>
-                  Não significa ausência de forças. Significa que, depois de somar vetorialmente todas as forças, o resultado é zero.
-                </Paragraph>
+              <TopicBlock
+                title="Enunciado formal"
+                tone="green"
+                icon={BookOpen}
+              >
+                <blockquote className="border-l-4 border-green-500 pl-5 py-3 bg-green-50 rounded-r-xl text-slate-700 italic leading-8">
+                  Todo corpo tende a permanecer em repouso ou em movimento retilíneo uniforme, a menos que uma força resultante externa atue sobre ele.
+                </blockquote>
 
                 <FormulaStep
-                  title="Exemplo de equilíbrio"
-                  explanation="Um livro parado na mesa tem peso para baixo e normal para cima."
-                  formula={String.raw`N - P = 0 \Rightarrow N = P`}
+                  title="Forma matemática da Primeira Lei"
+                  explanation="Se a força resultante é nula, a aceleração é nula. Se a aceleração é nula, a velocidade vetorial permanece constante."
+                  formula={String.raw`\vec{F}_{\text{res}} = \vec{0} \Rightarrow \vec{a} = \vec{0} \Rightarrow \vec{v} = \text{constante}`}
                   tone="green"
-                />
-
-                <SubTitle>Aceleração nula</SubTitle>
-                <Paragraph>
-                  Se a aceleração é nula, a velocidade não muda. O corpo pode continuar parado ou continuar em movimento retilíneo uniforme.
-                </Paragraph>
-
-                <FormulaStep
-                  title="Velocidade constante"
-                  formula={String.raw`\vec{a} = \vec{0} \Rightarrow \vec{v} = \text{constante}`}
-                  tone="blue"
                 />
               </TopicBlock>
 
-              <TopicBlock title="Casos especiais da Primeira Lei" tone="blue">
+              <TopicBlock
+                title="Explicando a fórmula com calma"
+                tone="slate"
+                icon={Calculator}
+              >
+                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}}`} /></SubTitle>
+                <Paragraph>
+                  Representa a soma vetorial de todas as forças que atuam no corpo. Não significa “não existe força”. Significa que as forças se equilibram.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Resultante como soma vetorial"
+                  formula={String.raw`\vec{F}_{\text{res}} = \vec{F}_1 + \vec{F}_2 + \vec{F}_3 + \cdots`}
+                  tone="blue"
+                />
+
+                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{a}`} /></SubTitle>
+                <Paragraph>
+                  Representa a aceleração vetorial. Se ela é zero, a velocidade vetorial não muda. Não importa se o corpo está parado ou se movendo. O ponto é: ele não altera seu estado de movimento.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Aceleração nula"
+                  formula={String.raw`\vec{a} = \vec{0}`}
+                  tone="green"
+                />
+
+                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{v} = \text{constante}`} /></SubTitle>
+                <Paragraph>
+                  Significa que a velocidade vetorial permanece a mesma. Se ela era zero, continua zero. Se era diferente de zero, continua com mesmo módulo, mesma direção e mesmo sentido.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Duas possibilidades"
+                  formula={String.raw`\vec{v} = \vec{0} \quad \text{ou} \quad \vec{v} \neq \vec{0} \ \text{constante}`}
+                  tone="purple"
+                />
+              </TopicBlock>
+
+              <TopicBlock
+                title="Por que essa lei funciona?"
+                tone="purple"
+                icon={Brain}
+              >
+                <Paragraph>
+                  A Primeira Lei funciona porque a velocidade de um corpo só muda quando existe aceleração. E, no modelo newtoniano, aceleração só aparece quando há força resultante.
+                </Paragraph>
+
+                <Paragraph>
+                  Se todas as forças se equilibram, não existe agente físico capaz de alterar o movimento do corpo. O corpo simplesmente mantém aquilo que já estava fazendo.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Ponte com a Segunda Lei"
+                  explanation="A Primeira Lei pode ser vista como o caso em que a força resultante da Segunda Lei vale zero."
+                  formula={String.raw`\vec{F}_{\text{res}} = m\vec{a} \quad \text{e} \quad \vec{F}_{\text{res}} = \vec{0} \Rightarrow \vec{a} = \vec{0}`}
+                  tone="purple"
+                />
+
+                <NoteBox title="Mas atenção" tone="amber">
+                  A Primeira Lei não é inútil por parecer um caso da Segunda. Ela define o tipo de referencial em que as Leis de Newton funcionam diretamente: os referenciais inerciais.
+                </NoteBox>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Referencial inercial"
+                tone="blue"
+                icon={Compass}
+              >
+                <Paragraph>
+                  Um referencial inercial é aquele em que um corpo livre de força resultante permanece em repouso ou em movimento retilíneo uniforme.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Condição em um referencial inercial"
+                  formula={String.raw`\vec{F}_{\text{res}} = \vec{0} \Rightarrow \vec{v} = \text{constante}`}
+                  tone="blue"
+                />
+
+                <Paragraph>
+                  Em vestibulares e no Ensino Médio, a Terra costuma ser tratada como aproximadamente inercial em problemas comuns, como blocos, rampas, elevadores e polias. Essa é uma aproximação, porque a Terra gira e orbita o Sol, mas funciona muito bem para a maioria dos problemas.
+                </Paragraph>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Equilíbrio estático e equilíbrio dinâmico"
+                tone="green"
+                icon={Scale}
+              >
                 <FormulaGrid>
                   <NoteBox title="Equilíbrio estático" tone="green">
-                    O corpo está parado e continua parado:{" "}
+                    O corpo está parado e continua parado:
                     <InlineFormulaBox formula={String.raw`\vec{v} = \vec{0}`} />.
                   </NoteBox>
 
                   <NoteBox title="Equilíbrio dinâmico" tone="blue">
-                    O corpo se move com velocidade constante:{" "}
+                    O corpo está em movimento retilíneo uniforme:
                     <InlineFormulaBox formula={String.raw`\vec{v} = \text{constante}`} />.
                   </NoteBox>
-
-                  <NoteBox title="MRU" tone="purple">
-                    Movimento retilíneo uniforme é compatível com força resultante nula.
-                  </NoteBox>
-
-                  <NoteBox title="Repouso" tone="amber">
-                    Repouso também é compatível com força resultante nula.
-                  </NoteBox>
                 </FormulaGrid>
+
+                <Paragraph>
+                  Nos dois casos, a força resultante é nula. A diferença é apenas o valor da velocidade. No equilíbrio estático, ela é zero. No equilíbrio dinâmico, ela é constante e diferente de zero.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Condição geral de equilíbrio"
+                  formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`}
+                  tone="green"
+                />
               </TopicBlock>
 
-              <TopicBlock title="Interpretação gráfica ligada à Primeira Lei" tone="blue">
+              <TopicBlock
+                title="Como reconhecer a Primeira Lei em questões?"
+                tone="amber"
+                icon={Search}
+              >
                 <Paragraph>
-                  Se a força resultante é nula, a aceleração é nula. Logo, no gráfico velocidade versus tempo, a velocidade fica constante.
+                  A Primeira Lei costuma aparecer quando a questão fala de repouso, movimento retilíneo uniforme, velocidade constante, equilíbrio ou força resultante nula.
+                </Paragraph>
+
+                <BulletList
+                  items={[
+                    <>“O corpo permanece em repouso...”</>,
+                    <>“O corpo se move com velocidade constante...”</>,
+                    <>“A força resultante é nula...”</>,
+                    <>“O sistema está em equilíbrio...”</>,
+                    <>“O objeto está em MRU...”</>,
+                  ]}
+                />
+
+                <NoteBox title="O que pensar na hora da prova" tone="amber">
+                  Se a velocidade não muda, a aceleração é zero. Se a aceleração é zero, a força resultante é zero.
+                </NoteBox>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Interpretação gráfica na Primeira Lei"
+                tone="blue"
+                icon={Activity}
+              >
+                <Paragraph>
+                  Se a força resultante é nula, a aceleração é nula. No gráfico velocidade versus tempo, isso aparece como uma reta horizontal.
                 </Paragraph>
 
                 <FormulaGrid>
                   <FormulaStep
-                    title="Resultante nula"
+                    title="Força resultante"
                     formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`}
                     tone="green"
                   />
                   <FormulaStep
-                    title="Aceleração nula"
+                    title="Aceleração"
                     formula={String.raw`\vec{a} = \vec{0}`}
                     tone="blue"
                   />
                   <FormulaStep
-                    title="Gráfico v × t"
-                    explanation="Velocidade constante gera uma reta horizontal."
-                    formula={String.raw`v = \text{constante}`}
+                    title="Velocidade"
+                    formula={String.raw`\vec{v} = \text{constante}`}
                     tone="purple"
                   />
                 </FormulaGrid>
+
+                <NoteBox title="No gráfico v × t" tone="blue">
+                  Uma reta horizontal significa aceleração zero. Logo, pela Dinâmica, a força resultante também é zero.
+                </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Armadilhas da Primeira Lei" tone="rose">
+              <TopicBlock
+                title="Erros comuns na Primeira Lei"
+                tone="rose"
+                icon={AlertTriangle}
+              >
                 <FormulaGrid>
-                  <NoteBox title="Erro: força mantém movimento" tone="red">
-                    Força resultante não mantém movimento. Ela altera movimento.
+                  <NoteBox title="Achar que força mantém movimento" tone="red">
+                    Errado. Força resultante altera movimento. Movimento retilíneo uniforme não precisa de força resultante.
                   </NoteBox>
 
-                  <NoteBox title="Erro: resultante nula significa parado" tone="red">
-                    Resultante nula significa velocidade constante. Essa velocidade pode ser zero ou diferente de zero.
+                  <NoteBox title="Achar que resultante nula significa repouso" tone="red">
+                    Errado. Resultante nula significa velocidade constante. Essa velocidade pode ser zero ou diferente de zero.
                   </NoteBox>
 
-                  <NoteBox title="Erro: inércia é força" tone="red">
-                    Inércia não é força. É propriedade da matéria.
+                  <NoteBox title="Desenhar força do movimento" tone="red">
+                    Errado. Movimento não é corpo e não exerce força.
                   </NoteBox>
 
-                  <NoteBox title="Erro: desenhar força do movimento" tone="red">
-                    “Força do movimento” não existe em DCL newtoniano. Movimento não empurra nada, apesar de algumas apostilas tentarem o contrário.
+                  <NoteBox title="Confundir inércia com força" tone="red">
+                    Errado. Inércia é propriedade da matéria, não uma força desenhada no DCL.
                   </NoteBox>
                 </FormulaGrid>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Ponto para ITA/IME"
+                tone="purple"
+                icon={Target}
+              >
+                <Paragraph>
+                  Em prova difícil, a Primeira Lei aparece disfarçada em problemas de equilíbrio, referenciais, sistemas sem aceleração e análise conceitual. O erro mais comum é enxergar movimento e inventar uma força no sentido do movimento.
+                </Paragraph>
+
+                <NoteBox title="Regra mental" tone="purple">
+                  Antes de perguntar “para onde o corpo se move?”, pergunte: “a velocidade dele está mudando?”. Se não está, a resultante é zero.
+                </NoteBox>
               </TopicBlock>
             </Section>
 
             <Section
               icon={Calculator}
               title="Segunda Lei de Newton — Princípio Fundamental da Dinâmica"
-              subtitle="A lei que liga força resultante, massa e aceleração. Aqui entram peso, normal, tração, atrito, plano inclinado, elevador e sistemas."
+              subtitle="A lei que explica o que acontece quando sobra força resultante."
               gradient="bg-gradient-to-r from-indigo-600 to-purple-700"
             >
-              <TopicBlock title="Enunciado e fórmula central" tone="indigo">
+              <TopicBlock
+                title="Por que essa lei foi criada?"
+                tone="indigo"
+                icon={History}
+              >
                 <Paragraph>
-                  A Segunda Lei de Newton afirma que a força resultante sobre um corpo é igual ao produto da massa pela aceleração.
+                  A Primeira Lei responde o que acontece quando a força resultante é nula: o corpo não acelera. Mas Newton precisava responder a pergunta seguinte, muito mais operacional:
                 </Paragraph>
+
+                <NoteBox title="Pergunta central da Segunda Lei" tone="indigo">
+                  O que acontece quando sobra força resultante sobre um corpo?
+                </NoteBox>
+
+                <Paragraph>
+                  A resposta é: o corpo acelera. Mas a aceleração não depende só da força. Ela depende também da massa. Um mesmo empurrão produz efeitos bem diferentes em uma bola de tênis e em um caminhão carregado. A natureza, aparentemente, não liga para sua vontade de simplificar.
+                </Paragraph>
+
+                <Paragraph>
+                  A Segunda Lei nasceu para quantificar essa relação entre força resultante, massa e aceleração.
+                </Paragraph>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Ideia intuitiva"
+                tone="blue"
+                icon={Lightbulb}
+              >
+                <Paragraph>
+                  A força resultante mede o desequilíbrio das interações sobre o corpo. A massa mede a resistência do corpo a mudar seu estado de movimento. A aceleração é a resposta do corpo a esse desequilíbrio.
+                </Paragraph>
+
+                <ThreeGrid>
+                  <NoteBox title="Força resultante" tone="blue">
+                    É o que sobra depois de somar vetorialmente todas as forças.
+                  </NoteBox>
+
+                  <NoteBox title="Massa" tone="purple">
+                    Mede a inércia, isto é, a resistência à mudança de movimento.
+                  </NoteBox>
+
+                  <NoteBox title="Aceleração" tone="green">
+                    É a mudança da velocidade vetorial no tempo.
+                  </NoteBox>
+                </ThreeGrid>
+
+                <Paragraph>
+                  Se a força resultante aumenta, a aceleração aumenta. Se a massa aumenta, a aceleração diminui. Esse é o núcleo da Segunda Lei.
+                </Paragraph>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Enunciado formal e fórmula principal"
+                tone="indigo"
+                icon={BookOpen}
+              >
+                <blockquote className="border-l-4 border-indigo-500 pl-5 py-3 bg-indigo-50 rounded-r-xl text-slate-700 italic leading-8">
+                  A força resultante sobre um corpo é igual ao produto da massa do corpo pela aceleração adquirida.
+                </blockquote>
 
                 <FormulaStep
                   title="Segunda Lei de Newton"
-                  explanation="A aceleração tem a mesma direção e o mesmo sentido da força resultante."
+                  explanation="A equação é vetorial. Isso significa que a aceleração tem a mesma direção e o mesmo sentido da força resultante."
                   formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
                   tone="blue"
                 />
-
-                <FormulaGrid>
-                  <NoteBox title="Mais força resultante" tone="blue">
-                    Para a mesma massa, maior força resultante gera maior aceleração.
-                  </NoteBox>
-
-                  <NoteBox title="Mais massa" tone="purple">
-                    Para a mesma força resultante, maior massa gera menor aceleração.
-                  </NoteBox>
-                </FormulaGrid>
               </TopicBlock>
 
-              <TopicBlock title="Interpretação termo a termo da Segunda Lei" tone="indigo">
-                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}}`} /></SubTitle>
+              <TopicBlock
+                title="Como essa fórmula foi construída?"
+                tone="purple"
+                icon={Brain}
+              >
                 <Paragraph>
-                  É a soma vetorial de todas as forças que atuam no corpo. Não é a força aplicada, não é a maior força e não é necessariamente a força no sentido do movimento.
+                  Experimentalmente, observa-se que, para um mesmo corpo, aumentar a força resultante aumenta a aceleração. Se você dobra a força resultante, a aceleração também dobra, desde que a massa seja a mesma.
                 </Paragraph>
 
                 <FormulaStep
-                  title="Soma vetorial"
+                  title="Proporcionalidade com a força"
+                  formula={String.raw`a \propto F_{\text{res}}`}
+                  tone="blue"
+                />
+
+                <Paragraph>
+                  Também se observa que, para a mesma força resultante, corpos de massas maiores aceleram menos. Se a massa dobra, a aceleração fica pela metade.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Proporcionalidade inversa com a massa"
+                  formula={String.raw`a \propto \frac{1}{m}`}
+                  tone="purple"
+                />
+
+                <Paragraph>
+                  Juntando as duas ideias:
+                </Paragraph>
+
+                <FormulaStep
+                  title="Síntese física"
+                  formula={String.raw`a \propto \frac{F_{\text{res}}}{m}`}
+                  tone="green"
+                />
+
+                <Paragraph>
+                  No Sistema Internacional, escolhemos as unidades de modo que a constante de proporcionalidade seja 1. Assim:
+                </Paragraph>
+
+                <FormulaStep
+                  title="Forma final"
+                  formula={String.raw`F_{\text{res}} = ma`}
+                  tone="green"
+                />
+              </TopicBlock>
+
+              <TopicBlock
+                title="Leitura termo a termo"
+                tone="slate"
+                icon={Eye}
+              >
+                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}}`} /></SubTitle>
+                <Paragraph>
+                  Não é uma força qualquer. É a soma vetorial de todas as forças reais que atuam no corpo escolhido. Se há 50 N para a direita e 20 N para a esquerda, a resultante horizontal é 30 N para a direita.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Soma das forças"
                   formula={String.raw`\vec{F}_{\text{res}} = \vec{F}_1 + \vec{F}_2 + \vec{F}_3 + \cdots`}
                   tone="blue"
                 />
 
                 <SubTitle>O termo <InlineFormulaBox formula={String.raw`m`} /></SubTitle>
                 <Paragraph>
-                  É a massa do corpo. Mede a inércia, isto é, a resistência que o corpo oferece à mudança de movimento.
+                  Representa a massa do corpo. Massa não é peso. Massa mede a inércia: quanto maior a massa, maior a dificuldade de alterar a velocidade do corpo.
                 </Paragraph>
 
                 <FormulaStep
-                  title="A massa aparece no denominador da aceleração"
-                  formula={String.raw`\vec{a} = \frac{\vec{F}_{\text{res}}}{m}`}
+                  title="Massa como resistência à aceleração"
+                  formula={String.raw`a = \frac{F_{\text{res}}}{m}`}
                   tone="purple"
                 />
 
                 <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{a}`} /></SubTitle>
                 <Paragraph>
-                  É a aceleração vetorial. Ela representa a variação da velocidade vetorial no tempo.
+                  Representa a aceleração vetorial. Ela indica como a velocidade vetorial muda no tempo. A aceleração não aponta necessariamente para onde o corpo se move. Ela aponta no sentido da força resultante.
                 </Paragraph>
 
-                <FormulaGrid>
-                  <FormulaStep
-                    title="Definição média de aceleração"
-                    formula={String.raw`\vec{a} = \frac{\Delta \vec{v}}{\Delta t}`}
-                    tone="green"
-                  />
-                  <FormulaStep
-                    title="Aceleração causada pela resultante"
-                    formula={String.raw`\vec{a} = \frac{\vec{F}_{\text{res}}}{m}`}
-                    tone="blue"
-                  />
-                </FormulaGrid>
+                <FormulaStep
+                  title="Aceleração média"
+                  formula={String.raw`\vec{a} = \frac{\Delta \vec{v}}{\Delta t}`}
+                  tone="green"
+                />
               </TopicBlock>
 
-              <TopicBlock title="Unidade e análise dimensional dentro da Segunda Lei" tone="blue">
+              <TopicBlock
+                title="Por que a aceleração aponta no sentido da força resultante?"
+                tone="blue"
+                icon={Compass}
+              >
                 <Paragraph>
-                  A unidade de força vem diretamente da Segunda Lei. Como massa é medida em quilograma e aceleração em metro por segundo ao quadrado, a força é medida em newtons.
+                  Pela Segunda Lei:
                 </Paragraph>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
-                  <FormulaStep title="Segunda Lei" formula={String.raw`F = ma`} tone="blue" />
-                  <FormulaStep title="Dimensões" formula={String.raw`[F] = [m][a]`} tone="green" />
-                  <FormulaStep title="Substituindo unidades" formula={String.raw`[F] = \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`} tone="purple" />
-                  <FormulaStep title="Newton" formula={String.raw`1 \ \text{N} = 1 \ \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`} tone="amber" />
-                </div>
+                <FormulaStep
+                  title="Isolando a aceleração"
+                  formula={String.raw`\vec{a} = \frac{\vec{F}_{\text{res}}}{m}`}
+                  tone="blue"
+                />
 
-                <NoteBox title="Peso também é força" tone="amber">
-                  Como <InlineFormulaBox formula={String.raw`P = mg`} />, o peso também tem unidade{" "}
-                  <InlineFormulaBox formula={String.raw`\text{N}`} />. Massa é kg. Peso é N. Esse erro é uma praga resistente.
+                <Paragraph>
+                  Como a massa é uma grandeza positiva, dividir um vetor por uma massa positiva não muda sua direção nem seu sentido. Por isso, a aceleração tem a mesma direção e o mesmo sentido da força resultante.
+                </Paragraph>
+
+                <NoteBox title="Exemplo clássico" tone="amber">
+                  Em um lançamento vertical para cima, o corpo ainda pode estar subindo, mas a força resultante é o peso para baixo. Portanto, a aceleração é para baixo. Velocidade para cima, aceleração para baixo. A natureza não consulta o velocímetro antes de decidir a aceleração.
                 </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Diagrama de Corpo Livre dentro da Segunda Lei" tone="slate">
+              <TopicBlock
+                title="Análise dimensional do newton"
+                tone="blue"
+                icon={Scale}
+              >
                 <Paragraph>
-                  O DCL é o desenho das forças reais que atuam sobre um corpo. Em problemas de Segunda Lei, ele é mais importante do que sair jogando fórmula como quem joga sal grosso.
+                  A unidade de força surge da própria Segunda Lei. Como força é massa vezes aceleração:
+                </Paragraph>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                  <FormulaStep title="Segunda Lei em módulo" formula={String.raw`F = ma`} tone="blue" />
+                  <FormulaStep title="Dimensões" formula={String.raw`[F] = [m][a]`} tone="green" />
+                  <FormulaStep title="Massa e aceleração" formula={String.raw`[m] = \text{kg} \qquad [a] = \frac{\text{m}}{\text{s}^2}`} tone="purple" />
+                  <FormulaStep title="Unidade de força" formula={String.raw`[F] = \text{kg}\cdot \frac{\text{m}}{\text{s}^2}`} tone="amber" />
+                  <FormulaStep title="Definição de newton" formula={String.raw`1 \ \text{N} = 1 \ \text{kg}\cdot \frac{\text{m}}{\text{s}^2}`} tone="green" />
+                </div>
+
+                <NoteBox title="Interpretação" tone="blue">
+                  Uma força de 1 N é a força resultante capaz de produzir aceleração de 1 m/s² em um corpo de massa 1 kg.
+                </NoteBox>
+              </TopicBlock>
+
+              <TopicBlock
+                title="DCL: o mapa antes da fórmula"
+                tone="slate"
+                icon={ListChecks}
+              >
+                <Paragraph>
+                  O Diagrama de Corpo Livre é o desenho de todas as forças que atuam sobre o corpo escolhido. Ele é obrigatório para resolver Dinâmica direito. Pular o DCL é igual resolver equação sem ler o enunciado: dá para fazer, mas é uma aposta contra a própria dignidade.
                 </Paragraph>
 
                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
-                  <p className="font-bold text-indigo-900 mb-4">Sequência segura para aplicar a Segunda Lei</p>
+                  <p className="font-bold text-indigo-900 mb-4">Sequência segura</p>
                   <NumberedSteps
                     items={[
                       <>Escolha o corpo ou sistema.</>,
-                      <>Desenhe apenas as forças que atuam nele.</>,
+                      <>Isole mentalmente esse corpo.</>,
+                      <>Desenhe apenas forças que atuam nele.</>,
+                      <>Não desenhe forças que ele exerce nos outros.</>,
                       <>Identifique quem exerce cada força.</>,
                       <>Escolha eixos convenientes.</>,
                       <>Decomponha forças inclinadas.</>,
-                      <>Escreva <InlineFormulaBox formula={String.raw`\sum F_x = ma_x`} /> e <InlineFormulaBox formula={String.raw`\sum F_y = ma_y`} />.</>,
+                      <>Aplique <InlineFormulaBox formula={String.raw`\sum F = ma`} /> em cada eixo.</>,
                     ]}
                   />
                 </div>
@@ -825,193 +1108,314 @@ export default function DynamicsTopicNewton() {
                 </FormulaGrid>
               </TopicBlock>
 
-              <TopicBlock title="Peso como aplicação da Segunda Lei" tone="amber">
+              <TopicBlock
+                title="Peso como aplicação da Segunda Lei"
+                tone="amber"
+                icon={Layers}
+              >
                 <Paragraph>
-                  Peso é a força gravitacional exercida por um astro sobre um corpo. Perto da superfície da Terra:
+                  O peso é a força gravitacional que a Terra, ou outro astro, exerce sobre um corpo. Ele não é massa. Massa é propriedade do corpo. Peso é força.
+                </Paragraph>
+
+                <Paragraph>
+                  A fórmula do peso aparece porque, na queda livre ideal, desprezando a resistência do ar, a única força sobre o corpo é a força gravitacional. Como a aceleração de queda livre é <InlineFormulaBox formula={String.raw`\vec{g}`} />, a força gravitacional fica:
                 </Paragraph>
 
                 <FormulaGrid>
                   <FormulaStep title="Forma vetorial" formula={String.raw`\vec{P} = m\vec{g}`} tone="blue" />
-                  <FormulaStep title="Módulo do peso" formula={String.raw`P = mg`} tone="green" />
+                  <FormulaStep title="Módulo" formula={String.raw`P = mg`} tone="green" />
                 </FormulaGrid>
 
-                <Paragraph>
-                  O peso aponta aproximadamente para o centro da Terra. Ele depende da massa e do campo gravitacional local.
-                </Paragraph>
-
-                <NoteBox title="Massa não é peso" tone="red">
-                  Um corpo de massa <InlineFormulaBox formula={String.raw`70 \ \text{kg}`} /> tem peso, na Terra com{" "}
-                  <InlineFormulaBox formula={String.raw`g = 10 \ \text{m/s}^2`} />, igual a{" "}
-                  <InlineFormulaBox formula={String.raw`P = 700 \ \text{N}`} />.
+                <NoteBox title="Massa versus peso" tone="red">
+                  Massa se mede em kg. Peso se mede em N. Um corpo de massa <InlineFormulaBox formula={String.raw`70 \ \text{kg}`} /> tem, na Terra com{" "}
+                  <InlineFormulaBox formula={String.raw`g = 10 \ \text{m/s}^2`} />, peso <InlineFormulaBox formula={String.raw`P = 700 \ \text{N}`} />.
                 </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Normal como aplicação da Segunda Lei" tone="blue">
+              <TopicBlock
+                title="Normal como aplicação da Segunda Lei"
+                tone="blue"
+                icon={Layers}
+              >
                 <Paragraph>
-                  A força normal é uma força de contato perpendicular à superfície. Ela deve ser calculada pela Segunda Lei no eixo perpendicular ao contato.
+                  A normal é a força de contato que uma superfície exerce sobre um corpo. Ela é perpendicular à superfície. A normal não existe simplesmente porque há peso; ela existe porque há compressão entre corpo e superfície.
                 </Paragraph>
+
+                <Paragraph>
+                  Se a compressão aumenta, a normal aumenta. Se a compressão diminui, a normal diminui. Se o corpo perde contato com a superfície, a normal vira zero.
+                </Paragraph>
+
+                <NoteBox title="Regra de ouro" tone="blue">
+                  A normal não tem fórmula fixa. Ela deve ser calculada pela Segunda Lei no eixo perpendicular ao contato.
+                </NoteBox>
 
                 <FormulaGrid>
                   <FormulaStep
                     title="Superfície horizontal simples"
+                    explanation="Sem aceleração vertical e sem outras forças verticais."
                     formula={String.raw`N - mg = 0 \Rightarrow N = mg`}
                     tone="blue"
                   />
+
                   <FormulaStep
                     title="Plano inclinado"
+                    explanation="A normal equilibra apenas a componente perpendicular do peso."
                     formula={String.raw`N - mg\cos\theta = 0 \Rightarrow N = mg\cos\theta`}
                     tone="green"
                   />
+
                   <FormulaStep
                     title="Elevador acelerando para cima"
+                    explanation="O piso precisa empurrar mais que o peso."
                     formula={String.raw`N - mg = ma \Rightarrow N = m(g+a)`}
                     tone="purple"
                   />
+
                   <FormulaStep
                     title="Elevador acelerando para baixo"
+                    explanation="O piso empurra menos que o peso."
                     formula={String.raw`mg - N = ma \Rightarrow N = m(g-a)`}
                     tone="amber"
                   />
-                </FormulaGrid>
 
-                <NoteBox title="Armadilha" tone="red">
-                  Normal igual ao peso é caso particular, não lei da natureza. Física não é Ctrl+C Ctrl+V de situação fácil.
-                </NoteBox>
-              </TopicBlock>
-
-              <TopicBlock title="Tração como aplicação da Segunda Lei" tone="slate">
-                <Paragraph>
-                  Tração é a força transmitida por fios, cordas e cabos esticados. Em fio ideal, normalmente assumimos massa desprezível, fio inextensível e mesma tração ao longo do mesmo fio.
-                </Paragraph>
-
-                <FormulaGrid>
-                  <FormulaStep title="Corpo pendurado parado" formula={String.raw`T = mg`} tone="blue" />
-                  <FormulaStep title="Corpo subindo acelerado" formula={String.raw`T - mg = ma \Rightarrow T = m(g+a)`} tone="green" />
-                  <FormulaStep title="Corpo descendo acelerado" formula={String.raw`mg - T = ma \Rightarrow T = m(g-a)`} tone="amber" />
-                </FormulaGrid>
-
-                <NoteBox title="Armadilha" tone="red">
-                  Tração não é sempre igual ao peso. Ela só vale <InlineFormulaBox formula={String.raw`mg`} /> em situações específicas de equilíbrio.
-                </NoteBox>
-              </TopicBlock>
-
-              <TopicBlock title="Atrito como aplicação da Segunda Lei" tone="amber">
-                <Paragraph>
-                  O atrito é uma força de contato paralela à superfície. Ele se opõe à tendência de deslizamento relativo entre as superfícies.
-                </Paragraph>
-
-                <FormulaGrid>
-                  <TopicBlock title="Atrito estático" tone="amber">
-                    <FormulaStep
-                      title="Relação geral"
-                      explanation="Ele se ajusta conforme a necessidade."
-                      formula={String.raw`f_e \leq \mu_e N`}
-                      tone="amber"
-                    />
-                    <FormulaStep
-                      title="Valor máximo"
-                      explanation="A igualdade só ocorre na iminência de escorregar."
-                      formula={String.raw`f_{e,\text{máx}} = \mu_e N`}
-                      tone="amber"
-                    />
-                  </TopicBlock>
-
-                  <TopicBlock title="Atrito cinético" tone="blue">
-                    <FormulaStep
-                      title="Durante o deslizamento"
-                      formula={String.raw`f_c = \mu_c N`}
-                      tone="blue"
-                    />
-                    <FormulaStep
-                      title="Comparação comum"
-                      formula={String.raw`\mu_e > \mu_c`}
-                      tone="green"
-                    />
-                  </TopicBlock>
-                </FormulaGrid>
-
-                <NoteBox title="Armadilha" tone="red">
-                  Nunca comece colocando <InlineFormulaBox formula={String.raw`f_e = \mu_e N`} /> para atrito estático, a menos que o problema diga que está na iminência de escorregar.
-                </NoteBox>
-              </TopicBlock>
-
-              <TopicBlock title="Plano inclinado dentro da Segunda Lei" tone="green">
-                <Paragraph>
-                  No plano inclinado, a escolha esperta é usar um eixo paralelo ao plano e outro perpendicular ao plano. Escolher eixo ruim é uma forma elegante de perder tempo.
-                </Paragraph>
-
-                <FormulaGrid>
-                  <FormulaStep title="Componente paralela do peso" formula={String.raw`P_{\parallel} = mg\sin\theta`} tone="green" />
-                  <FormulaStep title="Componente perpendicular do peso" formula={String.raw`P_{\perp} = mg\cos\theta`} tone="blue" />
-                  <FormulaStep title="Normal" formula={String.raw`N = mg\cos\theta`} tone="purple" />
-                  <FormulaStep title="Sem atrito" formula={String.raw`a = g\sin\theta`} tone="green" />
-                </FormulaGrid>
-
-                <SubTitle>Com atrito cinético, bloco descendo</SubTitle>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
-                  <FormulaStep title="Atrito" formula={String.raw`f_c = \mu_c mg\cos\theta`} tone="amber" />
-                  <FormulaStep title="Segunda Lei no eixo paralelo" formula={String.raw`mg\sin\theta - f_c = ma`} tone="green" />
-                  <FormulaStep title="Aceleração" formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`} tone="purple" />
-                </div>
-
-                <SubTitle>Iminência de escorregamento</SubTitle>
-                <FormulaStep
-                  title="Ângulo crítico"
-                  explanation="Na iminência de descer, o atrito estático é máximo."
-                  formula={String.raw`\mu_e = \tan\theta`}
-                  tone="amber"
-                />
-              </TopicBlock>
-
-              <TopicBlock title="Elevador dentro da Segunda Lei" tone="blue">
-                <Paragraph>
-                  No elevador, a sensação de peso muda porque a normal muda. O peso real continua sendo <InlineFormulaBox formula={String.raw`P = mg`} />.
-                </Paragraph>
-
-                <FormulaGrid>
-                  <FormulaStep
-                    title="Acelerando para cima"
-                    explanation="A pessoa sente-se mais pesada."
-                    formula={String.raw`N = m(g+a)`}
-                    tone="blue"
-                  />
-                  <FormulaStep
-                    title="Acelerando para baixo"
-                    explanation="A pessoa sente-se mais leve."
-                    formula={String.raw`N = m(g-a)`}
-                    tone="green"
-                  />
                   <FormulaStep
                     title="Queda livre"
-                    explanation="A normal desaparece, mas o peso continua existindo."
+                    explanation="Não há contato efetivo com o piso."
                     formula={String.raw`a = g \Rightarrow N = 0`}
                     tone="red"
                   />
                 </FormulaGrid>
               </TopicBlock>
 
-              <TopicBlock title="Sistemas de blocos e polias dentro da Segunda Lei" tone="slate">
-                <SubTitle>Sistema de dois blocos</SubTitle>
+              <TopicBlock
+                title="Tração como aplicação da Segunda Lei"
+                tone="slate"
+                icon={Layers}
+              >
+                <Paragraph>
+                  A tração é a força transmitida por fios, cordas ou cabos esticados. Em problemas ideais, costuma-se considerar fio sem massa, fio inextensível, polia sem massa e sem atrito.
+                </Paragraph>
+
+                <Paragraph>
+                  Em um fio ideal, a tração tem o mesmo módulo ao longo do mesmo fio. Mas isso não significa que tração seja sempre igual ao peso. Ela depende da aceleração do corpo.
+                </Paragraph>
+
                 <FormulaGrid>
-                  <FormulaStep title="Aceleração do conjunto" formula={String.raw`a = \frac{F}{m_1 + m_2}`} tone="blue" />
-                  <FormulaStep title="Força de contato" formula={String.raw`C = \frac{m_2F}{m_1 + m_2}`} tone="green" />
+                  <FormulaStep
+                    title="Corpo pendurado em repouso ou MRU"
+                    formula={String.raw`T - mg = 0 \Rightarrow T = mg`}
+                    tone="blue"
+                  />
+
+                  <FormulaStep
+                    title="Corpo subindo acelerado"
+                    formula={String.raw`T - mg = ma \Rightarrow T = m(g+a)`}
+                    tone="green"
+                  />
+
+                  <FormulaStep
+                    title="Corpo descendo acelerado"
+                    formula={String.raw`mg - T = ma \Rightarrow T = m(g-a)`}
+                    tone="amber"
+                  />
+                </FormulaGrid>
+
+                <NoteBox title="Erro comum" tone="red">
+                  Tração só é igual ao peso em situações específicas. Se há aceleração, geralmente <InlineFormulaBox formula={String.raw`T \neq mg`} />.
+                </NoteBox>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Atrito como aplicação da Segunda Lei"
+                tone="amber"
+                icon={Layers}
+              >
+                <Paragraph>
+                  O atrito é uma força de contato paralela à superfície. Ele se opõe à tendência de deslizamento relativo entre as superfícies, não necessariamente ao movimento do corpo em relação ao chão.
+                </Paragraph>
+
+                <FormulaGrid>
+                  <TopicBlock title="Atrito estático" tone="amber">
+                    <Paragraph>
+                      Atua quando não há deslizamento relativo. Ele se ajusta conforme a necessidade, até um valor máximo.
+                    </Paragraph>
+
+                    <FormulaStep
+                      title="Relação geral"
+                      formula={String.raw`f_e \leq \mu_e N`}
+                      tone="amber"
+                    />
+
+                    <FormulaStep
+                      title="Valor máximo"
+                      formula={String.raw`f_{e,\text{máx}} = \mu_e N`}
+                      tone="amber"
+                    />
+
+                    <NoteBox title="Cuidado" tone="red">
+                      A igualdade só vale na iminência de escorregamento.
+                    </NoteBox>
+                  </TopicBlock>
+
+                  <TopicBlock title="Atrito cinético" tone="blue">
+                    <Paragraph>
+                      Atua quando já existe deslizamento relativo entre as superfícies.
+                    </Paragraph>
+
+                    <FormulaStep
+                      title="Atrito cinético"
+                      formula={String.raw`f_c = \mu_c N`}
+                      tone="blue"
+                    />
+
+                    <FormulaStep
+                      title="Comparação usual"
+                      formula={String.raw`\mu_e > \mu_c`}
+                      tone="green"
+                    />
+                  </TopicBlock>
+                </FormulaGrid>
+
+                <NoteBox title="Exemplo importante" tone="green">
+                  Ao caminhar, o atrito sobre o pé aponta para frente. O pé tende a escorregar para trás em relação ao chão, então o chão exerce atrito para frente. É por isso que você anda. Sem atrito, vira coreografia triste no gelo.
+                </NoteBox>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Plano inclinado dentro da Segunda Lei"
+                tone="green"
+                icon={Compass}
+              >
+                <Paragraph>
+                  No plano inclinado, o peso continua apontando verticalmente para baixo. Mas o movimento costuma ocorrer ao longo da rampa. Por isso, decompomos o peso em duas componentes: uma paralela ao plano e outra perpendicular ao plano.
+                </Paragraph>
+
+                <FormulaGrid>
+                  <FormulaStep
+                    title="Componente paralela"
+                    explanation="É a parte do peso que tende a fazer o bloco descer a rampa."
+                    formula={String.raw`P_{\parallel} = mg\sin\theta`}
+                    tone="green"
+                  />
+
+                  <FormulaStep
+                    title="Componente perpendicular"
+                    explanation="É a parte do peso que comprime o bloco contra a superfície."
+                    formula={String.raw`P_{\perp} = mg\cos\theta`}
+                    tone="blue"
+                  />
+
+                  <FormulaStep
+                    title="Normal"
+                    formula={String.raw`N = mg\cos\theta`}
+                    tone="purple"
+                  />
+
+                  <FormulaStep
+                    title="Sem atrito"
+                    formula={String.raw`mg\sin\theta = ma \Rightarrow a = g\sin\theta`}
+                    tone="green"
+                  />
+                </FormulaGrid>
+
+                <SubTitle>Com atrito cinético, bloco descendo</SubTitle>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                  <FormulaStep
+                    title="Atrito cinético"
+                    formula={String.raw`f_c = \mu_c N = \mu_c mg\cos\theta`}
+                    tone="amber"
+                  />
+
+                  <FormulaStep
+                    title="Segunda Lei no eixo paralelo"
+                    formula={String.raw`mg\sin\theta - f_c = ma`}
+                    tone="green"
+                  />
+
+                  <FormulaStep
+                    title="Aceleração"
+                    formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`}
+                    tone="purple"
+                  />
+                </div>
+
+                <SubTitle>Iminência de escorregamento</SubTitle>
+
+                <Paragraph>
+                  Na iminência de o bloco começar a escorregar para baixo, o atrito estático aponta para cima da rampa e atinge seu valor máximo.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Condição do ângulo crítico"
+                  formula={String.raw`\mu_e = \tan\theta`}
+                  tone="amber"
+                />
+              </TopicBlock>
+
+              <TopicBlock
+                title="Sistemas de blocos e polias"
+                tone="purple"
+                icon={Layers}
+              >
+                <SubTitle>Sistema de dois blocos</SubTitle>
+
+                <Paragraph>
+                  Para achar a aceleração de um conjunto, muitas vezes é melhor analisar os corpos como um único sistema. As forças internas se cancelam no sistema completo. Depois, para achar contato ou tração, isolamos um corpo.
+                </Paragraph>
+
+                <FormulaGrid>
+                  <FormulaStep
+                    title="Aceleração do conjunto"
+                    formula={String.raw`a = \frac{F}{m_1 + m_2}`}
+                    tone="blue"
+                  />
+
+                  <FormulaStep
+                    title="Força de contato"
+                    formula={String.raw`C = m_2a = \frac{m_2F}{m_1 + m_2}`}
+                    tone="green"
+                  />
                 </FormulaGrid>
 
                 <SubTitle>Máquina de Atwood ideal</SubTitle>
+
+                <Paragraph>
+                  Dois corpos ligados por fio ideal e polia ideal têm acelerações de mesmo módulo, em sentidos opostos, no caso simples.
+                </Paragraph>
+
                 <FormulaGrid>
-                  <FormulaStep title="Aceleração" formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`} tone="purple" />
-                  <FormulaStep title="Tração" formula={String.raw`T = \frac{2m_1m_2g}{m_1 + m_2}`} tone="amber" />
+                  <FormulaStep
+                    title="Aceleração"
+                    formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`}
+                    tone="purple"
+                  />
+
+                  <FormulaStep
+                    title="Tração"
+                    formula={String.raw`T = \frac{2m_1m_2g}{m_1 + m_2}`}
+                    tone="amber"
+                  />
                 </FormulaGrid>
 
-                <SubTitle>Vínculo geométrico em fio</SubTitle>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
-                  <FormulaStep title="Comprimento constante" formula={String.raw`L = x_1 + x_2 + \text{constante}`} tone="blue" />
+                <SubTitle>Vínculo geométrico</SubTitle>
+
+                <Paragraph>
+                  Em fios inextensíveis, o comprimento total do fio é constante. Essa restrição gera relações entre deslocamentos, velocidades e acelerações.
+                </Paragraph>
+
+                <FormulaGrid>
+                  <FormulaStep title="Comprimento" formula={String.raw`L = x_1 + x_2 + \text{constante}`} tone="blue" />
                   <FormulaStep title="Velocidades" formula={String.raw`v_1 + v_2 = 0`} tone="green" />
                   <FormulaStep title="Acelerações" formula={String.raw`a_1 + a_2 = 0`} tone="purple" />
-                </div>
+                </FormulaGrid>
               </TopicBlock>
 
-              <TopicBlock title="Interpretação gráfica dentro da Segunda Lei" tone="blue">
+              <TopicBlock
+                title="Gráficos dentro da Segunda Lei"
+                tone="blue"
+                icon={Activity}
+              >
                 <Paragraph>
                   Se a massa é constante, força resultante e aceleração são diretamente proporcionais.
                 </Paragraph>
@@ -1019,63 +1423,196 @@ export default function DynamicsTopicNewton() {
                 <FormulaGrid>
                   <FormulaStep
                     title="Gráfico Fᵣₑₛ × a"
-                    explanation="O coeficiente angular é a massa."
+                    explanation="Reta passando pela origem."
                     formula={String.raw`F_{\text{res}} = ma`}
                     tone="blue"
                   />
+
                   <FormulaStep
                     title="Coeficiente angular"
+                    explanation="Se F está no eixo vertical e a no horizontal, a inclinação é a massa."
                     formula={String.raw`m = \frac{\Delta F_{\text{res}}}{\Delta a}`}
                     tone="green"
                   />
+
                   <FormulaStep
                     title="Gráfico a × Fᵣₑₛ"
-                    explanation="O coeficiente angular é o inverso da massa."
+                    explanation="Se a está no eixo vertical e F no horizontal, a inclinação é o inverso da massa."
                     formula={String.raw`a = \frac{1}{m}F_{\text{res}}`}
                     tone="purple"
                   />
+
                   <FormulaStep
-                    title="Gráfico v × t"
-                    explanation="A inclinação fornece a aceleração; pela Segunda Lei, isso permite descobrir a força resultante."
+                    title="Ponte com gráfico v × t"
+                    explanation="A inclinação do gráfico v × t é a aceleração."
                     formula={String.raw`a = \frac{\Delta v}{\Delta t}`}
                     tone="amber"
                   />
                 </FormulaGrid>
               </TopicBlock>
 
-              <TopicBlock title="Armadilhas da Segunda Lei" tone="rose">
+              <TopicBlock
+                title="Como reconhecer a Segunda Lei em questões?"
+                tone="amber"
+                icon={Search}
+              >
+                <Paragraph>
+                  A Segunda Lei aparece quando a questão envolve aceleração, força resultante, blocos, rampas, atrito, tração, normal, elevadores, polias ou sistemas.
+                </Paragraph>
+
+                <BulletList
+                  items={[
+                    <>“Determine a aceleração...”</>,
+                    <>“Determine a força de tração...”</>,
+                    <>“Determine a normal...”</>,
+                    <>“Um bloco desce um plano inclinado...”</>,
+                    <>“Um sistema de blocos é puxado...”</>,
+                    <>“O elevador acelera...”</>,
+                    <>“Há atrito entre as superfícies...”</>,
+                  ]}
+                />
+
+                <NoteBox title="O que pensar na hora da prova" tone="amber">
+                  Faça o DCL, escolha eixos, some as forças em cada eixo e aplique{" "}
+                  <InlineFormulaBox formula={String.raw`\sum F = ma`} />.
+                </NoteBox>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Erros comuns na Segunda Lei"
+                tone="rose"
+                icon={AlertTriangle}
+              >
                 <FormulaGrid>
-                  <NoteBox title="Confundir força aplicada com resultante" tone="red">
+                  <NoteBox title="Usar força aplicada no lugar da resultante" tone="red">
                     A aceleração vem da força resultante, não de uma força isolada.
                   </NoteBox>
+
                   <NoteBox title="Achar que aceleração segue a velocidade" tone="red">
                     A aceleração segue a força resultante, não necessariamente a velocidade.
                   </NoteBox>
-                  <NoteBox title="Errar o sentido do atrito" tone="red">
-                    Atrito se opõe à tendência de deslizamento relativo, não sempre ao movimento.
+
+                  <NoteBox title="Normal sempre igual a peso" tone="red">
+                    Normal depende da situação dinâmica.
                   </NoteBox>
-                  <NoteBox title="Usar normal igual a peso sempre" tone="red">
-                    Normal deve ser calculada pelo eixo perpendicular ao contato.
+
+                  <NoteBox title="Tração sempre igual a peso" tone="red">
+                    Só em casos específicos de equilíbrio ou MRU.
+                  </NoteBox>
+
+                  <NoteBox title="Usar atrito estático como μN sempre" tone="red">
+                    Atrito estático se ajusta. A igualdade só vale na iminência.
+                  </NoteBox>
+
+                  <NoteBox title="Errar o sentido do atrito" tone="red">
+                    Atrito se opõe à tendência de deslizamento relativo.
                   </NoteBox>
                 </FormulaGrid>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Pontos para ITA/IME"
+                tone="purple"
+                icon={Target}
+              >
+                <Paragraph>
+                  Em questões difíceis, a Segunda Lei raramente é difícil pela fórmula. O difícil é modelar o sistema corretamente.
+                </Paragraph>
+
+                <BulletList
+                  items={[
+                    <>Escolha o corpo ou sistema antes de escrever equações.</>,
+                    <>Forças internas somem no sistema completo, mas aparecem em corpos isolados.</>,
+                    <>Em polias, deduza o vínculo pelo comprimento do fio.</>,
+                    <>Em atrito estático, descubra a tendência de escorregamento antes de escolher o sentido.</>,
+                    <>Teste casos limites, como <InlineFormulaBox formula={String.raw`\theta = 0^\circ`} /> e <InlineFormulaBox formula={String.raw`\theta = 90^\circ`} /> no plano inclinado.</>,
+                  ]}
+                />
               </TopicBlock>
             </Section>
 
             <Section
               icon={Scale}
               title="Terceira Lei de Newton — Ação e Reação"
-              subtitle="A lei das interações entre corpos. Aqui entram pares de forças, peso e normal, forças internas e externas."
+              subtitle="A lei que explica como as forças aparecem em pares durante interações entre corpos."
               gradient="bg-gradient-to-r from-rose-600 to-red-700"
             >
-              <TopicBlock title="Enunciado e fórmula central" tone="rose">
+              <TopicBlock
+                title="Por que essa lei foi criada?"
+                tone="rose"
+                icon={History}
+              >
                 <Paragraph>
-                  Se um corpo A exerce uma força sobre um corpo B, então o corpo B exerce sobre A uma força de mesma intensidade, mesma direção e sentido oposto.
+                  A Terceira Lei foi criada para formalizar uma ideia essencial: força não aparece sozinha. Toda força nasce de uma interação entre dois corpos.
                 </Paragraph>
+
+                <Paragraph>
+                  Se um corpo A interage com um corpo B, então B também interage com A. Essa interação gera um par de forças: uma em cada corpo.
+                </Paragraph>
+
+                <NoteBox title="Pergunta central da Terceira Lei" tone="rose">
+                  Quando um corpo exerce força sobre outro, o que acontece com o corpo que exerceu essa força?
+                </NoteBox>
+
+                <Paragraph>
+                  A resposta é: ele também recebe uma força de mesmo módulo, mesma direção e sentido oposto.
+                </Paragraph>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Ideia intuitiva"
+                tone="blue"
+                icon={Lightbulb}
+              >
+                <Paragraph>
+                  Quando você empurra uma parede, a parede empurra você. Quando o pé empurra o chão para trás, o chão empurra o pé para frente. Quando a Terra puxa uma pedra, a pedra também puxa a Terra.
+                </Paragraph>
+
+                <Paragraph>
+                  Parece estranho dizer que a pedra puxa a Terra com a mesma força que a Terra puxa a pedra. Mas isso é exatamente o que a Terceira Lei afirma. A diferença está no efeito produzido em cada corpo, e isso depende da massa.
+                </Paragraph>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Enunciado formal e fórmula principal"
+                tone="rose"
+                icon={BookOpen}
+              >
+                <blockquote className="border-l-4 border-rose-500 pl-5 py-3 bg-rose-50 rounded-r-xl text-slate-700 italic leading-8">
+                  Se um corpo A exerce uma força sobre um corpo B, então o corpo B exerce sobre A uma força de mesma intensidade, mesma direção e sentido oposto.
+                </blockquote>
 
                 <FormulaStep
                   title="Terceira Lei de Newton"
                   formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`}
                   tone="red"
+                />
+              </TopicBlock>
+
+              <TopicBlock
+                title="Explicação termo a termo"
+                tone="slate"
+                icon={Eye}
+              >
+                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{A \to B}`} /></SubTitle>
+                <Paragraph>
+                  Representa a força que o corpo A exerce sobre o corpo B. Portanto, essa força atua em B.
+                </Paragraph>
+
+                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{B \to A}`} /></SubTitle>
+                <Paragraph>
+                  Representa a força que o corpo B exerce sobre o corpo A. Portanto, essa força atua em A.
+                </Paragraph>
+
+                <SubTitle>O sinal negativo</SubTitle>
+                <Paragraph>
+                  Indica que as forças têm sentidos opostos. Não significa que uma é “menor” ou “menos importante”.
+                </Paragraph>
+
+                <FormulaStep
+                  title="Mesmo módulo"
+                  formula={String.raw`|\vec{F}_{A \to B}| = |\vec{F}_{B \to A}|`}
+                  tone="purple"
                 />
 
                 <BulletList
@@ -1090,52 +1627,57 @@ export default function DynamicsTopicNewton() {
                 />
               </TopicBlock>
 
-              <TopicBlock title="Interpretação termo a termo da Terceira Lei" tone="rose">
-                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{A \to B}`} /></SubTitle>
+              <TopicBlock
+                title="Por que os efeitos podem ser diferentes?"
+                tone="purple"
+                icon={Brain}
+              >
                 <Paragraph>
-                  É a força que o corpo A exerce no corpo B. Portanto, essa força atua em B.
-                </Paragraph>
-
-                <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{B \to A}`} /></SubTitle>
-                <Paragraph>
-                  É a força que o corpo B exerce no corpo A. Portanto, essa força atua em A.
-                </Paragraph>
-
-                <SubTitle>O sinal negativo</SubTitle>
-                <Paragraph>
-                  Indica que as forças têm sentidos opostos, não que uma força é “menor” ou “menos real”.
+                  A Terceira Lei diz que as forças têm mesmo módulo. Mas a Segunda Lei diz que a aceleração depende da massa. Então dois corpos podem sentir forças iguais e ter acelerações muito diferentes.
                 </Paragraph>
 
                 <FormulaStep
-                  title="Mesmo módulo, sentidos opostos"
-                  formula={String.raw`|\vec{F}_{A \to B}| = |\vec{F}_{B \to A}|`}
+                  title="Conexão com a Segunda Lei"
+                  formula={String.raw`a = \frac{F}{m}`}
                   tone="purple"
                 />
+
+                <Paragraph>
+                  A Terra puxa uma pedra para baixo. A pedra puxa a Terra para cima com força de mesmo módulo. Mas a massa da Terra é gigantesca, então sua aceleração é praticamente imperceptível. A pedra, com massa pequena, acelera muito mais.
+                </Paragraph>
+
+                <NoteBox title="Resumo da ideia" tone="purple">
+                  Mesma força não significa mesma aceleração. A aceleração depende da massa.
+                </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Peso e normal dentro da Terceira Lei" tone="rose">
+              <TopicBlock
+                title="Peso e normal: a confusão clássica"
+                tone="rose"
+                icon={AlertTriangle}
+              >
                 <Paragraph>
-                  Uma das maiores confusões da Dinâmica é achar que peso e normal são ação e reação. Não são.
+                  Peso e normal frequentemente têm mesmo módulo em uma superfície horizontal simples, mas isso não faz deles um par de ação e reação.
                 </Paragraph>
 
                 <FormulaGrid>
                   <NoteBox title="Peso" tone="blue">
-                    Peso é força da Terra sobre o corpo:{" "}
+                    Peso é a força da Terra sobre o corpo:
                     <InlineFormulaBox formula={String.raw`\vec{P}_{\text{Terra} \to \text{corpo}}`} />.
                   </NoteBox>
 
                   <NoteBox title="Reação ao peso" tone="green">
-                    A reação ao peso é a força do corpo sobre a Terra:{" "}
+                    A reação ao peso é a força do corpo sobre a Terra:
                     <InlineFormulaBox formula={String.raw`\vec{P}_{\text{corpo} \to \text{Terra}}`} />.
                   </NoteBox>
 
                   <NoteBox title="Normal" tone="purple">
-                    Normal é força da superfície sobre o corpo:{" "}
+                    Normal é a força da superfície sobre o corpo:
                     <InlineFormulaBox formula={String.raw`\vec{N}_{\text{superfície} \to \text{corpo}}`} />.
                   </NoteBox>
 
                   <NoteBox title="Reação à normal" tone="amber">
-                    A reação à normal é a força do corpo sobre a superfície:{" "}
+                    A reação à normal é a força do corpo sobre a superfície:
                     <InlineFormulaBox formula={String.raw`\vec{N}_{\text{corpo} \to \text{superfície}}`} />.
                   </NoteBox>
                 </FormulaGrid>
@@ -1145,9 +1687,13 @@ export default function DynamicsTopicNewton() {
                 </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Forças internas e externas dentro da Terceira Lei" tone="slate">
+              <TopicBlock
+                title="Forças internas e externas"
+                tone="slate"
+                icon={Layers}
+              >
                 <Paragraph>
-                  Quando analisamos um sistema com vários corpos, pares de ação e reação internos podem se cancelar no sistema completo.
+                  Quando analisamos um sistema formado por vários corpos, forças trocadas entre partes do próprio sistema são forças internas. Elas aparecem em pares de ação e reação e se cancelam quando analisamos o sistema completo.
                 </Paragraph>
 
                 <FormulaGrid>
@@ -1156,6 +1702,7 @@ export default function DynamicsTopicNewton() {
                     formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`}
                     tone="blue"
                   />
+
                   <FormulaStep
                     title="Cancelamento no sistema A+B"
                     formula={String.raw`\vec{F}_{A \to B} + \vec{F}_{B \to A} = \vec{0}`}
@@ -1163,12 +1710,16 @@ export default function DynamicsTopicNewton() {
                   />
                 </FormulaGrid>
 
-                <NoteBox title="Estratégia de prova" tone="blue">
-                  Para achar aceleração de um conjunto, analise o sistema completo. Para achar forças internas, isole um corpo.
+                <NoteBox title="Estratégia de resolução" tone="blue">
+                  Para achar a aceleração do conjunto, analise o sistema completo. Para achar forças internas, como contato ou tração, isole um corpo.
                 </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Aplicações práticas da Terceira Lei" tone="blue">
+              <TopicBlock
+                title="Aplicações práticas"
+                tone="blue"
+                icon={Rocket}
+              >
                 <FormulaGrid>
                   <NoteBox title="Caminhar" tone="green">
                     O pé empurra o chão para trás. O chão empurra o pé para frente por atrito estático.
@@ -1188,63 +1739,92 @@ export default function DynamicsTopicNewton() {
                 </FormulaGrid>
               </TopicBlock>
 
-              <TopicBlock title="Armadilhas da Terceira Lei" tone="rose">
+              <TopicBlock
+                title="Como reconhecer a Terceira Lei em questões?"
+                tone="amber"
+                icon={Search}
+              >
+                <Paragraph>
+                  A Terceira Lei aparece quando a questão fala de interação entre corpos, pares de força, ação e reação, força de contato, forças internas ou comparação entre forças exercidas por dois corpos.
+                </Paragraph>
+
+                <BulletList
+                  items={[
+                    <>“Qual é o par de ação e reação?”</>,
+                    <>“A força que A faz em B...”</>,
+                    <>“A força que o chão faz no corpo...”</>,
+                    <>“Por que o carro anda?”</>,
+                    <>“Por que peso e normal não são ação e reação?”</>,
+                    <>“As forças internas se cancelam?”</>,
+                  ]}
+                />
+
+                <NoteBox title="O que pensar na prova" tone="amber">
+                  Pergunte sempre: essa força atua em qual corpo? O par dela atua em qual outro corpo?
+                </NoteBox>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Erros comuns na Terceira Lei"
+                tone="rose"
+                icon={AlertTriangle}
+              >
                 <FormulaGrid>
                   <NoteBox title="Colocar ação e reação no mesmo DCL" tone="red">
-                    No DCL de um corpo, entram apenas forças que atuam naquele corpo.
+                    Errado. Ação e reação atuam em corpos diferentes.
                   </NoteBox>
 
-                  <NoteBox title="Achar que ação vem antes da reação" tone="red">
-                    Ação e reação são simultâneas.
+                  <NoteBox title="Achar que peso e normal são ação e reação" tone="red">
+                    Errado. Peso e normal atuam no mesmo corpo.
                   </NoteBox>
 
                   <NoteBox title="Achar que o corpo maior faz força maior" tone="red">
-                    As forças têm mesmo módulo, mesmo que os efeitos sejam diferentes por causa das massas.
+                    Errado. As forças têm mesmo módulo. Os efeitos mudam por causa das massas.
                   </NoteBox>
 
-                  <NoteBox title="Misturar par de equilíbrio com ação e reação" tone="red">
-                    Peso e normal podem se equilibrar no mesmo corpo, mas não formam par de ação e reação.
+                  <NoteBox title="Achar que ação vem antes da reação" tone="red">
+                    Errado. Ação e reação são simultâneas.
                   </NoteBox>
                 </FormulaGrid>
+              </TopicBlock>
+
+              <TopicBlock
+                title="Pontos para ITA/IME"
+                tone="purple"
+                icon={Target}
+              >
+                <Paragraph>
+                  Em provas difíceis, a Terceira Lei aparece principalmente em sistemas de corpos, contato entre blocos, forças internas, centro de massa e vínculos. O aluno bom sabe escolher o sistema. O aluno que só decorou fórmula fica desenhando força duplicada no mesmo corpo, um verdadeiro crime vetorial.
+                </Paragraph>
+
+                <NoteBox title="Regra mental" tone="purple">
+                  Ação e reação têm mesmo módulo, mas nunca atuam no mesmo corpo. Se você colocou as duas no mesmo DCL, tem algo errado.
+                </NoteBox>
               </TopicBlock>
             </Section>
 
             <Section
               icon={Rocket}
-              title="Como as três leis aparecem juntas em problemas difíceis"
-              subtitle="Porque em prova real elas não aparecem separadinhas, infelizmente para a paz mundial."
+              title="Como as três leis trabalham juntas"
+              subtitle="Em questão real, elas aparecem misturadas. A prova não avisa educadamente qual lei usar, obviamente."
               gradient="bg-gradient-to-r from-slate-700 to-slate-900"
             >
-              <TopicBlock title="Cinto de segurança" tone="blue">
+              <TopicBlock title="Exemplo conceitual: carro freando" tone="blue" icon={Layers}>
                 <Paragraph>
-                  Pela Primeira Lei, o corpo tende a manter seu movimento quando o carro freia. Pela Segunda Lei, o cinto exerce força para desacelerar o corpo. Pela Terceira Lei, o corpo também exerce força no cinto.
+                  Pela Primeira Lei, o passageiro tende a manter seu movimento quando o carro freia. Pela Segunda Lei, o cinto exerce força resultante para desacelerar o corpo. Pela Terceira Lei, o corpo também exerce força sobre o cinto.
                 </Paragraph>
               </TopicBlock>
 
-              <TopicBlock title="Plano inclinado com atrito" tone="green">
+              <TopicBlock title="Exemplo conceitual: plano inclinado" tone="green" icon={Layers}>
                 <Paragraph>
-                  A Primeira Lei aparece quando o bloco está em equilíbrio. A Segunda Lei aparece quando há aceleração. A Terceira Lei aparece nas forças de contato entre bloco e plano.
+                  A Segunda Lei calcula a aceleração ao longo da rampa. A Primeira Lei aparece se o bloco está em equilíbrio. A Terceira Lei aparece no contato entre bloco e superfície.
                 </Paragraph>
               </TopicBlock>
 
-              <TopicBlock title="Sistemas de blocos" tone="purple">
+              <TopicBlock title="Exemplo conceitual: sistema de blocos" tone="purple" icon={Layers}>
                 <Paragraph>
-                  A Segunda Lei calcula a aceleração do sistema. A Terceira Lei explica as forças internas de contato. A Primeira Lei aparece quando a resultante externa é nula.
+                  A Segunda Lei calcula a aceleração do sistema. A Terceira Lei explica as forças internas entre os blocos. A Primeira Lei aparece se o conjunto está em equilíbrio ou MRU.
                 </Paragraph>
-              </TopicBlock>
-
-              <TopicBlock title="Checklist para ITA/IME e provas fortes" tone="amber">
-                <NumberedSteps
-                  items={[
-                    <>Escolha o corpo ou sistema.</>,
-                    <>Faça o DCL antes da fórmula.</>,
-                    <>Separe forças internas e externas.</>,
-                    <>Aplique <InlineFormulaBox formula={String.raw`\sum F = ma`} /> em cada eixo.</>,
-                    <>Use vínculos de fio/polia quando existirem.</>,
-                    <>Cheque ação e reação em corpos diferentes.</>,
-                    <>Teste casos limites para ver se a resposta faz sentido.</>,
-                  ]}
-                />
               </TopicBlock>
             </Section>
           </div>
@@ -1256,16 +1836,19 @@ export default function DynamicsTopicNewton() {
               <div className="flex items-center gap-3">
                 <Calculator className="w-6 h-6 text-indigo-600" />
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900">Exemplos Resolvidos</h2>
+                  <h2 className="text-2xl font-black text-slate-900">Exemplos resolvidos</h2>
                   <p className="text-slate-600 text-sm mt-1">
-                    Resoluções com DCL, Segunda Lei, substituição numérica e interpretação física.
+                    Resoluções com DCL, força resultante, fórmula e interpretação física.
                   </p>
                 </div>
               </div>
             </div>
 
             {examples.map((ex) => (
-              <div key={ex.id} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-100">
+              <div
+                key={ex.id}
+                className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-100"
+              >
                 <button
                   onClick={() => toggleExample(ex.id)}
                   className="w-full flex items-center justify-between p-6 hover:bg-slate-50 transition-colors"
@@ -1293,30 +1876,40 @@ export default function DynamicsTopicNewton() {
           <div className="space-y-10">
             <Section
               icon={Zap}
-              title="Resumo Final das Leis de Newton"
-              subtitle="Tudo organizado por lei, do jeito que deveria ter sido desde o começo, mas aparentemente precisamos sofrer primeiro."
+              title="Resumo final das Leis de Newton"
+              subtitle="A versão compacta, sem virar decoreba de rodapé."
               gradient="bg-gradient-to-r from-indigo-700 to-purple-800"
             >
-              <TopicBlock title="Primeira Lei de Newton" tone="green">
+              <TopicBlock title="Primeira Lei — Inércia" tone="green" icon={Shield}>
+                <Paragraph>
+                  Se a força resultante sobre um corpo é nula, ele permanece em repouso ou em movimento retilíneo uniforme.
+                </Paragraph>
+
                 <FormulaStep
-                  title="Condição de equilíbrio"
+                  title="Condição"
                   formula={String.raw`\vec{F}_{\text{res}} = \vec{0} \Rightarrow \vec{a} = \vec{0} \Rightarrow \vec{v} = \text{constante}`}
                   tone="green"
                 />
-                <Paragraph>
-                  Serve para repouso e MRU. Equilíbrio não significa necessariamente parado.
-                </Paragraph>
+
+                <NoteBox title="Ideia" tone="green">
+                  Força resultante não mantém movimento. Força resultante altera movimento.
+                </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Segunda Lei de Newton" tone="indigo">
+              <TopicBlock title="Segunda Lei — Força resultante e aceleração" tone="indigo" icon={Calculator}>
+                <Paragraph>
+                  Se sobra força resultante, o corpo acelera. A aceleração depende da força resultante e da massa.
+                </Paragraph>
+
                 <FormulaStep
                   title="Equação central"
                   formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
                   tone="blue"
                 />
+
                 <FormulaGrid>
                   <FormulaStep title="Peso" formula={String.raw`P = mg`} tone="amber" />
-                  <FormulaStep title="Normal em plano inclinado" formula={String.raw`N = mg\cos\theta`} tone="blue" />
+                  <FormulaStep title="Normal no plano inclinado" formula={String.raw`N = mg\cos\theta`} tone="blue" />
                   <FormulaStep title="Atrito estático" formula={String.raw`f_e \leq \mu_e N`} tone="amber" />
                   <FormulaStep title="Atrito cinético" formula={String.raw`f_c = \mu_c N`} tone="green" />
                   <FormulaStep title="Plano sem atrito" formula={String.raw`a = g\sin\theta`} tone="purple" />
@@ -1324,65 +1917,79 @@ export default function DynamicsTopicNewton() {
                 </FormulaGrid>
               </TopicBlock>
 
-              <TopicBlock title="Terceira Lei de Newton" tone="rose">
+              <TopicBlock title="Terceira Lei — Ação e reação" tone="rose" icon={Scale}>
+                <Paragraph>
+                  Toda força nasce de uma interação entre dois corpos. Se A exerce força em B, B exerce força em A.
+                </Paragraph>
+
                 <FormulaStep
-                  title="Ação e reação"
+                  title="Par de ação e reação"
                   formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`}
                   tone="red"
                 />
-                <Paragraph>
+
+                <NoteBox title="Ideia" tone="rose">
                   As forças têm mesmo módulo, mesma direção, sentidos opostos e atuam em corpos diferentes.
-                </Paragraph>
+                </NoteBox>
               </TopicBlock>
             </Section>
 
             <Section
               icon={AlertTriangle}
-              title="Erros comuns por lei"
-              subtitle="O mapa dos buracos onde aluno cai sorrindo."
+              title="Erros comuns"
+              subtitle="A coleção de pequenas tragédias que derrubam aluno em Dinâmica."
               gradient="bg-gradient-to-r from-red-600 to-rose-700"
             >
               <FormulaGrid>
-                <NoteBox title="Primeira Lei: achar que força mantém movimento" tone="red">
-                  Força resultante altera movimento. Se a resultante é nula, a velocidade é constante.
+                <NoteBox title="Primeira Lei: força mantém movimento" tone="red">
+                  Errado. Força resultante altera movimento.
                 </NoteBox>
 
-                <NoteBox title="Primeira Lei: achar que equilíbrio é só repouso" tone="red">
-                  MRU também é equilíbrio.
+                <NoteBox title="Primeira Lei: equilíbrio é só repouso" tone="red">
+                  Errado. MRU também é equilíbrio.
                 </NoteBox>
 
-                <NoteBox title="Segunda Lei: usar força aplicada no lugar da resultante" tone="red">
-                  A aceleração vem da soma vetorial das forças.
+                <NoteBox title="Segunda Lei: força aplicada igual à resultante" tone="red">
+                  Errado. Resultante é soma vetorial.
                 </NoteBox>
 
-                <NoteBox title="Segunda Lei: normal sempre igual a peso" tone="red">
-                  Normal depende da situação dinâmica.
+                <NoteBox title="Segunda Lei: normal sempre igual ao peso" tone="red">
+                  Errado. Normal depende da compressão e da aceleração perpendicular.
                 </NoteBox>
 
-                <NoteBox title="Terceira Lei: peso e normal como ação e reação" tone="red">
-                  Peso e normal atuam no mesmo corpo. Logo, não são par de ação e reação.
+                <NoteBox title="Segunda Lei: atrito estático sempre μN" tone="red">
+                  Errado. Atrito estático se ajusta até um máximo.
                 </NoteBox>
 
-                <NoteBox title="Terceira Lei: colocar ação e reação no mesmo DCL" tone="red">
-                  Ação e reação atuam em corpos diferentes.
+                <NoteBox title="Terceira Lei: peso e normal são ação e reação" tone="red">
+                  Errado. Eles atuam no mesmo corpo.
+                </NoteBox>
+
+                <NoteBox title="Terceira Lei: ação e reação no mesmo DCL" tone="red">
+                  Errado. Elas atuam em corpos diferentes.
+                </NoteBox>
+
+                <NoteBox title="Polias: assumir acelerações iguais sempre" tone="red">
+                  Errado. O vínculo depende da geometria do fio.
                 </NoteBox>
               </FormulaGrid>
             </Section>
 
             <Section
               icon={ListChecks}
-              title="Checklist final de resolução"
-              subtitle="Antes de sair aplicando fórmula feito planilha possuída."
+              title="Checklist para resolver questões"
+              subtitle="Antes de sair jogando fórmula como se fosse confete matemático."
               gradient="bg-gradient-to-r from-emerald-700 to-green-800"
             >
               <NumberedSteps
                 items={[
                   <>Qual corpo ou sistema estou analisando?</>,
-                  <>Quais forças atuam nele?</>,
-                  <>Essas forças são externas ou internas ao sistema escolhido?</>,
-                  <>Qual lei de Newton está sendo usada?</>,
-                  <>Qual é a resultante em cada eixo?</>,
-                  <>Há vínculo de fio, polia ou contato?</>,
+                  <>Quais forças atuam nesse corpo?</>,
+                  <>Quem exerce cada força?</>,
+                  <>Há forças internas que somem no sistema completo?</>,
+                  <>Qual é a força resultante em cada eixo?</>,
+                  <>Existe vínculo de fio, polia ou contato?</>,
+                  <>A aceleração aponta no sentido da resultante?</>,
                   <>A resposta faz sentido nos casos limites?</>,
                 ]}
               />
@@ -1395,10 +2002,10 @@ export default function DynamicsTopicNewton() {
             >
               <div className="bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 rounded-2xl p-7 text-center shadow-inner">
                 <p className="text-slate-900 text-2xl font-black">
-                  A fórmula é simples.
+                  A fórmula é curta.
                 </p>
                 <p className="text-green-700 text-2xl font-black mt-1">
-                  O difícil é escolher o corpo, desenhar o DCL e somar as forças certas.
+                  O raciocínio físico é onde a questão é vencida.
                 </p>
               </div>
             </Section>
