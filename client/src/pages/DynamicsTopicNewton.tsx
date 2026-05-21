@@ -35,13 +35,19 @@ type SectionProps = {
 type FormulaBoxProps = {
   formula: string;
   label?: string;
-  dark?: boolean;
 };
 
 type NoteBoxProps = {
   title: string;
   children: ReactNode;
-  tone?: "blue" | "green" | "amber" | "red" | "purple" | "slate";
+  tone?: "blue" | "green" | "amber" | "red" | "purple" | "slate" | "indigo";
+};
+
+type FormulaStepProps = {
+  title: string;
+  explanation?: ReactNode;
+  formula: string;
+  tone?: "blue" | "green" | "amber" | "purple" | "slate";
 };
 
 type ExampleItem = {
@@ -51,26 +57,26 @@ type ExampleItem = {
   content: ReactNode;
 };
 
-function FormulaBox({ formula, label, dark = true }: FormulaBoxProps) {
+function FormulaBox({ formula, label }: FormulaBoxProps) {
   return (
-    <div
-      className={`rounded-xl p-4 text-center overflow-x-auto ${
-        dark
-          ? "bg-slate-900 border border-slate-800"
-          : "bg-white border border-slate-200"
-      }`}
-    >
+    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-center overflow-x-auto shadow-inner">
       {label && (
-        <p
-          className={`text-xs font-bold uppercase tracking-wide mb-2 ${
-            dark ? "text-slate-400" : "text-slate-500"
-          }`}
-        >
+        <p className="text-xs font-bold uppercase tracking-wide mb-2 text-slate-500">
           {label}
         </p>
       )}
-      <MathFormula formula={formula} display={true} />
+      <div className="text-slate-900">
+        <MathFormula formula={formula} display={true} />
+      </div>
     </div>
+  );
+}
+
+function InlineFormulaBox({ formula }: { formula: string }) {
+  return (
+    <span className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 mx-1 align-middle">
+      <MathFormula formula={formula} />
+    </span>
   );
 }
 
@@ -82,11 +88,11 @@ function Section({ icon: Icon, title, subtitle, gradient, children }: SectionPro
           <Icon className="w-6 h-6 text-white mt-0.5 flex-shrink-0" />
           <div>
             <h2 className="text-xl font-bold text-white">{title}</h2>
-            {subtitle && <p className="text-white/80 text-sm mt-1">{subtitle}</p>}
+            {subtitle && <p className="text-white/85 text-sm mt-1">{subtitle}</p>}
           </div>
         </div>
       </div>
-      <div className="p-8 space-y-6">{children}</div>
+      <div className="p-8 space-y-7">{children}</div>
     </section>
   );
 }
@@ -99,12 +105,36 @@ function NoteBox({ title, children, tone = "blue" }: NoteBoxProps) {
     red: "bg-red-50 border-red-400 text-red-900",
     purple: "bg-purple-50 border-purple-400 text-purple-900",
     slate: "bg-slate-50 border-slate-400 text-slate-900",
+    indigo: "bg-indigo-50 border-indigo-400 text-indigo-900",
   };
 
   return (
     <div className={`${styles[tone]} border-l-4 rounded-r-xl p-5`}>
       <p className="font-bold mb-2">{title}</p>
       <div className="text-slate-700 text-sm leading-7">{children}</div>
+    </div>
+  );
+}
+
+function FormulaStep({ title, explanation, formula, tone = "slate" }: FormulaStepProps) {
+  const dotStyles = {
+    blue: "bg-blue-500",
+    green: "bg-green-500",
+    amber: "bg-amber-500",
+    purple: "bg-purple-500",
+    slate: "bg-slate-500",
+  };
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+      <div className="flex items-start gap-3 mb-3">
+        <span className={`h-3 w-3 rounded-full ${dotStyles[tone]} mt-1.5 flex-shrink-0`} />
+        <div>
+          <p className="font-bold text-slate-900">{title}</p>
+          {explanation && <div className="text-sm text-slate-700 leading-7 mt-1">{explanation}</div>}
+        </div>
+      </div>
+      <FormulaBox formula={formula} />
     </div>
   );
 }
@@ -149,6 +179,10 @@ function NumberedSteps({ items }: { items: ReactNode[] }) {
   );
 }
 
+function FormulaGrid({ children }: { children: ReactNode }) {
+  return <div className="grid md:grid-cols-2 gap-4">{children}</div>;
+}
+
 export default function DynamicsTopicNewton() {
   const [openExamples, setOpenExamples] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<TabId>("teoria");
@@ -166,33 +200,57 @@ export default function DynamicsTopicNewton() {
       content: (
         <div className="space-y-5">
           <NoteBox title="DCL descrito" tone="slate">
-            As forças sobre o bloco são: peso <MathFormula formula={String.raw`P = mg`} /> para baixo,
-            normal <MathFormula formula={String.raw`N`} /> para cima e força aplicada{" "}
-            <MathFormula formula={String.raw`F`} /> para a direita. Como não há atrito, nenhuma força horizontal se opõe ao movimento.
+            As forças sobre o bloco são: peso <InlineFormulaBox formula={String.raw`P = mg`} /> para baixo,
+            normal <InlineFormulaBox formula={String.raw`N`} /> para cima e força aplicada{" "}
+            <InlineFormulaBox formula={String.raw`F`} /> para a direita. Como não há atrito, nenhuma força horizontal se opõe ao movimento.
           </NoteBox>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-              <p className="font-bold text-slate-800 mb-3">Eixo vertical</p>
-              <FormulaBox formula={String.raw`\sum F_y = ma_y`} />
-              <FormulaBox formula={String.raw`N - mg = 0`} />
-              <FormulaBox formula={String.raw`N = mg`} />
+          <FormulaGrid>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+              <p className="font-bold text-slate-800">Eixo vertical</p>
+              <FormulaStep
+                title="Não há aceleração vertical"
+                explanation="O bloco não sobe nem afunda na superfície."
+                formula={String.raw`a_y = 0`}
+                tone="blue"
+              />
+              <FormulaStep
+                title="Aplicando a Segunda Lei no eixo y"
+                formula={String.raw`\sum F_y = ma_y`}
+                tone="blue"
+              />
+              <FormulaStep
+                title="Normal e peso se equilibram"
+                formula={String.raw`N - mg = 0 \Rightarrow N = mg`}
+                tone="blue"
+              />
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-              <p className="font-bold text-slate-800 mb-3">Eixo horizontal</p>
-              <FormulaBox formula={String.raw`\sum F_x = ma_x`} />
-              <FormulaBox formula={String.raw`F = ma`} />
-              <FormulaBox formula={String.raw`20 = 5a`} />
-              <FormulaBox formula={String.raw`a = 4 \ \text{m/s}^2`} />
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+              <p className="font-bold text-slate-800">Eixo horizontal</p>
+              <FormulaStep
+                title="A única força horizontal é F"
+                formula={String.raw`\sum F_x = ma_x`}
+                tone="green"
+              />
+              <FormulaStep
+                title="Substituindo os valores"
+                formula={String.raw`F = ma \Rightarrow 20 = 5a`}
+                tone="green"
+              />
+              <FormulaStep
+                title="Resultado"
+                formula={String.raw`a = 4 \ \text{m/s}^2`}
+                tone="green"
+              />
             </div>
-          </div>
+          </FormulaGrid>
 
           <NoteBox title="Ideia física" tone="green">
             Sem atrito, toda força horizontal aplicada vira força resultante horizontal. Como a massa é{" "}
-            <MathFormula formula={String.raw`5 \ \text{kg}`} />, uma força de{" "}
-            <MathFormula formula={String.raw`20 \ \text{N}`} /> produz aceleração de{" "}
-            <MathFormula formula={String.raw`4 \ \text{m/s}^2`} />.
+            <InlineFormulaBox formula={String.raw`5 \ \text{kg}`} />, uma força de{" "}
+            <InlineFormulaBox formula={String.raw`20 \ \text{N}`} /> produz aceleração de{" "}
+            <InlineFormulaBox formula={String.raw`4 \ \text{m/s}^2`} />.
           </NoteBox>
         </div>
       ),
@@ -208,25 +266,32 @@ export default function DynamicsTopicNewton() {
             As forças são: peso para baixo, normal para cima, força aplicada para a direita e atrito cinético para a esquerda. O atrito aponta contra o deslizamento relativo.
           </NoteBox>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <p className="font-bold text-slate-800">Eixo vertical</p>
-            <FormulaBox formula={String.raw`N - mg = 0`} />
-            <FormulaBox formula={String.raw`N = mg = 10 \cdot 10 = 100 \ \text{N}`} />
-          </div>
+          <FormulaStep
+            title="Normal no eixo vertical"
+            explanation="Como não há aceleração vertical, normal e peso se equilibram."
+            formula={String.raw`N - mg = 0 \Rightarrow N = mg = 10 \cdot 10 = 100 \ \text{N}`}
+            tone="blue"
+          />
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <p className="font-bold text-slate-800">Atrito cinético</p>
-            <FormulaBox formula={String.raw`f_c = \mu_c N`} />
-            <FormulaBox formula={String.raw`f_c = 0{,}2 \cdot 100 = 20 \ \text{N}`} />
-          </div>
+          <FormulaStep
+            title="Cálculo do atrito cinético"
+            explanation="O bloco já está deslizando, então usamos a fórmula do atrito cinético."
+            formula={String.raw`f_c = \mu_c N = 0{,}2 \cdot 100 = 20 \ \text{N}`}
+            tone="amber"
+          />
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <p className="font-bold text-slate-800">Eixo horizontal</p>
-            <FormulaBox formula={String.raw`F - f_c = ma`} />
-            <FormulaBox formula={String.raw`50 - 20 = 10a`} />
-            <FormulaBox formula={String.raw`30 = 10a`} />
-            <FormulaBox formula={String.raw`a = 3 \ \text{m/s}^2`} />
-          </div>
+          <FormulaStep
+            title="Força resultante horizontal"
+            explanation="A força aplicada aponta para a direita; o atrito aponta para a esquerda."
+            formula={String.raw`F - f_c = ma \Rightarrow 50 - 20 = 10a`}
+            tone="green"
+          />
+
+          <FormulaStep
+            title="Resultado"
+            formula={String.raw`30 = 10a \Rightarrow a = 3 \ \text{m/s}^2`}
+            tone="green"
+          />
 
           <NoteBox title="Ideia física" tone="green">
             A força aplicada não vira inteira aceleração, porque o atrito “come” parte da força. O que sobra é a força resultante horizontal.
@@ -245,20 +310,40 @@ export default function DynamicsTopicNewton() {
             As forças são peso vertical para baixo e normal perpendicular ao plano. O peso é decomposto em duas componentes: uma paralela à rampa e outra perpendicular à rampa.
           </NoteBox>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-              <p className="font-bold text-slate-800">Componente perpendicular</p>
-              <FormulaBox formula={String.raw`N - mg\cos\theta = 0`} />
-              <FormulaBox formula={String.raw`N = mg\cos\theta`} />
+          <FormulaGrid>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+              <p className="font-bold text-slate-800">Eixo perpendicular</p>
+              <FormulaStep
+                title="O bloco não sai nem entra no plano"
+                formula={String.raw`a_y = 0`}
+                tone="blue"
+              />
+              <FormulaStep
+                title="Normal equilibra a componente perpendicular do peso"
+                formula={String.raw`N - mg\cos\theta = 0 \Rightarrow N = mg\cos\theta`}
+                tone="blue"
+              />
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-              <p className="font-bold text-slate-800">Componente paralela</p>
-              <FormulaBox formula={String.raw`mg\sin\theta = ma`} />
-              <FormulaBox formula={String.raw`a = g\sin\theta`} />
-              <FormulaBox formula={String.raw`a = 10\sin 30^\circ = 10 \cdot \frac{1}{2} = 5 \ \text{m/s}^2`} />
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+              <p className="font-bold text-slate-800">Eixo paralelo</p>
+              <FormulaStep
+                title="A componente paralela do peso acelera o bloco"
+                formula={String.raw`mg\sin\theta = ma`}
+                tone="green"
+              />
+              <FormulaStep
+                title="A massa cancela"
+                formula={String.raw`a = g\sin\theta`}
+                tone="green"
+              />
+              <FormulaStep
+                title="Substituindo o ângulo"
+                formula={String.raw`a = 10\sin 30^\circ = 10 \cdot \frac{1}{2} = 5 \ \text{m/s}^2`}
+                tone="green"
+              />
             </div>
-          </div>
+          </FormulaGrid>
 
           <NoteBox title="Ideia física" tone="green">
             Sem atrito, a massa cancela. Dois blocos de massas diferentes descem com a mesma aceleração no mesmo plano inclinado ideal.
@@ -275,18 +360,46 @@ export default function DynamicsTopicNewton() {
         <div className="space-y-5">
           <NoteBox title="DCL descrito" tone="slate">
             Como o bloco desce, o atrito cinético aponta para cima da rampa. A componente do peso para baixo é{" "}
-            <MathFormula formula={String.raw`mg\sin\theta`} /> e o atrito vale{" "}
-            <MathFormula formula={String.raw`\mu_c mg\cos\theta`} />.
+            <InlineFormulaBox formula={String.raw`mg\sin\theta`} /> e o atrito vale{" "}
+            <InlineFormulaBox formula={String.raw`\mu_c mg\cos\theta`} />.
           </NoteBox>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <FormulaBox formula={String.raw`N = mg\cos\theta`} />
-            <FormulaBox formula={String.raw`f_c = \mu_c N = \mu_c mg\cos\theta`} />
-            <FormulaBox formula={String.raw`mg\sin\theta - f_c = ma`} />
-            <FormulaBox formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`} />
-            <FormulaBox formula={String.raw`a = 10(0{,}6 - 0{,}25 \cdot 0{,}8)`} />
-            <FormulaBox formula={String.raw`a = 10(0{,}6 - 0{,}2) = 4 \ \text{m/s}^2`} />
-          </div>
+          <FormulaStep
+            title="Normal no eixo perpendicular"
+            formula={String.raw`N = mg\cos\theta`}
+            tone="blue"
+          />
+
+          <FormulaStep
+            title="Atrito cinético"
+            formula={String.raw`f_c = \mu_c N = \mu_c mg\cos\theta`}
+            tone="amber"
+          />
+
+          <FormulaStep
+            title="Segunda Lei no eixo paralelo"
+            explanation="A componente do peso puxa para baixo; o atrito puxa para cima."
+            formula={String.raw`mg\sin\theta - f_c = ma`}
+            tone="green"
+          />
+
+          <FormulaStep
+            title="Substituindo o atrito"
+            formula={String.raw`mg\sin\theta - \mu_c mg\cos\theta = ma`}
+            tone="green"
+          />
+
+          <FormulaStep
+            title="Isolando a aceleração"
+            formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`}
+            tone="green"
+          />
+
+          <FormulaStep
+            title="Substituição numérica"
+            formula={String.raw`a = 10(0{,}6 - 0{,}25 \cdot 0{,}8) = 4 \ \text{m/s}^2`}
+            tone="green"
+          />
 
           <NoteBox title="Ideia física" tone="green">
             O atrito reduz a aceleração em relação ao caso sem atrito. A resultante paralela é o que sobra da componente do peso depois de vencer o atrito.
@@ -302,25 +415,43 @@ export default function DynamicsTopicNewton() {
       content: (
         <div className="space-y-5">
           <NoteBox title="Estratégia" tone="blue">
-            Para achar a aceleração, analisamos o sistema completo. Para achar a força de contato, isolamos um dos blocos. Esse vai e volta entre sistema e corpo isolado é uma das armas mais importantes em Dinâmica.
+            Para achar a aceleração, analisamos o sistema completo. Para achar a força de contato, isolamos um dos blocos.
           </NoteBox>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+          <FormulaGrid>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
               <p className="font-bold text-slate-800">Sistema completo</p>
-              <FormulaBox formula={String.raw`M = m_1 + m_2 = 2 + 3 = 5 \ \text{kg}`} />
-              <FormulaBox formula={String.raw`F = Ma`} />
-              <FormulaBox formula={String.raw`20 = 5a`} />
-              <FormulaBox formula={String.raw`a = 4 \ \text{m/s}^2`} />
+              <FormulaStep
+                title="Massa total"
+                formula={String.raw`M = m_1 + m_2 = 2 + 3 = 5 \ \text{kg}`}
+                tone="blue"
+              />
+              <FormulaStep
+                title="Segunda Lei para o conjunto"
+                formula={String.raw`F = Ma \Rightarrow 20 = 5a`}
+                tone="green"
+              />
+              <FormulaStep
+                title="Aceleração"
+                formula={String.raw`a = 4 \ \text{m/s}^2`}
+                tone="green"
+              />
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
               <p className="font-bold text-slate-800">Isolando o bloco m₂</p>
-              <FormulaBox formula={String.raw`C = m_2a`} />
-              <FormulaBox formula={String.raw`C = 3 \cdot 4`} />
-              <FormulaBox formula={String.raw`C = 12 \ \text{N}`} />
+              <FormulaStep
+                title="A força de contato acelera m₂"
+                formula={String.raw`C = m_2a`}
+                tone="purple"
+              />
+              <FormulaStep
+                title="Substituindo"
+                formula={String.raw`C = 3 \cdot 4 = 12 \ \text{N}`}
+                tone="purple"
+              />
             </div>
-          </div>
+          </FormulaGrid>
         </div>
       ),
     },
@@ -332,31 +463,44 @@ export default function DynamicsTopicNewton() {
       content: (
         <div className="space-y-5">
           <NoteBox title="DCL descrito" tone="slate">
-            Como <MathFormula formula={String.raw`m_2 > m_1`} />, o bloco <MathFormula formula={String.raw`m_2`} /> desce e o bloco{" "}
-            <MathFormula formula={String.raw`m_1`} /> sobe. A tração é a mesma no fio ideal.
+            Como <InlineFormulaBox formula={String.raw`m_2 > m_1`} />, o bloco <InlineFormulaBox formula={String.raw`m_2`} /> desce e o bloco{" "}
+            <InlineFormulaBox formula={String.raw`m_1`} /> sobe. A tração é a mesma no fio ideal.
           </NoteBox>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <p className="font-bold text-slate-800">Equações</p>
-            <FormulaBox formula={String.raw`m_2g - T = m_2a`} />
-            <FormulaBox formula={String.raw`T - m_1g = m_1a`} />
-            <FormulaBox formula={String.raw`30 - T = 3a`} />
-            <FormulaBox formula={String.raw`T - 20 = 2a`} />
-          </div>
+          <FormulaGrid>
+            <FormulaStep
+              title="Equação para m₂"
+              explanation="Escolhemos positivo para baixo, pois m₂ desce."
+              formula={String.raw`m_2g - T = m_2a \Rightarrow 30 - T = 3a`}
+              tone="blue"
+            />
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <p className="font-bold text-slate-800">Somando as equações</p>
-            <FormulaBox formula={String.raw`30 - T + T - 20 = 3a + 2a`} />
-            <FormulaBox formula={String.raw`10 = 5a`} />
-            <FormulaBox formula={String.raw`a = 2 \ \text{m/s}^2`} />
-          </div>
+            <FormulaStep
+              title="Equação para m₁"
+              explanation="Escolhemos positivo para cima, pois m₁ sobe."
+              formula={String.raw`T - m_1g = m_1a \Rightarrow T - 20 = 2a`}
+              tone="green"
+            />
+          </FormulaGrid>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <p className="font-bold text-slate-800">Tração</p>
-            <FormulaBox formula={String.raw`T - 20 = 2a`} />
-            <FormulaBox formula={String.raw`T - 20 = 2 \cdot 2`} />
-            <FormulaBox formula={String.raw`T = 24 \ \text{N}`} />
-          </div>
+          <FormulaStep
+            title="Somando as equações"
+            explanation="A tração cancela, pois é força interna ao sistema."
+            formula={String.raw`30 - T + T - 20 = 3a + 2a \Rightarrow 10 = 5a`}
+            tone="purple"
+          />
+
+          <FormulaStep
+            title="Aceleração"
+            formula={String.raw`a = 2 \ \text{m/s}^2`}
+            tone="purple"
+          />
+
+          <FormulaStep
+            title="Tração"
+            formula={String.raw`T - 20 = 2 \cdot 2 \Rightarrow T = 24 \ \text{N}`}
+            tone="amber"
+          />
 
           <NoteBox title="Ideia física" tone="green">
             A diferença entre os pesos é a força que acelera o sistema. A tração não é igual ao peso de nenhum dos blocos, porque ambos estão acelerando.
@@ -375,17 +519,33 @@ export default function DynamicsTopicNewton() {
             As forças sobre a pessoa são peso para baixo e normal para cima. Como o elevador acelera para cima, a pessoa também acelera para cima.
           </NoteBox>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <FormulaBox formula={String.raw`\sum F_y = ma`} />
-            <FormulaBox formula={String.raw`N - mg = ma`} />
-            <FormulaBox formula={String.raw`N = m(g+a)`} />
-            <FormulaBox formula={String.raw`N = 70(10+2)`} />
-            <FormulaBox formula={String.raw`N = 840 \ \text{N}`} />
-          </div>
+          <FormulaStep
+            title="Segunda Lei no eixo vertical"
+            formula={String.raw`\sum F_y = ma`}
+            tone="blue"
+          />
+
+          <FormulaStep
+            title="Normal para cima e peso para baixo"
+            formula={String.raw`N - mg = ma`}
+            tone="blue"
+          />
+
+          <FormulaStep
+            title="Isolando a normal"
+            formula={String.raw`N = m(g+a)`}
+            tone="green"
+          />
+
+          <FormulaStep
+            title="Substituindo"
+            formula={String.raw`N = 70(10+2) = 840 \ \text{N}`}
+            tone="green"
+          />
 
           <NoteBox title="Ideia física" tone="green">
-            O peso real é <MathFormula formula={String.raw`P = 700 \ \text{N}`} />, mas a normal é{" "}
-            <MathFormula formula={String.raw`840 \ \text{N}`} />. É a normal que a pessoa “sente” como peso aparente.
+            O peso real é <InlineFormulaBox formula={String.raw`P = 700 \ \text{N}`} />, mas a normal é{" "}
+            <InlineFormulaBox formula={String.raw`840 \ \text{N}`} />. É a normal que a pessoa “sente” como peso aparente.
           </NoteBox>
         </div>
       ),
@@ -397,23 +557,24 @@ export default function DynamicsTopicNewton() {
         "Um livro de massa m = 2 kg está parado sobre uma mesa horizontal. Considere g = 10 m/s². Determine a normal sobre o livro e identifique corretamente os pares de ação e reação.",
       content: (
         <div className="space-y-5">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <p className="font-bold text-slate-800">Normal sobre o livro</p>
-            <FormulaBox formula={String.raw`N - mg = 0`} />
-            <FormulaBox formula={String.raw`N = mg = 2 \cdot 10 = 20 \ \text{N}`} />
-          </div>
+          <FormulaStep
+            title="Normal sobre o livro"
+            explanation="Como o livro está parado, a força resultante vertical é nula."
+            formula={String.raw`N - mg = 0 \Rightarrow N = mg = 2 \cdot 10 = 20 \ \text{N}`}
+            tone="green"
+          />
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <FormulaGrid>
             <NoteBox title="Par de ação e reação do peso" tone="purple">
-              <MathFormula formula={String.raw`\vec{P}_{\text{Terra} \to \text{livro}}`} /> e{" "}
-              <MathFormula formula={String.raw`\vec{P}_{\text{livro} \to \text{Terra}}`} />.
+              <InlineFormulaBox formula={String.raw`\vec{P}_{\text{Terra} \to \text{livro}}`} /> e{" "}
+              <InlineFormulaBox formula={String.raw`\vec{P}_{\text{livro} \to \text{Terra}}`} />.
             </NoteBox>
 
             <NoteBox title="Par de ação e reação da normal" tone="purple">
-              <MathFormula formula={String.raw`\vec{N}_{\text{mesa} \to \text{livro}}`} /> e{" "}
-              <MathFormula formula={String.raw`\vec{N}_{\text{livro} \to \text{mesa}}`} />.
+              <InlineFormulaBox formula={String.raw`\vec{N}_{\text{mesa} \to \text{livro}}`} /> e{" "}
+              <InlineFormulaBox formula={String.raw`\vec{N}_{\text{livro} \to \text{mesa}}`} />.
             </NoteBox>
-          </div>
+          </FormulaGrid>
 
           <NoteBox title="Cuidado clássico" tone="red">
             Peso e normal não são par de ação e reação, mesmo que tenham mesmo módulo nesse caso. Eles atuam no mesmo corpo: o livro. Pares de ação e reação atuam em corpos diferentes.
@@ -430,21 +591,38 @@ export default function DynamicsTopicNewton() {
         <div className="space-y-5">
           <NoteBox title="Ideia do vínculo" tone="blue">
             A polia móvel é sustentada por dois trechos de fio. Quando a carga sobe uma distância{" "}
-            <MathFormula formula={String.raw`x_B`} />, cada um dos dois trechos encurta{" "}
-            <MathFormula formula={String.raw`x_B`} />. Então a extremidade livre precisa compensar o dobro.
+            <InlineFormulaBox formula={String.raw`x_B`} />, cada um dos dois trechos encurta{" "}
+            <InlineFormulaBox formula={String.raw`x_B`} />. Então a extremidade livre precisa compensar o dobro.
           </NoteBox>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <FormulaBox formula={String.raw`x_E = 2x_B`} />
-            <FormulaBox formula={String.raw`\frac{dx_E}{dt} = 2\frac{dx_B}{dt}`} />
-            <FormulaBox formula={String.raw`v_E = 2v_B`} />
-            <FormulaBox formula={String.raw`\frac{dv_E}{dt} = 2\frac{dv_B}{dt}`} />
-            <FormulaBox formula={String.raw`a_E = 2a_B`} />
-            <FormulaBox formula={String.raw`a_B = \frac{a_E}{2}`} />
-          </div>
+          <FormulaStep
+            title="Relação entre os deslocamentos"
+            formula={String.raw`x_E = 2x_B`}
+            tone="blue"
+          />
+
+          <FormulaStep
+            title="Derivando uma vez"
+            explanation="A derivada do deslocamento em relação ao tempo dá velocidade."
+            formula={String.raw`\frac{dx_E}{dt} = 2\frac{dx_B}{dt} \Rightarrow v_E = 2v_B`}
+            tone="green"
+          />
+
+          <FormulaStep
+            title="Derivando novamente"
+            explanation="A derivada da velocidade em relação ao tempo dá aceleração."
+            formula={String.raw`\frac{dv_E}{dt} = 2\frac{dv_B}{dt} \Rightarrow a_E = 2a_B`}
+            tone="purple"
+          />
+
+          <FormulaStep
+            title="Relação final"
+            formula={String.raw`a_B = \frac{a_E}{2}`}
+            tone="amber"
+          />
 
           <NoteBox title="Ideia física" tone="green">
-            Em uma polia móvel sustentada por dois ramos de fio, puxar a extremidade livre uma certa distância não faz a carga subir a mesma distância. A carga sobe metade. Por isso, a aceleração da carga também é metade da aceleração da extremidade livre.
+            Em uma polia móvel sustentada por dois ramos de fio, puxar a extremidade livre uma certa distância não faz a carga subir a mesma distância. A carga sobe metade.
           </NoteBox>
         </div>
       ),
@@ -452,8 +630,8 @@ export default function DynamicsTopicNewton() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      <header className="bg-white/95 backdrop-blur border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/dinamica">
@@ -463,7 +641,7 @@ export default function DynamicsTopicNewton() {
             </Link>
             <div>
               <h1 className="text-xl font-bold text-slate-900">Leis de Newton</h1>
-              <p className="text-xs text-slate-500">Dinâmica — Fundamentos completos</p>
+              <p className="text-xs text-slate-500">Dinâmica — fundamentos completos</p>
             </div>
           </div>
 
@@ -474,7 +652,7 @@ export default function DynamicsTopicNewton() {
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
                   activeTab === tab
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-indigo-600 text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
@@ -508,7 +686,7 @@ export default function DynamicsTopicNewton() {
 
               <Paragraph>
                 Essa diferença é essencial. Dizer que um bloco tem aceleração de{" "}
-                <MathFormula formula={String.raw`2 \ \text{m/s}^2`} /> é Cinemática. Explicar que essa aceleração ocorre porque a força resultante sobre ele é diferente de zero é Dinâmica.
+                <InlineFormulaBox formula={String.raw`2 \ \text{m/s}^2`} /> é Cinemática. Explicar que essa aceleração ocorre porque a força resultante sobre ele é diferente de zero é Dinâmica.
               </Paragraph>
 
               <Paragraph>
@@ -527,10 +705,10 @@ export default function DynamicsTopicNewton() {
                 A grande virada conceitual veio com Galileu e foi consolidada por Newton. Galileu percebeu que, se reduzirmos os efeitos resistivos, um corpo tende a manter seu movimento por mais tempo. Quanto menor o atrito, mais tempo ele continua se movendo. No limite ideal de ausência de atrito, um corpo lançado em uma superfície horizontal continuaria em movimento retilíneo uniforme indefinidamente.
               </Paragraph>
 
-              <div className="bg-slate-900 rounded-2xl p-7 text-center">
-                <p className="text-amber-400 font-black text-lg mb-2">A virada conceitual</p>
-                <p className="text-white text-2xl font-black">O movimento não precisa ser sustentado por força.</p>
-                <p className="text-green-400 text-2xl font-black mt-1">O que precisa de força resultante é a mudança do movimento.</p>
+              <div className="bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 rounded-2xl p-7 text-center shadow-inner">
+                <p className="text-amber-600 font-black text-lg mb-2">A virada conceitual</p>
+                <p className="text-slate-900 text-2xl font-black">O movimento não precisa ser sustentado por força.</p>
+                <p className="text-green-700 text-2xl font-black mt-1">O que precisa de força resultante é a mudança do movimento.</p>
               </div>
 
               <Paragraph>
@@ -545,7 +723,7 @@ export default function DynamicsTopicNewton() {
                 A ideia de Newton é poderosa porque conecta três conceitos centrais: <strong>força</strong>, <strong>massa</strong> e <strong>aceleração</strong>.
               </Paragraph>
 
-              <div className="grid md:grid-cols-3 gap-4">
+              <FormulaGrid>
                 <NoteBox title="Força" tone="blue">
                   Representa uma interação entre corpos.
                 </NoteBox>
@@ -555,11 +733,14 @@ export default function DynamicsTopicNewton() {
                 <NoteBox title="Aceleração" tone="purple">
                   Representa a mudança da velocidade vetorial.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
-              <Paragraph>A Segunda Lei de Newton resume essa relação por:</Paragraph>
-
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} label="Equação central da Dinâmica" />
+              <FormulaStep
+                title="Equação central da Dinâmica"
+                explanation="A Segunda Lei de Newton resume a relação entre força resultante, massa e aceleração."
+                formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
+                tone="blue"
+              />
 
               <Paragraph>
                 Essa equação é simples na aparência, mas é uma das mais profundas da Física. Ela diz que o movimento de um corpo não é determinado por uma força isolada qualquer, mas pela soma vetorial de todas as forças que atuam nele.
@@ -580,10 +761,6 @@ export default function DynamicsTopicNewton() {
                   <>Um elevador parado tem peso e normal sobre a pessoa, mas a resultante é nula.</>,
                 ]}
               />
-
-              <Paragraph>
-                Então uma das primeiras maturidades em Dinâmica é abandonar a frase vaga “tem força” e substituí-la por uma pergunta mais física: <strong>depois de somar vetorialmente todas as forças, sobra alguma força resultante?</strong>
-              </Paragraph>
             </Section>
 
             <Section
@@ -592,17 +769,17 @@ export default function DynamicsTopicNewton() {
               subtitle="Força resultante altera velocidade vetorial, não sustenta movimento."
               gradient="bg-gradient-to-r from-indigo-500 to-purple-600"
             >
-              <div className="bg-slate-900 rounded-2xl p-7 text-center">
-                <p className="text-indigo-300 font-black uppercase tracking-wide text-xs mb-3">Ideia principal</p>
-                <p className="text-white text-2xl font-black">Força resultante não mantém velocidade.</p>
-                <p className="text-green-400 text-2xl font-black mt-1">Força resultante muda velocidade.</p>
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-7 text-center shadow-inner">
+                <p className="text-indigo-600 font-black uppercase tracking-wide text-xs mb-3">Ideia principal</p>
+                <p className="text-slate-900 text-2xl font-black">Força resultante não mantém velocidade.</p>
+                <p className="text-green-700 text-2xl font-black mt-1">Força resultante muda velocidade.</p>
               </div>
 
               <Paragraph>
                 Essa frase precisa ser entendida com cuidado. A velocidade é uma grandeza vetorial. Isso significa que ela possui módulo, direção e sentido.
               </Paragraph>
 
-              <div className="grid md:grid-cols-3 gap-4">
+              <FormulaGrid>
                 <NoteBox title="Mudar o módulo" tone="green">
                   O corpo fica mais rápido ou mais lento. Exemplo: carro arrancando ou freando.
                 </NoteBox>
@@ -612,7 +789,7 @@ export default function DynamicsTopicNewton() {
                 <NoteBox title="Mudar o sentido" tone="purple">
                   O corpo inverte o movimento, como uma bolinha que sobe, para e começa a descer.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
               <Paragraph>
                 Por isso, existe aceleração sempre que a velocidade vetorial muda. Mesmo que o velocímetro marque sempre o mesmo valor, se o corpo está fazendo uma curva, a direção da velocidade muda. Logo, há aceleração. Logo, há força resultante.
@@ -649,17 +826,20 @@ export default function DynamicsTopicNewton() {
                 Quanto maior a massa, maior a dificuldade de alterar a velocidade do corpo. Um carrinho vazio acelera facilmente quando você empurra. Um carrinho cheio de cimento exige muito mais força para adquirir a mesma aceleração.
               </Paragraph>
 
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />
-              <FormulaBox formula={String.raw`\vec{a} = \frac{\vec{F}_{\text{res}}}{m}`} />
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <NoteBox title="Mesma massa" tone="green">
-                  Quanto maior a força resultante, maior a aceleração.
-                </NoteBox>
-                <NoteBox title="Mesma força resultante" tone="blue">
-                  Quanto maior a massa, menor a aceleração.
-                </NoteBox>
-              </div>
+              <FormulaGrid>
+                <FormulaStep
+                  title="Segunda Lei"
+                  explanation="A força resultante é proporcional à massa e à aceleração."
+                  formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Isolando a aceleração"
+                  explanation="A aceleração cresce com a força resultante e diminui com a massa."
+                  formula={String.raw`\vec{a} = \frac{\vec{F}_{\text{res}}}{m}`}
+                  tone="green"
+                />
+              </FormulaGrid>
 
               <MiniTitle>2.3 A aceleração como efeito da força resultante</MiniTitle>
 
@@ -671,9 +851,24 @@ export default function DynamicsTopicNewton() {
                 Um corpo lançado verticalmente para cima, após sair da mão, desprezando a resistência do ar, sofre apenas o peso para baixo. Durante a subida, sua velocidade aponta para cima, mas sua aceleração aponta para baixo.
               </Paragraph>
 
-              <FormulaBox formula={String.raw`\vec{P} = m\vec{g}`} />
-              <FormulaBox formula={String.raw`m\vec{a} = m\vec{g}`} />
-              <FormulaBox formula={String.raw`\vec{a} = \vec{g}`} />
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep
+                  title="Força resultante após o lançamento"
+                  explanation="Desprezando o ar, a única força é o peso."
+                  formula={String.raw`\vec{P} = m\vec{g}`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Aplicando a Segunda Lei"
+                  formula={String.raw`m\vec{a} = m\vec{g}`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Cancelando a massa"
+                  formula={String.raw`\vec{a} = \vec{g}`}
+                  tone="purple"
+                />
+              </div>
 
               <NoteBox title="Conclusão conceitual" tone="purple">
                 Força resultante e aceleração têm sempre mesma direção e mesmo sentido. Velocidade e aceleração podem ter sentidos iguais ou opostos.
@@ -685,26 +880,46 @@ export default function DynamicsTopicNewton() {
                 Imagine um bloco sobre uma superfície horizontal sendo puxado por uma força para a direita. Ao mesmo tempo, existe atrito para a esquerda.
               </Paragraph>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
+              <FormulaGrid>
+                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
                   <p className="font-bold text-slate-800">Caso 1: sobra força</p>
-                  <FormulaBox formula={String.raw`F_{\text{res}} = 30 - 10`} />
-                  <FormulaBox formula={String.raw`F_{\text{res}} = 20 \ \text{N}`} />
+                  <FormulaStep
+                    title="Soma das forças"
+                    formula={String.raw`F_{\text{res}} = 30 - 10`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Força resultante"
+                    formula={String.raw`F_{\text{res}} = 20 \ \text{N}`}
+                    tone="green"
+                  />
                   <p className="text-sm text-slate-700 leading-7">
                     A aceleração depende dos <strong>20 N que sobraram</strong>, não dos 30 N aplicados separadamente.
                   </p>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
+                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
                   <p className="font-bold text-slate-800">Caso 2: não sobra força</p>
-                  <FormulaBox formula={String.raw`F_{\text{res}} = 30 - 30`} />
-                  <FormulaBox formula={String.raw`F_{\text{res}} = 0`} />
-                  <FormulaBox formula={String.raw`0 = ma \Rightarrow a = 0`} />
+                  <FormulaStep
+                    title="Soma das forças"
+                    formula={String.raw`F_{\text{res}} = 30 - 30`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Resultante nula"
+                    formula={String.raw`F_{\text{res}} = 0`}
+                    tone="green"
+                  />
+                  <FormulaStep
+                    title="Aceleração nula"
+                    formula={String.raw`0 = ma \Rightarrow a = 0`}
+                    tone="purple"
+                  />
                   <p className="text-sm text-slate-700 leading-7">
                     O corpo pode estar parado ou pode estar se movendo com velocidade constante.
                   </p>
                 </div>
-              </div>
+              </FormulaGrid>
             </Section>
 
             <Section
@@ -726,39 +941,53 @@ export default function DynamicsTopicNewton() {
                 ]}
               />
               <Paragraph>
-                Representamos força por <MathFormula formula={String.raw`\vec{F}`} />. A unidade de força no Sistema Internacional é o newton, símbolo{" "}
-                <MathFormula formula={String.raw`\text{N}`} />.
+                Representamos força por <InlineFormulaBox formula={String.raw`\vec{F}`} />. A unidade de força no Sistema Internacional é o newton, símbolo{" "}
+                <InlineFormulaBox formula={String.raw`\text{N}`} />.
               </Paragraph>
-              <FormulaBox formula={String.raw`1 \ \text{N} = 1 \ \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`} />
+              <FormulaStep
+                title="Unidade de força"
+                explanation="A unidade vem diretamente da Segunda Lei."
+                formula={String.raw`1 \ \text{N} = 1 \ \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`}
+                tone="blue"
+              />
 
               <MiniTitle>3.2 Força resultante</MiniTitle>
               <Paragraph>
                 A força resultante sobre um corpo é a soma vetorial de todas as forças que atuam nesse corpo.
               </Paragraph>
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = \vec{F}_1 + \vec{F}_2 + \vec{F}_3 + \cdots`} />
+              <FormulaStep
+                title="Soma vetorial das forças"
+                formula={String.raw`\vec{F}_{\text{res}} = \vec{F}_1 + \vec{F}_2 + \vec{F}_3 + \cdots`}
+                tone="green"
+              />
 
-              <div className="grid md:grid-cols-2 gap-4">
+              <FormulaGrid>
                 <NoteBox title="Forças na mesma direção" tone="blue">
                   Escolha um sentido positivo e trabalhe com sinais. Exemplo:{" "}
-                  <MathFormula formula={String.raw`F_{\text{res}} = 20 - 8 = 12 \ \text{N}`} />.
+                  <InlineFormulaBox formula={String.raw`F_{\text{res}} = 20 - 8 = 12 \ \text{N}`} />.
                 </NoteBox>
 
                 <NoteBox title="Forças perpendiculares" tone="green">
                   Use Pitágoras e trigonometria:{" "}
-                  <MathFormula formula={String.raw`F_{\text{res}} = \sqrt{F_x^2 + F_y^2}`} /> e{" "}
-                  <MathFormula formula={String.raw`\tan\theta = \frac{F_y}{F_x}`} />.
+                  <InlineFormulaBox formula={String.raw`F_{\text{res}} = \sqrt{F_x^2 + F_y^2}`} /> e{" "}
+                  <InlineFormulaBox formula={String.raw`\tan\theta = \frac{F_y}{F_x}`} />.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
               <MiniTitle>3.3 Massa e inércia</MiniTitle>
               <Paragraph>
                 Massa é uma grandeza escalar associada à inércia de um corpo. No Sistema Internacional, sua unidade é o quilograma, símbolo{" "}
-                <MathFormula formula={String.raw`\text{kg}`} />.
+                <InlineFormulaBox formula={String.raw`\text{kg}`} />.
               </Paragraph>
               <Paragraph>
                 Inércia é a tendência que um corpo tem de manter seu estado de movimento. A inércia não é uma força. Ela é uma propriedade da matéria.
               </Paragraph>
-              <FormulaBox formula={String.raw`a = \frac{F_{\text{res}}}{m}`} />
+              <FormulaStep
+                title="Massa no denominador"
+                explanation="Quanto maior a massa, menor a aceleração para uma mesma força resultante."
+                formula={String.raw`a = \frac{F_{\text{res}}}{m}`}
+                tone="purple"
+              />
 
               <NoteBox title="Aviso importante" tone="red">
                 Não se deve desenhar uma “força de inércia” em problemas resolvidos em referenciais inerciais. Em referenciais não inerciais, aparecem forças fictícias, mas isso é outro cuidado conceitual.
@@ -769,11 +998,11 @@ export default function DynamicsTopicNewton() {
                 Referencial inercial é um referencial no qual vale a Primeira Lei de Newton. Em um referencial inercial, se a força resultante sobre um corpo é nula, o corpo permanece em repouso ou em movimento retilíneo uniforme.
               </Paragraph>
 
-              <div className="grid md:grid-cols-3 gap-4">
-                <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`} />
-                <FormulaBox formula={String.raw`\vec{a} = \vec{0}`} />
-                <FormulaBox formula={String.raw`\vec{v} = \text{constante}`} />
-              </div>
+              <FormulaGrid>
+                <FormulaStep title="Resultante nula" formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`} tone="blue" />
+                <FormulaStep title="Aceleração nula" formula={String.raw`\vec{a} = \vec{0}`} tone="green" />
+                <FormulaStep title="Velocidade constante" formula={String.raw`\vec{v} = \text{constante}`} tone="purple" />
+              </FormulaGrid>
 
               <Paragraph>
                 A Terra geralmente é tratada como referencial aproximadamente inercial em problemas comuns de Ensino Médio, ENEM, FUVEST e vestibulares militares. Essa aproximação funciona bem para blocos, planos inclinados, elevadores, polias e movimentos próximos à superfície terrestre.
@@ -784,11 +1013,15 @@ export default function DynamicsTopicNewton() {
                 Todo corpo tende a permanecer em repouso ou em movimento retilíneo uniforme, a menos que uma força resultante externa atue sobre ele.
               </blockquote>
 
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = \vec{0} \Rightarrow \vec{a} = \vec{0} \Rightarrow \vec{v} = \text{constante}`} />
+              <FormulaStep
+                title="Forma matemática"
+                formula={String.raw`\vec{F}_{\text{res}} = \vec{0} \Rightarrow \vec{a} = \vec{0} \Rightarrow \vec{v} = \text{constante}`}
+                tone="green"
+              />
 
               <NoteBox title="Equilíbrio não significa repouso" tone="amber">
-                Se <MathFormula formula={String.raw`\vec{v} = \vec{0}`} />, o corpo está em repouso. Se{" "}
-                <MathFormula formula={String.raw`\vec{v} \neq \vec{0}`} /> e constante, o corpo está em MRU. Os dois casos são equilíbrio.
+                Se <InlineFormulaBox formula={String.raw`\vec{v} = \vec{0}`} />, o corpo está em repouso. Se{" "}
+                <InlineFormulaBox formula={String.raw`\vec{v} \neq \vec{0}`} /> e constante, o corpo está em MRU. Os dois casos são equilíbrio.
               </NoteBox>
 
               <MiniTitle>3.6 Segunda Lei de Newton</MiniTitle>
@@ -796,9 +1029,13 @@ export default function DynamicsTopicNewton() {
                 A Segunda Lei de Newton afirma que a força resultante sobre um corpo é igual ao produto da massa do corpo pela aceleração adquirida.
               </Paragraph>
 
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} label="Princípio Fundamental da Dinâmica" />
+              <FormulaStep
+                title="Princípio Fundamental da Dinâmica"
+                formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
+                tone="blue"
+              />
 
-              <div className="grid md:grid-cols-3 gap-4">
+              <FormulaGrid>
                 <NoteBox title="Direção" tone="blue">
                   A aceleração tem a mesma direção da força resultante.
                 </NoteBox>
@@ -808,17 +1045,23 @@ export default function DynamicsTopicNewton() {
                 <NoteBox title="Massa" tone="purple">
                   Para uma mesma força, maior massa gera menor aceleração.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
-              <FormulaBox formula={String.raw`\sum F_x = ma_x`} />
-              <FormulaBox formula={String.raw`\sum F_y = ma_y`} />
+              <FormulaGrid>
+                <FormulaStep title="Eixo x" formula={String.raw`\sum F_x = ma_x`} tone="blue" />
+                <FormulaStep title="Eixo y" formula={String.raw`\sum F_y = ma_y`} tone="green" />
+              </FormulaGrid>
 
               <MiniTitle>3.7 Terceira Lei de Newton</MiniTitle>
               <blockquote className="border-l-4 border-rose-500 pl-5 py-3 bg-rose-50 rounded-r-xl text-slate-700 italic">
                 Se um corpo A exerce uma força sobre um corpo B, então o corpo B exerce sobre A uma força de mesma intensidade, mesma direção e sentido oposto.
               </blockquote>
 
-              <FormulaBox formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`} />
+              <FormulaStep
+                title="Ação e reação"
+                formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`}
+                tone="purple"
+              />
 
               <BulletList
                 items={[
@@ -856,8 +1099,10 @@ export default function DynamicsTopicNewton() {
 
               <SubTitle>Peso</SubTitle>
               <Paragraph>Peso é a força gravitacional exercida por um astro sobre um corpo.</Paragraph>
-              <FormulaBox formula={String.raw`\vec{P} = m\vec{g}`} />
-              <FormulaBox formula={String.raw`P = mg`} />
+              <FormulaGrid>
+                <FormulaStep title="Forma vetorial" formula={String.raw`\vec{P} = m\vec{g}`} tone="blue" />
+                <FormulaStep title="Módulo do peso" formula={String.raw`P = mg`} tone="green" />
+              </FormulaGrid>
 
               <SubTitle>Normal</SubTitle>
               <Paragraph>
@@ -865,12 +1110,12 @@ export default function DynamicsTopicNewton() {
               </Paragraph>
 
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+                <table className="w-full border-collapse text-sm rounded-xl overflow-hidden">
                   <thead>
                     <tr className="bg-slate-800 text-white">
-                      <th className="p-3 text-left rounded-tl-lg">Situação</th>
+                      <th className="p-3 text-left">Situação</th>
                       <th className="p-3 text-center">Normal</th>
-                      <th className="p-3 text-left rounded-tr-lg">Comentário</th>
+                      <th className="p-3 text-left">Comentário</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -922,14 +1167,18 @@ export default function DynamicsTopicNewton() {
               <Paragraph>
                 O atrito estático atua quando não há escorregamento relativo entre as superfícies. Ele se ajusta conforme a tendência de escorregamento, até atingir um valor máximo.
               </Paragraph>
-              <FormulaBox formula={String.raw`0 \leq f_e \leq f_{e,\text{máx}}`} />
-              <FormulaBox formula={String.raw`f_{e,\text{máx}} = \mu_e N`} />
-              <FormulaBox formula={String.raw`f_e \leq \mu_e N`} />
+              <FormulaGrid>
+                <FormulaStep title="Intervalo possível" formula={String.raw`0 \leq f_e \leq f_{e,\text{máx}}`} tone="amber" />
+                <FormulaStep title="Atrito estático máximo" formula={String.raw`f_{e,\text{máx}} = \mu_e N`} tone="amber" />
+                <FormulaStep title="Relação geral" formula={String.raw`f_e \leq \mu_e N`} tone="amber" />
+              </FormulaGrid>
 
               <SubTitle>Atrito cinético</SubTitle>
               <Paragraph>O atrito cinético atua quando há escorregamento relativo entre as superfícies.</Paragraph>
-              <FormulaBox formula={String.raw`f_c = \mu_c N`} />
-              <FormulaBox formula={String.raw`\mu_e > \mu_c`} />
+              <FormulaGrid>
+                <FormulaStep title="Atrito cinético" formula={String.raw`f_c = \mu_c N`} tone="blue" />
+                <FormulaStep title="Comparação usual" formula={String.raw`\mu_e > \mu_c`} tone="blue" />
+              </FormulaGrid>
 
               <SubTitle>Forças internas e externas</SubTitle>
               <Paragraph>
@@ -944,101 +1193,288 @@ export default function DynamicsTopicNewton() {
             <Section
               icon={Calculator}
               title="Parte 4 — Demonstrações Matemáticas"
-              subtitle="As deduções mais importantes para transformar conceito em resolução."
+              subtitle="Agora as fórmulas ficam junto da explicação. Porque fórmula solta é só decoração algébrica."
               gradient="bg-gradient-to-r from-violet-600 to-purple-700"
             >
               <MiniTitle>4.1 Da Segunda Lei para a condição de equilíbrio</MiniTitle>
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`} />
-              <FormulaBox formula={String.raw`\vec{0} = m\vec{a}`} />
-              <FormulaBox formula={String.raw`m \neq 0 \Rightarrow \vec{a} = \vec{0}`} />
-              <FormulaBox formula={String.raw`\vec{v} = \text{constante}`} />
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep
+                  title="Partimos da Segunda Lei"
+                  formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Se a força resultante é nula"
+                  formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Substituindo na Segunda Lei"
+                  formula={String.raw`\vec{0} = m\vec{a}`}
+                  tone="purple"
+                />
+                <FormulaStep
+                  title="Como a massa não é zero"
+                  explanation="Para um corpo material comum, m é diferente de zero."
+                  formula={String.raw`m \neq 0 \Rightarrow \vec{a} = \vec{0}`}
+                  tone="amber"
+                />
+                <FormulaStep
+                  title="Consequência cinemática"
+                  explanation="Se a aceleração é nula, a velocidade vetorial não varia."
+                  formula={String.raw`\vec{v} = \text{constante}`}
+                  tone="green"
+                />
+              </div>
 
               <NoteBox title="Conclusão" tone="green">
                 Se a força resultante é nula, o corpo pode estar em repouso ou em movimento retilíneo uniforme.
               </NoteBox>
 
               <MiniTitle>4.2 Segunda Lei em componentes</MiniTitle>
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = F_{\text{res},x}\hat{i} + F_{\text{res},y}\hat{j}`} />
-              <FormulaBox formula={String.raw`\vec{a} = a_x\hat{i} + a_y\hat{j}`} />
-              <FormulaBox formula={String.raw`\sum F_x = ma_x`} />
-              <FormulaBox formula={String.raw`\sum F_y = ma_y`} />
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep
+                  title="Equação vetorial"
+                  formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Decompondo a força resultante"
+                  formula={String.raw`\vec{F}_{\text{res}} = F_{\text{res},x}\hat{i} + F_{\text{res},y}\hat{j}`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Decompondo a aceleração"
+                  formula={String.raw`\vec{a} = a_x\hat{i} + a_y\hat{j}`}
+                  tone="purple"
+                />
+                <FormulaGrid>
+                  <FormulaStep
+                    title="Eixo x"
+                    formula={String.raw`\sum F_x = ma_x`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Eixo y"
+                    formula={String.raw`\sum F_y = ma_y`}
+                    tone="green"
+                  />
+                </FormulaGrid>
+              </div>
 
               <MiniTitle>4.3 Plano inclinado sem atrito</MiniTitle>
               <Paragraph>
-                Considere um bloco de massa <MathFormula formula={String.raw`m`} /> em um plano inclinado de ângulo{" "}
-                <MathFormula formula={String.raw`\theta`} />, sem atrito. As forças são peso e normal.
+                Considere um bloco de massa <InlineFormulaBox formula={String.raw`m`} /> em um plano inclinado de ângulo{" "}
+                <InlineFormulaBox formula={String.raw`\theta`} />, sem atrito. As forças são peso e normal.
               </Paragraph>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
+              <FormulaGrid>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
                   <p className="font-bold text-slate-800">Eixo perpendicular</p>
-                  <FormulaBox formula={String.raw`a_y = 0`} />
-                  <FormulaBox formula={String.raw`N - mg\cos\theta = 0`} />
-                  <FormulaBox formula={String.raw`N = mg\cos\theta`} />
+                  <FormulaStep
+                    title="O bloco não sai nem entra no plano"
+                    formula={String.raw`a_y = 0`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Aplicando a Segunda Lei"
+                    formula={String.raw`N - mg\cos\theta = 0`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Normal"
+                    formula={String.raw`N = mg\cos\theta`}
+                    tone="green"
+                  />
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
                   <p className="font-bold text-slate-800">Eixo paralelo</p>
-                  <FormulaBox formula={String.raw`mg\sin\theta = ma`} />
-                  <FormulaBox formula={String.raw`a = g\sin\theta`} />
+                  <FormulaStep
+                    title="Componente que puxa o bloco rampa abaixo"
+                    formula={String.raw`mg\sin\theta = ma`}
+                    tone="amber"
+                  />
+                  <FormulaStep
+                    title="Cancelando a massa"
+                    formula={String.raw`a = g\sin\theta`}
+                    tone="green"
+                  />
                 </div>
-              </div>
+              </FormulaGrid>
 
               <MiniTitle>4.4 Plano inclinado com atrito cinético</MiniTitle>
               <Paragraph>
                 Se o bloco desce o plano inclinado com atrito cinético, o atrito aponta para cima do plano.
               </Paragraph>
-              <FormulaBox formula={String.raw`N = mg\cos\theta`} />
-              <FormulaBox formula={String.raw`f_c = \mu_c N = \mu_c mg\cos\theta`} />
-              <FormulaBox formula={String.raw`mg\sin\theta - f_c = ma`} />
-              <FormulaBox formula={String.raw`mg\sin\theta - \mu_c mg\cos\theta = ma`} />
-              <FormulaBox formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`} />
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep
+                  title="Normal"
+                  formula={String.raw`N = mg\cos\theta`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Atrito cinético"
+                  explanation="O atrito depende da normal."
+                  formula={String.raw`f_c = \mu_c N = \mu_c mg\cos\theta`}
+                  tone="amber"
+                />
+                <FormulaStep
+                  title="Segunda Lei no eixo paralelo"
+                  explanation="Peso paralelo para baixo; atrito para cima."
+                  formula={String.raw`mg\sin\theta - f_c = ma`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Substituindo o atrito"
+                  formula={String.raw`mg\sin\theta - \mu_c mg\cos\theta = ma`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Aceleração"
+                  formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`}
+                  tone="purple"
+                />
+              </div>
 
               <MiniTitle>4.5 Condição de iminência de escorregamento</MiniTitle>
               <Paragraph>
                 Na iminência de descer, o atrito estático aponta para cima do plano e assume valor máximo.
               </Paragraph>
-              <FormulaBox formula={String.raw`f_e = \mu_e N`} />
-              <FormulaBox formula={String.raw`N = mg\cos\theta`} />
-              <FormulaBox formula={String.raw`mg\sin\theta - f_e = 0`} />
-              <FormulaBox formula={String.raw`mg\sin\theta = \mu_e mg\cos\theta`} />
-              <FormulaBox formula={String.raw`\tan\theta = \mu_e`} />
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep
+                  title="Atrito máximo"
+                  formula={String.raw`f_e = \mu_e N`}
+                  tone="amber"
+                />
+                <FormulaStep
+                  title="Normal no plano inclinado"
+                  formula={String.raw`N = mg\cos\theta`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Equilíbrio no eixo paralelo"
+                  formula={String.raw`mg\sin\theta - f_e = 0`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Substituindo o atrito"
+                  formula={String.raw`mg\sin\theta = \mu_e mg\cos\theta`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Relação final"
+                  formula={String.raw`\tan\theta = \mu_e`}
+                  tone="purple"
+                />
+              </div>
 
               <MiniTitle>4.6 Sistema de dois blocos</MiniTitle>
-              <FormulaBox formula={String.raw`M = m_1 + m_2`} />
-              <FormulaBox formula={String.raw`F = (m_1 + m_2)a`} />
-              <FormulaBox formula={String.raw`a = \frac{F}{m_1 + m_2}`} />
-              <FormulaBox formula={String.raw`C = m_2a = \frac{m_2F}{m_1 + m_2}`} />
+
+              <FormulaGrid>
+                <FormulaStep
+                  title="Massa total"
+                  formula={String.raw`M = m_1 + m_2`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Segunda Lei no conjunto"
+                  formula={String.raw`F = (m_1 + m_2)a`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Aceleração"
+                  formula={String.raw`a = \frac{F}{m_1 + m_2}`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Força de contato"
+                  explanation="Para achar força interna, isolamos um dos blocos."
+                  formula={String.raw`C = m_2a = \frac{m_2F}{m_1 + m_2}`}
+                  tone="purple"
+                />
+              </FormulaGrid>
 
               <MiniTitle>4.7 Máquina de Atwood ideal</MiniTitle>
-              <FormulaBox formula={String.raw`m_2g - T = m_2a`} />
-              <FormulaBox formula={String.raw`T - m_1g = m_1a`} />
-              <FormulaBox formula={String.raw`(m_2 - m_1)g = (m_1 + m_2)a`} />
-              <FormulaBox formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`} />
-              <FormulaBox formula={String.raw`T = \frac{2m_1m_2g}{m_1 + m_2}`} />
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep
+                  title="Equação para o bloco mais pesado"
+                  formula={String.raw`m_2g - T = m_2a`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Equação para o bloco mais leve"
+                  formula={String.raw`T - m_1g = m_1a`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Somando as equações"
+                  explanation="A tração cancela."
+                  formula={String.raw`(m_2 - m_1)g = (m_1 + m_2)a`}
+                  tone="purple"
+                />
+                <FormulaStep
+                  title="Aceleração"
+                  formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`}
+                  tone="purple"
+                />
+                <FormulaStep
+                  title="Tração"
+                  formula={String.raw`T = \frac{2m_1m_2g}{m_1 + m_2}`}
+                  tone="amber"
+                />
+              </div>
 
               <MiniTitle>4.8 Elevador acelerado</MiniTitle>
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
+
+              <FormulaGrid>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
                   <p className="font-bold text-slate-800">Acelerando para cima</p>
-                  <FormulaBox formula={String.raw`N - mg = ma`} />
-                  <FormulaBox formula={String.raw`N = m(g+a)`} />
+                  <FormulaStep
+                    title="Normal maior que o peso"
+                    formula={String.raw`N - mg = ma`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Resultado"
+                    formula={String.raw`N = m(g+a)`}
+                    tone="green"
+                  />
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
                   <p className="font-bold text-slate-800">Acelerando para baixo</p>
-                  <FormulaBox formula={String.raw`mg - N = ma`} />
-                  <FormulaBox formula={String.raw`N = m(g-a)`} />
+                  <FormulaStep
+                    title="Normal menor que o peso"
+                    formula={String.raw`mg - N = ma`}
+                    tone="amber"
+                  />
+                  <FormulaStep
+                    title="Resultado"
+                    formula={String.raw`N = m(g-a)`}
+                    tone="green"
+                  />
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 md:col-span-2">
                   <p className="font-bold text-slate-800">Queda livre</p>
-                  <FormulaBox formula={String.raw`a = g`} />
-                  <FormulaBox formula={String.raw`N = m(g-g) = 0`} />
+                  <FormulaStep
+                    title="Aceleração igual à gravidade"
+                    formula={String.raw`a = g`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Normal nula"
+                    formula={String.raw`N = m(g-g) = 0`}
+                    tone="red"
+                  />
                 </div>
-              </div>
+              </FormulaGrid>
             </Section>
 
             <Section
@@ -1048,80 +1484,135 @@ export default function DynamicsTopicNewton() {
               gradient="bg-gradient-to-r from-cyan-600 to-blue-700"
             >
               <MiniTitle>5.1 Segunda Lei de Newton</MiniTitle>
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />
 
-              <SubTitle>O termo <MathFormula formula={String.raw`\vec{F}_{\text{res}}`} /></SubTitle>
+              <FormulaStep
+                title="Fórmula central"
+                formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`}
+                tone="blue"
+              />
+
+              <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}}`} /></SubTitle>
               <Paragraph>
                 Representa a soma vetorial de todas as forças que atuam sobre o corpo. Não é “a maior força”, não é “a força aplicada”, não é “a força que está no sentido do movimento”. É a resultante.
               </Paragraph>
-              <FormulaBox formula={String.raw`\vec{F}_{\text{res}} = \vec{F}_1 + \vec{F}_2 + \vec{F}_3 + \cdots`} />
 
-              <SubTitle>O termo <MathFormula formula={String.raw`m`} /></SubTitle>
+              <FormulaStep
+                title="Soma vetorial"
+                formula={String.raw`\vec{F}_{\text{res}} = \vec{F}_1 + \vec{F}_2 + \vec{F}_3 + \cdots`}
+                tone="blue"
+              />
+
+              <SubTitle>O termo <InlineFormulaBox formula={String.raw`m`} /></SubTitle>
               <Paragraph>
                 Representa a massa do corpo, medida da inércia. Quanto maior a massa, maior a resistência à alteração do movimento.
               </Paragraph>
-              <FormulaBox formula={String.raw`a = \frac{F_{\text{res}}}{m}`} />
 
-              <SubTitle>O termo <MathFormula formula={String.raw`\vec{a}`} /></SubTitle>
+              <FormulaStep
+                title="Isolando a aceleração"
+                formula={String.raw`a = \frac{F_{\text{res}}}{m}`}
+                tone="green"
+              />
+
+              <SubTitle>O termo <InlineFormulaBox formula={String.raw`\vec{a}`} /></SubTitle>
               <Paragraph>
                 Representa a aceleração vetorial. Ela indica a taxa de variação da velocidade vetorial.
               </Paragraph>
-              <FormulaBox formula={String.raw`\vec{a} = \frac{\Delta \vec{v}}{\Delta t}`} />
-              <FormulaBox formula={String.raw`\vec{a} = \frac{\vec{F}_{\text{res}}}{m}`} />
+
+              <FormulaGrid>
+                <FormulaStep
+                  title="Definição média de aceleração"
+                  formula={String.raw`\vec{a} = \frac{\Delta \vec{v}}{\Delta t}`}
+                  tone="purple"
+                />
+                <FormulaStep
+                  title="Aceleração pela Segunda Lei"
+                  formula={String.raw`\vec{a} = \frac{\vec{F}_{\text{res}}}{m}`}
+                  tone="blue"
+                />
+              </FormulaGrid>
 
               <NoteBox title="Direção da aceleração" tone="purple">
-                Como a massa é positiva, dividir a força resultante por <MathFormula formula={String.raw`m`} /> não muda a direção nem o sentido do vetor. Portanto,{" "}
-                <MathFormula formula={String.raw`\vec{F}_{\text{res}}`} /> e <MathFormula formula={String.raw`\vec{a}`} /> têm mesma direção e mesmo sentido.
+                Como a massa é positiva, dividir a força resultante por <InlineFormulaBox formula={String.raw`m`} /> não muda a direção nem o sentido do vetor. Portanto,{" "}
+                <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}}`} /> e <InlineFormulaBox formula={String.raw`\vec{a}`} /> têm mesma direção e mesmo sentido.
               </NoteBox>
 
               <MiniTitle>5.2 Peso</MiniTitle>
-              <FormulaBox formula={String.raw`\vec{P} = m\vec{g}`} />
-              <FormulaBox formula={String.raw`P = mg`} />
+              <FormulaGrid>
+                <FormulaStep title="Peso vetorial" formula={String.raw`\vec{P} = m\vec{g}`} tone="blue" />
+                <FormulaStep title="Módulo do peso" formula={String.raw`P = mg`} tone="green" />
+              </FormulaGrid>
+
               <Paragraph>
-                O termo <MathFormula formula={String.raw`P`} /> é o módulo da força peso. O termo{" "}
-                <MathFormula formula={String.raw`m`} /> é a massa. O termo{" "}
-                <MathFormula formula={String.raw`g`} /> é a aceleração da gravidade local.
+                O termo <InlineFormulaBox formula={String.raw`P`} /> é o módulo da força peso. O termo{" "}
+                <InlineFormulaBox formula={String.raw`m`} /> é a massa. O termo{" "}
+                <InlineFormulaBox formula={String.raw`g`} /> é a aceleração da gravidade local.
               </Paragraph>
-              <FormulaBox formula={String.raw`g \approx 9{,}8 \ \text{m/s}^2`} />
-              <FormulaBox formula={String.raw`g = 10 \ \text{m/s}^2`} />
+
+              <FormulaGrid>
+                <FormulaStep title="Valor aproximado" formula={String.raw`g \approx 9{,}8 \ \text{m/s}^2`} tone="blue" />
+                <FormulaStep title="Valor comum em exercícios" formula={String.raw`g = 10 \ \text{m/s}^2`} tone="green" />
+              </FormulaGrid>
 
               <MiniTitle>5.3 Normal</MiniTitle>
               <Paragraph>
                 A normal é sempre perpendicular à superfície de contato. Ela não possui uma fórmula universal única do tipo{" "}
-                <MathFormula formula={String.raw`N = mg`} />. Deve ser determinada pela Segunda Lei no eixo perpendicular à superfície.
+                <InlineFormulaBox formula={String.raw`N = mg`} />. Deve ser determinada pela Segunda Lei no eixo perpendicular à superfície.
               </Paragraph>
 
-              <FormulaBox formula={String.raw`N - mg = 0 \Rightarrow N = mg`} />
-              <FormulaBox formula={String.raw`N - mg\cos\theta = 0 \Rightarrow N = mg\cos\theta`} />
-              <FormulaBox formula={String.raw`N - mg = ma \Rightarrow N = m(g+a)`} />
+              <FormulaGrid>
+                <FormulaStep
+                  title="Superfície horizontal simples"
+                  formula={String.raw`N - mg = 0 \Rightarrow N = mg`}
+                  tone="blue"
+                />
+                <FormulaStep
+                  title="Plano inclinado"
+                  formula={String.raw`N - mg\cos\theta = 0 \Rightarrow N = mg\cos\theta`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Elevador subindo acelerado"
+                  formula={String.raw`N - mg = ma \Rightarrow N = m(g+a)`}
+                  tone="purple"
+                />
+              </FormulaGrid>
 
               <MiniTitle>5.4 Tração</MiniTitle>
               <Paragraph>
                 A tração aparece em cordas, fios e cabos esticados. Em fio ideal, a tração tem o mesmo módulo ao longo de todo o fio.
               </Paragraph>
-              <FormulaBox formula={String.raw`T = mg \quad \text{(pendurado parado)}`} />
-              <FormulaBox formula={String.raw`T = m(g+a) \quad \text{(subindo acelerado)}`} />
-              <FormulaBox formula={String.raw`T = m(g-a) \quad \text{(descendo acelerado)}`} />
+
+              <FormulaGrid>
+                <FormulaStep title="Pendurado parado" formula={String.raw`T = mg`} tone="blue" />
+                <FormulaStep title="Subindo acelerado" formula={String.raw`T = m(g+a)`} tone="green" />
+                <FormulaStep title="Descendo acelerado" formula={String.raw`T = m(g-a)`} tone="amber" />
+              </FormulaGrid>
 
               <MiniTitle>5.5 Atrito</MiniTitle>
-              <div className="grid md:grid-cols-2 gap-4">
+              <FormulaGrid>
                 <NoteBox title="Atrito estático" tone="amber">
-                  <MathFormula formula={String.raw`f_e \leq \mu_e N`} />. Ele se ajusta até um limite máximo. A igualdade só ocorre na iminência de escorregar.
+                  <InlineFormulaBox formula={String.raw`f_e \leq \mu_e N`} />. Ele se ajusta até um limite máximo. A igualdade só ocorre na iminência de escorregar.
                 </NoteBox>
 
                 <NoteBox title="Atrito cinético" tone="blue">
-                  <MathFormula formula={String.raw`f_c = \mu_c N`} />. Vale quando já há deslizamento relativo entre as superfícies.
+                  <InlineFormulaBox formula={String.raw`f_c = \mu_c N`} />. Vale quando já há deslizamento relativo entre as superfícies.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
               <MiniTitle>5.6 Componentes do peso no plano inclinado</MiniTitle>
-              <FormulaBox formula={String.raw`P_{\parallel} = mg\sin\theta`} />
-              <FormulaBox formula={String.raw`P_{\perp} = mg\cos\theta`} />
-              <FormulaBox formula={String.raw`N = mg\cos\theta`} />
-              <FormulaBox formula={String.raw`a = g\sin\theta`} />
+              <FormulaGrid>
+                <FormulaStep title="Componente paralela" formula={String.raw`P_{\parallel} = mg\sin\theta`} tone="green" />
+                <FormulaStep title="Componente perpendicular" formula={String.raw`P_{\perp} = mg\cos\theta`} tone="blue" />
+                <FormulaStep title="Normal" formula={String.raw`N = mg\cos\theta`} tone="purple" />
+                <FormulaStep title="Aceleração sem atrito" formula={String.raw`a = g\sin\theta`} tone="green" />
+              </FormulaGrid>
 
               <MiniTitle>5.7 Ação e reação</MiniTitle>
-              <FormulaBox formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`} />
+              <FormulaStep
+                title="Terceira Lei"
+                formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`}
+                tone="purple"
+              />
               <Paragraph>
                 O sinal negativo indica sentidos opostos. Os módulos são iguais, as direções são iguais, os sentidos são opostos e as forças atuam em corpos diferentes.
               </Paragraph>
@@ -1140,26 +1631,31 @@ export default function DynamicsTopicNewton() {
               <MiniTitle>6.1 Grandezas fundamentais</MiniTitle>
               <BulletList
                 items={[
-                  <>comprimento: metro, <MathFormula formula={String.raw`\text{m}`} />;</>,
-                  <>massa: quilograma, <MathFormula formula={String.raw`\text{kg}`} />;</>,
-                  <>tempo: segundo, <MathFormula formula={String.raw`\text{s}`} />.</>,
+                  <>comprimento: metro, <InlineFormulaBox formula={String.raw`\text{m}`} />;</>,
+                  <>massa: quilograma, <InlineFormulaBox formula={String.raw`\text{kg}`} />;</>,
+                  <>tempo: segundo, <InlineFormulaBox formula={String.raw`\text{s}`} />.</>,
                 ]}
               />
 
-              <FormulaBox formula={String.raw`[v] = \frac{\text{m}}{\text{s}}`} />
-              <FormulaBox formula={String.raw`[a] = \frac{\text{m}}{\text{s}^2}`} />
+              <FormulaGrid>
+                <FormulaStep title="Velocidade" formula={String.raw`[v] = \frac{\text{m}}{\text{s}}`} tone="blue" />
+                <FormulaStep title="Aceleração" formula={String.raw`[a] = \frac{\text{m}}{\text{s}^2}`} tone="green" />
+              </FormulaGrid>
 
               <MiniTitle>6.2 Unidade de força</MiniTitle>
-              <FormulaBox formula={String.raw`F = ma`} />
-              <FormulaBox formula={String.raw`[F] = [m][a]`} />
-              <FormulaBox formula={String.raw`[F] = \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`} />
-              <FormulaBox formula={String.raw`1 \ \text{N} = 1 \ \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`} />
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep title="Segunda Lei" formula={String.raw`F = ma`} tone="blue" />
+                <FormulaStep title="Dimensões" formula={String.raw`[F] = [m][a]`} tone="green" />
+                <FormulaStep title="Substituindo unidades" formula={String.raw`[F] = \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`} tone="purple" />
+                <FormulaStep title="Newton" formula={String.raw`1 \ \text{N} = 1 \ \text{kg} \cdot \frac{\text{m}}{\text{s}^2}`} tone="amber" />
+              </div>
 
               <MiniTitle>6.3 Peso, normal, tração e atrito</MiniTitle>
-              <div className="grid md:grid-cols-2 gap-4">
+              <FormulaGrid>
                 <NoteBox title="Peso" tone="blue">
-                  <MathFormula formula={String.raw`P = mg`} /> tem unidade{" "}
-                  <MathFormula formula={String.raw`\text{kg}\cdot \frac{\text{m}}{\text{s}^2} = \text{N}`} />.
+                  <InlineFormulaBox formula={String.raw`P = mg`} /> tem unidade{" "}
+                  <InlineFormulaBox formula={String.raw`\text{kg}\cdot \frac{\text{m}}{\text{s}^2} = \text{N}`} />.
                 </NoteBox>
 
                 <NoteBox title="Normal" tone="green">
@@ -1173,35 +1669,46 @@ export default function DynamicsTopicNewton() {
                 <NoteBox title="Atrito" tone="amber">
                   Atrito é força. Portanto, é medido em newtons.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
               <MiniTitle>6.4 Coeficiente de atrito é adimensional</MiniTitle>
-              <FormulaBox formula={String.raw`f_c = \mu_c N`} />
-              <FormulaBox formula={String.raw`\mu_c = \frac{f_c}{N}`} />
-              <FormulaBox formula={String.raw`[\mu_c] = \frac{\text{N}}{\text{N}} = 1`} />
+
+              <FormulaGrid>
+                <FormulaStep title="Atrito cinético" formula={String.raw`f_c = \mu_c N`} tone="blue" />
+                <FormulaStep title="Isolando o coeficiente" formula={String.raw`\mu_c = \frac{f_c}{N}`} tone="green" />
+                <FormulaStep title="Unidades cancelam" formula={String.raw`[\mu_c] = \frac{\text{N}}{\text{N}} = 1`} tone="purple" />
+              </FormulaGrid>
 
               <MiniTitle>6.5 Conferindo plano inclinado sem atrito</MiniTitle>
-              <FormulaBox formula={String.raw`a = g\sin\theta`} />
-              <FormulaBox formula={String.raw`[g] = \frac{\text{m}}{\text{s}^2}`} />
-              <FormulaBox formula={String.raw`[\sin\theta] = 1`} />
-              <FormulaBox formula={String.raw`[a] = \frac{\text{m}}{\text{s}^2}`} />
+              <FormulaGrid>
+                <FormulaStep title="Fórmula" formula={String.raw`a = g\sin\theta`} tone="blue" />
+                <FormulaStep title="Unidade de g" formula={String.raw`[g] = \frac{\text{m}}{\text{s}^2}`} tone="green" />
+                <FormulaStep title="Seno é adimensional" formula={String.raw`[\sin\theta] = 1`} tone="purple" />
+                <FormulaStep title="Unidade final" formula={String.raw`[a] = \frac{\text{m}}{\text{s}^2}`} tone="amber" />
+              </FormulaGrid>
 
               <MiniTitle>6.6 Conferindo plano inclinado com atrito</MiniTitle>
-              <FormulaBox formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`} />
-              <Paragraph>
-                O seno, o cosseno e o coeficiente de atrito são adimensionais. Logo, o termo entre parênteses é adimensional, e a unidade da aceleração vem de{" "}
-                <MathFormula formula={String.raw`g`} />.
-              </Paragraph>
+              <FormulaStep
+                title="Fórmula"
+                explanation="Seno, cosseno e coeficiente de atrito são adimensionais. A unidade da aceleração vem de g."
+                formula={String.raw`a = g(\sin\theta - \mu_c\cos\theta)`}
+                tone="blue"
+              />
 
               <MiniTitle>6.7 Conferindo a máquina de Atwood</MiniTitle>
-              <FormulaBox formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`} />
-              <Paragraph>
-                O termo <MathFormula formula={String.raw`\frac{m_2 - m_1}{m_1 + m_2}`} /> é razão entre massas, então é adimensional. A unidade de{" "}
-                <MathFormula formula={String.raw`a`} /> é a unidade de <MathFormula formula={String.raw`g`} />.
-              </Paragraph>
-
-              <FormulaBox formula={String.raw`T = \frac{2m_1m_2g}{m_1 + m_2}`} />
-              <FormulaBox formula={String.raw`[T] = \frac{\text{kg}^2}{\text{kg}}\cdot \frac{\text{m}}{\text{s}^2} = \text{N}`} />
+              <FormulaGrid>
+                <FormulaStep
+                  title="Aceleração"
+                  explanation="A razão entre massas é adimensional, então a unidade vem de g."
+                  formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`}
+                  tone="green"
+                />
+                <FormulaStep
+                  title="Tração"
+                  formula={String.raw`[T] = \frac{\text{kg}^2}{\text{kg}}\cdot \frac{\text{m}}{\text{s}^2} = \text{N}`}
+                  tone="purple"
+                />
+              </FormulaGrid>
             </Section>
 
             <Section
@@ -1211,12 +1718,12 @@ export default function DynamicsTopicNewton() {
               gradient="bg-gradient-to-r from-teal-600 to-cyan-700"
             >
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+                <table className="w-full border-collapse text-sm rounded-xl overflow-hidden">
                   <thead>
                     <tr className="bg-slate-800 text-white">
-                      <th className="p-3 text-left rounded-tl-lg">Caso</th>
+                      <th className="p-3 text-left">Caso</th>
                       <th className="p-3 text-left">Condição</th>
-                      <th className="p-3 text-left rounded-tr-lg">Interpretação</th>
+                      <th className="p-3 text-left">Interpretação</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1236,14 +1743,14 @@ export default function DynamicsTopicNewton() {
                       <td className="p-3 border-b border-slate-200">Corpo em MRU, com resultante nula.</td>
                     </tr>
                     <tr className="bg-slate-50">
-                      <td className="p-3 border-b border-slate-200 font-semibold">Força resultante paralela à velocidade</td>
+                      <td className="p-3 border-b border-slate-200 font-semibold">Força paralela à velocidade</td>
                       <td className="p-3 border-b border-slate-200">
                         <MathFormula formula={String.raw`\vec{F}_{\text{res}} \parallel \vec{v}`} />
                       </td>
                       <td className="p-3 border-b border-slate-200">Muda o módulo da velocidade.</td>
                     </tr>
                     <tr className="bg-white">
-                      <td className="p-3 border-b border-slate-200 font-semibold">Força resultante perpendicular</td>
+                      <td className="p-3 border-b border-slate-200 font-semibold">Força perpendicular à velocidade</td>
                       <td className="p-3 border-b border-slate-200">
                         <MathFormula formula={String.raw`\vec{F}_{\text{res}} \perp \vec{v}`} />
                       </td>
@@ -1264,14 +1771,16 @@ export default function DynamicsTopicNewton() {
               <Paragraph>
                 Isso ocorre em movimentos curvilíneos, como o movimento circular uniforme. A rapidez pode ser constante, mas a direção da velocidade muda.
               </Paragraph>
-              <FormulaBox formula={String.raw`a_c = \frac{v^2}{R}`} />
-              <FormulaBox formula={String.raw`F_c = m\frac{v^2}{R}`} />
+              <FormulaGrid>
+                <FormulaStep title="Aceleração centrípeta" formula={String.raw`a_c = \frac{v^2}{R}`} tone="blue" />
+                <FormulaStep title="Força centrípeta" formula={String.raw`F_c = m\frac{v^2}{R}`} tone="green" />
+              </FormulaGrid>
 
               <MiniTitle>7.2 Atrito estático nulo</MiniTitle>
               <Paragraph>
                 Pode haver contato entre superfícies sem atrito atuando. O atrito estático só aparece se houver tendência de escorregamento relativo.
               </Paragraph>
-              <FormulaBox formula={String.raw`f_e = 0`} />
+              <FormulaStep title="Sem tendência de escorregamento" formula={String.raw`f_e = 0`} tone="amber" />
 
               <MiniTitle>7.3 Fio ideal com mesma tração</MiniTitle>
               <Paragraph>
@@ -1284,22 +1793,26 @@ export default function DynamicsTopicNewton() {
               </Paragraph>
 
               <MiniTitle>7.5 Forças internas cancelando no sistema</MiniTitle>
-              <FormulaBox formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`} />
-              <FormulaBox formula={String.raw`\vec{F}_{A \to B} + \vec{F}_{B \to A} = \vec{0}`} />
+              <FormulaGrid>
+                <FormulaStep title="Ação e reação interna" formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`} tone="blue" />
+                <FormulaStep title="Soma no sistema completo" formula={String.raw`\vec{F}_{A \to B} + \vec{F}_{B \to A} = \vec{0}`} tone="green" />
+              </FormulaGrid>
               <Paragraph>
                 Essas forças não entram na resultante externa do sistema completo, mas entram quando analisamos cada corpo separadamente.
               </Paragraph>
 
               <MiniTitle>7.6 Vínculo geométrico em fio inextensível</MiniTitle>
-              <FormulaBox formula={String.raw`L = x_1 + x_2 + \text{constante}`} />
-              <FormulaBox formula={String.raw`x_1 + x_2 = \text{constante}`} />
-              <FormulaBox formula={String.raw`v_1 + v_2 = 0`} />
-              <FormulaBox formula={String.raw`a_1 + a_2 = 0`} />
-              <FormulaBox formula={String.raw`|a_1| = |a_2|`} />
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep title="Comprimento total constante" formula={String.raw`L = x_1 + x_2 + \text{constante}`} tone="blue" />
+                <FormulaStep title="Parte variável constante" formula={String.raw`x_1 + x_2 = \text{constante}`} tone="green" />
+                <FormulaStep title="Derivando uma vez" formula={String.raw`v_1 + v_2 = 0`} tone="purple" />
+                <FormulaStep title="Derivando novamente" formula={String.raw`a_1 + a_2 = 0`} tone="amber" />
+                <FormulaStep title="Em módulo" formula={String.raw`|a_1| = |a_2|`} tone="green" />
+              </div>
 
               <NoteBox title="Polia móvel" tone="amber">
                 Em polias móveis, a relação pode mudar para algo como{" "}
-                <MathFormula formula={String.raw`|a_{\text{extremidade}}| = 2|a_{\text{carga}}|`} />, dependendo da geometria do fio.
+                <InlineFormulaBox formula={String.raw`|a_{\text{extremidade}}| = 2|a_{\text{carga}}|`} />, dependendo da geometria do fio.
               </NoteBox>
             </Section>
 
@@ -1310,57 +1823,84 @@ export default function DynamicsTopicNewton() {
               gradient="bg-gradient-to-r from-blue-600 to-indigo-700"
             >
               <MiniTitle>8.1 Gráfico força resultante versus aceleração</MiniTitle>
-              <FormulaBox formula={String.raw`F_{\text{res}} = ma`} />
+
+              <FormulaStep
+                title="Segunda Lei em módulo"
+                formula={String.raw`F_{\text{res}} = ma`}
+                tone="blue"
+              />
+
               <Paragraph>
-                Se colocarmos <MathFormula formula={String.raw`a`} /> no eixo horizontal e{" "}
-                <MathFormula formula={String.raw`F_{\text{res}}`} /> no eixo vertical, teremos uma reta que passa pela origem.
+                Se colocarmos <InlineFormulaBox formula={String.raw`a`} /> no eixo horizontal e{" "}
+                <InlineFormulaBox formula={String.raw`F_{\text{res}}`} /> no eixo vertical, teremos uma reta que passa pela origem.
               </Paragraph>
-              <FormulaBox formula={String.raw`m = \frac{\Delta F_{\text{res}}}{\Delta a}`} />
-              <NoteBox title="Interpretação" tone="blue">
-                O coeficiente angular do gráfico <MathFormula formula={String.raw`F_{\text{res}} \times a`} /> é a massa.
-              </NoteBox>
+
+              <FormulaStep
+                title="Coeficiente angular"
+                explanation="O coeficiente angular da reta é a massa."
+                formula={String.raw`m = \frac{\Delta F_{\text{res}}}{\Delta a}`}
+                tone="green"
+              />
 
               <MiniTitle>8.2 Gráfico aceleração versus força resultante</MiniTitle>
-              <FormulaBox formula={String.raw`a = \frac{F_{\text{res}}}{m}`} />
-              <FormulaBox formula={String.raw`a = \frac{1}{m}F_{\text{res}}`} />
+
+              <FormulaGrid>
+                <FormulaStep title="Isolando a aceleração" formula={String.raw`a = \frac{F_{\text{res}}}{m}`} tone="blue" />
+                <FormulaStep title="Coeficiente angular" formula={String.raw`a = \frac{1}{m}F_{\text{res}}`} tone="green" />
+              </FormulaGrid>
+
               <Paragraph>
-                Nesse caso, o coeficiente angular é <MathFormula formula={String.raw`\frac{1}{m}`} />. Quanto maior a massa, menor a inclinação.
+                Nesse caso, o coeficiente angular é <InlineFormulaBox formula={String.raw`\frac{1}{m}`} />. Quanto maior a massa, menor a inclinação.
               </Paragraph>
 
               <MiniTitle>8.3 Gráfico força resultante versus tempo</MiniTitle>
-              <FormulaBox formula={String.raw`a = \frac{F_{\text{res}}}{m}`} />
+              <FormulaStep
+                title="Aceleração a partir da força"
+                formula={String.raw`a = \frac{F_{\text{res}}}{m}`}
+                tone="blue"
+              />
+
               <Paragraph>
-                Se <MathFormula formula={String.raw`F_{\text{res}}`} /> é constante, então a aceleração é constante. Se{" "}
-                <MathFormula formula={String.raw`F_{\text{res}} = 0`} />, então{" "}
-                <MathFormula formula={String.raw`a = 0`} />.
+                Se <InlineFormulaBox formula={String.raw`F_{\text{res}}`} /> é constante, então a aceleração é constante. Se{" "}
+                <InlineFormulaBox formula={String.raw`F_{\text{res}} = 0`} />, então{" "}
+                <InlineFormulaBox formula={String.raw`a = 0`} />.
               </Paragraph>
 
               <MiniTitle>8.4 Gráfico aceleração versus tempo</MiniTitle>
-              <FormulaBox formula={String.raw`a = \frac{\Delta v}{\Delta t}`} />
-              <FormulaBox formula={String.raw`\Delta v = a\Delta t`} />
-              <FormulaBox formula={String.raw`v = v_0 + at`} />
+              <FormulaGrid>
+                <FormulaStep title="Definição" formula={String.raw`a = \frac{\Delta v}{\Delta t}`} tone="blue" />
+                <FormulaStep title="Área no gráfico a×t" formula={String.raw`\Delta v = a\Delta t`} tone="green" />
+                <FormulaStep title="Equação horária da velocidade" formula={String.raw`v = v_0 + at`} tone="purple" />
+              </FormulaGrid>
 
               <MiniTitle>8.5 Gráfico velocidade versus tempo</MiniTitle>
               <Paragraph>
-                No gráfico <MathFormula formula={String.raw`v \times t`} />, a inclinação representa a aceleração.
+                No gráfico <InlineFormulaBox formula={String.raw`v \times t`} />, a inclinação representa a aceleração.
               </Paragraph>
-              <FormulaBox formula={String.raw`a_m = \frac{\Delta v}{\Delta t}`} />
+
+              <FormulaStep
+                title="Inclinação"
+                formula={String.raw`a_m = \frac{\Delta v}{\Delta t}`}
+                tone="blue"
+              />
 
               <MiniTitle>8.6 Gráfico do atrito estático</MiniTitle>
               <Paragraph>
                 Enquanto o bloco não escorrega, o atrito estático se ajusta para equilibrar a força aplicada.
               </Paragraph>
-              <FormulaBox formula={String.raw`F - f_e = 0`} />
-              <FormulaBox formula={String.raw`f_e = F`} />
-              <FormulaBox formula={String.raw`f_{e,\text{máx}} = \mu_e N`} />
-              <Paragraph>
-                Quando a força aplicada atinge o valor máximo do atrito estático, o bloco fica na iminência de escorregar. Depois que escorrega, o atrito passa a ser cinético.
-              </Paragraph>
+
+              <FormulaGrid>
+                <FormulaStep title="Equilíbrio horizontal" formula={String.raw`F - f_e = 0`} tone="blue" />
+                <FormulaStep title="Atrito se ajusta" formula={String.raw`f_e = F`} tone="green" />
+                <FormulaStep title="Valor máximo" formula={String.raw`f_{e,\text{máx}} = \mu_e N`} tone="amber" />
+              </FormulaGrid>
 
               <MiniTitle>8.7 Gráfico da normal em um elevador</MiniTitle>
-              <FormulaBox formula={String.raw`N = m(g+a) \quad \text{(acelerando para cima)}`} />
-              <FormulaBox formula={String.raw`N = m(g-a) \quad \text{(acelerando para baixo)}`} />
-              <FormulaBox formula={String.raw`a = g \Rightarrow N = 0`} />
+              <FormulaGrid>
+                <FormulaStep title="Acelerando para cima" formula={String.raw`N = m(g+a)`} tone="blue" />
+                <FormulaStep title="Acelerando para baixo" formula={String.raw`N = m(g-a)`} tone="green" />
+                <FormulaStep title="Queda livre" formula={String.raw`a = g \Rightarrow N = 0`} tone="amber" />
+              </FormulaGrid>
 
               <NoteBox title="Ponte entre Dinâmica e Cinemática" tone="purple">
                 Se a questão dá força, você acha aceleração. Se acha aceleração, pode usar Cinemática. Essa transição é comum em provas fortes.
@@ -1373,15 +1913,15 @@ export default function DynamicsTopicNewton() {
               subtitle="Onde as Leis de Newton aparecem fora do quadro."
               gradient="bg-gradient-to-r from-orange-600 to-red-600"
             >
-              <div className="grid md:grid-cols-2 gap-5">
+              <FormulaGrid>
                 <NoteBox title="Cinto de segurança" tone="blue">
                   Durante uma freada brusca, o passageiro tende a continuar em movimento por inércia. O cinto exerce força no sentido de desacelerar o corpo.
                 </NoteBox>
 
                 <NoteBox title="Airbag" tone="green">
                   O airbag aumenta o tempo de desaceleração. Como{" "}
-                  <MathFormula formula={String.raw`a_m = \frac{\Delta v}{\Delta t}`} />, aumentar{" "}
-                  <MathFormula formula={String.raw`\Delta t`} /> reduz a aceleração média e, portanto, reduz a força média.
+                  <InlineFormulaBox formula={String.raw`a_m = \frac{\Delta v}{\Delta t}`} />, aumentar{" "}
+                  <InlineFormulaBox formula={String.raw`\Delta t`} /> reduz a aceleração média e, portanto, reduz a força média.
                 </NoteBox>
 
                 <NoteBox title="Caminhar" tone="purple">
@@ -1398,36 +1938,42 @@ export default function DynamicsTopicNewton() {
 
                 <NoteBox title="Elevadores" tone="blue">
                   A sensação de peso muda porque a normal muda. Para cima:{" "}
-                  <MathFormula formula={String.raw`N = m(g+a)`} />. Para baixo:{" "}
-                  <MathFormula formula={String.raw`N = m(g-a)`} />.
+                  <InlineFormulaBox formula={String.raw`N = m(g+a)`} />. Para baixo:{" "}
+                  <InlineFormulaBox formula={String.raw`N = m(g-a)`} />.
                 </NoteBox>
 
                 <NoteBox title="Plano inclinado" tone="green">
                   Rampas reduzem a componente do peso ao longo do movimento:{" "}
-                  <MathFormula formula={String.raw`P_{\parallel} = mg\sin\theta`} />.
+                  <InlineFormulaBox formula={String.raw`P_{\parallel} = mg\sin\theta`} />.
                 </NoteBox>
 
                 <NoteBox title="Polias" tone="purple">
                   Polias podem mudar direção de força e impor vínculos entre acelerações. Em polia móvel, a carga pode subir metade do deslocamento da extremidade.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
               <MiniTitle>Satélites e órbitas</MiniTitle>
               <Paragraph>
                 Um satélite em órbita não está “sem gravidade”. Ele está caindo continuamente em torno da Terra. A força gravitacional atua como força centrípeta.
               </Paragraph>
-              <FormulaBox formula={String.raw`F_g = F_c`} />
-              <FormulaBox formula={String.raw`\frac{GMm}{R^2} = m\frac{v^2}{R}`} />
-              <FormulaBox formula={String.raw`v = \sqrt{\frac{GM}{R}}`} />
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep title="Força gravitacional como centrípeta" formula={String.raw`F_g = F_c`} tone="blue" />
+                <FormulaStep title="Igualando expressões" formula={String.raw`\frac{GMm}{R^2} = m\frac{v^2}{R}`} tone="green" />
+                <FormulaStep title="Velocidade orbital" formula={String.raw`v = \sqrt{\frac{GM}{R}}`} tone="purple" />
+              </div>
 
               <MiniTitle>Esportes</MiniTitle>
               <Paragraph>
                 Em uma arrancada, o corredor empurra o chão para trás e o chão empurra o corredor para frente. Em um salto, o atleta empurra o chão para baixo e o chão empurra o atleta para cima pela normal.
               </Paragraph>
-              <FormulaBox formula={String.raw`N - mg = ma`} />
-              <Paragraph>
-                Se o atleta acelera para cima, então <MathFormula formula={String.raw`N > mg`} />.
-              </Paragraph>
+
+              <FormulaStep
+                title="Impulsão vertical"
+                explanation="Se o atleta acelera para cima, a normal deve superar o peso."
+                formula={String.raw`N - mg = ma \Rightarrow N > mg`}
+                tone="green"
+              />
             </Section>
           </div>
         )}
@@ -1479,7 +2025,7 @@ export default function DynamicsTopicNewton() {
               subtitle="Onde a maioria erra e depois culpa a prova, esse velho esporte nacional."
               gradient="bg-gradient-to-r from-red-600 to-rose-700"
             >
-              <div className="grid md:grid-cols-2 gap-4">
+              <FormulaGrid>
                 {[
                   {
                     title: "Achar que força mantém movimento",
@@ -1535,7 +2081,7 @@ export default function DynamicsTopicNewton() {
                     <p className="text-slate-700 text-sm leading-6">{trap.text}</p>
                   </div>
                 ))}
-              </div>
+              </FormulaGrid>
             </Section>
 
             <Section
@@ -1556,7 +2102,7 @@ export default function DynamicsTopicNewton() {
                     <>Escolha o corpo ou sistema.</>,
                     <>Faça o DCL.</>,
                     <>Escolha eixos convenientes.</>,
-                    <>Escreva <MathFormula formula={String.raw`\sum F = ma`} /> em cada eixo.</>,
+                    <>Escreva <InlineFormulaBox formula={String.raw`\sum F = ma`} /> em cada eixo.</>,
                     <>Escreva os vínculos geométricos.</>,
                     <>Resolva o sistema de equações.</>,
                     <>Verifique se o resultado faz sentido físico.</>,
@@ -1568,11 +2114,18 @@ export default function DynamicsTopicNewton() {
               <Paragraph>
                 Se o problema pede aceleração de um conjunto, muitas vezes analise o conjunto inteiro. Depois, para achar tração, normal de contato ou força interna, isole um corpo.
               </Paragraph>
-              <FormulaBox formula={String.raw`F = (m_1 + m_2)a`} />
-              <FormulaBox formula={String.raw`a = \frac{F}{m_1 + m_2}`} />
+
+              <FormulaGrid>
+                <FormulaStep title="Sistema completo" formula={String.raw`F = (m_1 + m_2)a`} tone="blue" />
+                <FormulaStep title="Aceleração" formula={String.raw`a = \frac{F}{m_1 + m_2}`} tone="green" />
+              </FormulaGrid>
 
               <MiniTitle>12.3 Centro de massa e forças externas</MiniTitle>
-              <FormulaBox formula={String.raw`\vec{F}_{\text{ext,res}} = M\vec{a}_{CM}`} />
+              <FormulaStep
+                title="Centro de massa"
+                formula={String.raw`\vec{F}_{\text{ext,res}} = M\vec{a}_{CM}`}
+                tone="purple"
+              />
               <Paragraph>
                 Forças internas podem alterar movimentos relativos entre partes do sistema, mas não aceleram o centro de massa do sistema como um todo.
               </Paragraph>
@@ -1583,24 +2136,27 @@ export default function DynamicsTopicNewton() {
               </Paragraph>
 
               <MiniTitle>12.5 Em polias, deduza o vínculo</MiniTitle>
-              <FormulaBox formula={String.raw`L = x_A + 2x_B + \text{constante}`} />
-              <FormulaBox formula={String.raw`x_A + 2x_B = \text{constante}`} />
-              <FormulaBox formula={String.raw`v_A + 2v_B = 0`} />
-              <FormulaBox formula={String.raw`a_A + 2a_B = 0`} />
-              <FormulaBox formula={String.raw`|a_A| = 2|a_B|`} />
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+                <FormulaStep title="Comprimento constante" formula={String.raw`L = x_A + 2x_B + \text{constante}`} tone="blue" />
+                <FormulaStep title="Parte variável" formula={String.raw`x_A + 2x_B = \text{constante}`} tone="green" />
+                <FormulaStep title="Velocidades" formula={String.raw`v_A + 2v_B = 0`} tone="purple" />
+                <FormulaStep title="Acelerações" formula={String.raw`a_A + 2a_B = 0`} tone="amber" />
+                <FormulaStep title="Em módulo" formula={String.raw`|a_A| = 2|a_B|`} tone="green" />
+              </div>
 
               <MiniTitle>12.6 Testes de limite</MiniTitle>
-              <FormulaBox formula={String.raw`a = g\sin\theta`} />
-              <FormulaBox formula={String.raw`\theta = 0^\circ \Rightarrow a = 0`} />
-              <FormulaBox formula={String.raw`\theta = 90^\circ \Rightarrow a = g`} />
-
-              <FormulaBox formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`} />
-              <FormulaBox formula={String.raw`m_2 = m_1 \Rightarrow a = 0`} />
-              <FormulaBox formula={String.raw`m_1 \approx 0 \Rightarrow a \approx g`} />
+              <FormulaGrid>
+                <FormulaStep title="Plano inclinado" formula={String.raw`a = g\sin\theta`} tone="blue" />
+                <FormulaStep title="Plano horizontal" formula={String.raw`\theta = 0^\circ \Rightarrow a = 0`} tone="green" />
+                <FormulaStep title="Plano vertical" formula={String.raw`\theta = 90^\circ \Rightarrow a = g`} tone="purple" />
+                <FormulaStep title="Atwood" formula={String.raw`a = \frac{(m_2 - m_1)g}{m_1 + m_2}`} tone="amber" />
+                <FormulaStep title="Massas iguais" formula={String.raw`m_2 = m_1 \Rightarrow a = 0`} tone="green" />
+                <FormulaStep title="Uma massa desprezível" formula={String.raw`m_1 \approx 0 \Rightarrow a \approx g`} tone="blue" />
+              </FormulaGrid>
 
               <MiniTitle>12.7 Referenciais não inerciais</MiniTitle>
               <Paragraph>
-                A forma simples <MathFormula formula={String.raw`\sum F = ma`} /> vale diretamente em referenciais inerciais. Em elevadores, carros acelerados e referenciais girantes, pode ser mais seguro resolver a partir do solo.
+                A forma simples <InlineFormulaBox formula={String.raw`\sum F = ma`} /> vale diretamente em referenciais inerciais. Em elevadores, carros acelerados e referenciais girantes, pode ser mais seguro resolver a partir do solo.
               </Paragraph>
             </Section>
 
@@ -1610,42 +2166,42 @@ export default function DynamicsTopicNewton() {
               subtitle="A página inteira condensada sem virar resumo burro."
               gradient="bg-gradient-to-r from-slate-700 to-slate-900"
             >
-              <div className="bg-slate-900 rounded-2xl p-7 text-center">
-                <p className="text-amber-400 font-black text-lg mb-3">Ideia central da Dinâmica</p>
-                <p className="text-white text-2xl font-black">Força resultante não mantém movimento.</p>
-                <p className="text-green-400 text-2xl font-black mt-1">Força resultante altera movimento.</p>
+              <div className="bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 rounded-2xl p-7 text-center shadow-inner">
+                <p className="text-amber-600 font-black text-lg mb-3">Ideia central da Dinâmica</p>
+                <p className="text-slate-900 text-2xl font-black">Força resultante não mantém movimento.</p>
+                <p className="text-green-700 text-2xl font-black mt-1">Força resultante altera movimento.</p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-5">
+              <FormulaGrid>
                 <NoteBox title="Primeira Lei" tone="green">
-                  <MathFormula formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`} /> implica{" "}
-                  <MathFormula formula={String.raw`\vec{a} = \vec{0}`} /> e{" "}
-                  <MathFormula formula={String.raw`\vec{v} = \text{constante}`} />.
+                  <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}} = \vec{0}`} /> implica{" "}
+                  <InlineFormulaBox formula={String.raw`\vec{a} = \vec{0}`} /> e{" "}
+                  <InlineFormulaBox formula={String.raw`\vec{v} = \text{constante}`} />.
                 </NoteBox>
 
                 <NoteBox title="Segunda Lei" tone="blue">
-                  <MathFormula formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />. A aceleração tem mesma direção e mesmo sentido da resultante.
+                  <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />. A aceleração tem mesma direção e mesmo sentido da resultante.
                 </NoteBox>
 
                 <NoteBox title="Terceira Lei" tone="purple">
-                  <MathFormula formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`} />. Ação e reação atuam em corpos diferentes.
+                  <InlineFormulaBox formula={String.raw`\vec{F}_{A \to B} = -\vec{F}_{B \to A}`} />. Ação e reação atuam em corpos diferentes.
                 </NoteBox>
 
                 <NoteBox title="Peso" tone="amber">
-                  <MathFormula formula={String.raw`\vec{P} = m\vec{g}`} /> e{" "}
-                  <MathFormula formula={String.raw`P = mg`} />.
+                  <InlineFormulaBox formula={String.raw`\vec{P} = m\vec{g}`} /> e{" "}
+                  <InlineFormulaBox formula={String.raw`P = mg`} />.
                 </NoteBox>
-              </div>
+              </FormulaGrid>
 
               <MiniTitle>Fórmulas principais</MiniTitle>
 
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+                <table className="w-full border-collapse text-sm rounded-xl overflow-hidden">
                   <thead>
                     <tr className="bg-slate-800 text-white">
-                      <th className="p-3 text-left rounded-tl-lg">Tema</th>
+                      <th className="p-3 text-left">Tema</th>
                       <th className="p-3 text-center">Fórmula</th>
-                      <th className="p-3 text-left rounded-tr-lg">Observação</th>
+                      <th className="p-3 text-left">Observação</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1730,7 +2286,7 @@ export default function DynamicsTopicNewton() {
               </div>
 
               <NoteBox title="Frase final" tone="amber">
-                A equação central é sempre <MathFormula formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />. Mas a inteligência do problema está antes da fórmula: está no DCL, na escolha do sistema, nos vínculos e na interpretação física.
+                A equação central é sempre <InlineFormulaBox formula={String.raw`\vec{F}_{\text{res}} = m\vec{a}`} />. Mas a inteligência do problema está antes da fórmula: está no DCL, na escolha do sistema, nos vínculos e na interpretação física.
               </NoteBox>
             </Section>
 
@@ -1740,7 +2296,7 @@ export default function DynamicsTopicNewton() {
               subtitle="Antes de resolver uma questão de Dinâmica."
               gradient="bg-gradient-to-r from-emerald-700 to-green-800"
             >
-              <div className="grid md:grid-cols-2 gap-4">
+              <FormulaGrid>
                 {[
                   "Escolhi corretamente o corpo ou sistema?",
                   "Desenhei apenas forças que atuam nesse corpo?",
@@ -1760,7 +2316,7 @@ export default function DynamicsTopicNewton() {
                     <p className="text-slate-700 text-sm leading-6">{item}</p>
                   </div>
                 ))}
-              </div>
+              </FormulaGrid>
             </Section>
 
             <Section
@@ -1773,11 +2329,11 @@ export default function DynamicsTopicNewton() {
                 Em Dinâmica, a fórmula raramente é o problema. O problema é o modelo. A prova difícil quer saber se você consegue escolher o sistema, enxergar as forças reais, ignorar forças fantasmas, escrever vínculos e só depois aplicar a Segunda Lei.
               </Paragraph>
 
-              <div className="bg-slate-900 rounded-2xl p-7 text-center">
-                <p className="text-white text-2xl font-black">
+              <div className="bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 rounded-2xl p-7 text-center shadow-inner">
+                <p className="text-slate-900 text-2xl font-black">
                   Não comece procurando fórmula.
                 </p>
-                <p className="text-green-400 text-2xl font-black mt-1">
+                <p className="text-green-700 text-2xl font-black mt-1">
                   Comece desenhando o DCL.
                 </p>
               </div>
