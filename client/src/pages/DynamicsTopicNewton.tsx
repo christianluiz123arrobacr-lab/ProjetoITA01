@@ -283,14 +283,12 @@ function PageHero() {
             </p>
 
             <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-tight">
-              Leis de Newton sem decoreba burra.
+              Leis de Newton.
             </h2>
 
             <p className="text-slate-300 leading-7 mt-4 max-w-2xl">
               Contexto histórico, intuição física, fórmulas explicadas, aplicações,
-              armadilhas e pontos de prova. Porque jogar{" "}
-              <span className="font-bold text-white">F = ma</span> na tela e fingir que
-              ensinou é uma pequena fraude pedagógica.
+              armadilhas e pontos de prova. 
             </p>
           </div>
 
