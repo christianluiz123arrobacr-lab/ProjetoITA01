@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -18,6 +18,7 @@ import {
 import PublicHeader from "@/components/layout/PublicHeader";
 import { requestManualSubscription } from "@/services/billing.service";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { supabase } from "@/lib/supabase";
 
 type Plan = {
   slug: string;
@@ -29,6 +30,13 @@ type Plan = {
   featured?: boolean;
   limited?: string;
   features: string[];
+};
+
+type FounderUsage = {
+  plan_slug: string;
+  used_slots: number;
+  max_slots: number;
+  remaining_slots: number;
 };
 
 const plans: Plan[] = [
@@ -92,6 +100,12 @@ function PlanIcon({ icon }: { icon: Plan["icon"] }) {
   return <Star className="h-5 w-5" />;
 }
 
+function getUsagePercent(usedSlots: number, maxSlots: number) {
+  if (!maxSlots || maxSlots <= 0) return 0;
+
+  return Math.min(100, Math.round((usedSlots / maxSlots) * 100));
+}
+
 export default function PricingPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
@@ -99,11 +113,54 @@ export default function PricingPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [success, setSuccess] = useState("");
+  const [founderUsage, setFounderUsage] = useState<FounderUsage | null>(null);
 
   const isLoading = useMemo(
     () => authLoading || selectedPlan !== null,
     [authLoading, selectedPlan]
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadFounderUsage() {
+      const { data, error } = await supabase
+        .rpc("get_fundador_plan_usage")
+        .maybeSingle();
+
+      if (error) {
+        console.warn("Não foi possível carregar uso do plano fundador:", error);
+
+        if (mounted) {
+          setFounderUsage({
+            plan_slug: "fundador_8",
+            used_slots: 0,
+            max_slots: 15,
+            remaining_slots: 15,
+          });
+        }
+
+        return;
+      }
+
+      if (mounted) {
+        setFounderUsage(
+          data ?? {
+            plan_slug: "fundador_8",
+            used_slots: 0,
+            max_slots: 15,
+            remaining_slots: 15,
+          }
+        );
+      }
+    }
+
+    loadFounderUsage();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function handleSubscribe(plan: Plan) {
     setErro("");
@@ -161,8 +218,8 @@ export default function PricingPage() {
 
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
               Primeiro você cria sua conta. Depois escolhe o plano. Assim o
-              acesso fica vinculado ao seu usuário, em vez de virar aquela
-              caça ao tesouro patética de “quem pagou esse Pix aqui?”.
+              acesso fica vinculado ao seu usuário, em vez de virar aquela caça
+              ao tesouro patética de “quem pagou esse Pix aqui?”.
             </p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -204,6 +261,12 @@ export default function PricingPage() {
           <div className="mt-12 grid gap-6 lg:grid-cols-3">
             {plans.map((plan) => {
               const currentLoading = selectedPlan === plan.slug;
+              const isFounderPlan = plan.slug === "beta-fundador-8";
+
+              const usedSlots = founderUsage?.used_slots ?? 0;
+              const maxSlots = founderUsage?.max_slots ?? 15;
+              const remainingSlots = founderUsage?.remaining_slots ?? 15;
+              const usagePercent = getUsagePercent(usedSlots, maxSlots);
 
               return (
                 <article
@@ -260,7 +323,30 @@ export default function PricingPage() {
 
                   {plan.limited && (
                     <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm font-bold leading-6 text-amber-100">
-                      {plan.limited}
+                      <p>{plan.limited}</p>
+
+                      {isFounderPlan && (
+                        <div className="mt-3">
+                          <div className="mb-1 flex items-center justify-between gap-3 text-xs font-black text-amber-50/90">
+                            <span>
+                              {usedSlots}/{maxSlots} vagas preenchidas
+                            </span>
+
+                            <span>
+                              {remainingSlots > 0
+                                ? `${remainingSlots} restantes`
+                                : "lotado"}
+                            </span>
+                          </div>
+
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-950/50">
+                            <div
+                              className="h-full rounded-full bg-cyan-300 transition-all"
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
