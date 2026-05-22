@@ -43,7 +43,7 @@ import IAResolver from "./pages/IAResolver";
 import QuestionBank from "./pages/QuestionBankPage";
 
 import DynamicsTopicNewton from "./pages/DynamicsTopicNewton";
-import DynamicsTopicForce from "./pages/DynamicsTopicForce";
+import DynamicsTopicFriction from "./pages/DynamicsTopicFriction";
 import DynamicsTopicEnergy from "./pages/DynamicsTopicEnergy";
 import DynamicsTopicMomentum from "./pages/DynamicsTopicMomentum";
 import DynamicsTopicPower from "./pages/DynamicsTopicPower";
@@ -97,13 +97,13 @@ import MecanicaHome from "./pages/MecanicaHome";
 import MecanicaTopicCinematica from "./pages/MecanicaTopicCinematica";
 import MecanicaTopicDinamica from "./pages/MecanicaTopicDinamica";
 
-import OndulatóriaHome from "./pages/OndulatóriaHome";
-import OndulatóriaTopicConceitos from "./pages/OndulatóriaTopicConceitos";
-import OndulatóriaTopicMHS from "./pages/OndulatóriaTopicMHS";
-import OndulatóriaTopicEquacao from "./pages/OndulatóriaTopicEquacao";
-import OndulatóriaTopicFenomenos from "./pages/OndulatóriaTopicFenomenos";
-import OndulatóriaTopicSom from "./pages/OndulatóriaTopicSom";
-import OndulatóriaTopicLuz from "./pages/OndulatóriaTopicLuz";
+import OndulatoriaHome from "./pages/Ondulat#U00f3riaHome";
+import OndulatoriaTopicConceitos from "./pages/Ondulat#U00f3riaTopicConceitos";
+import OndulatoriaTopicMHS from "./pages/Ondulat#U00f3riaTopicMHS";
+import OndulatoriaTopicEquacao from "./pages/Ondulat#U00f3riaTopicEquacao";
+import OndulatoriaTopicFenomenos from "./pages/Ondulat#U00f3riaTopicFenomenos";
+import OndulatoriaTopicSom from "./pages/Ondulat#U00f3riaTopicSom";
+import OndulatoriaTopicLuz from "./pages/Ondulat#U00f3riaTopicLuz";
 import OndulatoriaSimulator from "./pages/OndulatoriaSimulator";
 import OndulatoriaGraphs from "./pages/OndulatoriaGraphs";
 import OndulatoriaQuiz from "./pages/OndulatoriaQuiz";
@@ -164,7 +164,7 @@ function PrivateRouter() {
         <Route path="/dinamica/graphs" component={DynamicsGraphs} />
         <Route path="/dinamica/simulator" component={DynamicsSimulator} />
         <Route path="/dinamica/topic/newton" component={DynamicsTopicNewton} />
-        <Route path="/dinamica/topic/force" component={DynamicsTopicForce} />
+        <Route path="/dinamica/topic/atrito" component={DynamicsTopicFriction} />
         <Route path="/dinamica/topic/energy" component={DynamicsTopicEnergy} />
         <Route path="/dinamica/topic/momentum" component={DynamicsTopicMomentum} />
         <Route path="/dinamica/topic/power" component={DynamicsTopicPower} />
@@ -196,13 +196,13 @@ function PrivateRouter() {
         <Route path="/mecanica/topic/dinamica" component={MecanicaTopicDinamica} />
 
         {/* Ondulatória */}
-        <Route path="/ondulatoria" component={OndulatóriaHome} />
-        <Route path="/ondulatoria/topic/conceitos" component={OndulatóriaTopicConceitos} />
-        <Route path="/ondulatoria/topic/mhs" component={OndulatóriaTopicMHS} />
-        <Route path="/ondulatoria/topic/equacao" component={OndulatóriaTopicEquacao} />
-        <Route path="/ondulatoria/topic/fenomenos" component={OndulatóriaTopicFenomenos} />
-        <Route path="/ondulatoria/topic/som" component={OndulatóriaTopicSom} />
-        <Route path="/ondulatoria/topic/luz" component={OndulatóriaTopicLuz} />
+        <Route path="/ondulatoria" component={OndulatoriaHome} />
+        <Route path="/ondulatoria/topic/conceitos" component={OndulatoriaTopicConceitos} />
+        <Route path="/ondulatoria/topic/mhs" component={OndulatoriaTopicMHS} />
+        <Route path="/ondulatoria/topic/equacao" component={OndulatoriaTopicEquacao} />
+        <Route path="/ondulatoria/topic/fenomenos" component={OndulatoriaTopicFenomenos} />
+        <Route path="/ondulatoria/topic/som" component={OndulatoriaTopicSom} />
+        <Route path="/ondulatoria/topic/luz" component={OndulatoriaTopicLuz} />
         <Route path="/ondulatoria/simulator" component={OndulatoriaSimulator} />
         <Route path="/ondulatoria/quiz" component={OndulatoriaQuiz} />
         <Route path="/ondulatoria/graphs" component={OndulatoriaGraphs} />
