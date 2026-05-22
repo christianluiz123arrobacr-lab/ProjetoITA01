@@ -13,6 +13,71 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
 
+    registerStudent: publicProcedure
+      .input(
+        z.object({
+          nome: z.string().min(2, "Nome muito curto"),
+          telefone: z.string().min(8, "Digite um telefone válido"),
+          email: z.string().email("E-mail inválido"),
+          senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const nome = input.nome.trim();
+        const telefone = input.telefone.trim();
+        const email = input.email.trim().toLowerCase();
+
+        const { data, error } = await supabaseAdmin.auth.admin.createUser({
+          email,
+          password: input.senha,
+          email_confirm: true,
+          user_metadata: {
+            nome,
+            telefone,
+          },
+        });
+
+        if (error || !data.user) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error?.message ?? "Erro ao criar usuário no Supabase Auth.",
+          });
+        }
+
+        const { error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .upsert(
+            {
+              id: data.user.id,
+              nome,
+              telefone,
+              email,
+              role: "student",
+              ativo: true,
+            },
+            {
+              onConflict: "id",
+            }
+          );
+
+        if (profileError) {
+          await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              profileError.message ?? "Erro ao criar perfil do aluno.",
+          });
+        }
+
+        return {
+          success: true,
+          userId: data.user.id,
+          email,
+        } as const;
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
