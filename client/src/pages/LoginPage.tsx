@@ -39,7 +39,7 @@ export default function LoginPage() {
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !password) {
-      setErrorMessage("Preencha e-mail e senha para entrar.");
+      setErrorMessage("Preencha seu e-mail e sua senha para continuar.");
       return;
     }
 
@@ -65,12 +65,12 @@ export default function LoginPage() {
 
         if (message.includes("email not confirmed")) {
           setErrorMessage(
-            "Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada."
+            "Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada antes de acessar a plataforma."
           );
           return;
         }
 
-        setErrorMessage(error.message || "Não foi possível entrar na conta.");
+        setErrorMessage(error.message || "Não foi possível acessar sua conta.");
         return;
       }
 
@@ -82,7 +82,7 @@ export default function LoginPage() {
     } catch (error) {
       console.error("Erro inesperado no login:", error);
       setErrorMessage(
-        "Aconteceu um erro inesperado ao tentar entrar. Tente novamente."
+        "Ocorreu um erro inesperado ao tentar acessar sua conta. Tente novamente em instantes."
       );
     } finally {
       setSubmitting(false);
@@ -100,10 +100,10 @@ export default function LoginPage() {
               <Loader2 className="h-7 w-7 animate-spin" />
             </div>
 
-            <h1 className="text-xl font-black">Verificando sessão</h1>
+            <h1 className="text-xl font-black">Verificando acesso</h1>
 
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Estamos conferindo se você já está logado.
+              Estamos conferindo sua sessão para direcionar você corretamente.
             </p>
           </div>
         </section>
@@ -128,14 +128,14 @@ export default function LoginPage() {
             </div>
 
             <h1 className="max-w-xl text-5xl font-black tracking-tight">
-              Entre na sua conta e continue estudando.
+              Acesse sua conta e continue seus estudos.
             </h1>
 
             <p className="mt-5 max-w-xl text-base leading-8 text-slate-300">
-              Depois do login, você vai para a página inicial real da plataforma:
-              Física, Matemática, Química, banco de questões, progresso,
-              ranking e as ferramentas do projeto. Não para o seletor de Física,
-              porque finalmente estamos tratando rota como coisa séria.
+              Ao entrar, você será direcionado à página inicial da plataforma,
+              onde poderá acessar as disciplinas, o banco de questões, os
+              simuladores, seu progresso, ranking e demais ferramentas de
+              estudo disponíveis no projeto.
             </p>
 
             <div className="mt-8 grid max-w-xl gap-4">
@@ -145,13 +145,14 @@ export default function LoginPage() {
 
                   <div>
                     <p className="font-black text-white">
-                      Acesso protegido por assinatura
+                      Acesso vinculado à assinatura
                     </p>
 
                     <p className="mt-2 text-sm leading-7 text-slate-300">
-                      Se sua assinatura estiver ativa, você entra direto na
-                      plataforma. Se estiver vencida ou pendente, o sistema manda
-                      para a página de assinatura pendente.
+                      Contas com assinatura ativa acessam normalmente a
+                      plataforma. Caso a assinatura esteja pendente, vencida ou
+                      ainda não tenha sido aprovada, o acesso será direcionado à
+                      tela de regularização.
                     </p>
                   </div>
                 </div>
@@ -163,13 +164,13 @@ export default function LoginPage() {
 
                   <div>
                     <p className="font-black text-white">
-                      Sem login, sem bagunça
+                      Segurança e organização do acesso
                     </p>
 
                     <p className="mt-2 text-sm leading-7 text-slate-300">
-                      Usuário sem conta vê a página pública. Usuário com conta
-                      entra. Usuário sem assinatura fica bloqueado. Simples,
-                      direto e menos propenso a virar uma novela técnica.
+                      Cada assinatura fica associada ao usuário cadastrado,
+                      permitindo uma gestão mais segura, organizada e
+                      transparente do acesso à plataforma durante a fase beta.
                     </p>
                   </div>
                 </div>
@@ -193,7 +194,7 @@ export default function LoginPage() {
                 </h1>
 
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Use seu e-mail e senha cadastrados para acessar sua conta.
+                  Informe o e-mail e a senha cadastrados para acessar sua conta.
                 </p>
               </div>
 
@@ -278,7 +279,7 @@ export default function LoginPage() {
 
               <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-center">
                 <p className="text-sm leading-6 text-slate-300">
-                  Ainda não tem conta?
+                  Ainda não possui uma conta?
                 </p>
 
                 <Link href="/cadastro">
@@ -292,7 +293,7 @@ export default function LoginPage() {
               <div className="mt-4 text-center">
                 <Link href="/planos">
                   <a className="text-xs font-bold text-slate-400 transition hover:text-slate-200">
-                    Ver planos beta
+                    Ver planos disponíveis
                   </a>
                 </Link>
               </div>
