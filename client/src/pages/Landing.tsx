@@ -36,54 +36,54 @@ type Step = {
 const features: Feature[] = [
   {
     icon: BookOpen,
-    title: "Explicações profundas",
+    title: "Explicações aprofundadas",
     description:
-      "Conteúdos didáticos, organizados e feitos para realmente entender a matéria, não só decorar meia dúzia de fórmula e torcer para o universo colaborar.",
+      "Conteúdos organizados de forma didática, com foco na compreensão real dos conceitos, no desenvolvimento do raciocínio e na preparação para questões de maior exigência.",
   },
   {
     icon: Calculator,
     title: "Simuladores interativos",
     description:
-      "Ferramentas visuais para mexer em parâmetros, ver fenômenos acontecendo e transformar abstração em algo que o aluno consiga enxergar.",
+      "Ferramentas visuais que permitem analisar fenômenos, alterar parâmetros e compreender melhor relações físicas e matemáticas por meio da experimentação guiada.",
   },
   {
     icon: Target,
     title: "Banco de questões",
     description:
-      "Questões organizadas por disciplina, conteúdo, assunto, instituição, ano e dificuldade para treinar de forma mais estratégica.",
+      "Questões organizadas por disciplina, conteúdo, assunto, instituição, ano e dificuldade, facilitando um treino mais direcionado e estratégico.",
   },
   {
     icon: FlaskConical,
     title: "Física, Matemática e Química",
     description:
-      "A plataforma está crescendo por frentes, com foco em provas fortes como ITA, IME, militares, FUVEST e ENEM.",
+      "A plataforma está sendo desenvolvida por frentes de estudo, com foco em vestibulares exigentes como ITA, IME, escolas militares, FUVEST e ENEM.",
   },
 ];
 
 const betaItems = [
   "Acesso inicial à plataforma",
-  "Explicações em evolução constante",
-  "Banco de questões sendo ampliado",
-  "Simuladores sendo refinados",
-  "Preço inicial menor para os primeiros alunos",
-  "Feedback dos alunos ajudando a melhorar o projeto",
+  "Conteúdos em expansão contínua",
+  "Banco de questões em desenvolvimento",
+  "Simuladores em processo de refinamento",
+  "Condições especiais para os primeiros alunos",
+  "Participação na fase inicial de evolução do projeto",
 ];
 
 const steps: Step[] = [
   {
     title: "Crie sua conta",
     description:
-      "O aluno cadastra nome completo, telefone, e-mail e senha. Uma coisa normal, veja só, a tecnologia finalmente descobrindo o cadastro.",
+      "O aluno realiza o cadastro com nome completo, telefone, e-mail e senha. Esses dados permitem vincular corretamente o acesso à assinatura escolhida.",
   },
   {
     title: "Escolha um plano",
     description:
-      "Depois do cadastro, ele escolhe o plano beta disponível e solicita a assinatura.",
+      "Após o cadastro, o aluno seleciona um dos planos disponíveis na fase beta e envia a solicitação de assinatura.",
   },
   {
-    title: "Libere o acesso",
+    title: "Aguarde a liberação",
     description:
-      "Com a assinatura ativa, o aluno entra na plataforma e acessa os conteúdos protegidos.",
+      "Com a assinatura aprovada, o acesso à plataforma é liberado para a conta cadastrada, permitindo o uso dos conteúdos e ferramentas disponíveis.",
   },
 ];
 
@@ -116,17 +116,15 @@ export default function Landing() {
             </div>
 
             <h1 className="text-4xl font-black tracking-tight md:text-6xl">
-              Uma plataforma para estudar com mais direção, profundidade e menos
-              enrolação.
+              Uma plataforma para estudar com método, profundidade e direção.
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
-              O projeto reúne explicações didáticas, simuladores, banco de
-              questões e ferramentas de treino para quem está se preparando para
-              vestibulares difíceis. A ideia é simples: estudar com método,
-              clareza e profundidade, em vez de ficar perdido em PDF jogado,
-              aula solta e promessa milagrosa de produtividade. A humanidade já
-              sofreu bastante.
+              O Rumo ao ITA reúne explicações didáticas, simuladores, banco de
+              questões e ferramentas de acompanhamento para alunos que desejam
+              estudar com mais organização e profundidade. A proposta é oferecer
+              um ambiente estruturado para preparação em vestibulares exigentes,
+              com foco em clareza, prática e evolução constante.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -162,8 +160,9 @@ export default function Landing() {
                 <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-200">
                   Rumo ao ITA
                 </p>
+
                 <h2 className="mt-2 text-3xl font-black">
-                  Beta em construção
+                  Beta em desenvolvimento
                 </h2>
               </div>
 
@@ -173,10 +172,10 @@ export default function Landing() {
             </div>
 
             <p className="text-sm leading-7 text-slate-300">
-              O acesso beta serve para liberar a plataforma para os primeiros
-              alunos enquanto o projeto ainda está sendo refinado. Você entra,
-              usa, testa, estuda e ajuda a melhorar o produto antes da versão
-              mais madura.
+              O acesso beta permite que os primeiros alunos utilizem a
+              plataforma enquanto novos conteúdos, simuladores e recursos são
+              implementados. Durante essa fase, o projeto será continuamente
+              ajustado com base no uso real e nas necessidades dos estudantes.
             </p>
 
             <div className="mt-6 grid gap-3">
@@ -186,6 +185,7 @@ export default function Landing() {
                   className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3"
                 >
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
+
                   <span className="text-sm leading-6 text-slate-200">
                     {item}
                   </span>
@@ -208,18 +208,19 @@ export default function Landing() {
           <div className="max-w-3xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white">
               <LayoutDashboard className="h-4 w-4" />
-              O que tem dentro
+              Estrutura da plataforma
             </div>
 
             <h2 className="text-3xl font-black tracking-tight md:text-5xl">
-              A plataforma junta teoria, prática e visualização.
+              Teoria, prática e visualização reunidas em um só ambiente.
             </h2>
 
             <p className="mt-4 text-base leading-8 text-slate-600">
-              O objetivo não é ser só um “site com conteúdo”. Isso já existe aos
-              montes, geralmente com a mesma alegria visual de uma planilha
-              abandonada. A ideia é organizar o estudo em um ambiente mais
-              claro, com teoria, questão, simulador e acompanhamento.
+              A plataforma foi pensada para organizar diferentes etapas do
+              estudo: compreensão teórica, resolução de questões, visualização
+              de fenômenos e acompanhamento da evolução do aluno. O objetivo é
+              tornar o processo de preparação mais claro, eficiente e
+              consistente.
             </p>
           </div>
 
@@ -259,14 +260,14 @@ export default function Landing() {
             </div>
 
             <h2 className="text-3xl font-black tracking-tight md:text-5xl">
-              O aluno cria conta primeiro. Depois assina.
+              Cadastro primeiro. Assinatura depois.
             </h2>
 
             <p className="mt-4 text-base leading-8 text-slate-600">
-              Esse fluxo evita o pior cenário possível: alguém pagar antes de
-              existir usuário no sistema e depois você ter que virar detetive de
-              Pix no WhatsApp. A conta vem primeiro. A assinatura vem depois. A
-              sanidade agradece.
+              O processo foi organizado para garantir que cada assinatura fique
+              corretamente vinculada ao usuário cadastrado. Dessa forma, o
+              controle de acesso se torna mais seguro, transparente e fácil de
+              acompanhar durante a fase beta.
             </p>
 
             <div className="mt-8 rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5">
@@ -279,9 +280,10 @@ export default function Landing() {
                   </p>
 
                   <p className="mt-2 text-sm leading-7 text-slate-600">
-                    Usuário sem login vai para a página inicial. Usuário logado
-                    sem assinatura vai para assinatura pendente. Usuário com
-                    assinatura ativa entra na plataforma.
+                    Usuários sem login acessam apenas a área pública. Usuários
+                    com conta, mas sem assinatura ativa, são direcionados para a
+                    tela de pendência. Usuários com assinatura ativa acessam a
+                    plataforma normalmente.
                   </p>
                 </div>
               </div>
@@ -316,11 +318,12 @@ export default function Landing() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-black text-cyan-950">
-                    Quer entrar no beta?
+                    Deseja participar da fase beta?
                   </p>
 
                   <p className="mt-1 text-sm leading-6 text-cyan-900/80">
-                    Crie sua conta e escolha um dos planos disponíveis.
+                    Crie sua conta e escolha um dos planos disponíveis para
+                    solicitar o acesso.
                   </p>
                 </div>
 
@@ -344,11 +347,14 @@ export default function Landing() {
                 <GraduationCap className="h-6 w-6" />
               </div>
 
-              <h3 className="text-xl font-black">Para vestibular forte</h3>
+              <h3 className="text-xl font-black">
+                Preparação para provas exigentes
+              </h3>
 
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                O projeto é pensado para quem quer estudar com profundidade e
-                não só passar o olho em resuminho de emergência.
+                O projeto é voltado para alunos que buscam uma preparação mais
+                profunda, especialmente para vestibulares de alto nível e provas
+                com grande cobrança conceitual.
               </p>
             </div>
 
@@ -357,11 +363,12 @@ export default function Landing() {
                 <Trophy className="h-6 w-6" />
               </div>
 
-              <h3 className="text-xl font-black">Treino com direção</h3>
+              <h3 className="text-xl font-black">Treino direcionado</h3>
 
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Filtros, questões e conteúdos ajudam o aluno a estudar pelo que
-                realmente precisa melhorar.
+                Filtros por disciplina, conteúdo, assunto, instituição, ano e
+                dificuldade ajudam o aluno a treinar com mais precisão e foco
+                nos pontos que precisam evoluir.
               </p>
             </div>
 
@@ -370,11 +377,12 @@ export default function Landing() {
                 <Users className="h-6 w-6" />
               </div>
 
-              <h3 className="text-xl font-black">Primeiros usuários</h3>
+              <h3 className="text-xl font-black">Fase beta controlada</h3>
 
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Quem entra no beta ajuda a validar o projeto e pega o acesso
-                inicial com condições melhores.
+                Os primeiros usuários ajudam a validar a plataforma, identificar
+                melhorias e acompanhar a evolução do projeto desde sua fase
+                inicial.
               </p>
             </div>
           </div>
@@ -384,7 +392,7 @@ export default function Landing() {
               <div>
                 <div className="mb-3 inline-flex items-center gap-2 text-sm font-black text-cyan-200">
                   <Zap className="h-4 w-4" />
-                  Comece pelo cadastro
+                  Início do acesso
                 </div>
 
                 <h2 className="text-3xl font-black tracking-tight">
@@ -392,8 +400,9 @@ export default function Landing() {
                 </h2>
 
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-                  Depois que a assinatura for liberada, você entra na plataforma
-                  e continua os estudos normalmente.
+                  Após a aprovação da assinatura, sua conta será liberada para
+                  acessar os conteúdos, ferramentas e recursos disponíveis na
+                  plataforma.
                 </p>
               </div>
 
