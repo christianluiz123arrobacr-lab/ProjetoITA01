@@ -17,9 +17,11 @@ export type BillingPlan = {
 export type ManualSubscriptionRequestResult = {
   id?: string;
   user_id?: string;
-  plan_slug?: string;
   plan_id?: string;
+  plan_slug?: string;
   status?: string;
+  gateway?: string;
+  payment_url?: string | null;
   created_at?: string;
   table_used?: string;
 };
@@ -48,8 +50,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     name: "Plano mensal",
     amountCents: 1099,
     currency: "BRL",
-    description:
-      "Plano padrão mensal para acesso à plataforma.",
+    description: "Plano padrão mensal para acesso à plataforma.",
     isBeta: false,
   },
 ];
@@ -60,34 +61,6 @@ export function getBillingPlans() {
 
 export function getBillingPlanBySlug(slug: string) {
   return BILLING_PLANS.find((plan) => plan.slug === slug);
-}
-
-function isMissingTableOrColumnError(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-
-  const message =
-    "message" in error && typeof error.message === "string"
-      ? error.message.toLowerCase()
-      : "";
-
-  const details =
-    "details" in error && typeof error.details === "string"
-      ? error.details.toLowerCase()
-      : "";
-
-  const code =
-    "code" in error && typeof error.code === "string"
-      ? error.code
-      : "";
-
-  return (
-    code === "42P01" ||
-    code === "42703" ||
-    message.includes("does not exist") ||
-    message.includes("column") ||
-    details.includes("does not exist") ||
-    details.includes("column")
-  );
 }
 
 async function getCurrentUserOrThrow() {
@@ -122,11 +95,12 @@ async function getUserProfile(userId: string) {
   return data;
 }
 
-async function findBillingPlanId(slug: string) {
+async function findBillingPlan(slug: string) {
   const { data, error } = await supabase
     .from("billing_plans")
-    .select("id, slug")
+    .select("id, slug, name, price_cents, currency, billing_cycle")
     .eq("slug", slug)
+    .eq("is_active", true)
     .maybeSingle();
 
   if (error) {
@@ -134,54 +108,68 @@ async function findBillingPlanId(slug: string) {
     return null;
   }
 
-  return data?.id ?? null;
+  return data;
 }
 
-async function tryInsert(
-  table: string,
-  payloads: Record<string, unknown>[]
-): Promise<ManualSubscriptionRequestResult | null> {
-  let lastError: unknown = null;
+async function findLatestUserSubscription(userId: string) {
+  const { data, error } = await supabase
+    .from("billing_subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .in("status", ["manual_review", "active", "trialing"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  for (const payload of payloads) {
-    const { data, error } = await supabase
-      .from(table)
-      .insert(payload)
-      .select("*")
-      .single();
-
-    if (!error && data) {
-      return {
-        ...(data as ManualSubscriptionRequestResult),
-        table_used: table,
-      };
-    }
-
-    lastError = error;
-
-    if (!isMissingTableOrColumnError(error)) {
-      console.warn(`Falha ao inserir em ${table}:`, error);
-    }
+  if (error) {
+    console.warn("Não foi possível buscar assinatura existente:", error);
+    return null;
   }
 
-  if (lastError) {
-    console.warn(`Nenhuma tentativa funcionou para ${table}:`, lastError);
-  }
-
-  return null;
+  return data;
 }
 
 export async function requestManualSubscription(
   planSlug: string
 ): Promise<ManualSubscriptionRequestResult> {
-  const plan = getBillingPlanBySlug(planSlug);
+  const localPlan = getBillingPlanBySlug(planSlug);
 
-  if (!plan) {
+  if (!localPlan) {
     throw new Error("Plano inválido.");
   }
 
   const user = await getCurrentUserOrThrow();
   const profile = await getUserProfile(user.id);
+  const billingPlan = await findBillingPlan(localPlan.slug);
+
+  if (!billingPlan?.id) {
+    throw new Error(
+      "Plano não encontrado no banco. Verifique se o slug do plano existe em billing_plans."
+    );
+  }
+
+  const existingSubscription = await findLatestUserSubscription(user.id);
+
+  if (existingSubscription?.status === "active") {
+    return {
+      ...(existingSubscription as ManualSubscriptionRequestResult),
+      table_used: "billing_subscriptions",
+    };
+  }
+
+  if (existingSubscription?.status === "trialing") {
+    return {
+      ...(existingSubscription as ManualSubscriptionRequestResult),
+      table_used: "billing_subscriptions",
+    };
+  }
+
+  if (existingSubscription?.status === "manual_review") {
+    return {
+      ...(existingSubscription as ManualSubscriptionRequestResult),
+      table_used: "billing_subscriptions",
+    };
+  }
 
   const customerName =
     profile?.nome ||
@@ -198,11 +186,11 @@ export async function requestManualSubscription(
     origin: "site_beta",
     requestedAt: new Date().toISOString(),
     plan: {
-      slug: plan.slug,
-      name: plan.name,
-      amountCents: plan.amountCents,
-      currency: plan.currency,
-      isBeta: plan.isBeta,
+      slug: localPlan.slug,
+      name: localPlan.name,
+      amountCents: localPlan.amountCents,
+      currency: localPlan.currency,
+      isBeta: localPlan.isBeta,
     },
     customer: {
       name: customerName,
@@ -211,137 +199,34 @@ export async function requestManualSubscription(
     },
   };
 
-  /*
-    Tentativa 1:
-    Tabela ideal para solicitação manual.
+  const payload = {
+    user_id: user.id,
+    plan_id: billingPlan.id,
+    status: "manual_review",
+    gateway: "manual",
+    payment_url: null,
+    metadata,
+  };
 
-    Se você criou uma tabela específica para pedidos de assinatura,
-    esse é o modelo mais limpo. Fica separado da assinatura ativa.
-  */
-  const requestResult = await tryInsert("billing_subscription_requests", [
-    {
-      user_id: user.id,
-      plan_slug: plan.slug,
-      plan_name: plan.name,
-      amount_cents: plan.amountCents,
-      currency: plan.currency,
-      status: "pending",
-      customer_name: customerName,
-      customer_email: customerEmail,
-      customer_phone: customerPhone,
-      metadata,
-    },
-    {
-      user_id: user.id,
-      plan_slug: plan.slug,
-      status: "pending",
-      metadata,
-    },
-    {
-      user_id: user.id,
-      plan_slug: plan.slug,
-      status: "pending",
-    },
-  ]);
+  const { data, error } = await supabase
+    .from("billing_subscriptions")
+    .insert(payload)
+    .select("*")
+    .single();
 
-  if (requestResult) {
-    return requestResult;
-  }
+  if (error) {
+    console.error("Erro ao criar assinatura manual:", error);
 
-  /*
-    Tentativa 2:
-    Caso seu projeto ainda use apenas billing_subscriptions.
-
-    A assinatura entra como pending, e depois você/admin transforma
-    em active quando o pagamento for confirmado.
-  */
-  const planId = await findBillingPlanId(plan.slug);
-
-  const subscriptionPayloads: Record<string, unknown>[] = [];
-
-  if (planId) {
-    subscriptionPayloads.push(
-      {
-        user_id: user.id,
-        plan_id: planId,
-        status: "pending",
-        provider: "manual",
-        metadata,
-      },
-      {
-        user_id: user.id,
-        plan_id: planId,
-        status: "pending",
-      }
+    throw new Error(
+      error.message ||
+        "Não foi possível registrar a solicitação de assinatura manual."
     );
   }
 
-  subscriptionPayloads.push(
-    {
-      user_id: user.id,
-      plan_slug: plan.slug,
-      status: "pending",
-      provider: "manual",
-      metadata,
-    },
-    {
-      user_id: user.id,
-      plan_slug: plan.slug,
-      status: "pending",
-    },
-    {
-      user_id: user.id,
-      status: "pending",
-      provider: "manual",
-      metadata,
-    },
-    {
-      user_id: user.id,
-      status: "pending",
-    }
-  );
-
-  const subscriptionResult = await tryInsert(
-    "billing_subscriptions",
-    subscriptionPayloads
-  );
-
-  if (subscriptionResult) {
-    return subscriptionResult;
-  }
-
-  /*
-    Tentativa 3:
-    Alguns projetos usam tabela simples chamada subscriptions.
-    É fallback para não morrer por causa de nome de tabela, esse
-    festival de criatividade humana sem governança.
-  */
-  const genericSubscriptionResult = await tryInsert("subscriptions", [
-    {
-      user_id: user.id,
-      plan_slug: plan.slug,
-      status: "pending",
-      provider: "manual",
-      metadata,
-    },
-    {
-      user_id: user.id,
-      plan_slug: plan.slug,
-      status: "pending",
-    },
-    {
-      user_id: user.id,
-      status: "pending",
-    },
-  ]);
-
-  if (genericSubscriptionResult) {
-    return genericSubscriptionResult;
-  }
-
-  throw new Error(
-    "Não foi possível registrar a solicitação de assinatura. Verifique se existe uma tabela billing_subscription_requests ou billing_subscriptions no Supabase e se as políticas RLS permitem insert para o usuário autenticado."
-  );
+  return {
+    ...(data as ManualSubscriptionRequestResult),
+    table_used: "billing_subscriptions",
+  };
 }
 
 export async function getMyActiveSubscription() {
@@ -370,8 +255,20 @@ export async function getMyLatestSubscriptionRequest() {
   const user = await getCurrentUserOrThrow();
 
   const { data, error } = await supabase
-    .from("billing_subscription_requests")
-    .select("*")
+    .from("billing_subscriptions")
+    .select(
+      `
+      *,
+      billing_plans (
+        id,
+        slug,
+        name,
+        price_cents,
+        currency,
+        billing_cycle
+      )
+    `
+    )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(1)
