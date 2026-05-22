@@ -18,6 +18,7 @@ import {
   UserCircle2,
   Users,
   Clock3,
+  Phone,
 } from "lucide-react";
 
 type AdminUserRow = {
@@ -31,6 +32,7 @@ type ProfileRow = {
   id: string;
   nome: string;
   email: string;
+  telefone?: string | null;
   role: string;
   ativo: boolean;
   created_at: string;
@@ -45,7 +47,9 @@ type UsersViewMode = "usuarios" | "adms";
 
 function formatDate(date?: string | null) {
   if (!date) return "Sem data";
+
   const parsed = new Date(date);
+
   if (Number.isNaN(parsed.getTime())) return "Sem data";
 
   return parsed.toLocaleString("pt-BR", {
@@ -61,6 +65,7 @@ function formatLastSeen(date?: string | null) {
   if (!date) return "Nunca registrado";
 
   const parsed = new Date(date);
+
   if (Number.isNaN(parsed.getTime())) return "Nunca registrado";
 
   const now = new Date();
@@ -71,9 +76,16 @@ function formatLastSeen(date?: string | null) {
   if (diffMinutes < 60) return `Há ${diffMinutes} min`;
 
   const diffHours = Math.floor(diffMinutes / 60);
+
   if (diffHours < 24) return `Há ${diffHours} h`;
 
   return formatDate(date);
+}
+
+function formatPhone(phone?: string | null) {
+  const clean = (phone || "").trim();
+
+  return clean || "Não informado";
 }
 
 export default function AdminUsersPage() {
@@ -164,6 +176,7 @@ export default function AdminUsersPage() {
     return users.filter((user) => {
       const nome = (user.profile?.nome || "").toLowerCase();
       const email = (user.profile?.email || "").toLowerCase();
+      const telefone = (user.profile?.telefone || "").toLowerCase();
       const adminRole = (user.role || "").toLowerCase();
       const profileRole = (user.profile?.role || "").toLowerCase();
       const userId = (user.user_id || "").toLowerCase();
@@ -171,6 +184,7 @@ export default function AdminUsersPage() {
       return (
         nome.includes(term) ||
         email.includes(term) ||
+        telefone.includes(term) ||
         adminRole.includes(term) ||
         profileRole.includes(term) ||
         userId.includes(term)
@@ -186,12 +200,14 @@ export default function AdminUsersPage() {
     return profiles.filter((profile) => {
       const nome = (profile.nome || "").toLowerCase();
       const email = (profile.email || "").toLowerCase();
+      const telefone = (profile.telefone || "").toLowerCase();
       const role = (profile.role || "").toLowerCase();
       const id = (profile.id || "").toLowerCase();
 
       return (
         nome.includes(term) ||
         email.includes(term) ||
+        telefone.includes(term) ||
         role.includes(term) ||
         id.includes(term)
       );
@@ -296,8 +312,10 @@ export default function AdminUsersPage() {
       setSuccessMessage(
         `Acesso ${newRole} adicionado/atualizado com sucesso para ${foundProfile.email}.`
       );
+
       setNewEmail("");
       setNewRole("editor");
+
       await loadAll();
     } catch (err) {
       console.error("Erro inesperado ao adicionar acesso:", err);
@@ -374,6 +392,20 @@ export default function AdminUsersPage() {
         profile.id === id ? { ...profile, ...patch } : profile
       )
     );
+
+    setUsers((prev) =>
+      prev.map((adminUser) =>
+        adminUser.profile?.id === id
+          ? {
+              ...adminUser,
+              profile: {
+                ...adminUser.profile,
+                ...patch,
+              },
+            }
+          : adminUser
+      )
+    );
   }
 
   async function handleSaveProfile(profile: ProfileRow) {
@@ -386,6 +418,7 @@ export default function AdminUsersPage() {
         .from("profiles")
         .update({
           nome: profile.nome,
+          telefone: profile.telefone || null,
           role: profile.role,
           ativo: profile.ativo,
         })
@@ -420,6 +453,7 @@ export default function AdminUsersPage() {
               <h2 className="text-xl font-bold text-slate-900 mb-1">
                 Central de usuários
               </h2>
+
               <p className="text-sm text-slate-500">
                 {profiles.length} usuários cadastrados • {users.length} acessos administrativos
               </p>
@@ -470,10 +504,12 @@ export default function AdminUsersPage() {
           <Card className="p-6 border-red-200 bg-red-50">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+
               <div>
                 <h2 className="text-lg font-bold text-red-700 mb-1">
                   Erro no módulo de usuários
                 </h2>
+
                 <p className="text-red-600">{error}</p>
               </div>
             </div>
@@ -501,6 +537,7 @@ export default function AdminUsersPage() {
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
                     Email do usuário
                   </label>
+
                   <input
                     type="email"
                     value={newEmail}
@@ -514,6 +551,7 @@ export default function AdminUsersPage() {
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
                     Papel administrativo
                   </label>
+
                   <select
                     value={newRole}
                     onChange={(e) =>
@@ -555,11 +593,12 @@ export default function AdminUsersPage() {
 
               <div className="relative w-full mb-5">
                 <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+
                 <input
                   type="text"
                   value={searchAdmins}
                   onChange={(e) => setSearchAdmins(e.target.value)}
-                  placeholder="Buscar por nome, email, papel ou user_id..."
+                  placeholder="Buscar por nome, email, telefone, papel ou user_id..."
                   className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
@@ -567,9 +606,11 @@ export default function AdminUsersPage() {
               {filteredAdmins.length === 0 ? (
                 <Card className="p-10 text-center border-slate-200">
                   <Shield className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+
                   <h3 className="text-lg font-bold text-slate-900 mb-2">
                     Nenhum acesso administrativo encontrado
                   </h3>
+
                   <p className="text-slate-500">
                     Quando houver registros na tabela admin_users, eles aparecerão aqui.
                   </p>
@@ -617,23 +658,34 @@ export default function AdminUsersPage() {
                                 <span className="font-semibold text-slate-800">Nome:</span>{" "}
                                 {user.profile?.nome || "Sem nome"}
                               </p>
+
                               <p>
                                 <span className="font-semibold text-slate-800">Email:</span>{" "}
                                 {user.profile?.email || "Sem email"}
                               </p>
+
+                              <p className="flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-slate-400" />
+                                <span className="font-semibold text-slate-800">Telefone:</span>{" "}
+                                {formatPhone(user.profile?.telefone)}
+                              </p>
+
                               <p>
                                 <span className="font-semibold text-slate-800">Role do profile:</span>{" "}
                                 {user.profile?.role || "Sem role"}
                               </p>
+
                               <p className="flex items-center gap-2">
                                 <Clock3 className="w-4 h-4 text-slate-400" />
                                 <span className="font-semibold text-slate-800">Último acesso:</span>{" "}
                                 {formatLastSeen(user.profile?.last_seen_at)}
                               </p>
+
                               <p>
                                 <span className="font-semibold text-slate-800">User ID:</span>{" "}
                                 <span className="font-mono break-all">{user.user_id}</span>
                               </p>
+
                               <p>
                                 <span className="font-semibold text-slate-800">Criado em:</span>{" "}
                                 {formatDate(user.created_at)}
@@ -770,11 +822,12 @@ export default function AdminUsersPage() {
 
               <div className="relative w-full mb-5">
                 <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+
                 <input
                   type="text"
                   value={searchProfiles}
                   onChange={(e) => setSearchProfiles(e.target.value)}
-                  placeholder="Buscar por nome, email, role ou id..."
+                  placeholder="Buscar por nome, email, telefone, role ou id..."
                   className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
@@ -782,9 +835,11 @@ export default function AdminUsersPage() {
               {filteredProfiles.length === 0 ? (
                 <Card className="p-10 text-center border-slate-200">
                   <UserCircle2 className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+
                   <h3 className="text-lg font-bold text-slate-900 mb-2">
                     Nenhum perfil encontrado
                   </h3>
+
                   <p className="text-slate-500">Tente outro termo de busca.</p>
                 </Card>
               ) : (
@@ -820,6 +875,7 @@ export default function AdminUsersPage() {
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                                   Nome
                                 </label>
+
                                 <input
                                   type="text"
                                   value={profile.nome || ""}
@@ -836,6 +892,7 @@ export default function AdminUsersPage() {
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                                   Email
                                 </label>
+
                                 <input
                                   type="text"
                                   value={profile.email || ""}
@@ -846,8 +903,27 @@ export default function AdminUsersPage() {
 
                               <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                  Telefone
+                                </label>
+
+                                <input
+                                  type="text"
+                                  value={profile.telefone || ""}
+                                  onChange={(e) =>
+                                    updateLocalProfile(profile.id, {
+                                      telefone: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Telefone não informado"
+                                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">
                                   Role do perfil
                                 </label>
+
                                 <select
                                   value={profile.role || "student"}
                                   onChange={(e) =>
@@ -867,6 +943,7 @@ export default function AdminUsersPage() {
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                                   Status
                                 </label>
+
                                 <select
                                   value={profile.ativo ? "ativo" : "inativo"}
                                   onChange={(e) =>
@@ -884,14 +961,22 @@ export default function AdminUsersPage() {
 
                             <div className="mt-4 space-y-2 text-sm text-slate-600">
                               <p className="flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-slate-400" />
+                                <span className="font-semibold text-slate-800">Telefone:</span>{" "}
+                                {formatPhone(profile.telefone)}
+                              </p>
+
+                              <p className="flex items-center gap-2">
                                 <Clock3 className="w-4 h-4 text-slate-400" />
                                 <span className="font-semibold text-slate-800">Último acesso:</span>{" "}
                                 {formatLastSeen(profile.last_seen_at)}
                               </p>
+
                               <p>
                                 <span className="font-semibold text-slate-800">ID:</span>{" "}
                                 <span className="font-mono break-all">{profile.id}</span>
                               </p>
+
                               <p>
                                 <span className="font-semibold text-slate-800">Criado em:</span>{" "}
                                 {formatDate(profile.created_at)}
