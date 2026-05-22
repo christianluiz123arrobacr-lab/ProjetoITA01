@@ -1,14 +1,19 @@
+import { useEffect, useState } from "react";
+import { Redirect, Route, Switch } from "wouter";
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
 
 import ErrorBoundary from "./components/ErrorBoundary";
-import ProtectedRoute from "./components/ProtectedRoute";
 import SubscriptionGuard from "./components/SubscriptionGuard";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
+import { supabase } from "@/lib/supabase";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+
 import Landing from "./pages/Landing";
+import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import PricingPage from "./pages/PricingPage";
@@ -42,6 +47,21 @@ import CinematicaTopicQuedaLivre from "./pages/CinematicaTopicQuedaLivre";
 import Progress from "./pages/Progress";
 import IAResolver from "./pages/IAResolver";
 import QuestionBank from "./pages/QuestionBankPage";
+
+import ProfilePage from "./pages/ProfilePage";
+import MinhaAssinaturaPage from "./pages/MinhaAssinaturaPage";
+import RankingPage from "./pages/RankingPage";
+
+import VetPage from "./pages/VetPage";
+import VetDiagnosisPage from "./pages/VetDiagnosisPage";
+import VetObjectivePage from "./pages/VetObjectivePage";
+import VetPlanPage from "./pages/VetPlanPage";
+import VetQuestionsPage from "./pages/VetQuestionsPage";
+import VetTrainingPage from "./pages/VetTrainingPage";
+import VetPrioritiesPage from "./pages/VetPrioritiesPage";
+import VetLevelPage from "./pages/VetLevelPage";
+import VetMockPage from "./pages/VetMockPage";
+import VetMockResultPage from "./pages/VetMockResultPage";
 
 import DynamicsTopicNewton from "./pages/DynamicsTopicNewton";
 import DynamicsTopicFriction from "./pages/DynamicsTopicFriction";
@@ -124,174 +144,125 @@ import FisicaModernaTopicAtomo from "./pages/FisicaModernaTopicAtomo";
 import FisicaModernaTopicParticulas from "./pages/FisicaModernaTopicParticulas";
 import FisicaModernaTopicAplicacoes from "./pages/FisicaModernaTopicAplicacoes";
 
-function PrivateRouter() {
-  return (
-    <ProtectedRoute>
-      <SubscriptionGuard>
-        <Switch>
-          {/* Entrada da plataforma depois do login */}
-          <Route path="/fisica" component={FisicaSelector} />
+type RootAccessState = "checking" | "allowed" | "blocked" | "public";
 
-          {/* Física por frentes */}
-          <Route path="/fisica-i" component={FisicaIHome} />
-          <Route path="/fisica-ii" component={FisicaIIHome} />
-          <Route path="/fisica-iii" component={FisicaIIIHome} />
+function RootGate() {
+  const { isAuthenticated, loading: authLoading, user } = useSupabaseAuth();
+  const [accessState, setAccessState] = useState<RootAccessState>("checking");
 
-          {/* Banco de questões */}
-          <Route path="/banco-questoes" component={QuestionBank} />
+  useEffect(() => {
+    let cancelled = false;
 
-          {/* Cinemática */}
-          <Route path="/cinematica" component={Home} />
-          <Route path="/cinematica/learn" component={Learn} />
-          <Route path="/cinematica/quiz" component={Quiz} />
-          <Route path="/cinematica/graphs" component={Graphs} />
-          <Route path="/cinematica/graphs-new" component={CinematicaGraphs} />
-          <Route path="/cinematica/calculator" component={Calculator} />
-          <Route path="/cinematica/formulas" component={Formulas} />
-          <Route path="/cinematica/quiz-new" component={CinematicaQuiz} />
-          <Route path="/cinematica/simulator" component={CinematicaSimulator} />
-          <Route path="/cinematica/topic/bases" component={CinematicaTopicBases} />
-          <Route path="/cinematica/topic/velocidade" component={CinematicaTopicVelocidade} />
-          <Route path="/cinematica/topic/mru" component={CinematicaTopicMRU} />
-          <Route path="/cinematica/topic/mruv" component={CinematicaTopicMRUV} />
-          <Route path="/cinematica/topic/circular" component={CinematicaTopicCircular} />
-          <Route path="/cinematica/topic/queda-livre" component={CinematicaTopicQuedaLivre} />
+    async function checkRootAccess() {
+      if (authLoading) return;
 
-          {/* Dinâmica */}
-          <Route path="/dinamica" component={DinamicaHome} />
-          <Route path="/dinamica/learn" component={DynamicsLearn} />
-          <Route path="/dinamica/quiz" component={DynamicsQuiz} />
-          <Route path="/dinamica/calculator" component={DynamicsCalculator} />
-          <Route path="/dinamica/formulas" component={DynamicsFormulas} />
-          <Route path="/dinamica/graphs" component={DynamicsGraphs} />
-          <Route path="/dinamica/simulator" component={DynamicsSimulator} />
-          <Route path="/dinamica/topic/newton" component={DynamicsTopicNewton} />
-          <Route path="/dinamica/topic/atrito" component={DynamicsTopicFriction} />
-          <Route path="/dinamica/topic/energy" component={DynamicsTopicEnergy} />
-          <Route path="/dinamica/topic/momentum" component={DynamicsTopicMomentum} />
-          <Route path="/dinamica/topic/power" component={DynamicsTopicPower} />
+      if (!isAuthenticated || !user) {
+        if (!cancelled) {
+          setAccessState("public");
+        }
 
-          {/* Estática */}
-          <Route path="/estatica" component={EstaticaHome} />
-          <Route path="/estatica/graphs" component={EstaticaGraphs} />
-          <Route path="/estatica/quiz" component={EstaticaQuiz} />
-          <Route path="/estatica/simulator" component={EstaticaSimulator} />
-          <Route path="/estatica/topic/equilibrio" component={EstaticaTopicEquilibrio} />
-          <Route path="/estatica/topic/torque" component={EstaticaTopicTorque} />
-          <Route path="/estatica/topic/maquinas" component={EstaticaTopicMaquinas} />
-          <Route path="/estatica/topic/hidrostatica" component={EstaticaTopicHidrostatica} />
+        return;
+      }
 
-          {/* Termologia */}
-          <Route path="/termologia" component={TermologiaHome} />
-          <Route path="/termologia/graphs" component={TermologiaGraphs} />
-          <Route path="/termologia/quiz" component={TermologiaQuiz} />
-          <Route path="/termologia/simulator" component={TermologiaSimulator} />
-          <Route path="/termologia/topic/temperatura" component={TermologiaTopicTemperatura} />
-          <Route path="/termologia/topic/calor" component={TermologiaTopicCalor} />
-          <Route path="/termologia/topic/calorimetria" component={TermologiaTopicCalorimetria} />
-          <Route path="/termologia/topic/termodinamica" component={TermologiaTopicTermodinamica} />
-          <Route path="/termologia/topic/dilatacao" component={TermologiaTopicDilatacao} />
+      try {
+        setAccessState("checking");
 
-          {/* Mecânica */}
-          <Route path="/mecanica" component={MecanicaHome} />
-          <Route path="/mecanica/topic/cinematica" component={MecanicaTopicCinematica} />
-          <Route path="/mecanica/topic/dinamica" component={MecanicaTopicDinamica} />
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role, ativo")
+          .eq("id", user.id)
+          .maybeSingle();
 
-          {/* Ondulatória */}
-          <Route path="/ondulatoria" component={OndulatoriaHome} />
-          <Route path="/ondulatoria/topic/conceitos" component={OndulatoriaTopicConceitos} />
-          <Route path="/ondulatoria/topic/mhs" component={OndulatoriaTopicMHS} />
-          <Route path="/ondulatoria/topic/equacao" component={OndulatoriaTopicEquacao} />
-          <Route path="/ondulatoria/topic/fenomenos" component={OndulatoriaTopicFenomenos} />
-          <Route path="/ondulatoria/topic/som" component={OndulatoriaTopicSom} />
-          <Route path="/ondulatoria/topic/luz" component={OndulatoriaTopicLuz} />
-          <Route path="/ondulatoria/simulator" component={OndulatoriaSimulator} />
-          <Route path="/ondulatoria/quiz" component={OndulatoriaQuiz} />
-          <Route path="/ondulatoria/graphs" component={OndulatoriaGraphs} />
+        if (profileError) {
+          console.warn("Erro ao buscar perfil na entrada:", profileError);
+        }
 
-          {/* Óptica */}
-          <Route path="/optica" component={OpticaHome} />
-          <Route path="/optica/topic/conceitos" component={OpticaTopicConceitos} />
-          <Route path="/optica/topic/lentes" component={OpticaTopicLentes} />
-          <Route path="/optica/topic/fenomenos" component={OpticaTopicFenomenos} />
-          <Route path="/optica/simulator" component={OpticaSimulator} />
-          <Route path="/optica/graphs" component={OpticaGraphs} />
-          <Route path="/optica/quiz" component={OpticaQuiz} />
+        if (profile?.role === "admin") {
+          if (!cancelled) {
+            setAccessState("allowed");
+          }
 
-          {/* Eletricidade */}
-          <Route path="/eletricidade" component={EletricidadeHome} />
-          <Route path="/eletricidade/topic/eletrostatica" component={EletricidadeTopicEletrostatica} />
-          <Route path="/eletricidade/topic/eletrodinamica" component={EletricidadeTopicEletrodinamica} />
-          <Route path="/eletricidade/topic/capacitores-indutores" component={EletricidadeTopicCapacitoresIndutores} />
-          <Route path="/eletricidade/topic/magnetismo" component={EletricidadeTopicMagnetismo} />
-          <Route path="/eletricidade/topic/potencial-eletrico" component={EletricidadeTopicPotencialEletrico} />
-          <Route path="/eletricidade/topic/dieletricos" component={EletricidadeTopicDieletricos} />
-          <Route path="/eletricidade/topic/circuitos-ac" component={EletricidadeTopicCircuitosAC} />
-          <Route path="/eletricidade/topic/ondas-eletromagneticas" component={EletricidadeTopicOndasEletromagneticas} />
+          return;
+        }
 
-          {/* Eletromagnetismo */}
-          <Route path="/eletromagnetismo" component={EletromagnetismoHome} />
-          <Route path="/eletromagnetismo/topic/campos-magneticos" component={EletromagnetismoTopicCamposMagneticos} />
-          <Route path="/eletromagnetismo/topic/inducao-eletromagnetica" component={EletromagnetismoTopicInducaoEletromagnetica} />
-          <Route path="/eletromagnetismo/topic/equacoes-maxwell" component={EletromagnetismoTopicEquacoesMacwell} />
-          <Route path="/eletromagnetismo/topic/ondas-eletromagneticas-avancado" component={EletromagnetismoTopicOndasAvancado} />
-          <Route path="/eletromagnetismo/topic/aplicacoes-eletromagnetismo" component={EletromagnetismoTopicAplicacoes} />
-          <Route path="/eletromagnetismo/topic/radiacao-eletromagnetica" component={EletromagnetismoTopicRadiacao} />
+        if (profile?.ativo === false) {
+          if (!cancelled) {
+            setAccessState("blocked");
+          }
 
-          {/* Magnetismo */}
-          <Route path="/magnetismo" component={MagnetismoHome} />
-          <Route path="/magnetismo/topic/forca-magnetica" component={MagnetismoTopicForcaMagnetica} />
+          return;
+        }
 
-          {/* Física moderna */}
-          <Route path="/fisica-moderna" component={FisicaModernaHome} />
-          <Route path="/fisica-moderna/topic/relatividade" component={FisicaModernaTopicRelatividade} />
-          <Route path="/fisica-moderna/topic/quantica" component={FisicaModernaTopicQuantica} />
-          <Route path="/fisica-moderna/topic/atomo" component={FisicaModernaTopicAtomo} />
-          <Route path="/fisica-moderna/topic/particulas" component={FisicaModernaTopicParticulas} />
-          <Route path="/fisica-moderna/topic/aplicacoes" component={FisicaModernaTopicAplicacoes} />
+        const { data: hasActiveSubscription, error: rpcError } =
+          await supabase.rpc("user_has_active_subscription", {
+            target_user_id: user.id,
+          });
 
-          {/* Área do aluno */}
-          <Route path="/progress" component={Progress} />
-          <Route path="/ia-resolver" component={IAResolver} />
+        if (!rpcError && typeof hasActiveSubscription === "boolean") {
+          if (!cancelled) {
+            setAccessState(hasActiveSubscription ? "allowed" : "blocked");
+          }
 
-          <Route path="/404" component={NotFound} />
-          <Route component={NotFound} />
-        </Switch>
-      </SubscriptionGuard>
-    </ProtectedRoute>
-  );
-}
+          return;
+        }
 
-function Router() {
-  return (
-    <Switch>
-      {/* Rotas públicas */}
-      <Route path="/" component={Landing} />
-      <Route path="/landing" component={Landing} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/cadastro" component={RegisterPage} />
-      <Route path="/planos" component={PricingPage} />
-      <Route path="/assinatura-pendente" component={SubscriptionPendingPage} />
+        console.warn(
+          "RPC user_has_active_subscription falhou na entrada. Usando fallback:",
+          rpcError
+        );
 
-      {/* Todo o resto exige login + assinatura */}
-      <Route>
-        <PrivateRouter />
-      </Route>
-    </Switch>
-  );
-}
+        const now = new Date().toISOString();
 
-function App() {
-  return (
-    <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
-}
+        const { data: subscription, error: subscriptionError } = await supabase
+          .from("billing_subscriptions")
+          .select("id")
+          .eq("user_id", user.id)
+          .in("status", ["active", "trialing"])
+          .or(`current_period_end.is.null,current_period_end.gte.${now}`)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-export default App;
+        if (subscriptionError) {
+          console.warn(
+            "Erro ao buscar assinatura ativa na entrada:",
+            subscriptionError
+          );
+        }
+
+        if (!cancelled) {
+          setAccessState(subscription ? "allowed" : "blocked");
+        }
+      } catch (error) {
+        console.warn("Erro inesperado na entrada do site:", error);
+
+        if (!cancelled) {
+          setAccessState("blocked");
+        }
+      }
+    }
+
+    checkRootAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isAuthenticated, user]);
+
+  if (authLoading || accessState === "checking") {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-8 py-6 text-center shadow-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-200">
+            Rumo ao ITA
+          </p>
+
+          <p className="mt-2 text-sm text-slate-300">
+            Verificando acesso...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessState === "allowed") {
