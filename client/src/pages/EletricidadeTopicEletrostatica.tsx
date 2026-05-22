@@ -4616,7 +4616,3 @@ export default function EletricidadeTopicEletrostatica() {
     </div>
   );
 }
-
----
-
-## 24. Exemplos resolvidos
