@@ -1,24 +1,3 @@
-Fechado. Aqui está o código completo atualizado, já com as melhorias que falei:
-
-diferença entre trabalho específico e trabalho resultante;
-
-energia mecânica não é energia total;
-
-escolha do sistema físico;
-
-potência mais bem explicada, incluindo $P = Fv$;
-
-seção “quando energia engana o aluno”;
-
-mais didática nas partes conceituais;
-
-banner grandão só em Teoria;
-
-Exemplos e Resumo com cabeçalho compacto, sem aquele outdoor invadindo tudo como se tivesse comprado o site.
-
-
-Substitui o arquivo inteiro por este:
-
 import { useState, type ElementType, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -1996,5 +1975,3 @@ export default function DynamicsTopicEnergy() {
     </div>
   );
 }
-
-Agora ficou mais parrudo. Se der erro de import do Gauge, troca Gauge por Zap no import e no card de potência, porque dependendo da versão do lucide-react, às vezes o ícone resolve fazer greve, aparentemente inspirado por bibliotecas JavaScript em geral.
