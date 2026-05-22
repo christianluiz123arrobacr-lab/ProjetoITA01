@@ -1,3 +1,24 @@
+Fechado. Aqui está o código completo atualizado, já com as melhorias que falei:
+
+diferença entre trabalho específico e trabalho resultante;
+
+energia mecânica não é energia total;
+
+escolha do sistema físico;
+
+potência mais bem explicada, incluindo $P = Fv$;
+
+seção “quando energia engana o aluno”;
+
+mais didática nas partes conceituais;
+
+banner grandão só em Teoria;
+
+Exemplos e Resumo com cabeçalho compacto, sem aquele outdoor invadindo tudo como se tivesse comprado o site.
+
+
+Substitui o arquivo inteiro por este:
+
 import { useState, type ElementType, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -10,6 +31,7 @@ import {
   ChevronUp,
   Compass,
   Flame,
+  Gauge,
   Layers,
   Lightbulb,
   Target,
@@ -203,9 +225,9 @@ export default function DynamicsTopicEnergy() {
           <p>
             A força não está totalmente na direção do deslocamento. Só a
             componente da força paralela ao deslocamento realiza trabalho. A
-            componente perpendicular pode até existir, fazer contato, alterar a
-            normal ou mudar outra coisa, mas nesse deslocamento específico ela
-            não transfere energia ao movimento horizontal.
+            componente perpendicular pode existir, alterar a normal ou influenciar
+            outra força, mas nesse deslocamento específico ela não transfere
+            energia para o movimento horizontal.
           </p>
 
           <FormulaBlock formula={String.raw`W = Fd\cos\theta`} />
@@ -229,10 +251,10 @@ export default function DynamicsTopicEnergy() {
           <FormulaBlock formula={String.raw`W = 250 \ \text{J}`} />
 
           <NoteBox title="Interpretação física" type="success">
-            A força total é 50 N, mas apenas a “parte útil” na direção do
+            A força total é 50 N, mas apenas sua componente na direção do
             deslocamento realiza trabalho. É por isso que o cosseno aparece. Ele
-            seleciona a componente da força que realmente contribui para a
-            transferência de energia.
+            seleciona a parte da força que realmente participa da transferência
+            de energia.
           </NoteBox>
         </>
       ),
@@ -584,9 +606,7 @@ export default function DynamicsTopicEnergy() {
 
           <FormulaBlock formula={String.raw`h = L(1-\cos\theta)`} />
 
-          <FormulaBlock
-            formula={String.raw`h = 2(1-\cos60^\circ)`}
-          />
+          <FormulaBlock formula={String.raw`h = 2(1-\cos60^\circ)`} />
 
           <FormulaBlock
             formula={String.raw`h = 2\left(1-\frac{1}{2}\right) = 1 \ \text{m}`}
@@ -629,15 +649,11 @@ export default function DynamicsTopicEnergy() {
             de contato.
           </p>
 
-          <p>
-            No topo do looping, a condição mínima para manter contato é:
-          </p>
+          <p>No topo do looping, a condição mínima para manter contato é:</p>
 
           <FormulaBlock formula={String.raw`N = 0`} />
 
-          <p>
-            No topo, o peso aponta para o centro. Na condição mínima:
-          </p>
+          <p>No topo, o peso aponta para o centro. Na condição mínima:</p>
 
           <FormulaBlock
             formula={String.raw`mg = m\frac{v_{\text{topo}}^2}{R}`}
@@ -645,9 +661,7 @@ export default function DynamicsTopicEnergy() {
 
           <p>Cancelando a massa:</p>
 
-          <FormulaBlock
-            formula={String.raw`v_{\text{topo}}^2 = gR`}
-          />
+          <FormulaBlock formula={String.raw`v_{\text{topo}}^2 = gR`} />
 
           <p>
             Agora usamos energia entre o ponto inicial, de altura{" "}
@@ -665,9 +679,7 @@ export default function DynamicsTopicEnergy() {
             formula={String.raw`gH = 2gR + \frac{1}{2}gR`}
           />
 
-          <FormulaBlock
-            formula={String.raw`H = 2R + \frac{R}{2}`}
-          />
+          <FormulaBlock formula={String.raw`H = 2R + \frac{R}{2}`} />
 
           <FormulaBlock formula={String.raw`H_{\min} = \frac{5R}{2}`} />
 
@@ -691,8 +703,8 @@ export default function DynamicsTopicEnergy() {
           <p>
             Quando a questão dá gráfico ou descreve força variável, o trabalho é
             área sob o gráfico <InlineFormula formula={String.raw`F \times x`} />
-            . Não saia procurando fórmula pronta igual quem procura botão de
-            “resolver minha vida”.
+            . Não saia procurando fórmula pronta antes de olhar a área, esse é
+            o tipo de pressa que transforma questão fácil em tragédia grega.
           </p>
 
           <p>Primeiro trecho: triângulo de base 4 m e altura 20 N.</p>
@@ -715,9 +727,7 @@ export default function DynamicsTopicEnergy() {
 
           <p>Trabalho total:</p>
 
-          <FormulaBlock
-            formula={String.raw`W = W_1 + W_2 + W_3`}
-          />
+          <FormulaBlock formula={String.raw`W = W_1 + W_2 + W_3`} />
 
           <FormulaBlock formula={String.raw`W = 40 + 80 + 20`} />
 
@@ -931,9 +941,18 @@ export default function DynamicsTopicEnergy() {
               <p>
                 Esse método continua indispensável. O problema é que ele pode
                 ser mais trabalhoso do que necessário quando a pergunta só quer
-                comparar início e fim. Se a questão pede velocidade final, altura
-                máxima, distância até parar ou compressão de uma mola, a energia
-                geralmente é mais direta.
+                comparar início e fim. Se a questão pede velocidade final,
+                altura máxima, distância até parar ou compressão de uma mola, a
+                energia geralmente é mais direta.
+              </p>
+
+              <p>
+                A grande vantagem da energia é que muitas vezes você não precisa
+                saber como o corpo se moveu em cada instante. Você só precisa
+                saber de onde ele saiu, onde chegou e quais transformações
+                aconteceram no caminho. Isso é absurdamente poderoso, porque
+                evita acompanhar aceleração ponto a ponto quando a questão nem
+                pediu isso.
               </p>
 
               <div className="grid md:grid-cols-2 gap-5">
@@ -1065,6 +1084,71 @@ export default function DynamicsTopicEnergy() {
             </SectionCard>
 
             <SectionCard
+              icon={Target}
+              title="Trabalho específico e trabalho resultante"
+              accent="from-cyan-700 to-blue-800"
+            >
+              <p>
+                Uma confusão clássica é misturar o trabalho de uma força
+                específica com o trabalho resultante. Essa diferença precisa
+                ficar cristalina, porque o Teorema da Energia Cinética usa o
+                trabalho resultante, não o trabalho de qualquer força aleatória
+                escolhida pela ansiedade do aluno.
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <NoteBox title="Trabalho de uma força específica" type="info">
+                  Analisa apenas uma força. Pode ser o trabalho do peso, do
+                  atrito, da normal, da tração, da força aplicada ou da força
+                  elástica.
+                  <FormulaBlock formula={String.raw`W_F = Fd\cos\theta`} />
+                </NoteBox>
+
+                <NoteBox title="Trabalho resultante" type="success">
+                  É a soma dos trabalhos de todas as forças que atuam sobre o
+                  corpo.
+                  <FormulaBlock
+                    formula={String.raw`W_{\text{res}} = W_1 + W_2 + W_3 + \cdots`}
+                  />
+                </NoteBox>
+              </div>
+
+              <p>
+                Imagine um bloco sendo puxado para a direita por uma força
+                aplicada, enquanto o atrito atua para a esquerda. A força
+                aplicada realiza trabalho positivo. O atrito realiza trabalho
+                negativo. A normal e o peso podem realizar trabalho nulo se o
+                deslocamento for horizontal.
+              </p>
+
+              <FormulaBlock
+                formula={String.raw`W_{\text{res}} = W_{\text{aplicada}} + W_{\text{atrito}} + W_N + W_P`}
+              />
+
+              <p>Se:</p>
+
+              <FormulaBlock formula={String.raw`W_N = 0`} />
+
+              <FormulaBlock formula={String.raw`W_P = 0`} />
+
+              <p>Então:</p>
+
+              <FormulaBlock
+                formula={String.raw`W_{\text{res}} = W_{\text{aplicada}} + W_{\text{atrito}}`}
+              />
+
+              <NoteBox title="Onde o aluno erra" type="danger">
+                Se a questão pede variação da energia cinética, não basta pegar
+                o trabalho da força aplicada e fingir que o atrito não existe.
+                O certo é usar:
+                <FormulaBlock
+                  formula={String.raw`W_{\text{res}} = \Delta E_c`}
+                />
+                O trabalho resultante é o saldo energético de todas as forças.
+              </NoteBox>
+            </SectionCard>
+
+            <SectionCard
               icon={Compass}
               title="Trabalho das forças principais"
               accent="from-slate-700 to-slate-950"
@@ -1172,9 +1256,7 @@ export default function DynamicsTopicEnergy() {
                 Trabalho da força elástica
               </h3>
 
-              <p>
-                A força elástica é variável. Para uma mola ideal:
-              </p>
+              <p>A força elástica é variável. Para uma mola ideal:</p>
 
               <FormulaBlock formula={String.raw`F_e = kx`} />
 
@@ -1261,9 +1343,7 @@ export default function DynamicsTopicEnergy() {
 
               <p>Usando a equação:</p>
 
-              <FormulaBlock
-                formula={String.raw`v_f^2 = v_i^2 + 2ad`}
-              />
+              <FormulaBlock formula={String.raw`v_f^2 = v_i^2 + 2ad`} />
 
               <FormulaBlock
                 formula={String.raw`ad = \frac{v_f^2 - v_i^2}{2}`}
@@ -1300,11 +1380,11 @@ export default function DynamicsTopicEnergy() {
 
               <NoteBox title="Referência não é enfeite" type="info">
                 Se um livro está 2 m acima do chão, sua energia potencial em
-                relação ao chão é <InlineFormula formula={String.raw`mg\cdot2`} />
-                . Se você escolher uma mesa de 1 m como referência, a altura em
-                relação à mesa será 1 m. O valor da energia potencial muda, mas
-                a variação entre dois pontos continua representando o trabalho
-                do peso.
+                relação ao chão é{" "}
+                <InlineFormula formula={String.raw`mg\cdot2`} />. Se você
+                escolher uma mesa de 1 m como referência, a altura em relação à
+                mesa será 1 m. O valor da energia potencial muda, mas a variação
+                entre dois pontos continua representando o trabalho do peso.
               </NoteBox>
 
               <h3 className="text-xl font-black text-slate-950 pt-4">
@@ -1347,7 +1427,7 @@ export default function DynamicsTopicEnergy() {
 
             <SectionCard
               icon={Layers}
-              title="Conservação, dissipação e forças não conservativas"
+              title="Conservação, dissipação e energia total"
               accent="from-blue-700 to-indigo-800"
             >
               <p>
@@ -1369,6 +1449,31 @@ export default function DynamicsTopicEnergy() {
                 gravitacional diminui e a energia cinética aumenta. Nenhuma das
                 duas se conserva isoladamente. A soma se conserva.
               </NoteBox>
+
+              <h3 className="text-xl font-black text-slate-950 pt-4">
+                Energia mecânica não é energia total
+              </h3>
+
+              <p>
+                Quando há atrito, costuma-se dizer que “perdeu energia”. Essa
+                frase é perigosa. O que se perde é energia mecânica, não energia
+                total. A energia total não desaparece; ela é transformada em
+                energia térmica, som, deformações microscópicas e energia
+                interna das superfícies.
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <NoteBox title="Energia mecânica" type="warning">
+                  É a soma das energias associadas ao movimento, posição e
+                  configuração mecânica do sistema.
+                  <FormulaBlock formula={String.raw`E_m = E_c + E_p`} />
+                </NoteBox>
+
+                <NoteBox title="Energia total" type="success">
+                  Inclui todas as formas de energia, inclusive energia térmica,
+                  energia interna, som e deformações microscópicas.
+                </NoteBox>
+              </div>
 
               <p>
                 Quando forças não conservativas realizam trabalho, a energia
@@ -1435,6 +1540,53 @@ export default function DynamicsTopicEnergy() {
             </SectionCard>
 
             <SectionCard
+              icon={Brain}
+              title="Escolha do sistema físico"
+              accent="from-slate-800 to-slate-950"
+            >
+              <p>
+                Energia não vive solta no universo como se fosse uma moeda
+                mágica. Quando você usa conservação de energia, precisa pensar
+                qual sistema está analisando. Essa parte é mais avançada, mas
+                deixa a explicação mais honesta e evita vários erros em questões
+                difíceis.
+              </p>
+
+              <p>
+                Se você analisa apenas o bloco, o peso é uma força externa
+                exercida pela Terra sobre ele. Se você analisa o sistema
+                bloco-Terra, a energia potencial gravitacional pertence ao
+                sistema.
+              </p>
+
+              <p>
+                Se você analisa apenas o bloco colidindo com uma mola, a força
+                elástica é externa ao bloco. Se você analisa o sistema
+                bloco-mola, a energia potencial elástica pertence ao sistema.
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <NoteBox title="Sistema bloco-Terra" type="info">
+                  Permite usar energia potencial gravitacional:
+                  <FormulaBlock formula={String.raw`E_{p,g} = mgh`} />
+                </NoteBox>
+
+                <NoteBox title="Sistema bloco-mola" type="success">
+                  Permite usar energia potencial elástica:
+                  <FormulaBlock formula={String.raw`E_{p,e} = \frac{1}{2}kx^2`} />
+                </NoteBox>
+              </div>
+
+              <NoteBox title="Regra prática" type="dark">
+                Antes de aplicar conservação de energia, pergunte: o sistema
+                inclui os corpos que armazenam energia potencial? Se a resposta
+                for sim, você pode tratar essa energia como parte da energia
+                mecânica do sistema. Se não, ela aparece como trabalho de uma
+                força externa.
+              </NoteBox>
+            </SectionCard>
+
+            <SectionCard
               icon={BarChart3}
               title="Gráficos, força variável e interpretação avançada"
               accent="from-violet-700 to-fuchsia-800"
@@ -1452,8 +1604,8 @@ export default function DynamicsTopicEnergy() {
 
               <p>
                 Quando a força muda, não faz sentido escolher um único valor de
-                força para o deslocamento inteiro. A ideia é quebrar o caminho em
-                pedaços muito pequenos. Em cada pedacinho, a força quase não
+                força para o deslocamento inteiro. A ideia é quebrar o caminho
+                em pedaços muito pequenos. Em cada pedacinho, a força quase não
                 muda. Calculamos o pequeno trabalho e depois somamos tudo.
               </p>
 
@@ -1525,8 +1677,75 @@ export default function DynamicsTopicEnergy() {
             </SectionCard>
 
             <SectionCard
+              icon={Gauge}
+              title="Potência: rapidez da transferência de energia"
+              accent="from-amber-600 to-orange-700"
+            >
+              <p>
+                Trabalho mede quanta energia foi transferida. Potência mede quão
+                rápido essa transferência aconteceu. Essa diferença é simples,
+                mas muito importante.
+              </p>
+
+              <p>
+                Imagine duas pessoas levantando a mesma caixa até a mesma altura.
+                As duas aumentam a energia potencial gravitacional da caixa pela
+                mesma quantidade. Mas, se uma faz isso em menos tempo, ela
+                desenvolve maior potência.
+              </p>
+
+              <FormulaBlock formula={String.raw`P = \frac{W}{\Delta t}`} />
+
+              <p>Como trabalho é transferência de energia, também podemos escrever:</p>
+
+              <FormulaBlock formula={String.raw`P = \frac{\Delta E}{\Delta t}`} />
+
+              <p>
+                A unidade de potência no Sistema Internacional é o watt:
+              </p>
+
+              <FormulaBlock formula={String.raw`1 \ \text{W} = 1 \ \frac{\text{J}}{\text{s}}`} />
+
+              <h3 className="text-xl font-black text-slate-950 pt-4">
+                Potência instantânea em movimento retilíneo
+              </h3>
+
+              <p>
+                Se uma força atua na mesma direção da velocidade, podemos usar:
+              </p>
+
+              <FormulaBlock formula={String.raw`P = Fv`} />
+
+              <p>
+                De forma mais geral, quando existe ângulo entre força e
+                velocidade:
+              </p>
+
+              <FormulaBlock formula={String.raw`P = Fv\cos\theta`} />
+
+              <p>
+                Isso aparece muito em problemas de motores, carros, elevadores,
+                esteiras, bombas d'água e rendimento. Quando o enunciado falar
+                em “por segundo”, “taxa”, “rapidez de realização de trabalho” ou
+                “potência”, a cabeça deve acender essa luz.
+              </p>
+
+              <NoteBox title="Rendimento" type="info">
+                Rendimento mede a fração da energia ou potência que virou efeito
+                útil.
+                <FormulaBlock
+                  formula={String.raw`\eta = \frac{E_{\text{útil}}}{E_{\text{total}}}`}
+                />
+                Ou:
+                <FormulaBlock
+                  formula={String.raw`\eta = \frac{P_{\text{útil}}}{P_{\text{total}}}`}
+                />
+              </NoteBox>
+            </SectionCard>
+
+            <SectionCard
               icon={Brain}
-              title="O que energia responde e o que ela não responde sozinha"
+              title="O que energia responde e onde ela engana o aluno"
               accent="from-slate-800 to-black"
             >
               <div className="grid md:grid-cols-2 gap-5">
@@ -1566,6 +1785,36 @@ export default function DynamicsTopicEnergy() {
                 fórmula; ele escolhe a ferramenta certa. Parece pouco, mas já
                 coloca a pessoa acima da média, o que diz muito sobre a média.
               </p>
+
+              <h3 className="text-xl font-black text-slate-950 pt-4">
+                Quando energia engana
+              </h3>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <NoteBox title="Energia pode dar velocidade, mas não força" type="warning">
+                  Em um looping, energia acha a velocidade. A normal exige
+                  dinâmica centrípeta:
+                  <FormulaBlock
+                    formula={String.raw`\sum F_c = m\frac{v^2}{R}`}
+                  />
+                </NoteBox>
+
+                <NoteBox title="Energia pode dar altura, mas não tempo" type="warning">
+                  Se a questão pede tempo de subida ou tempo de queda, energia
+                  sozinha normalmente não basta. Aí entra Cinemática.
+                </NoteBox>
+
+                <NoteBox title="Energia pode dar compressão, mas não aceleração" type="warning">
+                  Em uma mola, energia acha a compressão máxima. Mas a aceleração
+                  instantânea depende da força elástica:
+                  <FormulaBlock formula={String.raw`F = kx`} />
+                </NoteBox>
+
+                <NoteBox title="Energia mostra o saldo, não o filme inteiro" type="warning">
+                  Energia compara estados. Ela não descreve necessariamente o
+                  movimento completo entre eles.
+                </NoteBox>
+              </div>
             </SectionCard>
           </div>
         )}
@@ -1608,6 +1857,10 @@ export default function DynamicsTopicEnergy() {
                     formula: String.raw`W = Fd\cos\theta`,
                   },
                   {
+                    title: "Trabalho resultante",
+                    formula: String.raw`W_{\text{res}} = W_1 + W_2 + W_3 + \cdots`,
+                  },
+                  {
                     title: "Teorema da Energia Cinética",
                     formula: String.raw`W_{\text{res}} = \Delta E_c`,
                   },
@@ -1643,6 +1896,10 @@ export default function DynamicsTopicEnergy() {
                     title: "Potência média",
                     formula: String.raw`P = \frac{W}{\Delta t}`,
                   },
+                  {
+                    title: "Potência em movimento retilíneo",
+                    formula: String.raw`P = Fv\cos\theta`,
+                  },
                 ].map((item) => (
                   <div
                     key={item.title}
@@ -1671,11 +1928,14 @@ export default function DynamicsTopicEnergy() {
                   "Achar que força centrípeta realiza trabalho no MCU.",
                   "Confundir trabalho resultante com trabalho de uma força específica.",
                   "Usar conservação de energia mecânica mesmo com atrito.",
+                  "Falar que energia foi perdida, quando o correto é energia mecânica foi transformada.",
                   "Esquecer que atrito usa distância percorrida, não só deslocamento vetorial.",
                   "Errar o sinal do trabalho da força elástica.",
                   "Esquecer que energia cinética depende de v².",
                   "Usar energia para achar tração ou normal sem Newton.",
+                  "Não definir corretamente o sistema físico analisado.",
                   "Não separar energia dissipada de energia mecânica final.",
+                  "Confundir potência com trabalho total.",
                 ].map((item) => (
                   <div
                     key={item}
@@ -1700,15 +1960,18 @@ export default function DynamicsTopicEnergy() {
               <ol className="space-y-3">
                 {[
                   "Identifique o estado inicial e o estado final.",
+                  "Defina qual sistema físico está sendo analisado.",
                   "Veja se existe altura: pode haver energia potencial gravitacional.",
                   "Veja se existe velocidade: há energia cinética.",
                   "Veja se existe mola deformada: há energia potencial elástica.",
                   "Verifique se há atrito ou força dissipativa.",
                   "Veja se alguma força externa realiza trabalho.",
+                  "Diferencie trabalho específico e trabalho resultante.",
                   "Decida se a energia mecânica se conserva.",
                   "Se conservar, use Em,i = Em,f.",
                   "Se não conservar, use Em,i + Wnc = Em,f.",
                   "Se o foco for apenas variação de velocidade pelo trabalho total, use Wres = ΔEc.",
+                  "Se aparecer potência, procure tempo, taxa de energia ou P = Fv cosθ.",
                   "Se pedir normal, tração ou contato, combine com Newton.",
                 ].map((step, index) => (
                   <li key={step} className="flex gap-3">
@@ -1733,3 +1996,5 @@ export default function DynamicsTopicEnergy() {
     </div>
   );
 }
+
+Agora ficou mais parrudo. Se der erro de import do Gauge, troca Gauge por Zap no import e no card de potência, porque dependendo da versão do lucide-react, às vezes o ícone resolve fazer greve, aparentemente inspirado por bibliotecas JavaScript em geral.
