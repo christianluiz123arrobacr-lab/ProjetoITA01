@@ -1,67 +1,42 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import {
+  ArrowRight,
   BookOpen,
-  ChevronRight,
-  LayoutDashboard,
+  CreditCard,
+  Home,
   LogIn,
   Menu,
-  Sparkles,
-  UserPlus,
+  Rocket,
+  UserCircle2,
   X,
 } from "lucide-react";
-import { useAuth } from "@/_core/hooks/useAuth";
 
-type NavItem = {
-  label: string;
-  href: string;
-};
-
-const publicNavItems: NavItem[] = [
-  {
-    label: "Início",
-    href: "/",
-  },
-  {
-    label: "Planos",
-    href: "/planos",
-  },
-];
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 export default function PublicHeader() {
-  const [location] = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const { loading, isAuthenticated } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { loading, isAuthenticated } = useSupabaseAuth();
 
-  const isActive = (href: string) => {
-    if (href === "/") {
-      return location === "/";
-    }
-
-    return location.startsWith(href);
-  };
-
-  const closeMobile = () => {
-    setMobileOpen(false);
-  };
+  const closeMenu = () => setMenuOpen(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur-xl shadow-sm">
-      <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-4 md:px-6">
-        <Link href="/">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/90 text-white shadow-xl backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-6">
+        <Link href={isAuthenticated ? "/plataforma" : "/"}>
           <a
-            onClick={closeMobile}
-            className="group flex items-center gap-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
+            onClick={closeMenu}
+            className="flex items-center gap-3 transition hover:opacity-90"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-950/20 transition-transform group-hover:scale-105">
-              <BookOpen className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950 shadow-lg shadow-cyan-950/30">
+              <Rocket className="h-5 w-5" />
             </div>
 
             <div className="leading-tight">
-              <p className="text-base font-black tracking-tight text-slate-950">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">
                 Rumo ao ITA
               </p>
-              <p className="text-xs font-semibold text-slate-500">
+              <p className="text-xs font-semibold text-slate-400">
                 Plataforma beta
               </p>
             </div>
@@ -69,55 +44,63 @@ export default function PublicHeader() {
         </Link>
 
         <nav className="hidden items-center gap-2 md:flex">
-          {publicNavItems.map((item) => (
-            <Link key={item.href} href={item.href}>
-              <a
-                className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
-                  isActive(item.href)
-                    ? "bg-slate-950 text-white"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                }`}
-              >
-                {item.label}
+          {!isAuthenticated && (
+            <Link href="/">
+              <a className="inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
+                <Home className="h-4 w-4" />
+                Início
               </a>
             </Link>
-          ))}
+          )}
+
+          <Link href="/planos">
+            <a className="inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
+              <CreditCard className="h-4 w-4" />
+              Planos
+            </a>
+          </Link>
+
+          {isAuthenticated && (
+            <Link href="/plataforma">
+              <a className="inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/[0.08] hover:text-white">
+                <BookOpen className="h-4 w-4" />
+                Plataforma
+              </a>
+            </Link>
+          )}
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
           {loading ? (
-            <div className="h-10 w-40 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-10 w-36 animate-pulse rounded-2xl bg-white/[0.08]" />
           ) : isAuthenticated ? (
             <>
-              <Link href="/planos">
-                <a className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950">
-                  <Sparkles className="h-4 w-4" />
-                  Planos
+              <Link href="/plataforma">
+                <a className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-cyan-200">
+                  Ir para plataforma
+                  <ArrowRight className="h-4 w-4" />
                 </a>
               </Link>
 
-              <Link href="/fisica">
-                <a className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition-transform hover:scale-[1.02]">
-                  <LayoutDashboard className="h-4 w-4" />
-                  Ir para plataforma
-                  <ChevronRight className="h-4 w-4" />
+              <Link href="/perfil">
+                <a className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-white transition hover:bg-white/[0.1]">
+                  <UserCircle2 className="h-5 w-5" />
                 </a>
               </Link>
             </>
           ) : (
             <>
               <Link href="/login">
-                <a className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950">
+                <a className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-2.5 text-sm font-black text-white transition hover:bg-white/[0.1]">
                   <LogIn className="h-4 w-4" />
                   Entrar
                 </a>
               </Link>
 
               <Link href="/cadastro">
-                <a className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition-transform hover:scale-[1.02]">
-                  <UserPlus className="h-4 w-4" />
+                <a className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-cyan-200">
                   Criar conta
-                  <ChevronRight className="h-4 w-4" />
+                  <ArrowRight className="h-4 w-4" />
                 </a>
               </Link>
             </>
@@ -126,56 +109,60 @@ export default function PublicHeader() {
 
         <button
           type="button"
-          onClick={() => setMobileOpen((value) => !value)}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 md:hidden"
-          aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
+          onClick={() => setMenuOpen((current) => !current)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-white transition hover:bg-white/[0.1] md:hidden"
+          aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
         >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
-      {mobileOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-4 md:hidden">
-          <nav className="space-y-2">
-            {publicNavItems.map((item) => (
-              <Link key={item.href} href={item.href}>
+      {menuOpen && (
+        <div className="border-t border-white/10 bg-slate-950 px-4 py-4 md:hidden">
+          <div className="mx-auto flex max-w-6xl flex-col gap-2">
+            {!isAuthenticated && (
+              <Link href="/">
                 <a
-                  onClick={closeMobile}
-                  className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-black transition-colors ${
-                    isActive(item.href)
-                      ? "bg-slate-950 text-white"
-                      : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-                  }`}
+                  onClick={closeMenu}
+                  className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-white/[0.08]"
                 >
-                  {item.label}
-                  <ChevronRight className="h-4 w-4" />
+                  <Home className="h-4 w-4" />
+                  Início
                 </a>
               </Link>
-            ))}
-          </nav>
+            )}
 
-          <div className="mt-4 grid gap-2">
+            <Link href="/planos">
+              <a
+                onClick={closeMenu}
+                className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-white/[0.08]"
+              >
+                <CreditCard className="h-4 w-4" />
+                Planos
+              </a>
+            </Link>
+
             {loading ? (
-              <div className="h-11 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-12 animate-pulse rounded-2xl bg-white/[0.08]" />
             ) : isAuthenticated ? (
               <>
-                <Link href="/planos">
+                <Link href="/plataforma">
                   <a
-                    onClick={closeMobile}
-                    className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700"
+                    onClick={closeMenu}
+                    className="flex items-center gap-3 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
                   >
-                    <Sparkles className="h-4 w-4" />
-                    Ver planos
+                    <BookOpen className="h-4 w-4" />
+                    Ir para plataforma
                   </a>
                 </Link>
 
-                <Link href="/fisica">
+                <Link href="/perfil">
                   <a
-                    onClick={closeMobile}
-                    className="flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white"
+                    onClick={closeMenu}
+                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white transition hover:bg-white/[0.1]"
                   >
-                    <LayoutDashboard className="h-4 w-4" />
-                    Ir para plataforma
+                    <UserCircle2 className="h-4 w-4" />
+                    Ver perfil
                   </a>
                 </Link>
               </>
@@ -183,8 +170,8 @@ export default function PublicHeader() {
               <>
                 <Link href="/login">
                   <a
-                    onClick={closeMobile}
-                    className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700"
+                    onClick={closeMenu}
+                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white transition hover:bg-white/[0.1]"
                   >
                     <LogIn className="h-4 w-4" />
                     Entrar
@@ -193,11 +180,11 @@ export default function PublicHeader() {
 
                 <Link href="/cadastro">
                   <a
-                    onClick={closeMobile}
-                    className="flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white"
+                    onClick={closeMenu}
+                    className="flex items-center gap-3 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
                   >
-                    <UserPlus className="h-4 w-4" />
-                    Criar conta e assinar
+                    <ArrowRight className="h-4 w-4" />
+                    Criar conta
                   </a>
                 </Link>
               </>
