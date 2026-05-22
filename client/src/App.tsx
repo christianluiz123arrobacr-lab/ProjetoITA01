@@ -19,6 +19,22 @@ import RegisterPage from "./pages/RegisterPage";
 import PricingPage from "./pages/PricingPage";
 import SubscriptionPendingPage from "./pages/SubscriptionPendingPage";
 
+import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminBillingPage from "./pages/AdminBillingPage";
+import AdminQuestionsPage from "./pages/AdminQuestionsPage";
+import AdminQuestionCreatePage from "./pages/AdminQuestionCreatePage";
+import AdminQuestionEditPage from "./pages/AdminQuestionEditPage";
+import AdminQuestionReportsPage from "./pages/AdminQuestionReportsPage";
+import AdminResolutionsPage from "./pages/AdminResolutionsPage";
+import AdminResolutionEditorPage from "./pages/AdminResolutionEditorPage";
+import AdminUploadsPage from "./pages/AdminUploadsPage";
+import AdminVetPage from "./pages/AdminVetPage";
+import AdminLogsPage from "./pages/AdminLogsPage";
+import AdminProfilesPage from "./pages/AdminProfilesPage";
+import AdminSpatialGeometryPrototypePage from "./pages/AdminSpatialGeometryPrototypePage";
+import AdminMolecularGeometryPrototypePage from "./pages/AdminMolecularGeometryPrototypePage";
+
 import Home from "./pages/Home";
 import DinamicaHome from "./pages/DinamicaHome";
 import Calculator from "./pages/Calculator";
@@ -280,6 +296,47 @@ function PrivateRouter() {
   return (
     <SubscriptionGuard>
       <Switch>
+        {/* Admin */}
+        <Route path="/admin" component={AdminDashboardPage} />
+        <Route path="/admin/usuarios" component={AdminUsersPage} />
+        <Route path="/admin/profiles" component={AdminProfilesPage} />
+        <Route path="/admin/assinaturas" component={AdminBillingPage} />
+
+        <Route path="/admin/questoes" component={AdminQuestionsPage} />
+        <Route path="/admin/questoes/criar" component={AdminQuestionCreatePage} />
+        <Route
+          path="/admin/questoes/editar/:id"
+          component={AdminQuestionEditPage}
+        />
+
+        <Route path="/admin/reports" component={AdminQuestionReportsPage} />
+        <Route
+          path="/admin/questoes/relatorios"
+          component={AdminQuestionReportsPage}
+        />
+
+        <Route path="/admin/resolucoes" component={AdminResolutionsPage} />
+        <Route
+          path="/admin/resolucoes/editor"
+          component={AdminResolutionEditorPage}
+        />
+        <Route
+          path="/admin/resolucoes/editor/:questionId"
+          component={AdminResolutionEditorPage}
+        />
+
+        <Route path="/admin/uploads" component={AdminUploadsPage} />
+        <Route path="/admin/vet" component={AdminVetPage} />
+        <Route path="/admin/logs" component={AdminLogsPage} />
+        <Route
+          path="/admin/matematica/geometria-espacial"
+          component={AdminSpatialGeometryPrototypePage}
+        />
+        <Route
+          path="/admin/quimica/geometria-molecular"
+          component={AdminMolecularGeometryPrototypePage}
+        />
+
         {/* Entrada geral da plataforma */}
         <Route path="/plataforma" component={LandingPage} />
 
@@ -553,7 +610,7 @@ function Router() {
       <Route path="/planos" component={PricingPage} />
       <Route path="/assinatura-pendente" component={SubscriptionPendingPage} />
 
-      {/* Todo o resto exige login + assinatura */}
+      {/* Todo o resto exige login + assinatura, com exceção de admin liberado pelo guard */}
       <Route>
         <PrivateRouter />
       </Route>
