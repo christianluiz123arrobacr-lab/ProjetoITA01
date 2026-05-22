@@ -288,4 +288,30 @@ export async function getMyActiveSubscription() {
 export async function getMyLatestSubscriptionRequest() {
   const user = await getCurrentUserOrThrow();
 
-  const { data,
+  const { data, error } = await supabase
+    .from("billing_subscriptions")
+    .select(
+      `
+      *,
+      billing_plans (
+        id,
+        slug,
+        name,
+        price_cents,
+        currency,
+        billing_cycle
+      )
+    `
+    )
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Erro ao buscar solicitação de assinatura:", error);
+    return null;
+  }
+
+  return data;
+}
