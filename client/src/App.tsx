@@ -273,9 +273,7 @@ function RootGate() {
             Rumo ao ITA
           </p>
 
-          <p className="mt-2 text-sm text-slate-300">
-            Verificando acesso...
-          </p>
+          <p className="mt-2 text-sm text-slate-300">Verificando acesso...</p>
         </div>
       </div>
     );
@@ -303,11 +301,7 @@ function PrivateRouter() {
         <Route path="/admin/assinaturas" component={AdminBillingPage} />
 
         <Route path="/admin/questoes" component={AdminQuestionsPage} />
-        <Route path="/admin/questoes/criar" component={AdminQuestionCreatePage} />
-        <Route
-          path="/admin/questoes/editar/:id"
-          component={AdminQuestionEditPage}
-        />
+        <Route path="/admin/questoes/nova" component={AdminQuestionCreatePage} />
 
         <Route path="/admin/reports" component={AdminQuestionReportsPage} />
         <Route
@@ -315,13 +309,11 @@ function PrivateRouter() {
           component={AdminQuestionReportsPage}
         />
 
+        <Route path="/admin/questoes/:id" component={AdminQuestionEditPage} />
+
         <Route path="/admin/resolucoes" component={AdminResolutionsPage} />
         <Route
-          path="/admin/resolucoes/editor"
-          component={AdminResolutionEditorPage}
-        />
-        <Route
-          path="/admin/resolucoes/editor/:questionId"
+          path="/admin/resolucoes/:questaoId"
           component={AdminResolutionEditorPage}
         />
 
