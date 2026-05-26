@@ -16,6 +16,7 @@ import {
   Lightbulb,
   ShieldCheck,
   Sparkles,
+  Star,
   Target,
   Zap,
 } from "lucide-react";
@@ -4119,24 +4120,26 @@ function SectionCard({
   icon: Icon,
   title,
   children,
-  accent = "from-yellow-500 to-orange-600",
+  accent = "border-indigo-500",
+  iconBg = "bg-indigo-100",
+  iconColor = "text-indigo-600",
 }: {
   icon: ElementType;
   title: string;
   children: ReactNode;
   accent?: string;
+  iconBg?: string;
+  iconColor?: string;
 }) {
   return (
     <section className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-      <div className={`bg-gradient-to-r ${accent} px-6 py-4`}>
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border border-white/20 bg-white/15 p-2">
-            <Icon className="h-5 w-5 text-white" />
-          </div>
-          <h2 className="text-xl font-bold text-white">
-            {title}
-          </h2>
+      <div className={`border-l-4 ${accent} px-6 py-5 flex items-center gap-3 bg-slate-50`}>
+        <div className={`rounded-xl ${iconBg} p-2 shrink-0`}>
+          <Icon className={`h-5 w-5 ${iconColor}`} />
         </div>
+        <h2 className="text-xl font-bold text-slate-900">
+          {title}
+        </h2>
       </div>
       <div className="p-6 md:p-8">{children}</div>
     </section>
@@ -4242,15 +4245,29 @@ const markdownComponents: Components = {
     <li className="pl-1 text-slate-700">{children}</li>
   ),
 
-    blockquote: ({ children }) => (
-    <div className="my-5 rounded-xl border-l-4 border-indigo-500 bg-indigo-50 p-5 text-indigo-950">
-      <div className="mb-2 flex items-center gap-2 font-bold">
-        <Lightbulb className="h-5 w-5 text-indigo-600" />
-        <span className="text-indigo-700">Ideia importante</span>
+  blockquote: ({ children }) => {
+    const text = markdownText(children).toLowerCase();
+    if (text.startsWith("regra de ouro") || text.startsWith("propriedade de ouro") || text.startsWith("regra de ouro:")) {
+      return (
+        <div className="my-4 rounded-xl border-l-4 border-amber-500 bg-amber-50 p-5">
+          <div className="mb-2 flex items-center gap-2 font-bold text-amber-800">
+            <Star className="h-5 w-5 text-amber-500" />
+            <span>Regra de Ouro</span>
+          </div>
+          <blockquote className="space-y-2 leading-7 text-slate-700">{children}</blockquote>
+        </div>
+      );
+    }
+    return (
+      <div className="my-4 rounded-xl border-l-4 border-indigo-500 bg-indigo-50 p-5">
+        <div className="mb-2 flex items-center gap-2 font-bold text-indigo-800">
+          <Lightbulb className="h-5 w-5 text-indigo-500" />
+          <span>Ideia importante</span>
+        </div>
+        <blockquote className="space-y-2 leading-7 text-slate-700">{children}</blockquote>
       </div>
-      <blockquote className="space-y-3 leading-7 text-slate-700">{children}</blockquote>
-    </div>
-  ),
+    );
+  },
 
   strong: ({ children }) => (
     <strong className="font-black text-slate-950">{children}</strong>
@@ -4260,22 +4277,20 @@ const markdownComponents: Components = {
 
   hr: () => <hr className="my-8 border-slate-200" />,
 
-  table: ({ children }) => (
-    <div className="my-6 overflow-x-auto rounded-2xl border border-slate-200">
-      <table className="w-full min-w-[620px] border-collapse bg-white text-sm">
+    table: ({ children }) => (
+    <div className="my-4 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+      <table className="w-full min-w-[560px] border-collapse bg-white text-sm">
         {children}
       </table>
     </div>
   ),
-
   th: ({ children }) => (
-    <th className="border-b border-slate-200 bg-slate-950 px-4 py-3 text-left font-black text-white">
+    <th className="border-b border-slate-700 bg-slate-900 px-4 py-3 text-left font-bold text-white">
       {children}
     </th>
   ),
-
   td: ({ children }) => (
-    <td className="border-b border-slate-100 px-4 py-3 text-slate-700">
+    <td className="border-b border-slate-100 px-4 py-3 text-slate-700 even:bg-slate-50">
       {children}
     </td>
   ),
@@ -4295,24 +4310,28 @@ function MarkdownContent({ content }: { content: string }) {
   );
 }
 
-function ExampleAccordion({ example }: { example: ExampleBlock }) {
+function ExampleAccordion({ example, index }: { example: ExampleBlock; index?: number }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="w-full px-6 py-4 text-left transition-colors hover:bg-slate-50 flex items-center justify-between gap-4"
+        className="w-full px-6 py-4 text-left transition-colors hover:bg-indigo-50 flex items-center justify-between gap-4"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-            <Target className="h-4 w-4 text-indigo-600" />
+          <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
+            {index !== undefined ? (
+              <span className="text-sm font-black text-white">{index + 1}</span>
+            ) : (
+              <Target className="h-4 w-4 text-white" />
+            )}
           </div>
           <h3 className="text-base font-bold text-slate-900">
             {example.title}
           </h3>
         </div>
-        <div className="shrink-0 rounded-full bg-slate-100 p-1.5 text-slate-600">
+        <div className="shrink-0 rounded-full bg-indigo-100 p-1.5 text-indigo-600">
           {open ? (
             <ChevronUp className="h-4 w-4" />
           ) : (
@@ -4321,7 +4340,7 @@ function ExampleAccordion({ example }: { example: ExampleBlock }) {
         </div>
       </button>
       {open && (
-        <div className="border-t border-slate-100 px-6 py-5">
+        <div className="border-t border-indigo-100 bg-slate-50 px-6 py-5">
           <MarkdownContent content={example.content} />
         </div>
       )}
@@ -4537,7 +4556,7 @@ export default function EletricidadeTopicEletrostatica() {
             <div className="space-y-5">
               {examples.length > 0 ? (
                 examples.map((example) => (
-                  <ExampleAccordion key={example.id} example={example} />
+                  <ExampleAccordion key={example.id} example={example} index={examples.indexOf(example)} />
                 ))
               ) : (
                 <SectionCard icon={Target} title="Exemplos resolvidos">
