@@ -4198,30 +4198,25 @@ function markdownText(children: ReactNode) {
 
 const markdownComponents: Components = {
   h1: ({ children }) => (
-    <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-950">
+    <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
       {children}
     </h1>
   ),
-
   h2: ({ children }) => (
-    <h2 className="pt-4 text-2xl md:text-3xl font-black tracking-tight text-slate-950">
+    <h2 className="pt-6 pb-1 text-xl md:text-2xl font-bold text-slate-900 border-b border-slate-200">
       {children}
     </h2>
   ),
-
   h3: ({ children }) => (
-    <h3 className="pt-5 text-xl md:text-2xl font-black text-slate-900">
+    <h3 className="pt-4 pb-1 text-lg md:text-xl font-bold text-slate-800">
       {children}
     </h3>
   ),
-
   h4: ({ children }) => (
-    <h4 className="pt-4 text-lg font-black text-slate-900">{children}</h4>
+    <h4 className="pt-3 text-base font-bold text-slate-800">{children}</h4>
   ),
-
   p: ({ children }) => {
     const text = markdownText(children).toLowerCase();
-
     if (
       text.startsWith("atenção") ||
       text.startsWith("cuidado") ||
@@ -4233,22 +4228,18 @@ const markdownComponents: Components = {
         </NoteBox>
       );
     }
-
-    return <p className="leading-8 text-slate-700">{children}</p>;
+    return <p className="leading-7 text-slate-700 mb-0">{children}</p>;
   },
-
   ul: ({ children }) => (
-    <ul className="my-4 space-y-3 leading-8 text-slate-700">{children}</ul>
+    <ul className="my-3 space-y-1 leading-7 text-slate-700 pl-5 list-disc">{children}</ul>
   ),
-
   ol: ({ children }) => (
-    <ol className="my-4 list-decimal space-y-3 pl-6 leading-8 text-slate-700 marker:font-black marker:text-yellow-700">
+    <ol className="my-3 list-decimal space-y-1 pl-6 leading-7 text-slate-700 marker:font-bold marker:text-indigo-600">
       {children}
     </ol>
   ),
-
   li: ({ children }) => (
-    <li className="pl-1 text-slate-700 marker:text-yellow-700">{children}</li>
+    <li className="pl-1 text-slate-700">{children}</li>
   ),
 
     blockquote: ({ children }) => (
@@ -4292,7 +4283,7 @@ const markdownComponents: Components = {
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="space-y-4 text-slate-700 [&_.katex-display]:my-5 [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-xl [&_.katex-display]:border [&_.katex-display]:border-slate-700 [&_.katex-display]:bg-slate-900 [&_.katex-display]:px-6 [&_.katex-display]:py-5 [&_.katex-display]:text-slate-100 [&_.katex]:text-inherit [&_.katex-display_.katex]:text-slate-100">
+    <div className="space-y-2 text-slate-700 [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-xl [&_.katex-display]:border [&_.katex-display]:border-slate-700 [&_.katex-display]:bg-slate-900 [&_.katex-display]:px-6 [&_.katex-display]:py-4 [&_.katex-display]:text-slate-100 [&_.katex]:text-inherit [&_.katex-display_.katex]:text-slate-100">
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
