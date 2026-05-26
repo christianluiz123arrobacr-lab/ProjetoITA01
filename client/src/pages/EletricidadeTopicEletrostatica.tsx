@@ -4296,16 +4296,175 @@ const markdownComponents: Components = {
   ),
 };
 
+/**
+ * Pré-processa o Markdown agrupando sequências de fórmulas em bloco ($$...$$)
+ * intercaladas com textos curtos de transição em um único bloco :::demo:::.
+ * Isso permite renderizar todas as fórmulas de uma demonstração dentro de
+ * um único painel escuro, igual ao padrão visual de Cinemática.
+ */
+function preprocessDemoBlocks(markdown: string): string {
+  const lines = markdown.split("\n");
+  const result: string[] = [];
+  let i = 0;
+
+  // Palavras-chave que indicam texto de transição entre fórmulas
+  const transitionPattern =
+    /^(substituindo|logo|então|portanto|assim|antes|depois|calculando|desenvolvendo|dividindo|multiplicando|somando|subtraindo|simplificando|fatorando|isolando|expandindo|reorganizando|como|ou seja|temos|resulta|obtemos|daí|dai|segue que|note que|resolvendo|aplicando|usando|pela|pelo|com isso|disso|entao|resolvendo|portanto|logo)[:\s,]/i;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Detecta início de bloco $$
+    if (line.trim() === "$$") {
+      const groupLines: string[] = [];
+      let j = i;
+
+      while (j < lines.length) {
+        const cur = lines[j].trim();
+
+        // Bloco de fórmula $$
+        if (cur === "$$") {
+          const formulaLines: string[] = [lines[j]];
+          j++;
+          while (j < lines.length && lines[j].trim() !== "$$") {
+            formulaLines.push(lines[j]);
+            j++;
+          }
+          if (j < lines.length) {
+            formulaLines.push(lines[j]); // fecha $$
+            j++;
+          }
+          groupLines.push(...formulaLines);
+          continue;
+        }
+
+        // Linha vazia — olha adiante para decidir se continua no grupo
+        if (cur === "") {
+          let k = j + 1;
+          while (k < lines.length && lines[k].trim() === "") k++;
+          const nextNonEmpty = k < lines.length ? lines[k].trim() : "";
+          const nextIsFormula = nextNonEmpty === "$$";
+          const nextIsTransition = transitionPattern.test(nextNonEmpty);
+          if (nextIsFormula || nextIsTransition) {
+            groupLines.push(lines[j]);
+            j++;
+            continue;
+          }
+          break;
+        }
+
+        // Texto de transição curto antes de uma fórmula
+        const isShort =
+          cur.length <= 150 &&
+          !cur.startsWith("#") &&
+          !cur.startsWith("-") &&
+          !cur.startsWith("*") &&
+          !cur.startsWith(">") &&
+          !cur.startsWith("|") &&
+          !/^\d+\./.test(cur);
+
+        if (isShort) {
+          let k = j + 1;
+          while (k < lines.length && lines[k].trim() === "") k++;
+          const nextNonEmpty = k < lines.length ? lines[k].trim() : "";
+          if (nextNonEmpty === "$$") {
+            groupLines.push(lines[j]);
+            j++;
+            continue;
+          }
+        }
+
+        break;
+      }
+
+      // Conta quantos blocos $$ foram coletados
+      const formulaCount =
+        (groupLines.join("\n").match(/^\$\$$/gm) || []).length / 2;
+
+      // Agrupa em painel escuro se há 2+ fórmulas OU 1 fórmula com texto de transição
+      if (formulaCount >= 2 || (formulaCount >= 1 && groupLines.length > 3)) {
+        result.push(":::demo");
+        result.push(...groupLines);
+        result.push(":::");
+      } else {
+        result.push(...groupLines);
+      }
+      i = j;
+      continue;
+    }
+
+    result.push(line);
+    i++;
+  }
+
+  return result.join("\n");
+}
+
 function MarkdownContent({ content }: { content: string }) {
+  // Divide o conteúdo em segmentos: blocos :::demo (painel escuro) e texto normal
+  const segments = useMemo(() => {
+    const processed = preprocessDemoBlocks(content);
+    const parts: Array<{ type: "demo" | "normal"; text: string }> = [];
+    const demoRegex = /:::demo\n([\s\S]*?)\n:::/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = demoRegex.exec(processed)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({
+          type: "normal",
+          text: processed.slice(lastIndex, match.index),
+        });
+      }
+      parts.push({ type: "demo", text: match[1] });
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < processed.length) {
+      parts.push({ type: "normal", text: processed.slice(lastIndex) });
+    }
+
+    return parts.length > 0
+      ? parts
+      : [{ type: "normal" as const, text: content }];
+  }, [content]);
+
   return (
-    <div className="space-y-2 text-slate-700 [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-xl [&_.katex-display]:border [&_.katex-display]:border-slate-700 [&_.katex-display]:bg-slate-900 [&_.katex-display]:px-6 [&_.katex-display]:py-4 [&_.katex-display]:text-slate-100 [&_.katex]:text-inherit [&_.katex-display_.katex]:text-slate-100">
-      <ReactMarkdown
-        remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={markdownComponents}
-      >
-        {content}
-      </ReactMarkdown>
+    <div className="space-y-3 text-slate-700">
+      {segments.map((seg, idx) => {
+        if (seg.type === "demo") {
+          // Painel escuro único — igual ao padrão de Cinemática
+          return (
+            <div
+              key={idx}
+              className="rounded-xl border border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-5 shadow-lg [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:text-slate-100 [&_.katex]:text-inherit [&_.katex-display_.katex]:text-slate-100 [&_p]:text-slate-300 [&_p]:text-sm [&_p]:leading-6 [&_p]:my-1"
+            >
+              <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownComponents}
+              >
+                {seg.text}
+              </ReactMarkdown>
+            </div>
+          );
+        }
+        // Texto normal — fórmulas isoladas mantêm caixinha individual
+        return (
+          <div
+            key={idx}
+            className="[&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-xl [&_.katex-display]:border [&_.katex-display]:border-slate-700 [&_.katex-display]:bg-slate-900 [&_.katex-display]:px-6 [&_.katex-display]:py-4 [&_.katex-display]:text-slate-100 [&_.katex]:text-inherit [&_.katex-display_.katex]:text-slate-100"
+          >
+            <ReactMarkdown
+              remarkPlugins={[remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={markdownComponents}
+            >
+              {seg.text}
+            </ReactMarkdown>
+          </div>
+        );
+      })}
     </div>
   );
 }
