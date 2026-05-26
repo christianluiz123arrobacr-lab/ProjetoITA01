@@ -4127,19 +4127,17 @@ function SectionCard({
   accent?: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
-      <div className={`bg-gradient-to-r ${accent} px-7 py-5`}>
+    <section className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+      <div className={`bg-gradient-to-r ${accent} px-6 py-4`}>
         <div className="flex items-center gap-3">
-          <div className="rounded-2xl border border-white/20 bg-white/15 p-2">
-            <Icon className="h-6 w-6 text-white" />
+          <div className="rounded-xl border border-white/20 bg-white/15 p-2">
+            <Icon className="h-5 w-5 text-white" />
           </div>
-
-          <h2 className="text-xl md:text-2xl font-black tracking-tight text-white">
+          <h2 className="text-xl font-bold text-white">
             {title}
           </h2>
         </div>
       </div>
-
       <div className="p-6 md:p-8">{children}</div>
     </section>
   );
@@ -4155,11 +4153,11 @@ function NoteBox({
   type?: "info" | "warning" | "success" | "dark" | "danger";
 }) {
   const styles = {
-    info: "border-blue-200 bg-blue-50 text-blue-950",
-    warning: "border-amber-200 bg-amber-50 text-amber-950",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-950",
-    danger: "border-red-200 bg-red-50 text-red-950",
-    dark: "border-slate-800 bg-slate-950 text-slate-200",
+    info: "border-l-4 border-blue-500 bg-blue-50 text-blue-950",
+    warning: "border-l-4 border-amber-500 bg-amber-50 text-amber-950",
+    success: "border-l-4 border-emerald-500 bg-emerald-50 text-emerald-950",
+    danger: "border-l-4 border-red-500 bg-red-50 text-red-950",
+    dark: "border border-slate-700 bg-slate-900 text-slate-200",
   };
 
   const Icon =
@@ -4253,14 +4251,13 @@ const markdownComponents: Components = {
     <li className="pl-1 text-slate-700 marker:text-yellow-700">{children}</li>
   ),
 
-  blockquote: ({ children }) => (
-    <div className="my-5 rounded-2xl border border-yellow-200 bg-yellow-50 p-5 text-yellow-950 shadow-sm">
-      <div className="mb-2 flex items-center gap-2 font-black">
-        <Lightbulb className="h-5 w-5" />
-        Ideia importante
+    blockquote: ({ children }) => (
+    <div className="my-5 rounded-xl border-l-4 border-indigo-500 bg-indigo-50 p-5 text-indigo-950">
+      <div className="mb-2 flex items-center gap-2 font-bold">
+        <Lightbulb className="h-5 w-5 text-indigo-600" />
+        <span className="text-indigo-700">Ideia importante</span>
       </div>
-
-      <blockquote className="space-y-3 leading-7">{children}</blockquote>
+      <blockquote className="space-y-3 leading-7 text-slate-700">{children}</blockquote>
     </div>
   ),
 
@@ -4295,7 +4292,7 @@ const markdownComponents: Components = {
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="space-y-5 text-slate-700 [&_.katex-display]:my-5 [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-2xl [&_.katex-display]:border [&_.katex-display]:border-slate-700 [&_.katex-display]:bg-slate-950 [&_.katex-display]:px-5 [&_.katex-display]:py-5 [&_.katex-display]:text-slate-100 [&_.katex]:text-inherit [&_.katex-display_.katex]:text-slate-100">
+    <div className="space-y-4 text-slate-700 [&_.katex-display]:my-5 [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-xl [&_.katex-display]:border [&_.katex-display]:border-slate-700 [&_.katex-display]:bg-slate-900 [&_.katex-display]:px-6 [&_.katex-display]:py-5 [&_.katex-display]:text-slate-100 [&_.katex]:text-inherit [&_.katex-display_.katex]:text-slate-100">
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
@@ -4309,41 +4306,35 @@ function MarkdownContent({ content }: { content: string }) {
 
 function ExampleAccordion({ example }: { example: ExampleBlock }) {
   const [open, setOpen] = useState(false);
-
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_14px_45px_rgba(15,23,42,0.07)]">
+    <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="w-full p-6 text-left transition-colors hover:bg-slate-50"
+        className="w-full px-6 py-4 text-left transition-colors hover:bg-slate-50 flex items-center justify-between gap-4"
       >
-        <div className="flex items-start justify-between gap-5">
-          <div>
-            <h3 className="text-lg font-black text-slate-950">
-              {example.title}
-            </h3>
-
-            <p className="mt-2 text-sm leading-7 text-slate-600">
-              Clique para abrir a resolução comentada.
-            </p>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+            <Target className="h-4 w-4 text-indigo-600" />
           </div>
-
-          <div className="shrink-0 rounded-full bg-slate-950 p-2 text-white">
-            {open ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </div>
+          <h3 className="text-base font-bold text-slate-900">
+            {example.title}
+          </h3>
+        </div>
+        <div className="shrink-0 rounded-full bg-slate-100 p-1.5 text-slate-600">
+          {open ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
         </div>
       </button>
-
       {open && (
-        <div className="border-t border-slate-100 p-6 md:p-7">
+        <div className="border-t border-slate-100 px-6 py-5">
           <MarkdownContent content={example.content} />
         </div>
       )}
-    </article>
+    </div>
   );
 }
 
