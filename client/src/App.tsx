@@ -65,6 +65,8 @@ import IAResolver from "./pages/IAResolver";
 import QuestionBank from "./pages/QuestionBankPage";
 
 import ProfilePage from "./pages/ProfilePage";
+import PublicProfilePage from "./pages/PublicProfilePage";
+import ErrorNotebook from "./pages/ErrorNotebook";
 import MinhaAssinaturaPage from "./pages/MinhaAssinaturaPage";
 import RankingPage from "./pages/RankingPage";
 
@@ -344,8 +346,10 @@ function PrivateRouter() {
         <Route path="/banco-questoes" component={QuestionBank} />
         <Route path="/banco-de-questoes" component={QuestionBank} />
 
-        {/* Perfil, assinatura, ranking e VET */}
+                {/* Perfil, assinatura, ranking e caderno de erros */}
         <Route path="/perfil" component={ProfilePage} />
+        <Route path="/perfil/:userId" component={PublicProfilePage} />
+        <Route path="/caderno-de-erros" component={ErrorNotebook} />
         <Route path="/minha-assinatura" component={MinhaAssinaturaPage} />
         <Route path="/ranking" component={RankingPage} />
 
@@ -360,6 +364,13 @@ function PrivateRouter() {
         <Route path="/vet/simulado" component={VetMockPage} />
         <Route path="/vet/simulado/resultado" component={VetMockResultPage} />
 
+        {/* Perfil, assinatura, ranking e caderno de erros */}
+        <Route path="/perfil" component={ProfilePage} />
+        <Route path="/perfil/:userId" component={PublicProfilePage} />
+        <Route path="/caderno-de-erros" component={ErrorNotebook} />
+        <Route path="/minha-assinatura" component={MinhaAssinaturaPage} />
+        <Route path="/ranking" component={RankingPage} />
+        
         {/* Cinemática */}
         <Route path="/cinematica" component={Home} />
         <Route path="/cinematica/learn" component={Learn} />
