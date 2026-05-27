@@ -288,14 +288,12 @@ export default function EletricidadeTopicEletrodinamica() {
           </p>
 
           <FormulaBlock formula={String.raw`Q = i\Delta t`} />
-
           <FormulaBlock formula={String.raw`Q = 3{,}2 \cdot 5`} />
           <FormulaBlock formula={String.raw`Q = 16 \ \text{C}`} />
 
           <p>Agora usamos a quantização da carga:</p>
 
           <FormulaBlock formula={String.raw`Q = ne`} />
-
           <FormulaBlock formula={String.raw`n = \frac{Q}{e}`} />
 
           <FormulaBlock
@@ -332,11 +330,8 @@ export default function EletricidadeTopicEletrodinamica() {
           </p>
 
           <FormulaBlock formula={String.raw`U = Ri`} />
-
           <FormulaBlock formula={String.raw`i = \frac{U}{R}`} />
-
           <FormulaBlock formula={String.raw`i = \frac{24}{8}`} />
-
           <FormulaBlock formula={String.raw`i = 3 \ \text{A}`} />
 
           <NoteBox title="Resposta" type="success">
@@ -490,7 +485,6 @@ export default function EletricidadeTopicEletrodinamica() {
           <p>Potência é a taxa de transformação de energia.</p>
 
           <FormulaBlock formula={String.raw`P = Ui`} />
-
           <FormulaBlock formula={String.raw`P = 220\cdot 5`} />
           <FormulaBlock formula={String.raw`P = 1100 \ \text{W}`} />
           <FormulaBlock formula={String.raw`P = 1{,}1 \ \text{kW}`} />
@@ -498,7 +492,7 @@ export default function EletricidadeTopicEletrodinamica() {
           <NoteBox title="Resposta" type="success">
             O aparelho possui potência de{" "}
             <InlineFormula formula={String.raw`1100 \ \text{W}`} />, ou{" "}
-            <InlineFormula formula={String.raw`1{,}1 \ \text{kW`} />.
+            <InlineFormula formula={String.raw`1{,}1 \ \text{kW}`} />.
           </NoteBox>
         </>
       ),
@@ -515,9 +509,15 @@ export default function EletricidadeTopicEletrodinamica() {
             potência em kW e tempo em horas.
           </p>
 
-          <FormulaBlock formula={String.raw`5500 \ \text{W} = 5{,}5 \ \text{kW}`} />
-          <FormulaBlock formula={String.raw`30 \ \text{min} = 0{,}5 \ \text{h}`} />
-          <FormulaBlock formula={String.raw`\Delta t = 0{,}5\cdot 20 = 10 \ \text{h}`} />
+          <FormulaBlock
+            formula={String.raw`5500 \ \text{W} = 5{,}5 \ \text{kW}`}
+          />
+          <FormulaBlock
+            formula={String.raw`30 \ \text{min} = 0{,}5 \ \text{h}`}
+          />
+          <FormulaBlock
+            formula={String.raw`\Delta t = 0{,}5\cdot 20 = 10 \ \text{h}`}
+          />
 
           <FormulaBlock formula={String.raw`E = P\Delta t`} />
           <FormulaBlock formula={String.raw`E = 5{,}5\cdot 10`} />
@@ -542,12 +542,12 @@ export default function EletricidadeTopicEletrodinamica() {
           </p>
 
           <FormulaBlock formula={String.raw`E = Ri^2\Delta t`} />
-
           <FormulaBlock formula={String.raw`5 \ \text{min} = 300 \ \text{s}`} />
-
           <FormulaBlock formula={String.raw`E = 10\cdot 2^2\cdot 300`} />
           <FormulaBlock formula={String.raw`E = 12000 \ \text{J}`} />
-          <FormulaBlock formula={String.raw`E = 1{,}2 \times 10^4 \ \text{J}`} />
+          <FormulaBlock
+            formula={String.raw`E = 1{,}2 \times 10^4 \ \text{J}`}
+          />
 
           <NoteBox title="Ideia física" type="info">
             O aquecimento cresce com o quadrado da corrente. Se a corrente
@@ -569,7 +569,6 @@ export default function EletricidadeTopicEletrodinamica() {
           </p>
 
           <FormulaBlock formula={String.raw`U = \varepsilon - ri`} />
-
           <FormulaBlock formula={String.raw`U = 12 - 1\cdot 2`} />
           <FormulaBlock formula={String.raw`U = 10 \ \text{V}`} />
 
@@ -593,7 +592,6 @@ export default function EletricidadeTopicEletrodinamica() {
           </p>
 
           <FormulaBlock formula={String.raw`U = \varepsilon' + r'i`} />
-
           <FormulaBlock formula={String.raw`U = 20 + 2\cdot 3`} />
           <FormulaBlock formula={String.raw`U = 26 \ \text{V}`} />
 
@@ -652,7 +650,6 @@ export default function EletricidadeTopicEletrodinamica() {
           </p>
 
           <FormulaBlock formula={String.raw`+12 - R_1i - R_2i = 0`} />
-
           <FormulaBlock formula={String.raw`12 - 2i - 4i = 0`} />
           <FormulaBlock formula={String.raw`12 - 6i = 0`} />
           <FormulaBlock formula={String.raw`i = 2 \ \text{A}`} />
@@ -716,16 +713,23 @@ export default function EletricidadeTopicEletrodinamica() {
             formula={String.raw`5\cdot\frac{38}{13} - 2i_2 = 10`}
           />
 
-          <FormulaBlock formula={String.raw`\frac{190}{13} - 2i_2 = \frac{130}{13}`} />
+          <FormulaBlock
+            formula={String.raw`\frac{190}{13} - 2i_2 = \frac{130}{13}`}
+          />
           <FormulaBlock formula={String.raw`2i_2 = \frac{60}{13}`} />
           <FormulaBlock formula={String.raw`i_2 = \frac{30}{13} \ \text{A}`} />
 
           <NoteBox title="Resposta final" type="success">
             As correntes são{" "}
-            <InlineFormula formula={String.raw`i_1 = \frac{38}{13} \ \text{A}`} />{" "}
+            <InlineFormula
+              formula={String.raw`i_1 = \frac{38}{13} \ \text{A}`}
+            />{" "}
             e{" "}
-            <InlineFormula formula={String.raw`i_2 = \frac{30}{13} \ \text{A}`} />.
-            Como ambas deram positivas, os sentidos escolhidos estavam corretos.
+            <InlineFormula
+              formula={String.raw`i_2 = \frac{30}{13} \ \text{A}`}
+            />
+            . Como ambas deram positivas, os sentidos escolhidos estavam
+            corretos.
           </NoteBox>
         </>
       ),
@@ -747,9 +751,7 @@ export default function EletricidadeTopicEletrodinamica() {
           />
 
           <FormulaBlock formula={String.raw`\frac{2}{4} = \frac{3}{R_4}`} />
-
           <FormulaBlock formula={String.raw`\frac{1}{2} = \frac{3}{R_4}`} />
-
           <FormulaBlock formula={String.raw`R_4 = 6 \ \Omega`} />
 
           <NoteBox title="Resposta" type="success">
@@ -797,14 +799,16 @@ export default function EletricidadeTopicEletrodinamica() {
           <p>Nesse caso:</p>
 
           <FormulaBlock formula={String.raw`i = \frac{\varepsilon}{2r}`} />
-
           <FormulaBlock formula={String.raw`U_R = \frac{\varepsilon}{2}`} />
-
-          <FormulaBlock formula={String.raw`P_{\max} = \frac{\varepsilon^2}{4r}`} />
+          <FormulaBlock
+            formula={String.raw`P_{\max} = \frac{\varepsilon^2}{4r}`}
+          />
 
           <p>O rendimento nesse ponto é:</p>
 
-          <FormulaBlock formula={String.raw`\eta = \frac{P_{\text{útil}}}{P_{\text{total}}}`} />
+          <FormulaBlock
+            formula={String.raw`\eta = \frac{P_{\text{útil}}}{P_{\text{total}}}`}
+          />
           <FormulaBlock formula={String.raw`\eta = \frac{1}{2}`} />
 
           <NoteBox title="Ideia de prova difícil" type="warning">
@@ -842,7 +846,6 @@ export default function EletricidadeTopicEletrodinamica() {
           <p>A corrente no resistor entre A e B será:</p>
 
           <FormulaBlock formula={String.raw`i = \frac{U_{AB}}{R}`} />
-
           <FormulaBlock formula={String.raw`i = 0`} />
 
           <NoteBox title="Conclusão" type="success">
@@ -1198,9 +1201,19 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-slate-950 to-indigo-800"
             >
               <p>
-                A corrente elétrica média mede a quantidade de carga elétrica que
-                atravessa uma seção transversal de um condutor por unidade de
-                tempo.
+                A definição formal de corrente elétrica transforma a ideia
+                intuitiva de “fluxo de cargas” em uma grandeza mensurável. Em
+                vez de apenas dizer que cargas estão passando por um fio,
+                perguntamos: quanta carga atravessa uma seção do condutor em
+                certo intervalo de tempo?
+              </p>
+
+              <p>
+                Imagine cortar mentalmente um fio e observar uma seção
+                transversal dele, como se fosse uma porta por onde as cargas
+                passam. Se muitas cargas atravessam essa “porta” em pouco tempo,
+                a corrente é grande. Se pouca carga atravessa em muito tempo, a
+                corrente é pequena.
               </p>
 
               <FormulaBlock formula={String.raw`i = \frac{\Delta Q}{\Delta t}`} />
@@ -1223,6 +1236,14 @@ export default function EletricidadeTopicEletrodinamica() {
               />
 
               <p>
+                Essa fórmula não diz que a carga “fica” na seção. Ela diz que a
+                carga passa por ela. A seção funciona apenas como uma referência
+                de contagem. É exatamente como contar quantas pessoas passam por
+                uma porta por minuto: a porta não guarda as pessoas, apenas
+                define o ponto onde a contagem é feita.
+              </p>
+
+              <p>
                 A unidade de corrente elétrica no Sistema Internacional é o
                 ampère, símbolo <InlineFormula formula={String.raw`\text{A}`} />
                 .
@@ -1231,26 +1252,70 @@ export default function EletricidadeTopicEletrodinamica() {
               <FormulaBlock formula={String.raw`1 \ \text{A} = 1 \ \text{C/s}`} />
 
               <p>
-                Quando a corrente varia ao longo do tempo, usamos a definição
-                instantânea:
+                Isso significa que uma corrente de{" "}
+                <InlineFormula formula={String.raw`1 \ \text{A}`} /> corresponde
+                à passagem de{" "}
+                <InlineFormula formula={String.raw`1 \ \text{C}`} /> de carga por
+                segundo através de uma seção do condutor.
+              </p>
+
+              <p>
+                Quando a corrente não é constante, a razão{" "}
+                <InlineFormula formula={String.raw`\Delta Q/\Delta t`} /> fornece
+                apenas uma média no intervalo considerado. Para saber a corrente
+                em um instante específico, usamos a taxa instantânea de passagem
+                de carga.
               </p>
 
               <FormulaBlock formula={String.raw`i = \frac{dQ}{dt}`} />
 
               <p>
-                Em ITA/IME, pode aparecer uma função{" "}
-                <InlineFormula formula={String.raw`Q(t)`} /> e ser necessário
-                derivar para encontrar a corrente.
+                Essa expressão aparece quando a carga acumulada ou transportada é
+                dada por uma função do tempo. Se a questão fornece{" "}
+                <InlineFormula formula={String.raw`Q(t)`} />, a corrente
+                instantânea é a derivada dessa função.
+              </p>
+
+              <NoteBox title="Interpretação matemática" type="info">
+                A corrente é a taxa de variação da carga em relação ao tempo. Se
+                a carga transportada cresce rapidamente, a corrente é grande. Se
+                cresce lentamente, a corrente é pequena.
+              </NoteBox>
+
+              <p>
+                Como a carga elétrica é quantizada, muitas questões relacionam a
+                corrente ao número de elétrons que atravessam uma seção.
               </p>
 
               <FormulaBlock formula={String.raw`Q = ne`} />
 
+              <p>
+                Nessa expressão, <InlineFormula formula={String.raw`n`} /> é o
+                número de elétrons e{" "}
+                <InlineFormula formula={String.raw`e`} /> é a carga elementar.
+                Como geralmente queremos o módulo da carga transportada, usamos:
+              </p>
+
+              <FormulaBlock
+                formula={String.raw`e = 1{,}6 \times 10^{-19} \ \text{C}`}
+              />
+
               <NoteBox title="Leitura correta" type="warning">
-                Como elétrons têm carga negativa, o sinal algébrico da carga
-                seria negativo se estivéssemos acompanhando os elétrons. Em
-                problemas de corrente, normalmente se trabalha com o módulo da
-                carga que atravessa a seção.
+                Em metais, os portadores são elétrons, que possuem carga
+                negativa. Porém, em problemas de corrente elétrica, normalmente
+                trabalhamos com o módulo da carga transportada. O sinal é
+                importante para direção física, mas a intensidade da corrente é
+                geralmente tratada como valor positivo.
               </NoteBox>
+
+              <p>
+                Portanto, a sequência mental segura é: primeiro descubra a carga
+                total transportada; depois divida pelo tempo. Ou, se o número de
+                elétrons for dado, primeiro use{" "}
+                <InlineFormula formula={String.raw`Q = ne`} /> e só depois use{" "}
+                <InlineFormula formula={String.raw`i = Q/\Delta t`} />. Sim, são
+                dois passos. A humanidade sobreviverá.
+              </p>
             </SectionCard>
 
             <SectionCard
@@ -1260,9 +1325,18 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Para existir corrente elétrica em um circuito, não basta haver
-                cargas. Todo material comum tem cargas elétricas. O que importa é
-                haver portadores de carga livres e uma causa capaz de produzir
-                movimento ordenado desses portadores.
+                cargas elétricas. Todo material comum possui prótons e elétrons.
+                O que diferencia um circuito conduzindo corrente de um objeto
+                qualquer parado sobre a mesa é a presença de portadores móveis e
+                uma causa que organize o movimento desses portadores.
+              </p>
+
+              <p>
+                Em um metal desligado, os elétrons livres se movem
+                aleatoriamente por causa da temperatura. Porém, sem campo elétrico
+                resultante, não há movimento médio em uma direção preferencial.
+                A corrente aparece quando o circuito cria uma orientação para
+                esse movimento.
               </p>
 
               <NumberedList
@@ -1276,31 +1350,46 @@ export default function EletricidadeTopicEletrodinamica() {
               />
 
               <p>
-                Em metais, os portadores livres são elétrons. Em soluções
-                eletrolíticas, são íons positivos e negativos. Em gases
-                ionizados, podem ser elétrons e íons. Em semicondutores, há
-                elétrons e lacunas.
+                Os portadores livres dependem do material. Em metais, são
+                elétrons. Em soluções eletrolíticas, são íons positivos e
+                negativos. Em gases ionizados, podem ser elétrons e íons. Em
+                semicondutores, podem ser elétrons e lacunas.
               </p>
 
               <p>
-                A diferença de potencial é necessária para manter o movimento
-                ordenado das cargas. Sem diferença de potencial, os elétrons
-                livres em um metal continuam em agitação térmica, mas não há
-                corrente líquida.
-              </p>
-
-              <p>
-                Em um circuito ligado, existe campo elétrico dentro do condutor.
-                Esse campo exerce força sobre os portadores livres.
+                A diferença de potencial é a causa energética da corrente. Ela
+                cria uma diferença de energia por unidade de carga entre dois
+                pontos. Quando há um caminho condutor fechado, as cargas livres
+                respondem ao campo elétrico associado a essa diferença de
+                potencial.
               </p>
 
               <FormulaBlock formula={String.raw`\vec{F} = q\vec{E}`} />
 
               <p>
-                O gerador é o dispositivo que mantém a diferença de potencial
-                entre dois pontos do circuito. Uma pilha, uma bateria ou uma
-                fonte elétrica realiza trabalho sobre as cargas, fornecendo
-                energia ao circuito.
+                Essa fórmula explica por que o campo elétrico é tão importante:
+                ele exerce força sobre as cargas. Em um metal, como os elétrons
+                têm carga negativa, a força sobre eles tem sentido oposto ao
+                campo. Mesmo assim, por convenção, a corrente é desenhada no
+                sentido em que cargas positivas se moveriam.
+              </p>
+
+              <p>
+                O gerador não “cria corrente” magicamente. Ele mantém uma
+                diferença de potencial. Essa diferença sustenta o campo elétrico
+                no circuito. O campo age sobre as cargas livres. As cargas se
+                movem de forma ordenada. A isso chamamos corrente.
+              </p>
+
+              <FormulaBlock
+                formula={String.raw`\text{fonte} \Rightarrow \Delta V \Rightarrow \vec{E} \Rightarrow \vec{F} \Rightarrow \text{movimento ordenado} \Rightarrow i`}
+              />
+
+              <p>
+                Um circuito fechado permite que a corrente seja mantida em regime
+                estacionário. Um circuito aberto interrompe o caminho. Pode até
+                existir tensão entre dois pontos separados, mas a corrente não se
+                mantém no ramo interrompido.
               </p>
 
               <FormulaBlock
@@ -1314,11 +1403,19 @@ export default function EletricidadeTopicEletrodinamica() {
               <NoteBox title="Curto-circuito" type="danger">
                 Curto-circuito ocorre quando dois pontos entre os quais há
                 diferença de potencial são ligados por um caminho de resistência
-                muito baixa. Se a tensão é mantida e a resistência fica muito
-                pequena, a corrente pode se tornar muito alta.
+                muito baixa. Isso não significa “caminho curto” no sentido
+                geométrico. Significa caminho de baixa resistência elétrica.
               </NoteBox>
 
               <FormulaBlock formula={String.raw`i = \frac{U}{R}`} />
+
+              <p>
+                Se a tensão se mantém e a resistência total fica muito pequena,
+                a corrente pode ficar enorme. Essa corrente alta causa
+                aquecimento intenso e pode destruir componentes, derreter fios ou
+                iniciar incêndios. A física é belíssima, mas a instalação
+                elétrica não perdoa burrice.
+              </p>
             </SectionCard>
 
             <SectionCard
@@ -1327,43 +1424,89 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-blue-700 to-cyan-700"
             >
               <p>
-                Tensão elétrica, ou diferença de potencial, é uma medida de
-                energia por unidade de carga. Se uma fonte fornece energia{" "}
-                <InlineFormula formula={String.raw`W`} /> para uma carga{" "}
-                <InlineFormula formula={String.raw`q`} />, a tensão associada é:
+                Tensão elétrica, ou diferença de potencial, é uma das grandezas
+                mais confundidas em Eletrodinâmica. Ela não é corrente. Ela não é
+                “quantidade de eletricidade”. Ela mede energia por unidade de
+                carga.
+              </p>
+
+              <p>
+                Quando uma carga atravessa uma fonte ou um dispositivo, ela pode
+                ganhar ou perder energia. A tensão informa quanta energia está
+                associada a cada coulomb de carga.
               </p>
 
               <FormulaBlock formula={String.raw`U = \frac{W}{q}`} />
               <FormulaBlock formula={String.raw`W = qU`} />
 
+              <BulletList
+                items={[
+                  <span>
+                    <InlineFormula formula={String.raw`U`} /> é a tensão ou
+                    diferença de potencial;
+                  </span>,
+                  <span>
+                    <InlineFormula formula={String.raw`W`} /> é o trabalho ou a
+                    energia transferida;
+                  </span>,
+                  <span>
+                    <InlineFormula formula={String.raw`q`} /> é a carga elétrica.
+                  </span>,
+                ]}
+              />
+
               <p>
-                A unidade de tensão elétrica é o volt, símbolo{" "}
-                <InlineFormula formula={String.raw`\text{V}`} />.
+                A unidade de tensão elétrica é o volt. Pela própria definição:
               </p>
 
               <FormulaBlock formula={String.raw`1 \ \text{V} = 1 \ \text{J/C}`} />
 
               <p>
-                Uma bateria de{" "}
+                Então, uma bateria de{" "}
                 <InlineFormula formula={String.raw`12 \ \text{V}`} /> fornece,
                 idealmente,{" "}
-                <InlineFormula formula={String.raw`12 \ \text{J}`} /> de energia
-                para cada coulomb de carga que atravessa a fonte.
+                <InlineFormula formula={String.raw`12 \ \text{J}`} /> para cada
+                coulomb de carga que passa por ela.
+              </p>
+
+              <NoteBox title="Analogia útil" type="info">
+                A tensão é parecida com uma diferença de nível energético. Não é
+                o fluxo em si. Ela é a “razão” pela qual a carga pode ganhar ou
+                perder energia ao se mover no circuito.
+              </NoteBox>
+
+              <p>
+                Uma tomada pode ter tensão mesmo sem aparelho ligado. Nesse caso,
+                há diferença de potencial entre os terminais, mas praticamente
+                não há corrente porque o circuito está aberto. Quando um aparelho
+                é conectado, o caminho se fecha e a corrente passa a circular.
               </p>
 
               <BulletList
                 items={[
                   "tensão é energia por unidade de carga;",
                   "corrente é carga por unidade de tempo;",
-                  "uma tomada pode ter tensão mesmo sem corrente significativa, se o circuito estiver aberto;",
-                  "quando um aparelho é conectado, o circuito se fecha e a corrente pode circular.",
+                  "uma fonte de tensão fornece energia às cargas;",
+                  "um resistor transforma parte dessa energia em calor;",
+                  "um motor transforma parte dessa energia em movimento.",
                 ]}
               />
 
+              <p>
+                A relação <InlineFormula formula={String.raw`W = qU`} /> é a
+                ponte entre circuito e energia. Ela diz que a energia transferida
+                cresce com a carga transportada e com a tensão disponível. Se
+                dobramos a carga que atravessa uma fonte, dobramos a energia
+                transferida. Se dobramos a tensão, cada coulomb recebe o dobro de
+                energia.
+              </p>
+
               <NoteBox title="Não confunda" type="warning">
-                Tensão não é corrente. A tensão representa uma diferença de nível
-                energético por carga. A corrente é o fluxo de carga que passa
-                quando existe caminho condutor.
+                Tensão alta não significa automaticamente corrente alta. A
+                corrente também depende da resistência ou da impedância do
+                caminho. Alta tensão com resistência enorme pode gerar corrente
+                pequena. Baixa resistência com tensão moderada pode gerar
+                corrente perigosa.
               </NoteBox>
             </SectionCard>
 
@@ -1374,10 +1517,18 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Resistência elétrica é a oposição que um elemento oferece à
-                passagem da corrente elétrica. Em um metal real, os elétrons
-                livres interagem com a rede cristalina, sofrem espalhamentos e
-                transferem energia para o material. Esse processo está ligado ao
-                aquecimento e à dissipação.
+                passagem da corrente elétrica. Mas essa frase, sozinha, fica meio
+                seca. A ideia microscópica é mais interessante: em um metal, os
+                elétrons livres se deslocam sob ação do campo elétrico, mas não
+                atravessam o material como se estivessem em um túnel vazio.
+              </p>
+
+              <p>
+                O metal possui uma rede cristalina formada por íons positivos.
+                Os elétrons interagem com essa rede, sofrem espalhamentos e
+                transferem energia para o material. Essa energia aparece, em
+                geral, como aquecimento. É aí que resistência elétrica e efeito
+                Joule começam a conversar.
               </p>
 
               <FormulaBlock formula={String.raw`R = \frac{U}{i}`} />
@@ -1399,13 +1550,35 @@ export default function EletricidadeTopicEletrodinamica() {
                 ]}
               />
 
+              <p>
+                A unidade de resistência elétrica é o ohm, símbolo{" "}
+                <InlineFormula formula={String.raw`\Omega`} />.
+              </p>
+
               <FormulaBlock formula={String.raw`1 \ \Omega = 1 \ \frac{\text{V}}{\text{A}}`} />
 
               <p>
-                A resistência não deve ser vista como uma barreira absoluta. Ela
-                é uma relação entre tensão e corrente. Para uma mesma tensão,
-                maior resistência implica menor corrente. Para uma mesma
-                resistência, maior tensão implica maior corrente.
+                Dizer que um resistor tem{" "}
+                <InlineFormula formula={String.raw`10 \ \Omega`} /> significa que
+                ele exige{" "}
+                <InlineFormula formula={String.raw`10 \ \text{V}`} /> para cada{" "}
+                <InlineFormula formula={String.raw`1 \ \text{A}`} /> de corrente,
+                se ele estiver operando como resistor ôhmico.
+              </p>
+
+              <NoteBox title="Interpretação física" type="info">
+                Para a mesma tensão, maior resistência implica menor corrente.
+                Para a mesma resistência, maior tensão implica maior corrente.
+                Resistência é uma relação entre causa energética e fluxo de
+                carga.
+              </NoteBox>
+
+              <p>
+                Um condutor ideal teria resistência nula. Em muitos circuitos de
+                vestibular, os fios são considerados ideais, ou seja, sem queda
+                de tensão relevante. Já os resistores são os elementos onde a
+                energia elétrica é propositalmente transformada, geralmente em
+                calor.
               </p>
             </SectionCard>
 
@@ -1415,34 +1588,69 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-teal-700 to-emerald-700"
             >
               <p>
-                A Primeira Lei de Ohm afirma que, para determinados condutores
-                mantidos em condições físicas constantes, a tensão aplicada é
-                diretamente proporcional à corrente elétrica.
+                A Primeira Lei de Ohm descreve uma relação simples entre tensão e
+                corrente em certos condutores: se a temperatura e outras
+                condições físicas permanecem constantes, a corrente é
+                proporcional à tensão aplicada.
               </p>
+
+              <p>
+                Isso significa que, para um resistor ôhmico, dobrar a tensão
+                dobra a corrente; triplicar a tensão triplica a corrente. A razão
+                entre tensão e corrente permanece constante. Essa constante é a
+                resistência.
+              </p>
+
+              <FormulaBlock formula={String.raw`R = \frac{U}{i}`} />
+
+              <p>Reorganizando a expressão, obtemos:</p>
 
               <FormulaBlock formula={String.raw`U = Ri`} />
 
               <p>
-                Um resistor que obedece a essa relação com resistência constante
-                é chamado de resistor ôhmico. Para um resistor ôhmico, se
-                dobramos a tensão aplicada, a corrente dobra. Se triplicamos a
-                tensão, a corrente triplica. A razão{" "}
-                <InlineFormula formula={String.raw`U/i`} /> permanece constante.
+                Essa forma é mais usada em circuitos, porque geralmente queremos
+                relacionar a queda de tensão em um resistor à corrente que passa
+                por ele.
               </p>
 
-              <NoteBox title="Resistor não ôhmico" type="info">
-                Lâmpadas incandescentes, diodos, termistores e vários
-                componentes eletrônicos podem ser não ôhmicos. Neles, a
-                resistência pode variar com temperatura, tensão ou corrente.
+              <NoteBox title="Por que a fórmula é linear?" type="info">
+                Em um resistor ôhmico, a estrutura microscópica do material se
+                mantém aproximadamente nas mesmas condições durante a passagem de
+                corrente. Assim, a oposição ao movimento das cargas permanece
+                constante. Se a tensão aumenta, o campo elétrico interno aumenta,
+                a força sobre as cargas aumenta e a corrente cresce na mesma
+                proporção.
               </NoteBox>
 
               <p>
-                Para um resistor ôhmico, o gráfico{" "}
-                <InlineFormula formula={String.raw`U \times i`} /> é uma reta
-                que passa pela origem. A inclinação da reta é a resistência.
+                No gráfico <InlineFormula formula={String.raw`U \times i`} />,
+                um resistor ôhmico aparece como uma reta que passa pela origem.
+                Comparando:
               </p>
 
-              <FormulaBlock formula={String.raw`R = \frac{U}{i}`} />
+              <FormulaBlock formula={String.raw`U = Ri`} />
+              <FormulaBlock formula={String.raw`y = ax`} />
+
+              <p>
+                vemos que a inclinação da reta é a resistência elétrica.
+              </p>
+
+              <FormulaBlock formula={String.raw`R = \frac{\Delta U}{\Delta i}`} />
+
+              <NoteBox title="Resistor não ôhmico" type="warning">
+                Nem todo componente obedece a essa relação linear. Lâmpadas
+                incandescentes, diodos, termistores e componentes eletrônicos
+                podem ter resistência variável. Nesses casos, o gráfico{" "}
+                <InlineFormula formula={String.raw`U \times i`} /> não é uma reta
+                simples.
+              </NoteBox>
+
+              <p>
+                Na prática de prova, use{" "}
+                <InlineFormula formula={String.raw`U = Ri`} /> quando o problema
+                disser que o elemento é um resistor ôhmico ou quando o contexto
+                deixar claro que a resistência é constante no regime analisado.
+              </p>
             </SectionCard>
 
             <SectionCard
@@ -1451,8 +1659,16 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-emerald-700 to-lime-700"
             >
               <p>
-                A Segunda Lei de Ohm relaciona a resistência de um condutor com o
-                material e a geometria.
+                A Primeira Lei de Ohm relaciona tensão, corrente e resistência. A
+                Segunda Lei de Ohm responde outra pergunta: de onde vem o valor
+                da resistência de um fio? Por que um fio é mais resistente que
+                outro?
+              </p>
+
+              <p>
+                A resistência depende de dois grupos de fatores: o material e a
+                geometria. O material entra pela resistividade. A geometria entra
+                pelo comprimento e pela área da seção transversal.
               </p>
 
               <FormulaBlock formula={String.raw`R = \rho\frac{L}{A}`} />
@@ -1479,20 +1695,47 @@ export default function EletricidadeTopicEletrodinamica() {
               />
 
               <p>
-                Um fio mais comprido oferece maior resistência porque os
-                portadores de carga precisam atravessar um caminho maior. Um fio
-                mais grosso oferece menor resistência porque há mais área
-                disponível para o fluxo de carga.
+                Se aumentamos o comprimento do fio, aumentamos o caminho que os
+                portadores precisam percorrer. Quanto maior o caminho, maior a
+                chance de interações e dissipação. Por isso:
               </p>
 
               <FormulaBlock formula={String.raw`R \propto L`} />
+
+              <p>
+                Se aumentamos a área da seção transversal, damos mais “espaço”
+                para a corrente passar. É como abrir mais faixas em uma estrada:
+                a passagem do fluxo fica menos difícil. Por isso:
+              </p>
+
               <FormulaBlock formula={String.raw`R \propto \frac{1}{A}`} />
+
+              <p>
+                A resistividade{" "}
+                <InlineFormula formula={String.raw`\rho`} /> mede a tendência do
+                próprio material de resistir à condução. Cobre e prata têm baixa
+                resistividade. Borracha e vidro têm resistividade altíssima.
+              </p>
 
               <p>Da fórmula, isolando a resistividade:</p>
 
               <FormulaBlock formula={String.raw`\rho = R\frac{A}{L}`} />
 
+              <p>Fazendo a análise dimensional:</p>
+
+              <FormulaBlock
+                formula={String.raw`[\rho] = \Omega \cdot \frac{\text{m}^2}{\text{m}}`}
+              />
+
               <FormulaBlock formula={String.raw`[\rho] = \Omega\cdot\text{m}`} />
+
+              <NoteBox title="Como usar em questão" type="success">
+                Se o fio fica duas vezes mais comprido, a resistência dobra. Se a
+                área dobra, a resistência cai pela metade. Se muda o material,
+                muda a resistividade. A questão pode mexer em um desses fatores
+                ou em todos ao mesmo tempo, porque aparentemente uma variável só
+                seria bondade demais.
+              </NoteBox>
             </SectionCard>
 
             <SectionCard
@@ -1501,10 +1744,16 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-lime-700 to-amber-700"
             >
               <p>
-                A resistência elétrica de um condutor pode depender da
-                temperatura. Em metais, normalmente a resistência aumenta quando a
-                temperatura aumenta, porque a rede cristalina vibra mais
-                intensamente e aumenta os espalhamentos sofridos pelos elétrons.
+                A resistência elétrica não depende apenas do formato do condutor.
+                Ela também pode variar com a temperatura. Em metais, quando a
+                temperatura aumenta, a rede cristalina vibra mais intensamente.
+                Essas vibrações atrapalham o movimento ordenado dos elétrons e
+                aumentam a resistência.
+              </p>
+
+              <p>
+                Para intervalos moderados de temperatura, podemos usar uma
+                aproximação linear:
               </p>
 
               <FormulaBlock formula={String.raw`R = R_0(1 + \alpha \Delta T)`} />
@@ -1532,11 +1781,34 @@ export default function EletricidadeTopicEletrodinamica() {
 
               <FormulaBlock formula={String.raw`\Delta T = T - T_0`} />
 
-              <NoteBox title="Metais e semicondutores" type="info">
-                Em metais, geralmente{" "}
-                <InlineFormula formula={String.raw`\alpha > 0`} />. Em
-                semicondutores, a resistência pode diminuir com a temperatura
-                porque o aumento térmico libera mais portadores de carga.
+              <p>
+                A expressão é linear porque estamos usando uma aproximação válida
+                em certo intervalo. Ela diz que a variação relativa da
+                resistência é proporcional à variação de temperatura.
+              </p>
+
+              <FormulaBlock
+                formula={String.raw`\frac{R - R_0}{R_0} = \alpha \Delta T`}
+              />
+
+              <p>
+                Se <InlineFormula formula={String.raw`\alpha > 0`} />, a
+                resistência aumenta quando a temperatura aumenta. Esse é o
+                comportamento comum dos metais.
+              </p>
+
+              <p>
+                Se <InlineFormula formula={String.raw`\alpha < 0`} />, a
+                resistência diminui quando a temperatura aumenta. Isso pode
+                ocorrer em semicondutores, porque o aumento de temperatura pode
+                liberar mais portadores de carga.
+              </p>
+
+              <NoteBox title="Cuidado" type="warning">
+                Essa fórmula não é uma lei universal para qualquer temperatura.
+                É uma aproximação linear. Em provas, ela vale quando o enunciado
+                fornece ou sugere o uso do coeficiente{" "}
+                <InlineFormula formula={String.raw`\alpha`} />.
               </NoteBox>
             </SectionCard>
 
@@ -1547,17 +1819,43 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Resistores estão em série quando são atravessados pela mesma
-                corrente elétrica.
+                corrente elétrica. Isso acontece quando as cargas não têm escolha
+                de caminho: elas passam por um resistor e depois pelo outro, como
+                se enfrentassem obstáculos em sequência.
               </p>
 
               <FormulaBlock formula={String.raw`i_1 = i_2 = i_3 = \cdots = i`} />
 
-              <p>A tensão total se divide entre eles:</p>
+              <p>
+                Como a corrente é a mesma, cada resistor produz uma queda de
+                tensão própria. A tensão total fornecida pela fonte se reparte
+                entre os resistores.
+              </p>
 
               <FormulaBlock formula={String.raw`U = U_1 + U_2 + U_3 + \cdots`} />
 
+              <p>Usando a Primeira Lei de Ohm:</p>
+
+              <FormulaBlock formula={String.raw`U_1 = R_1i`} />
+              <FormulaBlock formula={String.raw`U_2 = R_2i`} />
+              <FormulaBlock formula={String.raw`U_3 = R_3i`} />
+
+              <p>Somando as quedas:</p>
+
+              <FormulaBlock
+                formula={String.raw`U = R_1i + R_2i + R_3i + \cdots`}
+              />
+
+              <p>Colocando a corrente em evidência:</p>
+
+              <FormulaBlock
+                formula={String.raw`U = i(R_1 + R_2 + R_3 + \cdots)`}
+              />
+
               <p>
-                Como <InlineFormula formula={String.raw`U = Ri`} />, temos:
+                Como o circuito equivalente deve obedecer a{" "}
+                <InlineFormula formula={String.raw`U = R_{\text{eq}}i`} />,
+                concluímos:
               </p>
 
               <FormulaBlock
@@ -1566,7 +1864,9 @@ export default function EletricidadeTopicEletrodinamica() {
 
               <NoteBox title="Divisor de tensão" type="info">
                 Em série, a tensão se divide proporcionalmente às resistências. O
-                resistor maior recebe maior parcela da tensão total.
+                resistor maior recebe maior parcela da tensão total porque, com a
+                mesma corrente, sua queda{" "}
+                <InlineFormula formula={String.raw`U = Ri`} /> é maior.
               </NoteBox>
 
               <FormulaBlock
@@ -1585,15 +1885,50 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Resistores estão em paralelo quando seus terminais estão ligados
-                aos mesmos dois nós. Nesse caso, todos ficam submetidos à mesma
-                tensão.
+                aos mesmos dois nós. Essa frase é mais importante do que parece.
+                Não interessa se o desenho está bonito, torto ou parecendo uma
+                obra de engenharia feita no susto: se os resistores estão ligados
+                aos mesmos dois nós, eles estão em paralelo.
+              </p>
+
+              <p>
+                Em paralelo, todos os resistores estão submetidos à mesma tensão,
+                porque seus extremos estão conectados aos mesmos pontos do
+                circuito.
               </p>
 
               <FormulaBlock formula={String.raw`U_1 = U_2 = U_3 = \cdots = U`} />
 
-              <p>A corrente total se divide entre os ramos:</p>
+              <p>
+                A corrente total, porém, se divide entre os ramos. Cada ramo
+                recebe uma parte da corrente, de acordo com sua resistência.
+              </p>
 
               <FormulaBlock formula={String.raw`i = i_1 + i_2 + i_3 + \cdots`} />
+
+              <p>Usando a Lei de Ohm em cada ramo:</p>
+
+              <FormulaBlock formula={String.raw`i_1 = \frac{U}{R_1}`} />
+              <FormulaBlock formula={String.raw`i_2 = \frac{U}{R_2}`} />
+              <FormulaBlock formula={String.raw`i_3 = \frac{U}{R_3}`} />
+
+              <p>Somando as correntes:</p>
+
+              <FormulaBlock
+                formula={String.raw`i = \frac{U}{R_1} + \frac{U}{R_2} + \frac{U}{R_3} + \cdots`}
+              />
+
+              <p>Colocando a tensão em evidência:</p>
+
+              <FormulaBlock
+                formula={String.raw`i = U\left(\frac{1}{R_1} + \frac{1}{R_2} + \frac{1}{R_3} + \cdots\right)`}
+              />
+
+              <p>
+                Mas, para o resistor equivalente, temos{" "}
+                <InlineFormula formula={String.raw`i = U/R_{\text{eq}}`} />.
+                Logo:
+              </p>
 
               <FormulaBlock
                 formula={String.raw`\frac{1}{R_{\text{eq}}} = \frac{1}{R_1} + \frac{1}{R_2} + \frac{1}{R_3} + \cdots`}
@@ -1610,10 +1945,24 @@ export default function EletricidadeTopicEletrodinamica() {
               <FormulaBlock formula={String.raw`R_{\text{eq}} = \frac{R}{n}`} />
 
               <NoteBox title="Ideia intuitiva" type="success">
-                Em paralelo, a resistência equivalente fica menor que a menor
-                resistência do conjunto porque novos ramos criam novos caminhos
-                para a corrente.
+                Em paralelo, adicionar um resistor cria mais um caminho para a
+                corrente. Mais caminhos significam menor resistência equivalente.
+                Por isso, a resistência equivalente em paralelo é menor que a
+                menor resistência individual.
               </NoteBox>
+
+              <p>
+                O ramo de menor resistência recebe maior corrente, porque oferece
+                menor oposição à passagem das cargas.
+              </p>
+
+              <FormulaBlock formula={String.raw`i = \frac{U}{R}`} />
+
+              <p>
+                Como a tensão é a mesma em todos os ramos, menor{" "}
+                <InlineFormula formula={String.raw`R`} /> implica maior{" "}
+                <InlineFormula formula={String.raw`i`} />.
+              </p>
             </SectionCard>
 
             <SectionCard
@@ -1622,30 +1971,46 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-red-700 to-rose-700"
             >
               <p>
-                Uma associação mista possui resistores em série e em paralelo no
-                mesmo circuito. O método seguro é simplificar o circuito passo a
-                passo.
+                Associação mista é uma combinação de resistores em série e em
+                paralelo. O erro comum é tentar resolver olhando apenas para o
+                desenho superficial. Em circuito, aparência engana. O que manda
+                são os nós.
+              </p>
+
+              <p>
+                Um nó é uma região condutora considerada equipotencial, isto é,
+                todos os pontos ligados diretamente por fio ideal pertencem ao
+                mesmo nó. Se dois resistores estão ligados aos mesmos dois nós,
+                eles estão em paralelo. Se dois resistores são atravessados pela
+                mesma corrente e não há ramificação entre eles, estão em série.
               </p>
 
               <NumberedList
                 items={[
-                  "identificar nós do circuito;",
-                  "procurar resistores claramente em série;",
-                  "procurar resistores claramente em paralelo;",
-                  "substituir cada grupo por uma resistência equivalente;",
-                  "redesenhar mentalmente ou no papel o circuito simplificado;",
-                  "repetir o processo até chegar à resistência equivalente total;",
-                  "calcular corrente total;",
-                  "voltar pelo circuito para encontrar tensões e correntes específicas.",
+                  "identifique os nós do circuito;",
+                  "marque mentalmente todos os pontos ligados por fios ideais como o mesmo nó;",
+                  "procure resistores ligados aos mesmos dois nós: eles estão em paralelo;",
+                  "procure resistores em sequência sem ramificação intermediária: eles estão em série;",
+                  "substitua cada grupo por uma resistência equivalente;",
+                  "redesenhe o circuito simplificado;",
+                  "repita o processo até chegar à resistência equivalente total;",
+                  "se necessário, volte pelo circuito para encontrar correntes e tensões específicas.",
                 ]}
               />
 
               <NoteBox title="Regra de ouro" type="warning">
-                Dois resistores estão em série se são atravessados pela mesma
-                corrente e o nó entre eles não tem ramificação. Dois resistores
-                estão em paralelo se estão ligados aos mesmos dois nós e possuem
-                a mesma tensão.
+                Dois resistores próximos no desenho não necessariamente estão em
+                série. Dois resistores desenhados longe um do outro podem estar em
+                paralelo se estiverem ligados aos mesmos nós. O circuito obedece
+                conexões, não estética.
               </NoteBox>
+
+              <p>
+                A leitura de nós é especialmente importante em ITA/IME, porque
+                muitas questões desenham circuitos de forma não convencional. O
+                aluno que redesenha os nós enxerga associações escondidas. O
+                aluno que tenta resolver pela aparência vira estatística.
+              </p>
             </SectionCard>
 
             <SectionCard
@@ -1655,18 +2020,65 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Potência mede a rapidez com que energia é transferida ou
-                transformada.
+                transformada. Em Eletrodinâmica, ela indica a taxa com que a
+                energia elétrica é fornecida, consumida ou dissipada em um
+                elemento do circuito.
               </p>
 
               <FormulaBlock formula={String.raw`P = \frac{\Delta E}{\Delta t}`} />
 
-              <p>Em circuitos elétricos:</p>
+              <p>
+                Se uma carga{" "}
+                <InlineFormula formula={String.raw`q`} /> atravessa uma diferença
+                de potencial <InlineFormula formula={String.raw`U`} />, a energia
+                associada é:
+              </p>
+
+              <FormulaBlock formula={String.raw`E = qU`} />
+
+              <p>
+                Dividindo pelo intervalo de tempo{" "}
+                <InlineFormula formula={String.raw`\Delta t`} />:
+              </p>
+
+              <FormulaBlock
+                formula={String.raw`P = \frac{E}{\Delta t} = \frac{qU}{\Delta t}`}
+              />
+
+              <p>
+                Como <InlineFormula formula={String.raw`i = q/\Delta t`} />,
+                obtemos:
+              </p>
 
               <FormulaBlock formula={String.raw`P = Ui`} />
 
-              <p>Usando a Lei de Ohm, podemos obter:</p>
+              <p>
+                Essa demonstração mostra que potência elétrica nasce da união
+                entre energia por carga e carga por tempo. Tensão fala de energia
+                por coulomb. Corrente fala de coulomb por segundo. Multiplicando,
+                sobra energia por segundo.
+              </p>
+
+              <FormulaBlock
+                formula={String.raw`\text{V}\cdot\text{A} = \frac{\text{J}}{\text{C}}\cdot\frac{\text{C}}{\text{s}} = \frac{\text{J}}{\text{s}} = \text{W}`}
+              />
+
+              <p>Usando a Lei de Ohm, podemos obter outras formas:</p>
+
+              <FormulaBlock formula={String.raw`U = Ri`} />
+
+              <FormulaBlock formula={String.raw`P = Ui = (Ri)i`} />
 
               <FormulaBlock formula={String.raw`P = Ri^2`} />
+
+              <p>Também, como:</p>
+
+              <FormulaBlock formula={String.raw`i = \frac{U}{R}`} />
+
+              <FormulaBlock
+                formula={String.raw`P = Ui = U\left(\frac{U}{R}\right)`}
+              />
+
               <FormulaBlock formula={String.raw`P = \frac{U^2}{R}`} />
 
               <NoteBox title="Quando usar cada fórmula" type="info">
@@ -1681,11 +2093,22 @@ export default function EletricidadeTopicEletrodinamica() {
               <NoteBox title="Armadilha clássica" type="warning">
                 Se a corrente é a mesma, como em série, potência cresce com a
                 resistência. Se a tensão é a mesma, como em paralelo, potência
-                diminui com a resistência.
+                diminui com a resistência. Não escolha fórmula no automático.
               </NoteBox>
 
+              <p>
+                Energia consumida é potência acumulada ao longo do tempo:
+              </p>
+
               <FormulaBlock formula={String.raw`E = P\Delta t`} />
-              <FormulaBlock formula={String.raw`1 \ \text{kWh} = 3{,}6 \times 10^6 \ \text{J}`} />
+
+              <p>
+                Em contas de energia elétrica, é comum usar quilowatt-hora:
+              </p>
+
+              <FormulaBlock
+                formula={String.raw`1 \ \text{kWh} = 3{,}6 \times 10^6 \ \text{J}`}
+              />
             </SectionCard>
 
             <SectionCard
@@ -1696,16 +2119,35 @@ export default function EletricidadeTopicEletrodinamica() {
               <p>
                 O efeito Joule é a transformação de energia elétrica em energia
                 térmica devido à passagem de corrente por um resistor ou condutor
-                real.
+                real. Ele aparece porque os portadores de carga, ao se moverem
+                sob ação do campo elétrico, transferem energia para a estrutura
+                microscópica do material.
+              </p>
+
+              <p>
+                Em um metal, os elétrons livres são acelerados pelo campo
+                elétrico entre colisões e interações com a rede cristalina.
+                Nessas interações, parte da energia associada ao movimento
+                ordenado vira agitação microscópica. Macroscopicamente, isso é
+                aquecimento.
               </p>
 
               <FormulaBlock formula={String.raw`P = Ri^2`} />
 
+              <p>
+                Como energia é potência multiplicada pelo tempo, temos:
+              </p>
+
+              <FormulaBlock formula={String.raw`E = P\Delta t`} />
+
+              <p>Substituindo a potência dissipada em resistor:</p>
+
               <FormulaBlock formula={String.raw`E = Ri^2\Delta t`} />
 
               <p>
-                Essa fórmula mostra que o aquecimento cresce com o quadrado da
-                corrente. Se a corrente dobra, a potência dissipada quadruplica.
+                Essa fórmula mostra uma dependência muito importante: o
+                aquecimento cresce com o quadrado da corrente. Se a corrente
+                dobra, a potência quadruplica.
               </p>
 
               <FormulaBlock formula={String.raw`i' = 2i`} />
@@ -1725,9 +2167,18 @@ export default function EletricidadeTopicEletrodinamica() {
               />
 
               <NoteBox title="Perigo físico" type="danger">
-                Corrente alta é perigosa porque pequenos aumentos de corrente
-                podem causar grandes aumentos de aquecimento.
+                Corrente alta é perigosa porque o aquecimento cresce com{" "}
+                <InlineFormula formula={String.raw`i^2`} />. Um aumento
+                aparentemente pequeno na corrente pode gerar aumento enorme na
+                dissipação térmica.
               </NoteBox>
+
+              <p>
+                Em instalações elétricas, fios muito finos para uma corrente alta
+                aquecem demais. É por isso que dimensionamento de fios, fusíveis
+                e disjuntores não é detalhe decorativo. É a diferença entre
+                circuito funcionando e cheiro de plástico queimado.
+              </p>
             </SectionCard>
 
             <SectionCard
@@ -1737,24 +2188,37 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Gerador elétrico é um dispositivo que transforma alguma forma de
-                energia em energia elétrica. Pilhas e baterias transformam energia
-                química em elétrica. Alternadores transformam energia mecânica em
+                energia em energia elétrica. Uma pilha transforma energia química
+                em elétrica. Um alternador transforma energia mecânica em
+                elétrica. Uma célula solar transforma energia luminosa em
                 elétrica.
               </p>
 
               <p>
-                A grandeza que caracteriza a energia fornecida pelo gerador por
-                unidade de carga é a força eletromotriz, representada por{" "}
-                <InlineFormula formula={String.raw`\varepsilon`} />. Apesar do
-                nome, força eletromotriz não é força. É energia por unidade de
-                carga, medida em volts.
+                A grandeza central de um gerador é a força eletromotriz,
+                representada por <InlineFormula formula={String.raw`\varepsilon`} />.
+                Apesar do nome péssimo, força eletromotriz não é força. É energia
+                por unidade de carga.
+              </p>
+
+              <FormulaBlock formula={String.raw`\varepsilon = \frac{W}{q}`} />
+
+              <p>
+                Como é energia por carga, sua unidade é volt. Um gerador ideal
+                entregaria toda essa energia por unidade de carga ao circuito
+                externo.
               </p>
 
               <p>Gerador ideal:</p>
 
               <FormulaBlock formula={String.raw`U = \varepsilon`} />
 
-              <p>Gerador real:</p>
+              <p>
+                Na prática, geradores reais possuem resistência interna. Parte da
+                energia fornecida pelo gerador é dissipada dentro dele mesmo.
+                Por isso, a tensão nos terminais fica menor que a força
+                eletromotriz quando há corrente.
+              </p>
 
               <FormulaBlock formula={String.raw`U = \varepsilon - ri`} />
 
@@ -1778,15 +2242,48 @@ export default function EletricidadeTopicEletrodinamica() {
                 ]}
               />
 
+              <p>
+                O termo <InlineFormula formula={String.raw`ri`} /> representa a
+                queda de tensão interna. Quanto maior a corrente, maior a perda
+                interna.
+              </p>
+
+              <p>Potência total fornecida pelo gerador:</p>
+
               <FormulaBlock formula={String.raw`P_{\text{total}} = \varepsilon i`} />
+
+              <p>Potência útil entregue ao circuito externo:</p>
+
               <FormulaBlock formula={String.raw`P_{\text{útil}} = Ui`} />
+
+              <p>Potência dissipada internamente:</p>
+
               <FormulaBlock formula={String.raw`P_{\text{dissipada}} = ri^2`} />
+
+              <p>
+                Multiplicando a equação do gerador por{" "}
+                <InlineFormula formula={String.raw`i`} />:
+              </p>
+
+              <FormulaBlock formula={String.raw`Ui = \varepsilon i - ri^2`} />
+
+              <FormulaBlock
+                formula={String.raw`P_{\text{útil}} = P_{\text{total}} - P_{\text{dissipada}}`}
+              />
+
+              <p>O rendimento é:</p>
 
               <FormulaBlock
                 formula={String.raw`\eta = \frac{P_{\text{útil}}}{P_{\text{total}}}`}
               />
 
               <FormulaBlock formula={String.raw`\eta = \frac{U}{\varepsilon}`} />
+
+              <NoteBox title="Ideia física" type="warning">
+                Gerador real não entrega tudo que produz. Parte da energia se
+                perde internamente. Quanto maior a corrente, maior a dissipação
+                interna por efeito Joule.
+              </NoteBox>
             </SectionCard>
 
             <SectionCard
@@ -1795,9 +2292,11 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-violet-700 to-indigo-800"
             >
               <p>
-                Receptor elétrico é um dispositivo que transforma energia
-                elétrica em outra forma de energia que não seja exclusivamente
-                térmica.
+                Receptor elétrico é um dispositivo que recebe energia elétrica e
+                transforma parte dessa energia em outra forma útil que não seja
+                apenas calor. Motor elétrico, bateria sendo carregada e alguns
+                equipamentos eletrônicos podem ser tratados como receptores em
+                modelos de circuito.
               </p>
 
               <BulletList
@@ -1809,12 +2308,39 @@ export default function EletricidadeTopicEletrodinamica() {
               />
 
               <p>
-                Em motores, aparece a força contraeletromotriz, representada por{" "}
-                <InlineFormula formula={String.raw`\varepsilon'`} />. Ela está
-                associada à transformação de energia elétrica em energia mecânica.
+                Em um receptor real, a tensão aplicada tem duas funções: sustentar
+                a transformação útil de energia e compensar a dissipação interna.
+                Por isso a equação tem sinal diferente da equação do gerador.
               </p>
 
               <FormulaBlock formula={String.raw`U = \varepsilon' + r'i`} />
+
+              <BulletList
+                items={[
+                  <span>
+                    <InlineFormula formula={String.raw`U`} /> é a tensão aplicada
+                    ao receptor;
+                  </span>,
+                  <span>
+                    <InlineFormula formula={String.raw`\varepsilon'`} /> é a
+                    força contraeletromotriz;
+                  </span>,
+                  <span>
+                    <InlineFormula formula={String.raw`r'`} /> é a resistência
+                    interna;
+                  </span>,
+                  <span>
+                    <InlineFormula formula={String.raw`i`} /> é a corrente.
+                  </span>,
+                ]}
+              />
+
+              <p>
+                A força contraeletromotriz representa a parte da energia por
+                carga convertida em forma útil, como energia mecânica no motor.
+                O termo <InlineFormula formula={String.raw`r'i`} /> representa a
+                queda interna associada à dissipação.
+              </p>
 
               <NoteBox title="Comparação fundamental" type="info">
                 Gerador real:{" "}
@@ -1822,6 +2348,13 @@ export default function EletricidadeTopicEletrodinamica() {
                 Receptor real:{" "}
                 <InlineFormula formula={String.raw`U = \varepsilon' + r'i`} />.
               </NoteBox>
+
+              <p>
+                No gerador, a energia sai do dispositivo para o circuito externo.
+                No receptor, a energia entra no dispositivo e é convertida em
+                outra forma útil. A diferença de sinal nas equações representa
+                essa diferença física.
+              </p>
             </SectionCard>
 
             <SectionCard
@@ -1829,38 +2362,59 @@ export default function EletricidadeTopicEletrodinamica() {
               title="17. Instrumentos de medida"
               accent="from-indigo-800 to-slate-950"
             >
-              <p>O amperímetro mede corrente elétrica.</p>
+              <p>
+                Instrumentos de medida precisam ser ligados de forma coerente com
+                a grandeza que medem. Um erro de ligação não apenas altera a
+                leitura, mas pode mudar completamente o circuito.
+              </p>
 
-              <BulletList
-                items={[
-                  "deve ser ligado em série;",
-                  "mede a corrente que passa em determinado ramo;",
-                  "resistência interna idealmente nula.",
-                ]}
-              />
+              <p>
+                O amperímetro mede corrente elétrica. Para medir a corrente de um
+                ramo, ele precisa ser atravessado pela mesma corrente daquele
+                ramo. Portanto, deve ser ligado em série.
+              </p>
 
               <FormulaBlock formula={String.raw`R_A = 0`} />
 
-              <p>O voltímetro mede tensão elétrica entre dois pontos.</p>
+              <p>
+                O amperímetro ideal tem resistência interna nula para não alterar
+                a corrente que pretende medir. Se tivesse resistência alta, ele
+                reduziria a corrente do ramo.
+              </p>
 
-              <BulletList
-                items={[
-                  "deve ser ligado em paralelo;",
-                  "mede diferença de potencial;",
-                  "resistência interna idealmente infinita.",
-                ]}
-              />
+              <p>
+                O voltímetro mede diferença de potencial entre dois pontos. Para
+                comparar os potenciais dos terminais de um componente, ele deve
+                ser ligado em paralelo com esse componente.
+              </p>
 
               <FormulaBlock formula={String.raw`R_V \to \infty`} />
 
               <p>
-                O ohmímetro mede resistência elétrica e deve ser usado com o
-                circuito desligado.
+                O voltímetro ideal tem resistência interna infinita para que não
+                passe corrente significativa por ele. Assim, ele mede a tensão
+                sem desviar corrente do circuito.
               </p>
 
+              <p>
+                O ohmímetro mede resistência elétrica e deve ser usado com o
+                circuito desligado, porque ele possui fonte interna própria para
+                realizar a medição. Usá-lo em circuito energizado pode gerar
+                leitura errada ou danificar o instrumento.
+              </p>
+
+              <BulletList
+                items={[
+                  "amperímetro: mede corrente, liga em série, resistência ideal nula;",
+                  "voltímetro: mede tensão, liga em paralelo, resistência ideal infinita;",
+                  "ohmímetro: mede resistência, deve ser usado com circuito desligado.",
+                ]}
+              />
+
               <NoteBox title="Erro comum que destrói questão" type="danger">
-                Amperímetro em paralelo pode causar curto. Voltímetro em série
-                pode praticamente interromper o circuito.
+                Amperímetro em paralelo pode causar curto-circuito. Voltímetro em
+                série pode praticamente interromper o circuito. É o tipo de erro
+                que a prova cobra sorrindo.
               </NoteBox>
             </SectionCard>
 
@@ -1870,48 +2424,81 @@ export default function EletricidadeTopicEletrodinamica() {
               accent="from-slate-950 to-indigo-900"
             >
               <p>
-                As Leis de Kirchhoff são usadas para analisar circuitos mais
-                complexos, especialmente quando não é possível reduzir tudo por
-                associações simples.
+                As Leis de Kirchhoff são necessárias quando o circuito não pode
+                ser simplificado apenas com associações em série e paralelo. Elas
+                permitem analisar circuitos com várias malhas, fontes e ramos.
               </p>
 
               <p>
-                Elas se baseiam em dois princípios: conservação da carga e
-                conservação da energia.
+                O segredo é entender que Kirchhoff não é um conjunto de regras
+                mágicas. A Lei dos Nós vem da conservação da carga. A Lei das
+                Malhas vem da conservação da energia.
               </p>
 
-              <p>Lei dos nós:</p>
+              <p>
+                Um nó é uma região onde três ou mais ramos se encontram. Em
+                regime estacionário, carga não fica se acumulando indefinidamente
+                no nó. Então, a corrente total que entra deve ser igual à
+                corrente total que sai.
+              </p>
 
               <FormulaBlock
                 formula={String.raw`\sum i_{\text{entrando}} = \sum i_{\text{saindo}}`}
               />
 
-              <p>
-                Essa lei expressa conservação da carga. Carga não se acumula
-                indefinidamente em um nó em regime estacionário.
-              </p>
+              <NoteBox title="Lei dos nós" type="info">
+                A Lei dos Nós é conservação da carga. O nó não é um reservatório
+                infinito de elétrons. O que entra precisa sair, considerando o
+                regime estacionário.
+              </NoteBox>
 
-              <p>Lei das malhas:</p>
+              <p>
+                Uma malha é um caminho fechado dentro do circuito. Ao percorrer
+                uma malha e voltar ao ponto inicial, o potencial final deve ser o
+                mesmo potencial inicial. Assim, a soma algébrica das variações de
+                potencial ao longo da volta completa deve ser zero.
+              </p>
 
               <FormulaBlock formula={String.raw`\sum U = 0`} />
 
-              <p>
-                Essa lei expressa conservação da energia. Ao dar uma volta
-                completa em uma malha, retornamos ao mesmo ponto, portanto ao
-                mesmo potencial.
-              </p>
-
-              <NoteBox title="Convenção de sinais" type="warning">
-                Em resistores, ao percorrer no sentido da corrente, ocorre queda
-                de potencial: <InlineFormula formula={String.raw`-Ri`} />. Contra
-                o sentido da corrente, ocorre aumento:{" "}
-                <InlineFormula formula={String.raw`+Ri`} />.
+              <NoteBox title="Lei das malhas" type="success">
+                A Lei das Malhas é conservação da energia. As elevações de
+                potencial fornecidas por geradores devem ser compensadas pelas
+                quedas de potencial em resistores, receptores e resistências
+                internas.
               </NoteBox>
 
-              <NoteBox title="Corrente negativa" type="info">
+              <p>
+                Em resistores, ao percorrer no sentido da corrente, ocorre queda
+                de potencial:
+              </p>
+
+              <FormulaBlock formula={String.raw`-Ri`} />
+
+              <p>
+                Ao percorrer contra o sentido da corrente, ocorre aumento:
+              </p>
+
+              <FormulaBlock formula={String.raw`+Ri`} />
+
+              <p>
+                Em um gerador ideal, ao atravessar do polo negativo para o polo
+                positivo, ocorre aumento de potencial:
+              </p>
+
+              <FormulaBlock formula={String.raw`+\varepsilon`} />
+
+              <p>
+                Ao atravessar do polo positivo para o negativo, ocorre queda:
+              </p>
+
+              <FormulaBlock formula={String.raw`-\varepsilon`} />
+
+              <NoteBox title="Corrente negativa" type="warning">
                 Se uma corrente calculada der negativa, isso não significa que a
-                conta está errada. Significa que o sentido real é oposto ao
-                sentido escolhido inicialmente.
+                conta deu errado. Significa que o sentido real da corrente é
+                oposto ao sentido escolhido inicialmente. Isso é informação
+                física, não tragédia matemática.
               </NoteBox>
             </SectionCard>
 
@@ -1922,28 +2509,49 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 A Ponte de Wheatstone é um circuito usado para comparar
-                resistências e medir resistências desconhecidas. Ela possui
-                quatro resistores formando dois ramos e um galvanômetro ligando
-                pontos intermediários.
+                resistências e medir resistências desconhecidas. Ela aparece
+                muito em provas porque mistura divisor de tensão, equilíbrio de
+                potenciais e simplificação de circuito.
               </p>
 
               <p>
-                A ponte está em equilíbrio quando não passa corrente pelo
-                galvanômetro.
+                A ponte é formada por quatro resistores dispostos em dois ramos,
+                com um galvanômetro ligando os pontos intermediários. O ponto
+                principal é: se os pontos ligados pelo galvanômetro têm o mesmo
+                potencial, não passa corrente por ele.
+              </p>
+
+              <FormulaBlock formula={String.raw`V_A = V_B \Rightarrow i_G = 0`} />
+
+              <p>
+                Quando a ponte está equilibrada, os divisores de tensão nos dois
+                ramos produzem a mesma razão de queda de potencial.
               </p>
 
               <FormulaBlock
                 formula={String.raw`\frac{R_1}{R_2} = \frac{R_3}{R_4}`}
               />
 
+              <p>
+                Essa condição não vem do nada. Ela nasce da igualdade de
+                potenciais nos pontos intermediários. Se a queda relativa de
+                tensão no ramo esquerdo é igual à queda relativa no ramo direito,
+                os pontos centrais ficam equipotenciais.
+              </p>
+
               <FormulaBlock formula={String.raw`i_G = 0`} />
 
-              <p>
-                A interpretação é que os divisores de tensão dos dois ramos
-                produzem o mesmo potencial nos pontos intermediários. Sem
-                diferença de potencial entre esses pontos, não passa corrente
-                pelo galvanômetro.
-              </p>
+              <NoteBox title="Uso estratégico" type="success">
+                Quando a ponte está equilibrada, o ramo do galvanômetro pode ser
+                ignorado na análise, porque não passa corrente por ele. Isso pode
+                transformar um circuito feio em uma associação simples.
+              </NoteBox>
+
+              <NoteBox title="Cuidado" type="warning">
+                Se a ponte não estiver equilibrada, não pode simplesmente apagar
+                o resistor ou galvanômetro central. Aí o circuito exige outra
+                estratégia, geralmente Kirchhoff ou transformação equivalente.
+              </NoteBox>
             </SectionCard>
 
             <SectionCard
@@ -1954,31 +2562,52 @@ export default function EletricidadeTopicEletrodinamica() {
               <p>
                 Curto-circuito ocorre quando dois pontos com diferença de
                 potencial são conectados por um caminho de resistência muito
-                baixa.
+                baixa. O perigo não está apenas no “curto” geométrico. O perigo
+                está na baixa resistência, que permite corrente muito alta.
               </p>
 
               <FormulaBlock formula={String.raw`i = \frac{U}{R}`} />
 
               <p>
-                Se <InlineFormula formula={String.raw`R`} /> tende a um valor
-                muito pequeno, a corrente pode se tornar muito grande.
+                Se <InlineFormula formula={String.raw`U`} /> é mantida e{" "}
+                <InlineFormula formula={String.raw`R`} /> fica muito pequena, a
+                corrente pode crescer enormemente.
+              </p>
+
+              <p>
+                O aquecimento associado a essa corrente é explicado pelo efeito
+                Joule:
               </p>
 
               <FormulaBlock formula={String.raw`P = Ri^2`} />
 
               <p>
-                Mesmo que a resistência do fio seja pequena, o valor enorme de{" "}
-                <InlineFormula formula={String.raw`i^2`} /> pode produzir
-                aquecimento suficiente para derreter isolantes e causar incêndios.
+                Parece contraditório: se{" "}
+                <InlineFormula formula={String.raw`R`} /> é pequeno, por que há
+                tanto aquecimento? Porque a corrente pode ficar tão grande que o
+                termo <InlineFormula formula={String.raw`i^2`} /> domina. O
+                resultado pode ser potência dissipada enorme.
+              </p>
+
+              <p>
+                Fusíveis e disjuntores existem para interromper o circuito quando
+                a corrente ultrapassa um valor seguro.
               </p>
 
               <BulletList
                 items={[
-                  "fusível: derrete e abre o circuito quando a corrente ultrapassa o limite;",
+                  "fusível: contém um fio que derrete quando a corrente excede o limite;",
                   "disjuntor: interrompe o circuito e pode ser rearmado;",
-                  "DR e aterramento: proteções ligadas a choque elétrico, não apenas sobrecorrente.",
+                  "DR: ajuda na proteção contra choques por fuga de corrente;",
+                  "aterramento: fornece caminho seguro para correntes indesejadas.",
                 ]}
               />
+
+              <NoteBox title="Diferença importante" type="warning">
+                Fusível e disjuntor comum protegem principalmente contra
+                sobrecorrente. Proteção contra choque elétrico envolve também DR,
+                aterramento e isolamento adequado.
+              </NoteBox>
             </SectionCard>
 
             <SectionCard
@@ -1988,30 +2617,57 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Capacitores armazenam carga elétrica e energia em um campo
-                elétrico entre suas placas.
+                elétrico entre suas placas. Em Eletrodinâmica básica, o ponto
+                mais importante é entender como eles se comportam em corrente
+                contínua.
               </p>
 
               <FormulaBlock formula={String.raw`Q = CU`} />
 
+              <BulletList
+                items={[
+                  <span>
+                    <InlineFormula formula={String.raw`Q`} /> é a carga
+                    armazenada;
+                  </span>,
+                  <span>
+                    <InlineFormula formula={String.raw`C`} /> é a capacitância;
+                  </span>,
+                  <span>
+                    <InlineFormula formula={String.raw`U`} /> é a tensão entre as
+                    placas.
+                  </span>,
+                ]}
+              />
+
               <p>
-                Em corrente contínua, no instante em que um capacitor descarregado
-                é ligado a uma fonte, pode haver corrente durante o processo de
-                carga. Conforme o capacitor carrega, a corrente diminui.
+                Quando um capacitor descarregado é ligado a uma fonte de corrente
+                contínua, inicialmente há movimento de cargas no circuito. As
+                placas começam a acumular cargas opostas, e a tensão entre elas
+                aumenta.
               </p>
 
               <p>
-                Em regime estacionário de corrente contínua, depois de totalmente
-                carregado, o capacitor ideal se comporta como circuito aberto.
+                Conforme o capacitor carrega, ele se opõe cada vez mais à
+                passagem de novas cargas. A corrente vai diminuindo até que, no
+                regime estacionário ideal, ela se torna nula.
               </p>
 
               <FormulaBlock
                 formula={String.raw`\text{capacitor carregado em CC estacionária} \Rightarrow \text{circuito aberto}`}
               />
 
-              <NoteBox title="Limite deste tópico" type="info">
-                Carga, descarga, constante de tempo e energia armazenada merecem
-                um estudo próprio. Aqui, o ponto essencial é reconhecer o
-                comportamento qualitativo em corrente contínua.
+              <p>
+                Isso não significa que o capacitor “sumiu” do circuito. Significa
+                que, em regime permanente de corrente contínua, ele bloqueia a
+                passagem de corrente através daquele ramo ideal.
+              </p>
+
+              <NoteBox title="Como usar em questão" type="info">
+                Em circuitos de corrente contínua após muito tempo, trate o
+                capacitor ideal como circuito aberto. Durante o processo de carga
+                e descarga, a análise envolve comportamento transitório e pode
+                exigir outro estudo.
               </NoteBox>
             </SectionCard>
 
@@ -2020,16 +2676,30 @@ export default function EletricidadeTopicEletrodinamica() {
               title="22. Gráficos importantes"
               accent="from-blue-900 to-indigo-900"
             >
+              <p>
+                Gráficos em Eletrodinâmica não são enfeite. Eles mostram relações
+                físicas e ajudam a extrair resistência, força eletromotriz,
+                resistência interna e comportamento ôhmico ou não ôhmico.
+              </p>
+
               <p>Para resistor ôhmico:</p>
 
               <FormulaBlock formula={String.raw`U = Ri`} />
 
               <p>
                 O gráfico <InlineFormula formula={String.raw`U \times i`} /> é
-                uma reta que passa pela origem. A inclinação é a resistência.
+                uma reta que passa pela origem. A inclinação da reta é a
+                resistência.
               </p>
 
               <FormulaBlock formula={String.raw`R = \frac{\Delta U}{\Delta i}`} />
+
+              <NoteBox title="Interpretação" type="info">
+                Maior inclinação no gráfico{" "}
+                <InlineFormula formula={String.raw`U \times i`} /> significa
+                maior resistência. Para a mesma corrente, o resistor exige maior
+                tensão.
+              </NoteBox>
 
               <p>Para potência em resistor:</p>
 
@@ -2037,7 +2707,8 @@ export default function EletricidadeTopicEletrodinamica() {
 
               <p>
                 O gráfico <InlineFormula formula={String.raw`P \times i`} /> é
-                uma parábola.
+                uma parábola. Isso mostra que a potência cresce com o quadrado da
+                corrente.
               </p>
 
               <p>Para gerador real:</p>
@@ -2046,9 +2717,20 @@ export default function EletricidadeTopicEletrodinamica() {
 
               <p>
                 O gráfico <InlineFormula formula={String.raw`U \times i`} /> é
-                uma reta decrescente. O intercepto vertical é{" "}
-                <InlineFormula formula={String.raw`\varepsilon`} /> e a
-                inclinação é <InlineFormula formula={String.raw`-r`} />.
+                uma reta decrescente. O intercepto vertical é a força
+                eletromotriz, pois quando{" "}
+                <InlineFormula formula={String.raw`i = 0`} />, temos:
+              </p>
+
+              <FormulaBlock formula={String.raw`U = \varepsilon`} />
+
+              <p>A inclinação da reta é:</p>
+
+              <FormulaBlock formula={String.raw`-r`} />
+
+              <p>
+                Quanto maior a resistência interna, mais rapidamente a tensão nos
+                terminais cai quando a corrente aumenta.
               </p>
 
               <p>Para receptor real:</p>
@@ -2060,6 +2742,12 @@ export default function EletricidadeTopicEletrodinamica() {
                 <InlineFormula formula={String.raw`\varepsilon'`} /> e a
                 inclinação é <InlineFormula formula={String.raw`r'`} />.
               </p>
+
+              <NoteBox title="Prova difícil" type="warning">
+                Em ITA/IME, o gráfico muitas vezes substitui o enunciado. Você
+                precisa saber ler intercepto, inclinação e significado físico da
+                reta.
+              </NoteBox>
             </SectionCard>
 
             <SectionCard
@@ -2070,12 +2758,16 @@ export default function EletricidadeTopicEletrodinamica() {
               <p>Corrente elétrica:</p>
 
               <FormulaBlock formula={String.raw`i = \frac{\Delta Q}{\Delta t}`} />
-              <FormulaBlock formula={String.raw`[i] = \frac{\text{C}}{\text{s}} = \text{A}`} />
+              <FormulaBlock
+                formula={String.raw`[i] = \frac{\text{C}}{\text{s}} = \text{A}`}
+              />
 
               <p>Resistência elétrica:</p>
 
               <FormulaBlock formula={String.raw`R = \frac{U}{i}`} />
-              <FormulaBlock formula={String.raw`[R] = \frac{\text{V}}{\text{A}} = \Omega`} />
+              <FormulaBlock
+                formula={String.raw`[R] = \frac{\text{V}}{\text{A}} = \Omega`}
+              />
 
               <p>Potência elétrica:</p>
 
@@ -2135,7 +2827,6 @@ export default function EletricidadeTopicEletrodinamica() {
               <p>Para transmitir uma potência:</p>
 
               <FormulaBlock formula={String.raw`P = Ui`} />
-
               <FormulaBlock formula={String.raw`i = \frac{P}{U}`} />
 
               <NoteBox title="Por que alta tensão?" type="success">
@@ -2172,8 +2863,9 @@ export default function EletricidadeTopicEletrodinamica() {
 
               <NoteBox title="Resumo da confusão humana" type="warning">
                 Corrente não é energia. Tensão não é corrente. Potência não é
-                energia. Resistência não é resistividade. Série não é paralelo. O
-                conteúdo é bonito, mas o aluno faz questão de transformar em sopa.
+                energia. Resistência não é resistividade. Série não é paralelo.
+                O conteúdo é bonito, mas o aluno faz questão de transformar em
+                sopa.
               </NoteBox>
             </SectionCard>
 
@@ -2184,9 +2876,9 @@ export default function EletricidadeTopicEletrodinamica() {
             >
               <p>
                 Em provas difíceis, Eletrodinâmica raramente é só aplicar{" "}
-                <InlineFormula formula={String.raw`U = Ri`} /> de forma direta. O
-                conteúdo aparece misturado com raciocínio de circuito, simetria,
-                gráficos, energia e modelagem.
+                <InlineFormula formula={String.raw`U = Ri`} /> de forma direta.
+                O conteúdo aparece misturado com raciocínio de circuito,
+                simetria, gráficos, energia e modelagem.
               </p>
 
               <BulletList
