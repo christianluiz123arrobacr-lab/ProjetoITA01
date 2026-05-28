@@ -14,6 +14,7 @@ import {
   Layers,
   Lightbulb,
   ShieldCheck,
+  Sparkles,
   Target,
   Zap,
 } from "lucide-react";
@@ -48,6 +49,12 @@ type DiagramData = {
   caption: string;
 };
 
+type ConceptBlockData = {
+  title: string;
+  icon?: ElementType;
+  paragraphs: string[];
+};
+
 type DerivationStepData = {
   title: string;
   body?: string[];
@@ -63,13 +70,13 @@ type EquationPanelData = {
 };
 
 type TheorySection = {
-  id: number;
+  id: string;
   icon: ElementType;
   title: string;
   accent: string;
-  paragraphs: string[];
+  intro?: string[];
+  concepts?: ConceptBlockData[];
   diagram?: DiagramData;
-  numbered?: string[];
   bullets?: string[];
   panels?: EquationPanelData[];
   notes?: {
@@ -178,7 +185,7 @@ function EquationPanel({ panel }: { panel: EquationPanelData }) {
           </ul>
         </MiniInfoCard>
 
-        <MiniInfoCard title="Por que essa estrutura?">
+        <MiniInfoCard title="Interpretação da estrutura">
           <ul className="space-y-3">
             {panel.structure.map((item, index) => (
               <li key={index} className="flex gap-3">
@@ -192,7 +199,7 @@ function EquationPanel({ panel }: { panel: EquationPanelData }) {
 
       <div className="mt-8 border-t border-slate-700 pt-8">
         <h4 className="mb-5 text-base font-black text-blue-300 md:text-lg">
-          📐 Dedução física e interpretação
+          Construção física e matemática
         </h4>
 
         <div className="space-y-4">
@@ -235,10 +242,34 @@ function SectionCard({
         </div>
       </div>
 
-      <div className="space-y-5 p-6 leading-8 text-slate-700 md:p-8">
+      <div className="space-y-6 p-6 leading-8 text-slate-700 md:p-8">
         {children}
       </div>
     </section>
+  );
+}
+
+function ConceptBlock({ concept }: { concept: ConceptBlockData }) {
+  const Icon = concept.icon ?? Sparkles;
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-indigo-50 p-5 shadow-sm md:p-6">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="rounded-2xl bg-slate-950 p-2">
+          <Icon className="h-5 w-5 text-amber-300" />
+        </div>
+
+        <h3 className="text-lg font-black tracking-tight text-slate-950">
+          {concept.title}
+        </h3>
+      </div>
+
+      <div className="space-y-4 leading-8 text-slate-700">
+        {concept.paragraphs.map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -321,7 +352,7 @@ function NoteBox({
 
 function BulletList({ items }: { items: string[] }) {
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-5">
       {items.map((item, index) => (
         <li key={index} className="flex gap-3">
           <span className="mt-3 h-2 w-2 flex-shrink-0 rounded-full bg-indigo-600" />
@@ -329,21 +360,6 @@ function BulletList({ items }: { items: string[] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-function NumberedList({ items }: { items: string[] }) {
-  return (
-    <ol className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-      {items.map((item, index) => (
-        <li key={index} className="flex gap-3">
-          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
-            {index + 1}
-          </span>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ol>
   );
 }
 
@@ -442,7 +458,6 @@ function CircuitDiagram({ diagram }: { diagram: DiagramData }) {
     </div>
   );
 }
-
 function ChargeCircle({
   x,
   y,
@@ -561,8 +576,8 @@ function AttractionRepulsionDiagram() {
 
       <ChargeCircle x={170} y={100} label="+" fill="#fee2e2" />
       <ChargeCircle x={310} y={100} label="+" fill="#fee2e2" />
-      <ArrowLine x1={210} y1={100} x2={245} y2={100} color="#dc2626" />
-      <ArrowLine x1={270} y1={100} x2={235} y2={100} color="#dc2626" />
+      <ArrowLine x1={220} y1={100} x2={250} y2={100} color="#dc2626" />
+      <ArrowLine x1={260} y1={100} x2={230} y2={100} color="#dc2626" />
       <DiagramLabel x={240} y={170}>mesmo sinal: repulsão</DiagramLabel>
 
       <ChargeCircle x={455} y={100} label="+" fill="#fee2e2" />
@@ -573,8 +588,8 @@ function AttractionRepulsionDiagram() {
 
       <ChargeCircle x={300} y={240} label="−" fill="#dbeafe" />
       <ChargeCircle x={460} y={240} label="−" fill="#dbeafe" />
-      <ArrowLine x1={340} y1={240} x2={375} y2={240} color="#dc2626" />
-      <ArrowLine x1={420} y1={240} x2={385} y2={240} color="#dc2626" />
+      <ArrowLine x1={350} y1={240} x2={380} y2={240} color="#dc2626" />
+      <ArrowLine x1={410} y1={240} x2={380} y2={240} color="#dc2626" />
       <DiagramLabel x={380} y={295}>negativo com negativo também se repele</DiagramLabel>
     </svg>
   );
@@ -605,7 +620,7 @@ function FrictionDiagram() {
 
       <DiagramLabel x={170} y={305}>perde elétrons</DiagramLabel>
       <DiagramLabel x={590} y={305}>ganha elétrons</DiagramLabel>
-      <DiagramLabel x={380} y={65}>atrito entre materiais diferentes pode transferir elétrons</DiagramLabel>
+      <DiagramLabel x={380} y={65}>materiais diferentes podem ter tendências diferentes de reter elétrons</DiagramLabel>
     </svg>
   );
 }
@@ -647,32 +662,36 @@ function InductionDiagram() {
       <text x="120" y="107" textAnchor="middle" className="fill-slate-950 text-[18px] font-black">
         bastão −
       </text>
+
       <circle cx="265" cy="100" r="46" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
       <text x="238" y="106" className="fill-red-700 text-[20px] font-black">+</text>
       <text x="282" y="106" className="fill-blue-700 text-[20px] font-black">−</text>
-      <DiagramLabel x={265} y={168}>1. separação de cargas</DiagramLabel>
+      <DiagramLabel x={265} y={168}>separação de cargas</DiagramLabel>
 
       <rect x="440" y="80" width="110" height="40" rx="12" fill="#dbeafe" stroke="#0f172a" strokeWidth="3" />
       <text x="495" y="107" textAnchor="middle" className="fill-slate-950 text-[18px] font-black">
         bastão −
       </text>
+
       <circle cx="640" cy="100" r="46" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
       <text x="610" y="106" className="fill-red-700 text-[20px] font-black">+</text>
       <text x="654" y="106" className="fill-blue-700 text-[20px] font-black">−</text>
+
       <line x1="640" y1="146" x2="640" y2="190" stroke="#0f172a" strokeWidth="4" />
       <line x1="615" y1="190" x2="665" y2="190" stroke="#0f172a" strokeWidth="4" />
       <line x1="623" y1="205" x2="657" y2="205" stroke="#0f172a" strokeWidth="4" />
       <line x1="631" y1="220" x2="649" y2="220" stroke="#0f172a" strokeWidth="4" />
+
       <ArrowLine x1={670} y1={110} x2={710} y2={150} color="#2563eb" />
-      <DiagramLabel x={640} y={258}>2. aterramento: elétrons saem</DiagramLabel>
+      <DiagramLabel x={640} y={258}>aterramento: elétrons saem</DiagramLabel>
 
       <circle cx="250" cy="315" r="46" fill="#fee2e2" stroke="#0f172a" strokeWidth="4" />
       <text x="250" y="323" textAnchor="middle" className="fill-red-700 text-[26px] font-black">+</text>
-      <DiagramLabel x={250} y={385}>3. retira terra e afasta o bastão</DiagramLabel>
+      <DiagramLabel x={250} y={385}>retira o aterramento</DiagramLabel>
 
       <circle cx="545" cy="315" r="46" fill="#fee2e2" stroke="#0f172a" strokeWidth="4" />
       <text x="545" y="323" textAnchor="middle" className="fill-red-700 text-[26px] font-black">+</text>
-      <DiagramLabel x={545} y={385}>4. esfera fica positiva</DiagramLabel>
+      <DiagramLabel x={545} y={385}>afasta o bastão: esfera positiva</DiagramLabel>
     </svg>
   );
 }
@@ -736,11 +755,17 @@ function SuperpositionDiagram() {
       <ArrowLine x1={380} y1={105} x2={460} y2={160} color="#16a34a" />
       <ArrowLine x1={380} y1={105} x2={380} y2={205} color="#dc2626" />
 
-      <text x="292" y="150" textAnchor="middle" className="fill-blue-700 text-[16px] font-black">F₁</text>
-      <text x="468" y="150" textAnchor="middle" className="fill-emerald-700 text-[16px] font-black">F₂</text>
-      <text x="405" y="190" className="fill-red-700 text-[16px] font-black">Fᵣ</text>
+      <text x="292" y="150" textAnchor="middle" className="fill-blue-700 text-[16px] font-black">
+        F₁
+      </text>
+      <text x="468" y="150" textAnchor="middle" className="fill-emerald-700 text-[16px] font-black">
+        F₂
+      </text>
+      <text x="405" y="190" className="fill-red-700 text-[16px] font-black">
+        Fᵣ
+      </text>
 
-      <DiagramLabel x={380} y={55}>a força resultante é a soma vetorial das forças individuais</DiagramLabel>
+      <DiagramLabel x={380} y={55}>a resultante é soma vetorial dos efeitos individuais</DiagramLabel>
       <DiagramLabel x={380} y={310}>em duas dimensões, decomponha em eixos e some componentes</DiagramLabel>
     </svg>
   );
@@ -757,10 +782,16 @@ function FieldChargeDiagram() {
       <ArrowLine x1={295} y1={160} x2={465} y2={160} color="#dc2626" />
       <ArrowLine x1={520} y1={160} x2={610} y2={160} color="#2563eb" />
 
-      <text x="380" y="135" textAnchor="middle" className="fill-red-700 text-[18px] font-black">campo criado por Q</text>
-      <text x="600" y="145" textAnchor="middle" className="fill-blue-700 text-[18px] font-black">força em +q</text>
+      <text x="380" y="135" textAnchor="middle" className="fill-red-700 text-[18px] font-black">
+        campo criado por Q
+      </text>
+      <text x="600" y="145" textAnchor="middle" className="fill-blue-700 text-[18px] font-black">
+        força em +q
+      </text>
 
-      <DiagramLabel x={380} y={255}>campo é propriedade do espaço; força é efeito sobre uma carga colocada ali</DiagramLabel>
+      <DiagramLabel x={380} y={255}>
+        campo é propriedade do espaço; força é efeito sobre uma carga colocada ali
+      </DiagramLabel>
     </svg>
   );
 }
@@ -790,7 +821,7 @@ function FieldLinesDiagram() {
 
       <DiagramLabel x={210} y={270}>linhas saem da carga positiva</DiagramLabel>
       <DiagramLabel x={550} y={270}>linhas entram na carga negativa</DiagramLabel>
-      <DiagramLabel x={380} y={55}>linhas de campo indicam direção e sentido do campo elétrico</DiagramLabel>
+      <DiagramLabel x={380} y={55}>linhas indicam direção, sentido e intensidade relativa do campo</DiagramLabel>
     </svg>
   );
 }
@@ -803,14 +834,18 @@ function UniformFieldDiagram() {
       <rect x="160" y="70" width="440" height="24" rx="8" fill="#dc2626" />
       <rect x="160" y="230" width="440" height="24" rx="8" fill="#2563eb" />
 
-      <text x="120" y="90" className="fill-red-700 text-[22px] font-black">+</text>
-      <text x="120" y="250" className="fill-blue-700 text-[22px] font-black">−</text>
+      <text x="120" y="90" className="fill-red-700 text-[22px] font-black">
+        +
+      </text>
+      <text x="120" y="250" className="fill-blue-700 text-[22px] font-black">
+        −
+      </text>
 
       {[220, 300, 380, 460, 540].map((x) => (
         <ArrowLine key={x} x1={x} y1={105} x2={x} y2={215} color="#0f172a" />
       ))}
 
-      <DiagramLabel x={380} y={45}>campo uniforme entre placas paralelas</DiagramLabel>
+      <DiagramLabel x={380} y={45}>campo aproximadamente uniforme entre placas paralelas</DiagramLabel>
       <DiagramLabel x={380} y={292}>linhas retas, paralelas e igualmente espaçadas</DiagramLabel>
     </svg>
   );
@@ -822,22 +857,32 @@ function PotentialDiagram() {
       <rect x="15" y="15" width="730" height="300" rx="26" fill="#ffffff" />
 
       <circle cx="160" cy="170" r="48" fill="#fee2e2" stroke="#0f172a" strokeWidth="4" />
-      <text x="160" y="178" textAnchor="middle" className="fill-slate-950 text-[24px] font-black">Q</text>
+      <text x="160" y="178" textAnchor="middle" className="fill-slate-950 text-[24px] font-black">
+        Q
+      </text>
 
       <circle cx="340" cy="170" r="16" fill="#f8fafc" stroke="#0f172a" strokeWidth="3" />
-      <text x="340" y="132" textAnchor="middle" className="fill-slate-950 text-[17px] font-black">A</text>
+      <text x="340" y="132" textAnchor="middle" className="fill-slate-950 text-[17px] font-black">
+        A
+      </text>
 
       <circle cx="570" cy="170" r="16" fill="#f8fafc" stroke="#0f172a" strokeWidth="3" />
-      <text x="570" y="132" textAnchor="middle" className="fill-slate-950 text-[17px] font-black">B</text>
+      <text x="570" y="132" textAnchor="middle" className="fill-slate-950 text-[17px] font-black">
+        B
+      </text>
 
       <line x1="160" y1="245" x2="340" y2="245" stroke="#0f172a" strokeWidth="3" strokeDasharray="8 8" />
       <line x1="160" y1="275" x2="570" y2="275" stroke="#0f172a" strokeWidth="3" strokeDasharray="8 8" />
 
-      <text x="250" y="238" textAnchor="middle" className="fill-slate-700 text-[15px] font-bold">r_A</text>
-      <text x="365" y="268" textAnchor="middle" className="fill-slate-700 text-[15px] font-bold">r_B</text>
+      <text x="250" y="238" textAnchor="middle" className="fill-slate-700 text-[15px] font-bold">
+        r_A
+      </text>
+      <text x="365" y="268" textAnchor="middle" className="fill-slate-700 text-[15px] font-bold">
+        r_B
+      </text>
 
       <DiagramLabel x={380} y={70}>para carga positiva, o potencial diminui com a distância</DiagramLabel>
-      <DiagramLabel x={380} y={305}>V = kQ/r</DiagramLabel>
+      <DiagramLabel x={380} y={305}>potencial é escalar: soma-se algebricamente</DiagramLabel>
     </svg>
   );
 }
@@ -848,6 +893,7 @@ function ConductorDiagram() {
       <rect x="15" y="15" width="730" height="300" rx="26" fill="#ffffff" />
 
       <circle cx="380" cy="165" r="95" fill="#e2e8f0" stroke="#0f172a" strokeWidth="4" />
+
       {[
         [310, 105],
         [450, 105],
@@ -890,7 +936,7 @@ function FaradayDiagram() {
       </text>
 
       <DiagramLabel x={380} y={55}>blindagem eletrostática</DiagramLabel>
-      <DiagramLabel x={380} y={292}>as cargas se redistribuem na superfície externa do condutor</DiagramLabel>
+      <DiagramLabel x={380} y={292}>as cargas se redistribuem na superfície do condutor</DiagramLabel>
     </svg>
   );
 }
@@ -901,6 +947,7 @@ function PointEffectDiagram() {
       <rect x="15" y="15" width="730" height="300" rx="26" fill="#ffffff" />
 
       <circle cx="230" cy="170" r="70" fill="#e2e8f0" stroke="#0f172a" strokeWidth="4" />
+
       {[
         [180, 130],
         [220, 105],
@@ -915,6 +962,7 @@ function PointEffectDiagram() {
       ))}
 
       <path d="M500 240 L610 240 L555 75 Z" fill="#e2e8f0" stroke="#0f172a" strokeWidth="4" />
+
       {[
         [555, 95],
         [545, 125],
@@ -930,7 +978,7 @@ function PointEffectDiagram() {
       ))}
 
       <ArrowLine x1={555} y1={75} x2={555} y2={35} color="#dc2626" />
-      <DiagramLabel x={230} y={285}>superfície arredondada: campo menor</DiagramLabel>
+      <DiagramLabel x={230} y={285}>superfície arredondada: campo menos intenso</DiagramLabel>
       <DiagramLabel x={555} y={285}>ponta: campo mais intenso</DiagramLabel>
     </svg>
   );
@@ -944,86 +992,148 @@ function GraphsDiagram() {
       <line x1="100" y1="270" x2="300" y2="270" stroke="#0f172a" strokeWidth="4" />
       <line x1="100" y1="270" x2="100" y2="80" stroke="#0f172a" strokeWidth="4" />
       <path d="M115 95 C150 180, 230 240, 290 260" fill="none" stroke="#2563eb" strokeWidth="5" />
-      <text x="105" y="70" className="fill-slate-950 text-[16px] font-black">E</text>
-      <text x="310" y="275" className="fill-slate-950 text-[16px] font-black">r</text>
+
+      <text x="105" y="70" className="fill-slate-950 text-[16px] font-black">
+        E
+      </text>
+      <text x="310" y="275" className="fill-slate-950 text-[16px] font-black">
+        r
+      </text>
       <DiagramLabel x={200} y={310}>E ∝ 1/r²</DiagramLabel>
 
       <line x1="460" y1="270" x2="660" y2="270" stroke="#0f172a" strokeWidth="4" />
       <line x1="460" y1="270" x2="460" y2="80" stroke="#0f172a" strokeWidth="4" />
       <path d="M475 100 C520 165, 590 225, 650 260" fill="none" stroke="#dc2626" strokeWidth="5" />
-      <text x="465" y="70" className="fill-slate-950 text-[16px] font-black">V</text>
-      <text x="670" y="275" className="fill-slate-950 text-[16px] font-black">r</text>
+
+      <text x="465" y="70" className="fill-slate-950 text-[16px] font-black">
+        V
+      </text>
+      <text x="670" y="275" className="fill-slate-950 text-[16px] font-black">
+        r
+      </text>
       <DiagramLabel x={560} y={310}>V ∝ 1/r</DiagramLabel>
 
       <DiagramLabel x={380} y={45}>campo cai mais rapidamente que potencial</DiagramLabel>
     </svg>
   );
 }
-
 const theorySections: TheorySection[] = [
   {
-    id: 1,
+    id: "contexto",
     icon: BookOpen,
-    title: "1. Contexto físico e histórico",
+    title: "Contexto físico e histórico",
     accent: "from-indigo-600 to-purple-700",
-    paragraphs: [
-      "A Eletrostática é a parte da Eletricidade que estuda as cargas elétricas em repouso e os efeitos produzidos por elas. Quando falamos em cargas em repouso, o foco não está em correntes elétricas atravessando circuitos, nem em motores, resistores ou geradores funcionando. O foco está em entender como corpos eletrizados interagem, como produzem forças, como criam campos elétricos, como armazenam energia e como se comportam quando estão em equilíbrio.",
-      "A palavra eletrostática pode ser dividida em duas ideias: eletro, relacionada a fenômenos elétricos, e estática, relacionada a uma situação sem movimento macroscópico de cargas. Isso não significa que nada microscópico aconteça. Em um metal, elétrons livres podem se reorganizar rapidamente até o equilíbrio.",
-      "Historicamente, fenômenos elétricos foram observados desde a Antiguidade, como o âmbar atritado atraindo pequenos corpos. Com o desenvolvimento experimental e matemático, especialmente com Coulomb, Faraday e outros, a eletricidade deixou de ser curiosidade e passou a ser uma teoria física poderosa.",
-      "A Eletrostática é base para campo elétrico, potencial elétrico, energia potencial elétrica, capacitores, corrente elétrica, eletrodinâmica, eletromagnetismo e Física Moderna. Reduzir esse conteúdo a uma fórmula solta seria uma forma elegante de estudar errado, esse hobby antigo da civilização.",
+    intro: [
+      "A Eletrostática é a parte da Eletricidade que estuda as cargas elétricas em repouso e os efeitos produzidos por elas. Quando dizemos repouso, não estamos afirmando que nada se move no nível microscópico. Em um metal, por exemplo, elétrons livres podem se reorganizar rapidamente até que o equilíbrio eletrostático seja atingido. O que não existe, nesse estado final, é uma corrente elétrica permanente atravessando o condutor.",
+      "Esse conteúdo é a base de praticamente toda a Eletricidade. Antes de estudar corrente, resistores, capacitores em circuito, geradores, motores e eletromagnetismo, é preciso entender o que é carga, como ela se distribui, como cria força, como cria campo, como armazena energia e como se comporta em condutores.",
     ],
-    numbered: [
-      "A matéria possui cargas elétricas.",
-      "Cargas podem estar equilibradas ou em excesso.",
-      "Corpos eletrizados interagem por forças.",
-      "Cargas criam campos elétricos no espaço.",
-      "Campos podem realizar trabalho sobre cargas.",
-      "Configurações de cargas armazenam energia.",
-      "Condutores se comportam de modo especial porque possuem cargas livres.",
-    ],
-    notes: [
+    concepts: [
       {
-        title: "Ideia central",
-        type: "success",
-        body: "Eletrostática estuda como cargas em repouso organizam forças, campos, potenciais, energia e equilíbrio elétrico.",
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "A Eletrostática começa com fenômenos simples: um pente atritado atraindo pedacinhos de papel, um balão grudando na parede, o cabelo arrepiando, um choque ao tocar uma maçaneta em dia seco. Esses fenômenos parecem pequenos, mas todos apontam para uma mesma ideia: a matéria possui cargas elétricas, e o desequilíbrio ou a redistribuição dessas cargas produz efeitos observáveis.",
+          "O grande salto da Física foi perceber que esses efeitos não são mágicos nem isolados. Eles obedecem a leis quantitativas. A mesma lógica que explica o balão grudado na parede também ajuda a entender campo elétrico, capacitores, blindagem eletrostática, para-raios e instrumentos elétricos. A natureza, por algum motivo, gosta de usar as mesmas regras em brinquedos de criança e em engenharia pesada. Pelo menos nisso ela economiza.",
+        ],
       },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Eletrostática é o estudo das cargas elétricas em repouso macroscópico, das forças entre elas, dos campos elétricos produzidos, dos potenciais associados, da energia armazenada em configurações de cargas e do equilíbrio eletrostático em condutores.",
+          "A palavra estática não significa ausência total de fenômenos internos. Ela significa ausência de corrente elétrica permanente. Em equilíbrio, as cargas livres de um condutor já se redistribuíram de modo que não exista campo elétrico interno capaz de mantê-las em movimento ordenado.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "O erro mais pobre aqui é achar que Eletrostática é só a Lei de Coulomb. Coulomb é uma parte importante, mas o conteúdo real é uma cadeia: carga elétrica, conservação, quantização, eletrização, polarização, força, campo, potencial, energia, condutores em equilíbrio, blindagem e poder das pontas.",
+          "Uma boa teoria de Eletrostática precisa sempre separar grandezas vetoriais de grandezas escalares. Força e campo são vetores. Energia potencial e potencial elétrico são escalares. Essa diferença parece detalhe até a primeira questão em que o campo se anula e o potencial não. Aí o detalhe vira humilhação pública em forma de alternativa errada.",
+        ],
+      },
+    ],
+    bullets: [
+      "A matéria possui cargas elétricas.",
+      "Corpos podem estar neutros ou eletrizados.",
+      "Cargas elétricas interagem por forças elétricas.",
+      "Cargas criam campos elétricos no espaço ao redor.",
+      "Campos elétricos podem realizar trabalho sobre cargas.",
+      "Configurações de cargas podem armazenar energia potencial elétrica.",
+      "Condutores em equilíbrio possuem propriedades especiais.",
+      "Blindagem, indução e poder das pontas nascem da redistribuição das cargas.",
     ],
   },
   {
-    id: 2,
+    id: "carga",
     icon: Zap,
-    title: "2. Ideia intuitiva de carga elétrica",
+    title: "Carga elétrica",
     accent: "from-purple-600 to-indigo-700",
-    paragraphs: [
-      "Carga elétrica é uma propriedade da matéria associada às interações elétricas. Assim como a massa está associada à interação gravitacional, a carga elétrica está associada à interação elétrica.",
-      "Na estrutura básica da matéria, os prótons possuem carga positiva, os elétrons possuem carga negativa e os nêutrons não possuem carga elétrica resultante. A carga elementar é representada por e e vale aproximadamente 1,6 × 10⁻¹⁹ C.",
-      "Um corpo eletricamente neutro não é um corpo sem cargas. Ele possui cargas positivas e negativas em quantidades equivalentes. Um corpo positivo perdeu elétrons. Um corpo negativo ganhou elétrons.",
-      "Nos processos comuns de eletrização, normalmente quem se move são os elétrons, não os prótons. Os prótons ficam presos no núcleo. Então, quando um corpo fica positivo, ele não ganhou prótons; ele perdeu elétrons.",
+    intro: [
+      "Carga elétrica é uma propriedade fundamental da matéria associada às interações elétricas. Assim como a massa está ligada à interação gravitacional, a carga elétrica está ligada à interação elétrica. A diferença é que, enquanto a gravidade clássica é sempre atrativa, a interação elétrica pode ser atrativa ou repulsiva.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Um corpo neutro não é um corpo sem cargas. Essa frase precisa entrar na cabeça com violência pedagógica. Um corpo neutro possui prótons e elétrons em quantidades equilibradas. A soma algébrica das cargas é zero, mas as cargas estão lá.",
+          "Quando um corpo fica eletrizado, geralmente não é porque prótons foram arrancados do núcleo. Nos processos comuns de eletrização, quem se movimenta são elétrons. Se um corpo perde elétrons, fica positivo. Se ganha elétrons, fica negativo. O sinal da carga revela excesso ou falta relativa de elétrons.",
+          "Pense em um corpo neutro como uma sala com a mesma quantidade de pessoas vestidas de vermelho e azul. A sala não está vazia; ela só está equilibrada. Se algumas pessoas azuis saem, passa a sobrar vermelho. Em eletrização, o corpo positivo não ganhou prótons; ele perdeu elétrons. A Física agradece quando ninguém inventa próton passeando em atrito de régua.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "A carga elétrica elementar é representada por e e possui módulo aproximadamente igual a 1,6 × 10⁻¹⁹ C. O próton possui carga +e, o elétron possui carga −e e o nêutron possui carga elétrica resultante nula.",
+          "A carga total de um corpo é a soma algébrica das cargas positivas e negativas que ele possui. Se a soma é zero, o corpo é eletricamente neutro. Se a soma é positiva, o corpo está positivamente eletrizado. Se a soma é negativa, está negativamente eletrizado.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "As questões mais básicas cobram o sinal final do corpo após perda ou ganho de elétrons. As questões intermediárias misturam número de elétrons com carga elementar. As mais perigosas perguntam se um corpo neutro pode ser atraído por um corpo carregado, e a resposta é sim, por polarização.",
+          "Outro ponto recorrente é o uso correto do sinal. Quando a pergunta pede a carga adquirida por um corpo que perdeu elétrons, o módulo vem de ne, mas o sinal final é positivo. Quando o corpo ganhou elétrons, o sinal final é negativo.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "A carga elétrica não é uma substância escorrendo pelo material. Ela é uma propriedade das partículas. Quando dizemos que um corpo tem carga total positiva, estamos falando do balanço entre cargas positivas e negativas, não de uma tinta positiva espalhada pela superfície.",
+          "Em materiais condutores, cargas livres podem se redistribuir com facilidade. Em isolantes, a carga tende a ficar mais localizada. Essa diferença explica por que metais e plásticos se comportam de maneiras tão diferentes em eletrização.",
+        ],
+      },
     ],
     diagram: {
       kind: "chargeStates",
       title: "Diagrama visual: corpo neutro, positivo e negativo",
       caption:
-        "O corpo neutro tem equilíbrio entre cargas. O positivo perdeu elétrons. O negativo ganhou elétrons.",
+        "O corpo neutro possui equilíbrio entre cargas. O corpo positivo perdeu elétrons. O corpo negativo ganhou elétrons.",
     },
     panels: [
       {
         title: "Carga elementar",
         formula: String.raw`e = 1{,}6 \times 10^{-19} \ \text{C}`,
         terms: [
-          "e: módulo da carga elementar.",
-          "próton: carga +e.",
-          "elétron: carga −e.",
-          "nêutron: carga elétrica resultante nula.",
+          "e é o módulo da carga elementar.",
+          "O próton possui carga +e.",
+          "O elétron possui carga −e.",
+          "O nêutron possui carga elétrica resultante nula.",
         ],
         structure: [
-          "A carga elétrica aparece em múltiplos da carga elementar.",
-          "O sinal indica excesso ou falta de elétrons.",
-          "O corpo neutro possui cargas, mas a soma algébrica é zero.",
+          "A carga elétrica aparece em unidades discretas.",
+          "A carga total de um corpo depende do balanço entre prótons e elétrons.",
+          "O sinal da carga indica excesso ou falta relativa de elétrons.",
         ],
         steps: [
           {
             title: "Corpo neutro",
+            body: [
+              "Se um corpo possui o mesmo número de prótons e elétrons, as contribuições positivas e negativas se cancelam.",
+            ],
             formulas: [
               String.raw`Q = N(+e) + N(-e)`,
               String.raw`Q = 0`,
@@ -1031,26 +1141,62 @@ const theorySections: TheorySection[] = [
           },
           {
             title: "Corpo positivo",
-            body: ["Perde elétrons e fica com falta relativa de carga negativa."],
+            body: [
+              "Quando perde elétrons, o corpo fica com falta relativa de carga negativa. A carga total passa a ser positiva.",
+            ],
           },
           {
             title: "Corpo negativo",
-            body: ["Ganha elétrons e fica com excesso de carga negativa."],
+            body: [
+              "Quando ganha elétrons, o corpo passa a ter excesso de carga negativa. A carga total passa a ser negativa.",
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 3,
+    id: "principios",
     icon: ShieldCheck,
-    title: "3. Princípios fundamentais da carga elétrica",
+    title: "Princípios fundamentais da carga elétrica",
     accent: "from-slate-950 to-indigo-800",
-    paragraphs: [
-      "A Eletrostática se apoia em três ideias fundamentais: atração e repulsão, conservação da carga elétrica e quantização da carga elétrica.",
-      "Cargas de mesmo sinal se repelem. Cargas de sinais opostos se atraem. Porém, cuidado: se um corpo eletrizado atrai um corpo neutro, isso não significa obrigatoriamente que o neutro tenha carga oposta. Ele pode ter sido polarizado.",
-      "A carga elétrica total de um sistema isolado se conserva. Isso significa que carga não é criada nem destruída nos processos comuns; ela é transferida ou redistribuída.",
-      "A carga elétrica é quantizada. Em processos comuns, ela aparece como múltiplo inteiro da carga elementar.",
+    intro: [
+      "A Eletrostática se apoia em princípios que parecem simples, mas sustentam quase todas as questões do conteúdo: atração e repulsão, conservação da carga elétrica e quantização da carga elétrica.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Cargas de mesmo sinal se repelem porque cada uma tende a afastar a outra. Cargas de sinais opostos se atraem porque a interação elétrica favorece a aproximação entre sinais contrários. Esse é o primeiro filtro mental em qualquer questão de força elétrica.",
+          "A conservação da carga diz que, em um sistema isolado, a carga total não surge do nada nem desaparece por constrangimento. Ela é transferida ou redistribuída. Se um corpo ganha elétrons, outro corpo, dentro do sistema, perdeu elétrons.",
+          "A quantização da carga afirma que a carga elétrica aparece em pacotes discretos. Em processos comuns, um corpo pode ganhar um elétron, dois elétrons, bilhões de elétrons, mas não meio elétron. A natureza tem seus caprichos, mas pelo menos não parcela elétron em boleto.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Cargas de mesmo sinal se repelem e cargas de sinais opostos se atraem. A carga elétrica total de um sistema eletricamente isolado se conserva. Além disso, a carga elétrica de um corpo eletrizado aparece como múltiplo inteiro da carga elementar.",
+          "A quantização é expressa por Q = ±ne, em que n é um número inteiro. O sinal depende de o corpo ter perdido ou ganhado elétrons.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "A conservação aparece em questões de atrito, contato e sistemas de esferas. A quantização aparece em questões que pedem número de elétrons perdidos ou ganhos. A atração e repulsão aparecem em questões conceituais e em problemas de força resultante.",
+          "A armadilha mais comum é concluir que atração sempre significa cargas opostas. Isso só é seguro quando os dois corpos são puntiformes e eletrizados. Corpos neutros extensos podem ser atraídos por polarização.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Esses três princípios devem ser usados juntos. Em uma eletrização por atrito, por exemplo, as cargas finais têm sinais opostos, a carga total do sistema se conserva e o valor de cada carga deve respeitar a quantização.",
+          "Em problemas de contato entre esferas idênticas, a conservação da carga dá a carga total, mas a simetria das esferas idênticas permite dividir igualmente. Se as esferas não forem idênticas, não existe obrigação de cargas iguais no final.",
+        ],
+      },
     ],
     diagram: {
       kind: "attractionRepulsion",
@@ -1063,22 +1209,22 @@ const theorySections: TheorySection[] = [
         title: "Conservação da carga elétrica",
         formula: String.raw`\sum Q_{\text{antes}} = \sum Q_{\text{depois}}`,
         terms: [
-          "ΣQ_antes: soma das cargas antes do processo.",
-          "ΣQ_depois: soma das cargas depois do processo.",
-          "Sistema isolado: sistema que não troca carga com o exterior.",
+          "ΣQ_antes é a soma das cargas antes do processo.",
+          "ΣQ_depois é a soma das cargas depois do processo.",
+          "O sistema deve estar eletricamente isolado para que a carga total se conserve.",
         ],
         structure: [
           "A carga total não é criada nem destruída.",
           "O que muda é a distribuição das cargas.",
-          "Se um corpo ganha elétrons, outro deve ter perdido elétrons dentro do sistema.",
+          "A conservação vale para atrito, contato, indução com sistema corretamente considerado e redistribuições internas.",
         ],
         steps: [
           {
-            title: "Antes",
+            title: "Sistema inicialmente neutro",
             formulas: [String.raw`Q_{\text{total, antes}} = 0`],
           },
           {
-            title: "Depois do atrito",
+            title: "Após transferência de elétrons",
             formulas: [
               String.raw`Q_{\text{total, depois}} = (+Q) + (-Q)`,
               String.raw`Q_{\text{total, depois}} = 0`,
@@ -1090,59 +1236,130 @@ const theorySections: TheorySection[] = [
         title: "Quantização da carga elétrica",
         formula: String.raw`Q = \pm ne`,
         terms: [
-          "Q: carga elétrica total.",
-          "n: número inteiro.",
-          "e: carga elementar.",
+          "Q é a carga elétrica total do corpo.",
+          "n é um número inteiro.",
+          "e é a carga elementar.",
+          "O sinal depende de o corpo estar com falta ou excesso de elétrons.",
         ],
         structure: [
-          "Elétrons são transferidos em unidades inteiras.",
-          "Não existe transferência de meio elétron em processos comuns.",
-          "A carga total deve ser múltiplo inteiro de e.",
+          "A carga vem em múltiplos inteiros de e.",
+          "O módulo da carga permite calcular o número de elétrons transferidos.",
+          "O sinal precisa ser interpretado fisicamente, não jogado na fórmula no modo loteria.",
         ],
         steps: [
           {
-            title: "Número de elétrons",
+            title: "Número de elétrons transferidos",
             formulas: [String.raw`n = \frac{|Q|}{e}`],
+          },
+          {
+            title: "Sinal da carga final",
+            body: [
+              "Se o corpo perdeu elétrons, a carga final é positiva. Se ganhou elétrons, a carga final é negativa.",
+            ],
           },
         ],
       },
     ],
     notes: [
       {
-        title: "Armadilha clássica",
+        title: "Observações",
         type: "warning",
         body: "Atração não prova, sozinha, que dois corpos possuem cargas de sinais opostos. Um corpo neutro polarizável também pode ser atraído por um corpo eletrizado.",
       },
     ],
   },
   {
-    id: 4,
+    id: "materiais",
     icon: Layers,
-    title: "4. Condutores, isolantes e semicondutores",
+    title: "Condutores, isolantes e semicondutores",
     accent: "from-indigo-700 to-blue-700",
-    paragraphs: [
-      "A resposta de um material a fenômenos elétricos depende da liberdade de movimento de suas cargas internas.",
-      "Condutores possuem cargas elétricas livres para se movimentar com relativa facilidade. Nos metais, essas cargas móveis são principalmente elétrons livres. Exemplos comuns são cobre, alumínio, prata, ouro, ferro, grafite, soluções iônicas e gases ionizados.",
-      "Isolantes são materiais nos quais as cargas não se movem livremente por grandes distâncias. Vidro, borracha, plástico, madeira seca, ar seco e porcelana são exemplos típicos.",
-      "Semicondutores têm comportamento intermediário entre condutores e isolantes. Silício e germânio são exemplos importantes, especialmente na eletrônica moderna.",
+    intro: [
+      "A forma como um material responde a fenômenos eletrostáticos depende da mobilidade das cargas em seu interior. Essa diferença é fundamental para entender contato, indução, polarização, blindagem e equilíbrio eletrostático.",
     ],
-    notes: [
+    concepts: [
       {
-        title: "Ponto importante",
-        type: "info",
-        body: "Isolante não significa material sem carga. Todo material comum possui prótons e elétrons. A diferença está na mobilidade das cargas.",
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Em um condutor, existem cargas livres que podem se deslocar com facilidade. Nos metais, essas cargas são elétrons livres. Quando um condutor é eletrizado ou colocado perto de um corpo carregado, esses elétrons se reorganizam rapidamente.",
+          "Em um isolante, as cargas não conseguem se deslocar livremente por grandes distâncias. Isso não significa que o isolante não tenha cargas. Ele tem prótons e elétrons, como qualquer matéria comum. A diferença é que essas cargas ficam muito mais presas às estruturas microscópicas do material.",
+          "Semicondutores ficam no meio do caminho. Eles não se comportam como metais comuns nem como isolantes perfeitos. Sua condutividade pode ser controlada, o que explica por que eles são a base de diodos, transistores, sensores, chips e praticamente todo o circo eletrônico moderno que a humanidade insiste em carregar no bolso.",
+        ],
       },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Condutores são materiais com portadores de carga livres para se moverem com relativa facilidade. Isolantes são materiais em que as cargas não se deslocam livremente por grandes distâncias. Semicondutores possuem condutividade intermediária e controlável.",
+          "Em condutores metálicos, os íons positivos formam uma rede relativamente fixa e os elétrons livres podem se mover pelo material. Em isolantes, os elétrons estão mais fortemente ligados às estruturas atômicas ou moleculares.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões costumam perguntar por que uma carga em excesso fica na superfície de um condutor em equilíbrio, por que a indução funciona melhor em condutores e por que isolantes podem ser atraídos apesar de não conduzirem carga livremente.",
+          "Também aparece muito a diferença entre eletrização localizada em isolantes e redistribuição de carga em condutores. Em um isolante, uma região atritada pode permanecer carregada localmente. Em um condutor, a carga tende a se redistribuir pela superfície.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Nunca confunda isolante com material sem carga. Isolante possui cargas; ele apenas não permite que elas se movimentem livremente pelo material.",
+          "Em problemas de Eletrostática de vestibulares mais fortes, quando o enunciado diz condutor em equilíbrio, isso abre um pacote inteiro de propriedades: campo interno nulo, potencial constante e carga em excesso na superfície externa.",
+        ],
+      },
+    ],
+    bullets: [
+      "Condutores comuns: cobre, alumínio, prata, ouro, ferro, grafite, soluções iônicas e gases ionizados.",
+      "Isolantes comuns: vidro, borracha, plástico, madeira seca, ar seco, porcelana, lã, seda e isopor.",
+      "Semicondutores importantes: silício e germânio.",
+      "A mobilidade das cargas define a resposta elétrica do material.",
     ],
   },
   {
-    id: 5,
+    id: "atrito",
     icon: Flame,
-    title: "5. Eletrização por atrito",
+    title: "Eletrização por atrito",
     accent: "from-blue-700 to-cyan-700",
-    paragraphs: [
-      "A eletrização por atrito ocorre quando dois corpos, inicialmente neutros e de materiais diferentes, são atritados entre si e trocam elétrons.",
-      "Após o atrito, um corpo perde elétrons e fica positivo, enquanto o outro ganha elétrons e fica negativo. Se o sistema estiver isolado, as cargas adquiridas têm mesmo módulo e sinais opostos.",
-      "A série triboelétrica organiza materiais de acordo com sua tendência de perder ou ganhar elétrons quando atritados. O importante não é decorar uma lista infinita, mas entender que materiais diferentes seguram elétrons com intensidades diferentes.",
+    intro: [
+      "A eletrização por atrito ocorre quando dois corpos de materiais diferentes são atritados e há transferência de elétrons entre eles.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Quando dois materiais diferentes são atritados, suas superfícies entram em contato repetidamente. Dependendo da natureza dos materiais, um deles pode ter maior tendência a perder elétrons, enquanto o outro pode ter maior tendência a recebê-los.",
+          "Depois do atrito, um corpo fica com falta de elétrons e se torna positivo. O outro fica com excesso de elétrons e se torna negativo. Se o sistema estiver isolado, as cargas adquiridas têm mesmo módulo e sinais opostos.",
+          "Esse é o caso típico do pente plástico atraindo pedacinhos de papel após ser esfregado no cabelo, do balão grudando na parede depois de ser atritado e da roupa grudando no corpo em dias secos.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Eletrização por atrito é o processo de eletrização em que dois corpos, geralmente inicialmente neutros e feitos de materiais diferentes, trocam elétrons devido ao atrito. A carga total do sistema se conserva.",
+          "O corpo que perde elétrons fica carregado positivamente. O corpo que ganha elétrons fica carregado negativamente.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "As questões podem fornecer o sinal de um dos corpos e pedir o sinal do outro. Se os dois começaram neutros e o sistema está isolado, as cargas finais terão mesmo módulo e sinais opostos.",
+          "Também é comum aparecer a série triboelétrica. Ela indica tendências relativas de materiais a perder ou ganhar elétrons. Não é para transformar isso em decoreba cega; é para interpretar quem cede e quem recebe elétrons.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "O atrito não cria carga do nada. Ele favorece transferência de elétrons. A carga total do conjunto continua sendo a mesma.",
+          "Em muitos fenômenos cotidianos, o ar seco facilita o acúmulo de cargas porque reduz a dissipação. Em dias úmidos, a água presente no ar ajuda a descarregar os corpos mais rapidamente.",
+        ],
+      },
     ],
     diagram: {
       kind: "friction",
@@ -1155,37 +1372,70 @@ const theorySections: TheorySection[] = [
         title: "Conservação no atrito",
         formula: String.raw`(+Q) + (-Q) = 0`,
         terms: [
-          "+Q: carga do corpo que perdeu elétrons.",
-          "−Q: carga do corpo que ganhou elétrons.",
-          "0: carga total do sistema inicialmente neutro.",
+          "+Q representa o corpo que perdeu elétrons.",
+          "−Q representa o corpo que ganhou elétrons.",
+          "A soma continua zero quando o sistema começou neutro e permaneceu isolado.",
         ],
         structure: [
-          "Os corpos começam neutros.",
-          "O atrito transfere elétrons.",
-          "A carga total do sistema isolado permanece constante.",
+          "A eletrização altera a distribuição de cargas.",
+          "A carga total do sistema não muda.",
+          "Os sinais finais são opostos porque elétrons saíram de um corpo e foram para o outro.",
         ],
         steps: [
           {
-            title: "Antes",
-            formulas: [String.raw`Q_{\text{antes}} = 0`],
+            title: "Antes do atrito",
+            formulas: [String.raw`Q_{\text{total}} = 0`],
           },
           {
-            title: "Depois",
-            formulas: [String.raw`Q_{\text{depois}} = (+Q) + (-Q) = 0`],
+            title: "Depois do atrito",
+            formulas: [String.raw`Q_{\text{total}} = (+Q) + (-Q) = 0`],
           },
         ],
       },
     ],
   },
   {
-    id: 6,
+    id: "contato",
     icon: Gauge,
-    title: "6. Eletrização por contato",
+    title: "Eletrização por contato",
     accent: "from-cyan-700 to-teal-700",
-    paragraphs: [
-      "A eletrização por contato ocorre quando um corpo eletrizado toca outro corpo condutor. Durante o contato, cargas se redistribuem entre os corpos até que o sistema atinja equilíbrio eletrostático.",
-      "Se os corpos forem condutores idênticos, a carga total se divide igualmente. Essa frase é importante: a divisão igual só vale diretamente para corpos idênticos.",
-      "Se os corpos não forem idênticos, a divisão depende das dimensões, formas e capacitâncias. Em uma descrição mais avançada, no equilíbrio eles ficam no mesmo potencial, não necessariamente com cargas iguais.",
+    intro: [
+      "A eletrização por contato ocorre quando um corpo eletrizado toca outro corpo condutor, permitindo redistribuição de cargas.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Quando dois condutores entram em contato, as cargas livres podem se mover de um para o outro. Esse movimento ocorre até que os corpos atinjam uma condição de equilíbrio elétrico.",
+          "Se as esferas forem idênticas, a simetria obriga que, no final, elas tenham cargas iguais. A carga total se conserva e é dividida igualmente. É por isso que, em duas esferas idênticas, usamos a média aritmética das cargas iniciais.",
+          "Se os corpos não forem idênticos, a situação muda. O equilíbrio não exige cargas iguais; exige mesmo potencial elétrico. A divisão de carga depende da geometria e da capacitância dos corpos.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Eletrização por contato é o processo em que cargas são transferidas ou redistribuídas entre corpos condutores que se tocam.",
+          "Para duas esferas condutoras idênticas, a carga final de cada uma é a carga total dividida por dois.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões básicas usam duas esferas idênticas. Questões intermediárias usam três ou mais contatos sucessivos, exigindo que você atualize a carga após cada contato. Questões mais maldosas misturam contato com aterramento ou com esferas de tamanhos diferentes.",
+          "O erro mais comum é usar a fórmula da média para corpos que não são idênticos. A fórmula Qf = (Q1 + Q2)/2 só vale diretamente para duas esferas condutoras idênticas.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "A carga total sempre se conserva no sistema isolado, mas a forma como ela se divide depende do sistema. Conservação da carga não significa divisão igual automaticamente.",
+          "Em condutores idênticos, a simetria física é o que permite a divisão igual. Sem simetria, a natureza não tem obrigação nenhuma de agradar a fórmula mais fácil.",
+        ],
+      },
     ],
     diagram: {
       kind: "contact",
@@ -1198,14 +1448,14 @@ const theorySections: TheorySection[] = [
         title: "Contato entre duas esferas idênticas",
         formula: String.raw`Q_f = \frac{Q_1 + Q_2}{2}`,
         terms: [
-          "Q_f: carga final de cada esfera.",
-          "Q₁ e Q₂: cargas iniciais.",
-          "2: número de esferas idênticas.",
+          "Qf é a carga final de cada esfera.",
+          "Q1 e Q2 são as cargas iniciais.",
+          "A divisão por 2 aparece porque são duas esferas idênticas.",
         ],
         structure: [
-          "Somamos a carga total do sistema.",
+          "Primeiro se calcula a carga total.",
           "A carga total se conserva.",
-          "Como as esferas são idênticas, a carga se divide igualmente.",
+          "Como as esferas são idênticas, a carga total se divide igualmente.",
         ],
         steps: [
           {
@@ -1213,23 +1463,55 @@ const theorySections: TheorySection[] = [
             formulas: [String.raw`Q_{\text{total}} = Q_1 + Q_2`],
           },
           {
-            title: "Divisão entre esferas idênticas",
+            title: "Divisão simétrica",
             formulas: [String.raw`Q_f = \frac{Q_{\text{total}}}{2}`],
           },
         ],
       },
     ],
   },
-  {
-    id: 7,
+    {
+    id: "inducao",
     icon: Brain,
-    title: "7. Eletrização por indução",
+    title: "Eletrização por indução",
     accent: "from-teal-700 to-emerald-700",
-    paragraphs: [
-      "A eletrização por indução é uma das partes mais importantes e mais confundidas da Eletrostática. Na indução, não é necessário contato entre o corpo carregado e o corpo que será eletrizado.",
-      "O corpo carregado que provoca a separação de cargas é chamado de indutor. O corpo que sofre a influência é chamado de induzido.",
-      "Um corpo eletrizado, ao ser aproximado de um condutor neutro, reorganiza as cargas livres desse condutor. Se houver aterramento e a ordem correta for seguida, o condutor pode ficar eletrizado com sinal oposto ao indutor.",
-      "A ordem é crucial: aproxima o indutor, aterra, retira o aterramento e só depois afasta o indutor. Trocar essa sequência é uma forma eficiente de errar a questão com personalidade.",
+    intro: [
+      "A eletrização por indução é um processo em que um corpo eletrizado provoca redistribuição de cargas em outro corpo sem precisar tocá-lo.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Na indução, o corpo carregado atua à distância por meio do campo elétrico. Ao se aproximar de um condutor neutro, ele empurra ou puxa os elétrons livres desse condutor, produzindo separação de cargas.",
+          "Se um bastão negativo é aproximado de uma esfera metálica neutra, os elétrons da esfera são repelidos para o lado oposto. O lado próximo ao bastão fica com falta relativa de elétrons, portanto positivo, e o lado distante fica negativo.",
+          "Se a esfera for aterrada enquanto o bastão está próximo, elétrons podem escapar para a Terra. Quando o aterramento é retirado e depois o bastão é afastado, a esfera fica com carga líquida positiva.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Eletrização por indução é o processo em que um corpo eletrizado, chamado indutor, provoca redistribuição de cargas em um condutor, chamado induzido, podendo eletrizá-lo sem contato direto quando há aterramento adequado.",
+          "O sinal final do induzido, no procedimento clássico com aterramento, é oposto ao sinal do indutor.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "A ordem do procedimento é o coração da questão. Aproxima-se o indutor, aterra-se o condutor, retira-se o aterramento mantendo o indutor próximo e, por fim, afasta-se o indutor.",
+          "Se a ordem for trocada, o resultado pode mudar. A prova adora isso porque é uma maneira eficiente de separar quem entende o fenômeno de quem decorou meia frase e saiu por aí confiante, que é sempre um espetáculo perigoso.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "A Terra funciona como um enorme reservatório de cargas. Ela pode receber ou fornecer elétrons sem sofrer alteração significativa em seu potencial.",
+          "Durante a primeira aproximação do indutor, o condutor ainda pode continuar neutro como um todo. O que ocorre inicialmente é separação interna de cargas. A eletrização líquida só aparece quando há troca de cargas com a Terra ou com outro corpo.",
+        ],
+      },
     ],
     diagram: {
       kind: "induction",
@@ -1237,32 +1519,65 @@ const theorySections: TheorySection[] = [
       caption:
         "Na indução com bastão negativo, elétrons são repelidos e podem sair pelo aterramento. A esfera fica positiva.",
     },
-    numbered: [
+    bullets: [
       "Aproxima-se o indutor eletrizado.",
       "As cargas livres do condutor se redistribuem.",
-      "Conecta-se o condutor à Terra.",
+      "O condutor é conectado à Terra.",
       "Elétrons entram ou saem pelo aterramento, dependendo do sinal do indutor.",
-      "Retira-se o aterramento mantendo o indutor próximo.",
-      "Afasta-se o indutor.",
-      "O condutor fica eletrizado.",
+      "O aterramento é retirado enquanto o indutor ainda está próximo.",
+      "O indutor é afastado.",
+      "O condutor fica eletrizado com sinal oposto ao do indutor.",
     ],
     notes: [
       {
-        title: "Como isso cai em prova",
+        title: "Observações",
         type: "dark",
-        body: "Questões costumam perguntar o sinal final do induzido e testar a ordem das etapas. A ordem correta muda tudo.",
+        body: "Na indução, o detalhe que manda é a ordem. Se retirar o indutor antes de retirar o aterramento, o sistema pode se neutralizar novamente. A questão parece simples, mas é uma máquina de moer desatenção.",
       },
     ],
   },
   {
-    id: 8,
+    id: "polarizacao",
     icon: Lightbulb,
-    title: "8. Polarização",
+    title: "Polarização",
     accent: "from-emerald-700 to-lime-700",
-    paragraphs: [
-      "Polarização é a separação ou deformação da distribuição de cargas em um corpo neutro sob a influência de um corpo eletrizado.",
-      "Em um condutor, cargas livres se deslocam pelo material. Em um isolante, as cargas não se deslocam livremente por longas distâncias, mas podem sofrer pequenos deslocamentos ou orientações microscópicas.",
-      "A polarização explica por que um corpo eletrizado pode atrair um corpo neutro. O lado mais próximo fica com carga efetiva de sinal oposto ao indutor e, por estar mais perto, a atração pode superar a repulsão do lado distante.",
+    intro: [
+      "Polarização é a reorganização interna de cargas em um corpo neutro devido à influência de um corpo eletrizado próximo.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Um corpo neutro pode ser atraído por um corpo eletrizado. Isso parece contraditório só se você imaginar que neutro significa sem cargas. Mas neutro significa cargas equilibradas, não ausência de cargas.",
+          "Quando um corpo carregado se aproxima, as cargas no corpo neutro podem se reorganizar. O lado mais próximo fica com predominância de carga de sinal oposto ao corpo carregado, enquanto o lado mais distante fica com predominância do mesmo sinal.",
+          "Como o lado de sinal oposto está mais perto, a atração pode ser maior que a repulsão do lado distante. O resultado é uma força líquida de atração mesmo que o corpo total continue neutro.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Polarização é a separação ou deformação da distribuição de cargas em um corpo neutro sob a ação de um campo elétrico externo.",
+          "Em condutores, essa separação ocorre pelo movimento de cargas livres. Em isolantes, ocorre por deslocamentos microscópicos ou orientação de dipolos elétricos.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões conceituais gostam de afirmar que, se dois corpos se atraem, necessariamente têm cargas opostas. Isso é falso em situações com corpos neutros polarizáveis.",
+          "Também aparece em problemas de bastão eletrizado atraindo papel picado, balão grudando na parede e objetos leves sendo atraídos por régua atritada.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Polarização não é necessariamente eletrização líquida. O corpo pode continuar neutro, com carga total zero, mas apresentar separação interna de cargas.",
+          "A polarização é essencial para entender a atração entre corpo carregado e corpo neutro. Sem esse conceito, o aluno sai inventando carga oposta onde não foi dada, porque aparentemente adivinhar carga virou método científico.",
+        ],
+      },
     ],
     diagram: {
       kind: "polarization",
@@ -1272,21 +1587,53 @@ const theorySections: TheorySection[] = [
     },
     notes: [
       {
-        title: "Armadilha clássica",
+        title: "Observações",
         type: "warning",
-        body: "Se um corpo eletrizado atrai outro corpo, não conclua automaticamente que o outro tem carga oposta. Ele pode estar neutro e polarizado.",
+        body: "Atração não garante cargas opostas. Um corpo neutro polarizado pode ser atraído por um corpo eletrizado.",
       },
     ],
   },
   {
-    id: 9,
+    id: "coulomb",
     icon: Calculator,
-    title: "9. Lei de Coulomb",
+    title: "Lei de Coulomb",
     accent: "from-lime-700 to-amber-700",
-    paragraphs: [
-      "A Lei de Coulomb descreve a força elétrica entre duas cargas puntiformes em repouso. Ela mostra que a força elétrica depende do produto dos módulos das cargas e diminui com o quadrado da distância entre elas.",
-      "A força elétrica é uma força de ação à distância. Cada carga exerce força sobre a outra. Essas forças têm mesmo módulo, mesma direção e sentidos opostos, de acordo com a terceira lei de Newton.",
-      "Se as cargas têm mesmo sinal, a força é repulsiva. Se têm sinais opostos, a força é atrativa.",
+    intro: [
+      "A Lei de Coulomb descreve a força elétrica entre duas cargas puntiformes em repouso.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Duas cargas elétricas interagem mesmo sem contato direto. Essa interação pode atrair ou repelir, dependendo dos sinais das cargas. Quanto maiores as cargas, maior a interação. Quanto maior a distância, menor a interação.",
+          "A dependência com o quadrado da distância é uma das partes mais importantes. Se a distância dobra, a força não cai pela metade; cai para um quarto. Se a distância triplica, cai para um nono. A distância entra com crueldade quadrática, como se a Física quisesse punir quem ignora expoente.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "O módulo da força elétrica entre duas cargas puntiformes é diretamente proporcional ao produto dos módulos das cargas e inversamente proporcional ao quadrado da distância entre elas.",
+          "A direção da força é a reta que une as cargas. O sentido depende dos sinais: repulsão para sinais iguais e atração para sinais opostos.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões diretas pedem o módulo da força. Questões intermediárias alteram carga ou distância e perguntam como a força muda. Questões mais fortes misturam Coulomb com superposição vetorial.",
+          "É comum usar microcoulomb, nanocoulomb ou distâncias em centímetros. A conversão de unidades é parte do problema, não um detalhe decorativo.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Na fórmula do módulo, usamos valores absolutos das cargas. O sinal não entra no módulo da força; o sinal serve para decidir se a interação é atrativa ou repulsiva.",
+          "A Lei de Coulomb vale para cargas puntiformes ou corpos pequenos em comparação com a distância entre eles. Para distribuições extensas de carga, a análise pode exigir integração ou simetria.",
+        ],
+      },
     ],
     diagram: {
       kind: "coulomb",
@@ -1299,42 +1646,88 @@ const theorySections: TheorySection[] = [
         title: "Lei de Coulomb",
         formula: String.raw`F = k\frac{|q_1q_2|}{d^2}`,
         terms: [
-          "F: módulo da força elétrica.",
-          "k: constante eletrostática do meio.",
-          "q₁ e q₂: cargas elétricas.",
-          "d: distância entre as cargas.",
+          "F é o módulo da força elétrica.",
+          "k é a constante eletrostática do meio.",
+          "q1 e q2 são as cargas elétricas.",
+          "d é a distância entre as cargas.",
         ],
         structure: [
           "A força cresce com o produto das cargas.",
           "A força diminui com o quadrado da distância.",
-          "O módulo é sempre positivo; o sentido depende dos sinais das cargas.",
+          "O sentido da força depende dos sinais das cargas.",
         ],
         steps: [
           {
-            title: "Dobrar uma carga",
-            body: ["Se uma das cargas dobra, a força dobra."],
+            title: "Alterando uma carga",
+            body: [
+              "Se uma das cargas dobra e a distância permanece constante, a força dobra.",
+            ],
           },
           {
-            title: "Dobrar a distância",
-            formulas: [String.raw`F' = k\frac{|q_1q_2|}{(2d)^2} = \frac{F}{4}`],
+            title: "Alterando as duas cargas",
+            body: [
+              "Se as duas cargas dobram, o produto das cargas fica quatro vezes maior, então a força quadruplica.",
+            ],
+          },
+          {
+            title: "Alterando a distância",
+            formulas: [
+              String.raw`F' = k\frac{|q_1q_2|}{(2d)^2}`,
+              String.raw`F' = \frac{F}{4}`,
+            ],
           },
           {
             title: "Constante no vácuo",
-            formulas: [String.raw`k_0 \approx 9{,}0 \times 10^9 \ \text{N}\cdot\text{m}^2/\text{C}^2`],
+            formulas: [
+              String.raw`k_0 \approx 9{,}0 \times 10^9 \ \text{N}\cdot\text{m}^2/\text{C}^2`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 10,
+    id: "superposicao",
     icon: Compass,
-    title: "10. Princípio da superposição",
+    title: "Princípio da superposição",
     accent: "from-amber-700 to-orange-700",
-    paragraphs: [
-      "Quando uma carga sofre a influência de várias outras cargas, a força elétrica resultante é a soma vetorial das forças individuais.",
-      "Isso é o princípio da superposição. Cada carga produz seu efeito como se as outras não existissem, e depois somamos vetorialmente todos esses efeitos.",
-      "Em problemas unidimensionais, a soma pode ser feita com sinais. Em problemas bidimensionais, o caminho mais seguro é decompor as forças ou campos em componentes.",
+    intro: [
+      "Quando uma carga sofre influência de várias outras cargas, o efeito total é obtido pela soma dos efeitos individuais.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Cada carga fonte age sobre a carga analisada como se produzisse seu próprio efeito. A força ou campo resultante não substitui os efeitos individuais; ele é a soma deles.",
+          "Se tudo está em uma linha, a análise pode ser feita com sinais. Se os vetores formam ângulos, a soma precisa ser vetorial. Isso significa desenhar, decompor, somar componentes e só depois calcular módulo e direção.",
+          "Esse é um dos pontos em que o aluno que só decora fórmula sofre. A fórmula de Coulomb dá o módulo de cada força, mas não resolve sozinha a geometria vetorial do problema.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "O princípio da superposição afirma que a força elétrica resultante sobre uma carga é a soma vetorial das forças elétricas exercidas individualmente pelas demais cargas.",
+          "O mesmo vale para o campo elétrico: o campo resultante em um ponto é a soma vetorial dos campos produzidos por cada carga fonte.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "A prova pode colocar cargas nos vértices de triângulos, quadrados ou pontos alinhados. O objetivo normalmente é testar direção, sentido, decomposição e simetria.",
+          "Quando houver simetria, muitos componentes se cancelam. Quando não houver, o caminho seguro é calcular componentes nos eixos x e y.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Forças e campos são vetores. Potenciais elétricos são escalares. Portanto, não use o mesmo procedimento para tudo. Campo resultante exige soma vetorial. Potencial resultante exige soma algébrica.",
+          "Em problemas difíceis, antes de fazer conta, desenhe os vetores. Tentar resolver superposição sem desenho é igual montar móvel sem manual: dá até para fazer, mas geralmente sobra peça e dignidade.",
+        ],
+      },
     ],
     diagram: {
       kind: "superposition",
@@ -1342,55 +1735,86 @@ const theorySections: TheorySection[] = [
       caption:
         "A resultante sobre a carga central é obtida somando vetorialmente as forças individuais.",
     },
-    numbered: [
-      "Desenhe as cargas.",
-      "Determine se cada interação é atrativa ou repulsiva.",
-      "Desenhe os vetores força ou campo.",
-      "Calcule os módulos separadamente.",
-      "Escolha eixos convenientes.",
-      "Decomponha os vetores quando necessário.",
-      "Some as componentes.",
-      "Determine módulo e direção da resultante.",
-    ],
     panels: [
       {
-        title: "Força resultante",
+        title: "Força elétrica resultante",
         formula: String.raw`\vec{F}_{\text{R}} = \vec{F}_1 + \vec{F}_2 + \vec{F}_3 + \cdots`,
         terms: [
-          "F_R: força elétrica resultante.",
-          "F₁, F₂, F₃: forças individuais.",
-          "Setas: indicam que a soma é vetorial.",
+          "FR é a força elétrica resultante.",
+          "F1, F2 e F3 são forças individuais.",
+          "As setas indicam que a soma é vetorial.",
         ],
         structure: [
-          "A força elétrica tem direção e sentido.",
-          "Não se somam apenas módulos em problemas vetoriais.",
-          "O desenho dos vetores é parte da resolução.",
+          "A direção e o sentido importam.",
+          "Módulos não devem ser somados sem analisar os vetores.",
+          "Em duas dimensões, o método das componentes costuma ser o mais seguro.",
         ],
         steps: [
           {
-            title: "Componentes",
+            title: "Componentes da resultante",
             formulas: [
-              String.raw`F_{Rx} = F_{1x} + F_{2x} + \cdots`,
-              String.raw`F_{Ry} = F_{1y} + F_{2y} + \cdots`,
+              String.raw`F_{Rx} = F_{1x} + F_{2x} + F_{3x} + \cdots`,
+              String.raw`F_{Ry} = F_{1y} + F_{2y} + F_{3y} + \cdots`,
             ],
           },
           {
-            title: "Módulo",
-            formulas: [String.raw`F_R = \sqrt{F_{Rx}^2 + F_{Ry}^2}`],
+            title: "Módulo da resultante",
+            formulas: [
+              String.raw`F_R = \sqrt{F_{Rx}^2 + F_{Ry}^2}`,
+            ],
+          },
+          {
+            title: "Direção da resultante",
+            formulas: [
+              String.raw`\tan\theta = \frac{F_{Ry}}{F_{Rx}}`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 11,
+    id: "campo",
     icon: Zap,
-    title: "11. Campo elétrico",
+    title: "Campo elétrico",
     accent: "from-orange-700 to-red-700",
-    paragraphs: [
-      "Campo elétrico é uma grandeza vetorial que descreve a influência elétrica que uma carga fonte produz no espaço ao seu redor.",
-      "A ideia é separar causa e efeito. A carga fonte cria campo elétrico no espaço. Uma carga de prova colocada nesse campo sofre força elétrica.",
-      "Campo elétrico não é a força. A força depende da carga colocada no ponto. O campo existe no ponto devido às cargas fontes.",
+    intro: [
+      "Campo elétrico é uma grandeza vetorial que descreve a influência elétrica criada por cargas no espaço.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "A ideia de campo serve para evitar imaginar que uma carga precisa tocar outra para interagir com ela. Uma carga fonte modifica o espaço ao seu redor. Quando uma carga de prova é colocada em algum ponto desse espaço, ela sofre força elétrica.",
+          "O campo elétrico pertence ao ponto do espaço. A força elétrica aparece quando uma carga é colocada naquele ponto. Essa diferença é essencial. Se você trocar campo por força como se fossem a mesma coisa, a Eletrostática começa a desmoronar igual prateleira mal instalada.",
+          "Pense no campo como uma informação presente no espaço: se uma carga positiva fosse colocada aqui, para onde ela seria empurrada? A resposta a essa pergunta dá a direção e o sentido do campo elétrico naquele ponto.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Campo elétrico em um ponto é definido como a força elétrica por unidade de carga de prova positiva colocada naquele ponto.",
+          "Como é uma grandeza vetorial, o campo possui módulo, direção e sentido. Por convenção, seu sentido é o sentido da força que atuaria sobre uma carga de prova positiva.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões costumam pedir campo resultante em um ponto, força sobre uma carga colocada em um campo ou relação entre campo e carga de prova.",
+          "Uma armadilha comum é dizer que o campo depende da carga de prova. A carga de prova é usada para definir ou medir o campo, mas o campo naquele ponto é produzido pelas cargas fontes.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Se a carga colocada no campo for positiva, a força tem o mesmo sentido do campo. Se for negativa, a força tem sentido oposto.",
+          "A unidade N/C vem diretamente da definição E = F/q. Mais tarde, também aparece a unidade V/m, especialmente ao relacionar campo elétrico uniforme e diferença de potencial.",
+        ],
+      },
     ],
     diagram: {
       kind: "fieldCharge",
@@ -1403,67 +1827,105 @@ const theorySections: TheorySection[] = [
         title: "Definição de campo elétrico",
         formula: String.raw`\vec{E} = \frac{\vec{F}}{q}`,
         terms: [
-          "E: campo elétrico.",
-          "F: força elétrica sobre a carga de prova.",
-          "q: carga de prova.",
+          "E é o campo elétrico.",
+          "F é a força elétrica sobre a carga de prova.",
+          "q é a carga de prova usada na definição.",
         ],
         structure: [
           "O campo mede força por unidade de carga.",
-          "A unidade pode ser N/C.",
-          "A força sobre uma carga colocada no campo é F = qE.",
+          "O campo é vetorial.",
+          "A força sobre uma carga em um campo é obtida por F = qE.",
         ],
         steps: [
           {
-            title: "Definição",
-            formulas: [String.raw`\vec{E} = \frac{\vec{F}}{q}`],
+            title: "Campo como força por carga",
+            formulas: [
+              String.raw`\vec{E} = \frac{\vec{F}}{q}`,
+            ],
           },
           {
-            title: "Força elétrica",
-            formulas: [String.raw`\vec{F} = q\vec{E}`],
+            title: "Força sobre uma carga",
+            formulas: [
+              String.raw`\vec{F} = q\vec{E}`,
+            ],
           },
           {
             title: "Carga negativa",
-            body: ["Se q é negativa, a força tem sentido oposto ao campo."],
+            body: [
+              "Se q é negativa, a força tem sentido oposto ao campo elétrico.",
+            ],
           },
         ],
       },
     ],
     notes: [
       {
-        title: "Diferença essencial",
+        title: "Observações",
         type: "warning",
-        body: "Campo elétrico é propriedade do ponto do espaço. Força elétrica é o efeito sobre uma carga colocada naquele ponto.",
+        body: "Campo elétrico não é a mesma coisa que força elétrica. O campo existe no ponto por causa das cargas fontes. A força depende da carga que for colocada ali.",
       },
     ],
   },
   {
-    id: 12,
+    id: "campo-carga",
     icon: Target,
-    title: "12. Campo elétrico de uma carga puntiforme",
+    title: "Campo elétrico de uma carga puntiforme",
     accent: "from-red-700 to-rose-700",
-    paragraphs: [
-      "Uma carga puntiforme Q cria um campo elétrico ao seu redor. O módulo do campo depende do módulo da carga fonte e da distância até ela.",
-      "Se Q é positiva, o campo aponta para fora da carga. Se Q é negativa, o campo aponta para a carga.",
-      "O campo elétrico de uma carga puntiforme diminui com o quadrado da distância, assim como a força elétrica de Coulomb.",
+    intro: [
+      "Uma carga puntiforme cria campo elétrico ao seu redor. O módulo desse campo depende do módulo da carga fonte e da distância até ela.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Quanto maior a carga fonte, mais intenso é o campo que ela cria. Quanto mais longe estamos da carga, menor é o campo. A queda com a distância também é quadrática, assim como na Lei de Coulomb.",
+          "Se a carga fonte é positiva, o campo aponta para fora dela. Se a carga fonte é negativa, o campo aponta para ela. Essa convenção vem do uso de uma carga de prova positiva para definir o campo.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "O módulo do campo elétrico criado por uma carga puntiforme Q, a uma distância d, é dado por E = k|Q|/d².",
+          "A direção do campo é radial. O sentido é para fora da carga, se Q for positiva, e para dentro da carga, se Q for negativa.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "É comum comparar campos em diferentes distâncias. Se a distância dobra, o campo cai para um quarto. Se a distância triplica, cai para um nono.",
+          "Também é comum calcular campo resultante criado por várias cargas. Nesse caso, cada campo individual deve ser desenhado e somado vetorialmente.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "O campo de uma carga puntiforme independe da carga de prova. A carga de prova apenas sentiria força se fosse colocada naquele ponto.",
+          "Em problemas com simetria, campos de cargas diferentes podem se cancelar em determinados pontos. Isso não significa necessariamente que o potencial também será zero.",
+        ],
+      },
     ],
     panels: [
       {
         title: "Campo de carga puntiforme",
         formula: String.raw`E = k\frac{|Q|}{d^2}`,
         terms: [
-          "E: módulo do campo elétrico.",
-          "k: constante eletrostática.",
-          "Q: carga fonte.",
-          "d: distância até a carga fonte.",
+          "E é o módulo do campo elétrico.",
+          "k é a constante eletrostática.",
+          "Q é a carga fonte.",
+          "d é a distância até a carga fonte.",
         ],
         structure: [
           "O campo cresce com o módulo da carga fonte.",
           "O campo diminui com o quadrado da distância.",
-          "O sentido depende do sinal de Q.",
+          "O sentido depende do sinal da carga fonte.",
         ],
         steps: [
           {
-            title: "Partindo de Coulomb",
+            title: "Partindo da Lei de Coulomb",
             formulas: [
               String.raw`F = k\frac{|Qq|}{d^2}`,
               String.raw`E = \frac{F}{|q|}`,
@@ -1471,21 +1933,56 @@ const theorySections: TheorySection[] = [
           },
           {
             title: "Cancelando a carga de prova",
-            formulas: [String.raw`E = k\frac{|Q|}{d^2}`],
+            formulas: [
+              String.raw`E = k\frac{|Q|}{d^2}`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 13,
+    id: "linhas",
     icon: BarChart3,
-    title: "13. Linhas de campo elétrico",
+    title: "Linhas de campo elétrico",
     accent: "from-rose-700 to-pink-700",
-    paragraphs: [
-      "Linhas de campo são uma representação visual do campo elétrico. A direção da linha indica a direção do campo, e o sentido da linha indica o sentido do campo.",
-      "Por convenção, as linhas de campo saem das cargas positivas e entram nas cargas negativas.",
-      "A densidade de linhas indica intensidade: onde as linhas estão mais próximas, o campo é mais intenso. Linhas de campo nunca se cruzam, pois isso indicaria dois sentidos diferentes para o campo no mesmo ponto.",
+    intro: [
+      "Linhas de campo são representações visuais usadas para indicar direção, sentido e intensidade relativa do campo elétrico.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Uma linha de campo mostra o caminho que uma carga de prova positiva tenderia a seguir se fosse abandonada sob ação do campo elétrico. Por isso, as linhas saem de cargas positivas e entram em cargas negativas.",
+          "Onde as linhas estão mais próximas, o campo é mais intenso. Onde estão mais afastadas, o campo é mais fraco. A densidade de linhas é uma representação qualitativa da intensidade.",
+          "Linhas de campo não se cruzam. Se duas linhas se cruzassem, haveria duas direções possíveis para o campo no mesmo ponto. Isso seria fisicamente absurdo, embora, convenhamos, a humanidade já tentou coisas piores.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Em cada ponto de uma linha de campo, o vetor campo elétrico é tangente à linha. O sentido da linha é o sentido do campo elétrico.",
+          "As linhas começam em cargas positivas e terminam em cargas negativas, ou no infinito, dependendo da configuração de cargas.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões pedem para identificar sinais das cargas a partir do desenho das linhas, comparar intensidade do campo em regiões com maior ou menor densidade de linhas e reconhecer padrões de dipolos ou placas paralelas.",
+          "Também é comum perguntar por que as linhas não se cruzam. A resposta é que o campo elétrico em um ponto possui uma única direção e um único sentido.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Linhas de campo são uma representação, não objetos físicos materiais. Não existe um fio invisível saindo da carga positiva. O desenho é uma ferramenta para visualizar o campo.",
+          "Em condutores em equilíbrio, as linhas de campo externas chegam ou saem perpendicularmente à superfície. Se houvesse componente tangencial do campo, cargas livres se moveriam pela superfície, e o condutor não estaria em equilíbrio.",
+        ],
+      },
     ],
     diagram: {
       kind: "fieldLines",
@@ -1494,22 +1991,55 @@ const theorySections: TheorySection[] = [
         "As linhas saem do positivo e entram no negativo. Quanto mais concentradas, maior o campo.",
     },
     bullets: [
-      "linhas saem de cargas positivas;",
-      "linhas entram em cargas negativas;",
-      "linhas mais próximas indicam campo mais intenso;",
-      "linhas de campo não se cruzam;",
-      "o vetor campo é tangente à linha em cada ponto.",
+      "Linhas saem de cargas positivas.",
+      "Linhas entram em cargas negativas.",
+      "Linhas mais próximas indicam campo mais intenso.",
+      "Linhas de campo não se cruzam.",
+      "O vetor campo é tangente à linha em cada ponto.",
     ],
   },
   {
-    id: 14,
+    id: "uniforme",
     icon: Layers,
-    title: "14. Campo elétrico uniforme",
+    title: "Campo elétrico uniforme",
     accent: "from-pink-700 to-fuchsia-700",
-    paragraphs: [
+    intro: [
       "Campo elétrico uniforme é aquele que possui mesmo módulo, mesma direção e mesmo sentido em todos os pontos de uma região.",
-      "Um exemplo importante ocorre entre duas placas paralelas extensas, carregadas com sinais opostos. Longe das bordas, as linhas de campo são aproximadamente retas, paralelas e igualmente espaçadas.",
-      "No campo uniforme, a força sobre uma carga é constante enquanto ela permanece na região do campo.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Entre duas placas paralelas extensas, carregadas com sinais opostos, o campo elétrico na região central é aproximadamente uniforme. As linhas são retas, paralelas e igualmente espaçadas.",
+          "Isso significa que uma carga colocada nessa região sofre uma força constante, desde que sua carga seja constante. A situação fica parecida com problemas de movimento sob aceleração constante, mas agora a força responsável é elétrica.",
+          "Se uma partícula carregada entra em um campo uniforme com velocidade perpendicular ao campo, ela pode sofrer desvio semelhante ao de um lançamento horizontal. A Cinemática volta pela janela porque a Física adora reaproveitar ideias, ao contrário dos estudantes que fingem que cada capítulo nasceu isolado.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Campo uniforme é aquele em que o vetor campo elétrico é constante em todos os pontos analisados.",
+          "Entre placas paralelas, a relação entre campo elétrico, diferença de potencial e distância é E = U/d, desconsiderando efeitos de borda.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões podem pedir força elétrica, aceleração de uma partícula, movimento dentro do campo, energia adquirida ao atravessar uma ddp ou relação entre campo e tensão.",
+          "Também aparece a comparação entre aumentar a tensão e diminuir a distância entre placas. Aumentar U aumenta o campo. Aumentar d diminui o campo.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "A fórmula E = U/d vale para campo uniforme. Não saia usando essa relação em qualquer campo elétrico como se a realidade tivesse assinado contrato de simplicidade.",
+          "Em placas reais, nas bordas o campo deixa de ser perfeitamente uniforme. Em questões básicas, costuma-se ignorar o efeito de borda.",
+        ],
+      },
     ],
     diagram: {
       kind: "uniformField",
@@ -1522,112 +2052,223 @@ const theorySections: TheorySection[] = [
         title: "Campo uniforme entre placas",
         formula: String.raw`E = \frac{U}{d}`,
         terms: [
-          "E: campo elétrico uniforme.",
-          "U: diferença de potencial entre as placas.",
-          "d: distância entre as placas.",
+          "E é o campo elétrico uniforme.",
+          "U é a diferença de potencial entre as placas.",
+          "d é a distância entre as placas.",
         ],
         structure: [
-          "Quanto maior a tensão, maior o campo.",
-          "Quanto maior a distância, menor o campo.",
+          "Campo maior quando a ddp é maior.",
+          "Campo menor quando a distância entre placas é maior.",
           "O campo aponta da placa positiva para a placa negativa.",
         ],
         steps: [
           {
             title: "Relação entre tensão e campo",
-            formulas: [String.raw`U = Ed`],
+            formulas: [
+              String.raw`U = Ed`,
+            ],
           },
           {
             title: "Isolando o campo",
-            formulas: [String.raw`E = \frac{U}{d}`],
+            formulas: [
+              String.raw`E = \frac{U}{d}`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 15,
+    id: "trabalho",
     icon: Flame,
-    title: "15. Trabalho da força elétrica",
+    title: "Trabalho da força elétrica",
     accent: "from-fuchsia-700 to-violet-700",
-    paragraphs: [
+    intro: [
       "A força elétrica pode realizar trabalho quando desloca uma carga em um campo elétrico.",
-      "Em eletrostática, a força elétrica é conservativa. Isso significa que o trabalho realizado pela força elétrica entre dois pontos não depende do caminho percorrido, mas apenas dos pontos inicial e final.",
-      "Essa propriedade permite definir energia potencial elétrica e potencial elétrico de maneira consistente.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Se uma carga se move sob ação da força elétrica, há transferência de energia. A força elétrica pode acelerar a carga, desacelerá-la ou alterar sua energia potencial elétrica.",
+          "Em Eletrostática, a força elétrica é conservativa. Isso significa que o trabalho realizado entre dois pontos depende apenas dos pontos inicial e final, não do caminho percorrido.",
+          "Essa propriedade é poderosa porque permite definir potencial elétrico. Se o trabalho dependesse do caminho, potencial elétrico como função de ponto perderia sentido. A matemática entraria em colapso e os livros ficariam ainda piores.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "O trabalho da força elétrica no deslocamento de uma carga q entre dois pontos A e B pode ser escrito em função da diferença de potencial entre esses pontos.",
+          "Como a força elétrica é conservativa, esse trabalho está associado à variação da energia potencial elétrica.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões podem pedir trabalho em função da carga e da ddp, energia adquirida por uma partícula ou velocidade final após atravessar uma região com diferença de potencial.",
+          "É comum misturar Eletrostática com energia mecânica. A energia elétrica perdida pode virar energia cinética, se outras perdas forem desprezadas.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "O sinal do trabalho depende do sinal da carga e do sentido do deslocamento em relação ao potencial. Carga positiva se move espontaneamente para potenciais menores. Carga negativa responde de forma oposta.",
+          "Quando o enunciado pede apenas energia adquirida ou módulo do trabalho, normalmente se usa o módulo das grandezas. Mas, em análise conceitual, o sinal importa bastante.",
+        ],
+      },
     ],
     panels: [
       {
         title: "Trabalho em diferença de potencial",
         formula: String.raw`\tau = q(V_A - V_B)`,
         terms: [
-          "τ: trabalho da força elétrica.",
-          "q: carga deslocada.",
-          "V_A e V_B: potenciais elétricos nos pontos A e B.",
+          "τ é o trabalho da força elétrica.",
+          "q é a carga deslocada.",
+          "VA e VB são os potenciais elétricos nos pontos A e B.",
         ],
         structure: [
           "O trabalho depende da carga.",
           "O trabalho depende da diferença de potencial.",
-          "O trabalho não depende do caminho em campo eletrostático.",
+          "O trabalho não depende do caminho em um campo eletrostático.",
         ],
         steps: [
           {
             title: "Diferença de potencial",
-            formulas: [String.raw`U_{AB} = V_A - V_B`],
+            formulas: [
+              String.raw`U_{AB} = V_A - V_B`,
+            ],
           },
           {
-            title: "Trabalho",
-            formulas: [String.raw`\tau = qU_{AB}`],
+            title: "Trabalho elétrico",
+            formulas: [
+              String.raw`\tau = qU_{AB}`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 16,
+    id: "energia",
     icon: Gauge,
-    title: "16. Energia potencial elétrica",
+    title: "Energia potencial elétrica",
     accent: "from-violet-700 to-indigo-800",
-    paragraphs: [
+    intro: [
       "Energia potencial elétrica é a energia associada à configuração de cargas elétricas.",
-      "Duas cargas interagem eletricamente. Dependendo dos sinais e da distância entre elas, o sistema pode ter energia potencial positiva ou negativa.",
-      "Cargas de mesmo sinal possuem energia potencial positiva quando usamos o infinito como referência zero. Cargas de sinais opostos possuem energia potencial negativa.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Quando duas cargas estão próximas, o sistema formado por elas possui energia associada à interação elétrica. Essa energia depende dos sinais das cargas e da distância entre elas.",
+          "Cargas de mesmo sinal se repelem. Para aproximá-las, geralmente é necessário realizar trabalho contra a repulsão, armazenando energia no sistema. Por isso, com referência no infinito, a energia potencial de cargas de mesmo sinal é positiva.",
+          "Cargas de sinais opostos se atraem. Separá-las exige trabalho externo. Com referência no infinito, a energia potencial elétrica entre cargas opostas é negativa.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "A energia potencial elétrica entre duas cargas puntiformes q1 e q2, separadas por uma distância d, é dada por Ep = kq1q2/d.",
+          "Diferentemente da fórmula do módulo da força de Coulomb, aqui os sinais das cargas devem ser mantidos.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões costumam misturar energia potencial elétrica com conservação de energia mecânica. Uma carga pode perder energia potencial elétrica e ganhar energia cinética.",
+          "Também aparece a montagem de sistemas com várias cargas. Nesse caso, a energia potencial total é a soma das energias de todos os pares de cargas.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Energia potencial elétrica é escalar. Ela pode ser positiva, negativa ou nula dependendo da configuração e da referência adotada.",
+          "O sinal da energia potencial elétrica carrega significado físico. Usar módulo automaticamente aqui é uma bela maneira de assassinar a interpretação do problema.",
+        ],
+      },
     ],
     panels: [
       {
         title: "Energia potencial elétrica entre duas cargas",
         formula: String.raw`E_p = k\frac{q_1q_2}{d}`,
         terms: [
-          "E_p: energia potencial elétrica.",
-          "k: constante eletrostática.",
-          "q₁ e q₂: cargas elétricas com sinal.",
-          "d: distância entre as cargas.",
+          "Ep é a energia potencial elétrica.",
+          "k é a constante eletrostática.",
+          "q1 e q2 são as cargas elétricas com sinal.",
+          "d é a distância entre as cargas.",
         ],
         structure: [
-          "Aqui os sinais das cargas importam.",
+          "Os sinais das cargas importam.",
           "Cargas de mesmo sinal geram energia potencial positiva.",
           "Cargas de sinais opostos geram energia potencial negativa.",
         ],
         steps: [
           {
             title: "Mesmo sinal",
-            formulas: [String.raw`q_1q_2 > 0 \Rightarrow E_p > 0`],
+            formulas: [
+              String.raw`q_1q_2 > 0 \Rightarrow E_p > 0`,
+            ],
           },
           {
             title: "Sinais opostos",
-            formulas: [String.raw`q_1q_2 < 0 \Rightarrow E_p < 0`],
+            formulas: [
+              String.raw`q_1q_2 < 0 \Rightarrow E_p < 0`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 17,
+    id: "potencial",
     icon: Calculator,
-    title: "17. Potencial elétrico",
+    title: "Potencial elétrico",
     accent: "from-indigo-800 to-slate-950",
-    paragraphs: [
+    intro: [
       "Potencial elétrico é uma grandeza escalar que mede energia potencial elétrica por unidade de carga.",
-      "Enquanto o campo elétrico é vetor, o potencial elétrico é escalar. Isso muda muito a forma de resolver problemas. Campos precisam ser somados vetorialmente; potenciais são somados algebricamente.",
-      "Uma carga fonte cria potencial elétrico no espaço ao seu redor. Uma carga colocada nesse ponto terá energia potencial elétrica associada ao potencial daquele ponto.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Potencial elétrico é uma forma de descrever o estado energético de um ponto do espaço. Ele responde à pergunta: se uma carga fosse colocada aqui, quanta energia potencial elétrica existiria por unidade de carga?",
+          "Campo elétrico é vetor. Potencial elétrico é escalar. Essa diferença muda completamente a estratégia de resolução. Campos são somados vetorialmente. Potenciais são somados algebricamente.",
+          "Uma carga positiva cria potencial positivo ao redor. Uma carga negativa cria potencial negativo. Quando várias cargas contribuem para o mesmo ponto, os potenciais podem se somar ou se cancelar.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "O potencial elétrico em um ponto é a energia potencial elétrica por unidade de carga de prova colocada nesse ponto.",
+          "Para uma carga puntiforme Q, o potencial a uma distância d é V = kQ/d. Aqui o sinal de Q deve ser considerado.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões fortes exploram a diferença entre campo e potencial. Um ponto pode ter campo elétrico nulo e potencial não nulo. Também pode ter potencial nulo e campo não nulo.",
+          "Em sistemas com várias cargas, calcule o potencial de cada carga no ponto e some algebricamente. Não decomponha potencial em componentes, porque potencial não é vetor.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Potencial elétrico não é energia potencial elétrica. Potencial é energia por carga. Energia potencial depende da carga que é colocada no ponto.",
+          "A confusão entre V e Ep é uma das mais comuns. A relação Ep = qV mostra a diferença: V pertence ao ponto devido às fontes; Ep depende também da carga colocada ali.",
+        ],
+      },
     ],
     diagram: {
       kind: "potential",
@@ -1640,54 +2281,97 @@ const theorySections: TheorySection[] = [
         title: "Potencial elétrico de carga puntiforme",
         formula: String.raw`V = k\frac{Q}{d}`,
         terms: [
-          "V: potencial elétrico.",
-          "k: constante eletrostática.",
-          "Q: carga fonte com sinal.",
-          "d: distância até a carga fonte.",
+          "V é o potencial elétrico.",
+          "k é a constante eletrostática.",
+          "Q é a carga fonte com sinal.",
+          "d é a distância até a carga fonte.",
         ],
         structure: [
           "Potencial é escalar.",
-          "O sinal de Q importa.",
+          "O sinal da carga fonte importa.",
           "Potenciais de várias cargas são somados algebricamente.",
         ],
         steps: [
           {
             title: "Potencial e energia",
-            formulas: [String.raw`V = \frac{E_p}{q}`],
+            formulas: [
+              String.raw`V = \frac{E_p}{q}`,
+            ],
           },
           {
             title: "Energia da carga q em um ponto",
-            formulas: [String.raw`E_p = qV`],
+            formulas: [
+              String.raw`E_p = qV`,
+            ],
+          },
+          {
+            title: "Potencial de carga puntiforme",
+            formulas: [
+              String.raw`V = k\frac{Q}{d}`,
+            ],
           },
         ],
       },
     ],
     notes: [
       {
-        title: "Diferença decisiva",
+        title: "Observações",
         type: "warning",
         body: "Campo elétrico é vetor. Potencial elétrico é escalar. Campo pode se anular por simetria enquanto potencial não se anula.",
       },
     ],
   },
   {
-    id: 18,
+    id: "ddp",
     icon: Zap,
-    title: "18. Diferença de potencial elétrico",
+    title: "Diferença de potencial elétrico",
     accent: "from-slate-950 to-indigo-900",
-    paragraphs: [
+    intro: [
       "Diferença de potencial, ou ddp, é a diferença entre os potenciais elétricos de dois pontos.",
-      "Ela mede a energia por unidade de carga envolvida no deslocamento entre esses pontos. Por isso, ddp aparece diretamente em trabalho elétrico, capacitores e, mais tarde, circuitos elétricos.",
-      "Uma carga positiva abandonada tende a se mover espontaneamente no sentido de diminuição do potencial elétrico. Uma carga negativa tende a responder no sentido oposto.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "A diferença de potencial mede o desnível energético por unidade de carga entre dois pontos. Se uma carga se desloca entre esses pontos, há uma variação de energia potencial elétrica associada.",
+          "É parecido, por analogia, com altura gravitacional. Um objeto em uma altura maior possui maior energia potencial gravitacional. Em eletricidade, uma carga em um potencial elétrico diferente possui uma energia potencial elétrica diferente.",
+          "A ddp não pertence a um ponto isolado. Ela é comparação entre dois pontos. Falar em tensão de um ponto sem referência é como perguntar a altura de uma pessoa sem escolher o chão. Filosófico, talvez; útil, não.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "A diferença de potencial entre os pontos A e B é UAB = VA − VB.",
+          "Ela representa o trabalho por unidade de carga associado ao deslocamento entre esses pontos.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "A ddp aparece em trabalho elétrico, energia adquirida por partículas, campo uniforme e, mais tarde, circuitos elétricos.",
+          "Em campo uniforme, a ddp entre placas se relaciona diretamente com o campo pela expressão U = Ed.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Pontos equipotenciais possuem mesma diferença de potencial nula entre si. Uma carga deslocada ao longo de uma superfície equipotencial não sofre trabalho da força elétrica.",
+          "Em condutores em equilíbrio eletrostático, todos os pontos do condutor possuem o mesmo potencial.",
+        ],
+      },
     ],
     panels: [
       {
         title: "Diferença de potencial",
         formula: String.raw`U_{AB} = V_A - V_B`,
         terms: [
-          "U_AB: diferença de potencial entre A e B.",
-          "V_A: potencial no ponto A.",
-          "V_B: potencial no ponto B.",
+          "UAB é a diferença de potencial entre A e B.",
+          "VA é o potencial no ponto A.",
+          "VB é o potencial no ponto B.",
         ],
         structure: [
           "A ddp depende de dois pontos.",
@@ -1697,25 +2381,62 @@ const theorySections: TheorySection[] = [
         steps: [
           {
             title: "Trabalho e ddp",
-            formulas: [String.raw`\tau_{AB} = qU_{AB}`],
+            formulas: [
+              String.raw`\tau_{AB} = qU_{AB}`,
+            ],
           },
           {
             title: "Ddp nula",
-            formulas: [String.raw`V_A = V_B \Rightarrow U_{AB} = 0`],
+            formulas: [
+              String.raw`V_A = V_B \Rightarrow U_{AB} = 0`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 19,
+    id: "condutores",
     icon: Layers,
-    title: "19. Condutores em equilíbrio eletrostático",
+    title: "Condutores em equilíbrio eletrostático",
     accent: "from-indigo-900 to-purple-900",
-    paragraphs: [
+    intro: [
       "Um condutor está em equilíbrio eletrostático quando suas cargas livres não apresentam movimento ordenado.",
-      "Se houvesse campo elétrico no interior do condutor, as cargas livres sofreriam força e se moveriam. Como em equilíbrio elas não se movem macroscopicamente, o campo elétrico interno deve ser nulo.",
-      "O excesso de carga em um condutor em equilíbrio fica na superfície externa. Além disso, o potencial é constante em todo o condutor, e o campo elétrico na superfície é perpendicular a ela.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Em um condutor, existem cargas livres. Se houvesse campo elétrico no interior do condutor, essas cargas sofreriam força elétrica e se moveriam. Se elas se movem de forma ordenada, o condutor ainda não está em equilíbrio eletrostático.",
+          "Portanto, quando o equilíbrio é atingido, o campo elétrico interno deve ser nulo. Essa é uma das ideias mais importantes do conteúdo.",
+          "Além disso, qualquer excesso de carga fica na superfície externa. As cargas se repelem e se afastam tanto quanto possível, ocupando a superfície do condutor.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Em um condutor em equilíbrio eletrostático, o campo elétrico no interior do material condutor é nulo, o potencial elétrico é constante em todo o condutor e o excesso de carga fica distribuído na superfície externa.",
+          "Na superfície do condutor, o campo elétrico resultante deve ser perpendicular à superfície. Se houvesse componente tangencial, as cargas livres se moveriam sobre a superfície.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões cobram campo interno nulo, potencial constante, distribuição superficial de cargas, blindagem eletrostática e cavidades em condutores.",
+          "Também é comum perguntar o que acontece quando uma carga é colocada dentro de uma cavidade condutora ou próxima de uma casca condutora.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Campo interno nulo não significa ausência de cargas no condutor. Significa que a configuração de cargas produziu cancelamento do campo dentro do material condutor.",
+          "Condutor em equilíbrio é um pacote de propriedades. Quando o enunciado disser isso, acenda o alerta: campo interno nulo, potencial constante, carga na superfície e campo perpendicular à superfície.",
+        ],
+      },
     ],
     diagram: {
       kind: "conductor",
@@ -1724,29 +2445,62 @@ const theorySections: TheorySection[] = [
         "No equilíbrio eletrostático, o campo interno é nulo e a carga em excesso fica na superfície.",
     },
     bullets: [
-      "campo elétrico interno nulo;",
-      "potencial constante em todo o condutor;",
-      "carga em excesso na superfície externa;",
-      "campo elétrico perpendicular à superfície;",
-      "maior concentração de cargas em regiões de maior curvatura.",
+      "Campo elétrico interno nulo.",
+      "Potencial constante em todo o condutor.",
+      "Carga em excesso na superfície externa.",
+      "Campo elétrico perpendicular à superfície.",
+      "Maior concentração de cargas em regiões de maior curvatura.",
     ],
     notes: [
       {
-        title: "Raciocínio físico",
+        title: "Observações",
         type: "success",
-        body: "Se existisse campo dentro do condutor, cargas livres se moveriam. Se elas ainda se movem, não há equilíbrio. Logo, em equilíbrio, o campo interno é nulo.",
+        body: "Se existisse campo dentro do condutor, cargas livres se moveriam. Se elas ainda se movem, não há equilíbrio. Logo, em equilíbrio eletrostático, o campo interno é nulo.",
       },
     ],
   },
   {
-    id: 20,
+    id: "blindagem",
     icon: ShieldCheck,
-    title: "20. Blindagem eletrostática",
+    title: "Blindagem eletrostática",
     accent: "from-purple-900 to-slate-950",
-    paragraphs: [
+    intro: [
       "Blindagem eletrostática é o fenômeno pelo qual o interior de um condutor em equilíbrio fica protegido de campos elétricos externos.",
-      "Quando um condutor é colocado em uma região com campo externo, suas cargas livres se redistribuem na superfície de modo que o campo resultante no interior seja nulo.",
-      "A gaiola de Faraday é a aplicação clássica desse princípio. Ela ajuda a explicar por que o interior de um carro pode ser uma região relativamente segura durante uma tempestade elétrica.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Quando um condutor é colocado em uma região com campo elétrico externo, suas cargas livres se redistribuem. Essa redistribuição cria um campo induzido que cancela o campo externo no interior do material condutor.",
+          "O resultado é que, no equilíbrio eletrostático, o campo elétrico no interior do condutor é nulo. Essa é a base da gaiola de Faraday.",
+          "Por isso, o interior de estruturas metálicas pode ficar protegido de certos campos elétricos externos. Não é magia, é redistribuição de cargas fazendo o trabalho enquanto o ser humano chama de tecnologia.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Blindagem eletrostática ocorre quando uma superfície condutora redistribui suas cargas de modo a tornar nulo o campo elétrico no interior da região protegida.",
+          "A gaiola de Faraday é uma estrutura condutora que explora esse princípio, fazendo com que cargas induzidas permaneçam na superfície externa.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões podem perguntar por que o campo dentro de uma casca condutora é nulo, por que uma pessoa dentro de um carro pode estar protegida durante uma tempestade ou como cargas se distribuem em cavidades.",
+          "Também pode aparecer a ideia de que cargas em excesso ficam na superfície externa de um condutor isolado em equilíbrio.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Blindagem eletrostática vale para situações eletrostáticas ou aproximadamente estáticas. Campos variáveis no tempo entram em temas mais avançados de eletromagnetismo.",
+          "A proteção não ocorre porque o metal destrói o campo externo, mas porque as cargas livres se reorganizam de modo que o campo resultante interno seja nulo.",
+        ],
+      },
     ],
     diagram: {
       kind: "faraday",
@@ -1756,14 +2510,47 @@ const theorySections: TheorySection[] = [
     },
   },
   {
-    id: 21,
+    id: "pontas",
     icon: AlertTriangle,
-    title: "21. Poder das pontas",
+    title: "Poder das pontas",
     accent: "from-red-700 to-red-950",
-    paragraphs: [
-      "Em condutores eletrizados, as cargas tendem a se concentrar mais intensamente em regiões pontiagudas, onde o raio de curvatura é menor.",
-      "Nessas regiões, o campo elétrico nas proximidades pode ficar muito intenso. Esse fenômeno é chamado de poder das pontas.",
-      "O poder das pontas está relacionado ao funcionamento de para-raios e também a descargas elétricas em pontas metálicas.",
+    intro: [
+      "Poder das pontas é o fenômeno pelo qual cargas elétricas se concentram mais em regiões pontiagudas de um condutor.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Em uma superfície pontiaguda, o raio de curvatura é pequeno. Nessa região, as cargas ficam mais concentradas, e o campo elétrico nas proximidades pode se tornar muito intenso.",
+          "Quando o campo fica suficientemente intenso, pode ionizar o ar ao redor e favorecer descargas elétricas. Esse é o princípio associado ao funcionamento de para-raios.",
+          "Uma esfera distribui melhor suas cargas. Uma ponta concentra mais. A geometria do condutor altera a distribuição de cargas e o campo próximo à superfície.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Em condutores em equilíbrio, a densidade superficial de carga tende a ser maior em regiões de menor raio de curvatura.",
+          "Como o campo elétrico próximo à superfície está relacionado à densidade de carga, regiões pontiagudas apresentam campo mais intenso.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões podem relacionar poder das pontas a para-raios, descargas elétricas, ionização do ar e concentração de cargas em regiões pontiagudas.",
+          "Também podem perguntar onde o campo elétrico é mais intenso em um condutor irregular eletrizado.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "O poder das pontas não significa que a ponta atrai cargas por superstição geométrica. A maior concentração de cargas e o campo mais intenso decorrem da condição de equilíbrio eletrostático na superfície do condutor.",
+          "Esse fenômeno é muito importante em aplicações práticas, mas também aparece em questões conceituais curtas, justamente por parecer simples demais para ser perigoso. E é aí que mora a rasteira.",
+        ],
+      },
     ],
     diagram: {
       kind: "pointEffect",
@@ -1771,23 +2558,49 @@ const theorySections: TheorySection[] = [
       caption:
         "Na ponta, a concentração de cargas é maior e o campo elétrico nas proximidades fica mais intenso.",
     },
-    notes: [
-      {
-        title: "Aplicação",
-        type: "info",
-        body: "Para-raios usam o poder das pontas para favorecer descargas elétricas controladas e conduzi-las para a Terra.",
-      },
-    ],
   },
   {
-    id: 22,
+    id: "graficos",
     icon: BarChart3,
-    title: "22. Gráficos importantes",
+    title: "Gráficos importantes",
     accent: "from-blue-900 to-indigo-900",
-    paragraphs: [
-      "Gráficos em Eletrostática ajudam a enxergar como campo, potencial e energia variam com a distância.",
-      "Para uma carga puntiforme, o campo elétrico diminui com o quadrado da distância, enquanto o potencial diminui com a distância de forma inversamente proporcional.",
-      "Isso significa que o campo cai mais rapidamente que o potencial quando nos afastamos da carga fonte.",
+    intro: [
+      "Gráficos em Eletrostática ajudam a visualizar como campo, potencial e energia variam com a distância.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "Para uma carga puntiforme, tanto o campo quanto o potencial diminuem quando nos afastamos da carga. Mas eles não diminuem do mesmo jeito.",
+          "O campo elétrico cai com o quadrado da distância. O potencial cai com a distância. Por isso, o campo diminui mais rapidamente que o potencial.",
+          "Esse detalhe é muito importante em gráficos. Uma curva de 1/r² desce mais rápido que uma curva de 1/r. Se o aluno ignora isso, troca gráfico de campo por gráfico de potencial e oferece mais um sacrifício aos deuses da alternativa errada.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "Para uma carga puntiforme, o módulo do campo elétrico é proporcional a 1/r², enquanto o potencial elétrico é proporcional a 1/r.",
+          "A energia potencial elétrica entre duas cargas também varia como 1/r, mas seu sinal depende do produto das cargas.",
+        ],
+      },
+      {
+        title: "Como cai em prova",
+        icon: Target,
+        paragraphs: [
+          "Questões podem pedir identificação de gráficos E × r, V × r e Ep × r. Também podem perguntar comportamento assintótico, sinal das curvas e comparação entre queda de campo e potencial.",
+          "Em gráficos de potencial, o sinal da carga fonte importa. Carga positiva gera potencial positivo; carga negativa gera potencial negativo.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Campo elétrico é vetor, mas gráficos de E × r geralmente representam módulo. Potencial elétrico é escalar e pode aparecer positivo ou negativo.",
+          "Quando r tende ao infinito, tanto campo quanto potencial tendem a zero para uma carga puntiforme isolada, tomando o infinito como referência de potencial nulo.",
+        ],
+      },
     ],
     diagram: {
       kind: "graphs",
@@ -1800,9 +2613,9 @@ const theorySections: TheorySection[] = [
         title: "Campo e potencial de carga puntiforme",
         formula: String.raw`E \propto \frac{1}{r^2} \qquad V \propto \frac{1}{r}`,
         terms: [
-          "E: campo elétrico.",
-          "V: potencial elétrico.",
-          "r: distância até a carga fonte.",
+          "E é o campo elétrico.",
+          "V é o potencial elétrico.",
+          "r é a distância até a carga fonte.",
         ],
         structure: [
           "O campo depende do inverso do quadrado da distância.",
@@ -1812,35 +2625,64 @@ const theorySections: TheorySection[] = [
         steps: [
           {
             title: "Campo",
-            formulas: [String.raw`E = k\frac{|Q|}{r^2}`],
+            formulas: [
+              String.raw`E = k\frac{|Q|}{r^2}`,
+            ],
           },
           {
             title: "Potencial",
-            formulas: [String.raw`V = k\frac{Q}{r}`],
+            formulas: [
+              String.raw`V = k\frac{Q}{r}`,
+            ],
           },
         ],
       },
     ],
   },
   {
-    id: 23,
+    id: "dimensional",
     icon: Calculator,
-    title: "23. Análise dimensional",
+    title: "Análise dimensional",
     accent: "from-indigo-900 to-slate-950",
-    paragraphs: [
-      "Análise dimensional é uma forma de verificar se uma fórmula faz sentido em termos de unidades. Ela não substitui o raciocínio físico, mas evita erros grosseiros.",
-      "Em Eletrostática, aparecem unidades como coulomb, newton, volt, joule, metro e newton por coulomb.",
+    intro: [
+      "Análise dimensional verifica se uma fórmula faz sentido em termos de unidades.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "A análise dimensional é uma ferramenta de controle de qualidade. Ela não substitui o raciocínio físico, mas ajuda a detectar erros grosseiros antes que eles se transformem em uma resolução inteira errada.",
+          "Em Eletrostática, as unidades carregam significado físico. Campo elétrico em N/C significa força por unidade de carga. Potencial em J/C significa energia por unidade de carga.",
+        ],
+      },
+      {
+        title: "Definição formal",
+        icon: BookOpen,
+        paragraphs: [
+          "A coerência dimensional exige que os dois lados de uma equação tenham as mesmas unidades físicas.",
+          "Se uma expressão para força não resulta em newton, ou uma expressão para potencial não resulta em volt, há algo errado na montagem da fórmula.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Em provas difíceis, a análise dimensional também pode ajudar a eliminar alternativas. Mesmo sem resolver tudo, uma alternativa com unidade incompatível pode ser descartada.",
+          "Só não confunda checagem dimensional com prova completa. Uma fórmula pode ter unidade correta e ainda estar fisicamente errada. A natureza é sutil, infelizmente.",
+        ],
+      },
     ],
     panels: [
       {
         title: "Unidades importantes",
         formula: String.raw`\text{C}, \ \text{N}, \ \text{V}, \ \text{J}, \ \frac{\text{N}}{\text{C}}`,
         terms: [
-          "C: coulomb, unidade de carga elétrica.",
-          "N: newton, unidade de força.",
-          "V: volt, unidade de potencial elétrico.",
-          "J: joule, unidade de energia.",
-          "N/C: unidade de campo elétrico.",
+          "C é coulomb, unidade de carga elétrica.",
+          "N é newton, unidade de força.",
+          "V é volt, unidade de potencial elétrico.",
+          "J é joule, unidade de energia.",
+          "N/C é uma unidade de campo elétrico.",
         ],
         structure: [
           "Campo elétrico pode ser medido em N/C.",
@@ -1859,7 +2701,7 @@ const theorySections: TheorySection[] = [
             title: "Potencial elétrico",
             formulas: [
               String.raw`V = \frac{E_p}{q}`,
-              String.raw`[V] = \frac{\text{J}}{\text{C}}`,
+              String.raw`[V] = \frac{\text{J}}{\text{C}} = \text{V}`,
             ],
           },
         ],
@@ -1867,75 +2709,109 @@ const theorySections: TheorySection[] = [
     ],
   },
   {
-    id: 24,
+    id: "armadilhas",
     icon: AlertTriangle,
-    title: "24. Armadilhas e erros comuns",
+    title: "Armadilhas e erros comuns",
     accent: "from-red-700 to-red-950",
-    paragraphs: [
-      "Eletrostática tem muitas fórmulas simples, mas as armadilhas conceituais são brutais. A maioria dos erros aparece quando o aluno tenta decorar sinais e fórmulas sem desenhar forças, campos e potenciais.",
+    intro: [
+      "Eletrostática tem muitas fórmulas simples, mas as armadilhas conceituais são brutais. A maioria dos erros nasce quando o aluno tenta decorar sinais e fórmulas sem desenhar forças, campos e potenciais.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "A maior dificuldade da Eletrostática não é decorar Coulomb. É saber quando somar vetorialmente, quando somar algebricamente, quando usar sinal, quando usar módulo, quando o corpo está neutro, quando está polarizado e quando o condutor está em equilíbrio.",
+          "O aluno que trata tudo como número positivo perde metade do conteúdo. O aluno que trata tudo como vetor também erra. A arte está em saber a natureza de cada grandeza.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Campo elétrico é vetor. Força elétrica é vetor. Potencial elétrico é escalar. Energia potencial elétrica é escalar. Essa separação resolve mais questão do que muita fórmula decorada.",
+          "Campo nulo não implica potencial nulo. Potencial nulo não implica campo nulo. Essa dupla merece ficar gravada na parede, no caderno e talvez na testa de quem insiste em confundir os dois.",
+        ],
+      },
     ],
     bullets: [
-      "achar que corpo neutro não possui cargas;",
-      "achar que corpo positivo ganhou prótons;",
-      "concluir que atração sempre significa cargas opostas;",
-      "esquecer que na eletrização comum quem se move são elétrons;",
-      "trocar a ordem das etapas na indução;",
-      "somar campos como escalares quando são vetores;",
-      "somar potenciais como vetores quando são escalares;",
-      "confundir campo elétrico com força elétrica;",
-      "confundir potencial elétrico com energia potencial elétrica;",
-      "achar que campo nulo implica potencial nulo;",
-      "achar que potencial nulo implica campo nulo;",
-      "usar módulo em energia potencial elétrica sem considerar sinais.",
+      "Achar que corpo neutro não possui cargas.",
+      "Achar que corpo positivo ganhou prótons.",
+      "Concluir que atração sempre significa cargas opostas.",
+      "Esquecer que, na eletrização comum, quem se move são elétrons.",
+      "Trocar a ordem das etapas na indução.",
+      "Somar campos como escalares quando são vetores.",
+      "Somar potenciais como vetores quando são escalares.",
+      "Confundir campo elétrico com força elétrica.",
+      "Confundir potencial elétrico com energia potencial elétrica.",
+      "Achar que campo nulo implica potencial nulo.",
+      "Achar que potencial nulo implica campo nulo.",
+      "Usar módulo em energia potencial elétrica sem considerar sinais.",
     ],
     notes: [
       {
-        title: "Resumo da tragédia",
+        title: "Observações",
         type: "warning",
-        body: "Campo é vetor. Potencial é escalar. Força depende da carga colocada. Campo pertence ao ponto do espaço. Potencial não é energia, é energia por carga.",
+        body: "Campo é vetor. Potencial é escalar. Força depende da carga colocada. Campo pertence ao ponto do espaço. Potencial não é energia; é energia por carga.",
       },
     ],
   },
   {
-    id: 25,
+    id: "provas",
     icon: Target,
-    title: "25. Pontos importantes para ITA/IME",
+    title: "Pontos importantes para provas difíceis",
     accent: "from-slate-950 to-purple-900",
-    paragraphs: [
-      "Em provas difíceis, Eletrostática aparece com superposição vetorial, simetria, pontos de campo nulo, pontos de potencial nulo, condutores em equilíbrio, indução, blindagem, gráficos e energia potencial.",
-      "O aluno forte não começa substituindo fórmula. Ele desenha o sistema, identifica sinais, direções, simetrias, grandezas vetoriais e grandezas escalares.",
+    intro: [
+      "Em provas difíceis, Eletrostática raramente aparece como aplicação direta de uma fórmula isolada. O conteúdo costuma vir misturado com simetria, vetores, energia, condutores em equilíbrio e interpretação gráfica.",
+    ],
+    concepts: [
+      {
+        title: "Ideia intuitiva",
+        icon: Lightbulb,
+        paragraphs: [
+          "O aluno forte não começa substituindo fórmula. Ele desenha o sistema, identifica sinais, verifica simetrias, separa grandezas vetoriais e escalares, escolhe eixos e só depois calcula.",
+          "Em problemas de campo e força, a direção importa. Em problemas de potencial e energia, o sinal e a soma algébrica importam. Em problemas com condutores, as propriedades de equilíbrio mandam mais do que a aparência do desenho.",
+        ],
+      },
+      {
+        title: "Observações",
+        icon: Brain,
+        paragraphs: [
+          "Superposição vetorial, pontos de campo nulo, pontos de potencial nulo, condutores em equilíbrio, blindagem e indução são temas com forte potencial de aparecer em questões mais elaboradas.",
+          "A pergunta mental mais útil é: a grandeza pedida é vetor ou escalar? Se for vetor, desenhe e some componentes. Se for escalar, cuide dos sinais e some algebricamente.",
+        ],
+      },
     ],
     bullets: [
-      "superposição de forças e campos;",
-      "decomposição vetorial em duas dimensões;",
-      "pontos onde o campo elétrico é nulo;",
-      "pontos onde o potencial elétrico é nulo;",
-      "diferença entre campo nulo e potencial nulo;",
-      "condutores em equilíbrio eletrostático;",
-      "blindagem eletrostática;",
-      "eletrização por indução;",
-      "poder das pontas;",
-      "energia potencial elétrica com sinais;",
-      "gráficos de E e V em função da distância.",
+      "Superposição de forças e campos.",
+      "Decomposição vetorial em duas dimensões.",
+      "Pontos onde o campo elétrico é nulo.",
+      "Pontos onde o potencial elétrico é nulo.",
+      "Diferença entre campo nulo e potencial nulo.",
+      "Condutores em equilíbrio eletrostático.",
+      "Blindagem eletrostática.",
+      "Eletrização por indução.",
+      "Poder das pontas.",
+      "Energia potencial elétrica com sinais.",
+      "Gráficos de campo e potencial em função da distância.",
     ],
     notes: [
       {
-        title: "Roteiro mental de prova",
+        title: "Observações",
         type: "dark",
         body: "Antes de calcular, pergunte: isso é vetor ou escalar? O sinal importa? Há simetria? O ponto é equipotencial? O condutor está em equilíbrio? O problema pede campo, força, potencial ou energia?",
       },
     ],
   },
 ];
-
 const examples: Example[] = [
   {
-    id: "ex1",
-    title: "Exemplo 1 — Quantização da carga",
+    id: "quantizacao",
+    title: "Exemplo — Quantização da carga",
     statement:
       "Um corpo perdeu 5,0 × 10¹² elétrons. Determine sua carga elétrica.",
     explanation: [
-      "Se o corpo perdeu elétrons, ficou positivo. A carga adquirida é o número de elétrons multiplicado pela carga elementar.",
+      "Se o corpo perdeu elétrons, ficou positivo. O módulo da carga adquirida é o número de elétrons multiplicado pela carga elementar.",
     ],
     formulas: [
       String.raw`Q = ne`,
@@ -1945,15 +2821,15 @@ const examples: Example[] = [
     ],
     notes: [
       {
-        title: "Resposta",
+        title: "Observações",
         type: "success",
         body: "A carga é positiva porque o corpo perdeu elétrons.",
       },
     ],
   },
   {
-    id: "ex2",
-    title: "Exemplo 2 — Contato entre esferas idênticas",
+    id: "contato",
+    title: "Exemplo — Contato entre esferas idênticas",
     statement:
       "Duas esferas metálicas idênticas têm cargas +6 μC e −2 μC. Após contato e separação, qual a carga final de cada uma?",
     explanation: [
@@ -1966,15 +2842,15 @@ const examples: Example[] = [
     ],
     notes: [
       {
-        title: "Resposta",
+        title: "Observações",
         type: "success",
-        body: "Cada esfera fica com +2 μC.",
+        body: "Cada esfera fica com +2 μC. Isso só vale diretamente porque elas são idênticas.",
       },
     ],
   },
   {
-    id: "ex3",
-    title: "Exemplo 3 — Lei de Coulomb",
+    id: "coulomb",
+    title: "Exemplo — Lei de Coulomb",
     statement:
       "Duas cargas de módulos 2 μC e 3 μC estão separadas por 0,30 m no vácuo. Determine o módulo da força elétrica.",
     explanation: [
@@ -1987,15 +2863,15 @@ const examples: Example[] = [
     ],
     notes: [
       {
-        title: "Resposta",
+        title: "Observações",
         type: "success",
-        body: "O módulo da força elétrica é 0,60 N.",
+        body: "O módulo da força elétrica é 0,60 N. O sentido dependeria dos sinais das cargas.",
       },
     ],
   },
   {
-    id: "ex4",
-    title: "Exemplo 4 — Campo elétrico",
+    id: "campo",
+    title: "Exemplo — Campo elétrico",
     statement:
       "Uma carga de prova +2 μC sofre força elétrica de 0,40 N em um ponto. Determine o campo elétrico nesse ponto.",
     explanation: [
@@ -2008,15 +2884,15 @@ const examples: Example[] = [
     ],
     notes: [
       {
-        title: "Resposta",
+        title: "Observações",
         type: "success",
         body: "O campo elétrico vale 2,0 × 10⁵ N/C.",
       },
     ],
   },
   {
-    id: "ex5",
-    title: "Exemplo 5 — Potencial elétrico",
+    id: "potencial",
+    title: "Exemplo — Potencial elétrico",
     statement:
       "Uma carga Q = +4 μC está no vácuo. Determine o potencial elétrico a 0,20 m da carga.",
     explanation: [
@@ -2029,15 +2905,15 @@ const examples: Example[] = [
     ],
     notes: [
       {
-        title: "Resposta",
+        title: "Observações",
         type: "success",
-        body: "O potencial é positivo e vale 1,8 × 10⁵ V.",
+        body: "O potencial é positivo porque a carga fonte é positiva.",
       },
     ],
   },
   {
-    id: "ex6",
-    title: "Exemplo 6 — Campo nulo e potencial não nulo",
+    id: "campo-potencial",
+    title: "Exemplo — Campo nulo e potencial não nulo",
     statement:
       "No ponto médio entre duas cargas iguais positivas, o campo elétrico pode ser nulo? E o potencial?",
     explanation: [
@@ -2050,9 +2926,9 @@ const examples: Example[] = [
     ],
     notes: [
       {
-        title: "Conclusão",
+        title: "Observações",
         type: "warning",
-        body: "Campo nulo não significa potencial nulo. Essa é uma das pegadinhas mais bonitas e irritantes da Eletrostática.",
+        body: "Campo nulo não significa potencial nulo. Essa diferença derruba muita gente porque campo é vetor e potencial é escalar.",
       },
     ],
   },
@@ -2067,7 +2943,7 @@ const formulaSummary: FormulaSummary[] = [
   {
     title: "Quantização da carga",
     formula: String.raw`Q = \pm ne`,
-    description: "Carga elétrica aparece em múltiplos inteiros de e.",
+    description: "Carga elétrica aparece em múltiplos inteiros da carga elementar.",
   },
   {
     title: "Conservação da carga",
@@ -2220,19 +3096,18 @@ export default function EletricidadeTopicEletrostatica() {
                   </h2>
 
                   <p className="mt-5 max-w-3xl leading-8 text-slate-300">
-                    Uma abordagem completa de Eletrostática, agora fora do
-                    Markdown renderizado e organizada em layout React com
-                    diagramas visuais, painéis de fórmula, exemplos, armadilhas
-                    e foco em ITA/IME.
+                    Uma abordagem completa de Eletrostática com explicações
+                    profundas, blocos conceituais, fórmulas interpretadas,
+                    diagramas visuais e observações de prova.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    ["25", "tópicos"],
+                    ["20", "blocos"],
                     ["16", "fórmulas"],
-                    ["ITA", "foco"],
-                    ["IME", "nível"],
+                    ["SVG", "diagramas"],
+                    ["PRO", "nível"],
                   ].map(([value, label]) => (
                     <div
                       key={label}
@@ -2255,13 +3130,17 @@ export default function EletricidadeTopicEletrostatica() {
                 title={section.title}
                 accent={section.accent}
               >
-                {section.paragraphs.map((paragraph, index) => (
-                  <p key={`paragraph-${index}`}>{paragraph}</p>
+                {section.intro?.map((paragraph, index) => (
+                  <p key={`intro-${index}`}>{paragraph}</p>
                 ))}
 
-                {section.diagram ? <CircuitDiagram diagram={section.diagram} /> : null}
+                {section.concepts?.map((concept, index) => (
+                  <ConceptBlock key={`concept-${index}`} concept={concept} />
+                ))}
 
-                {section.numbered ? <NumberedList items={section.numbered} /> : null}
+                {section.diagram ? (
+                  <CircuitDiagram diagram={section.diagram} />
+                ) : null}
 
                 {section.panels?.map((panel, index) => (
                   <EquationPanel key={`panel-${index}`} panel={panel} />
@@ -2303,7 +3182,7 @@ export default function EletricidadeTopicEletrostatica() {
               icon={Brain}
               eyebrow="Mapa final"
               title="Resumo de Eletrostática"
-              description="As fórmulas principais e os significados físicos que seguram o conteúdo inteiro."
+              description="As fórmulas principais e os significados físicos que sustentam o conteúdo inteiro."
               accent="from-slate-950 via-slate-900 to-indigo-950"
             />
 
@@ -2326,25 +3205,25 @@ export default function EletricidadeTopicEletrostatica() {
             >
               <BulletList
                 items={[
-                  "corpo neutro possui cargas, mas a soma algébrica é zero;",
-                  "corpo positivo perdeu elétrons; corpo negativo ganhou elétrons;",
-                  "força elétrica é vetor; energia potencial elétrica é escalar;",
-                  "campo elétrico é vetor; potencial elétrico é escalar;",
-                  "campos elétricos são somados vetorialmente;",
-                  "potenciais elétricos são somados algebricamente;",
-                  "campo nulo não implica potencial nulo;",
-                  "potencial nulo não implica campo nulo;",
-                  "em condutor em equilíbrio, o campo elétrico interno é nulo;",
-                  "em condutor em equilíbrio, a carga em excesso fica na superfície;",
-                  "na indução, a ordem das etapas é decisiva;",
-                  "atração não prova necessariamente cargas opostas.",
+                  "Corpo neutro possui cargas, mas a soma algébrica é zero.",
+                  "Corpo positivo perdeu elétrons; corpo negativo ganhou elétrons.",
+                  "Força elétrica é vetor; energia potencial elétrica é escalar.",
+                  "Campo elétrico é vetor; potencial elétrico é escalar.",
+                  "Campos elétricos são somados vetorialmente.",
+                  "Potenciais elétricos são somados algebricamente.",
+                  "Campo nulo não implica potencial nulo.",
+                  "Potencial nulo não implica campo nulo.",
+                  "Em condutor em equilíbrio, o campo elétrico interno é nulo.",
+                  "Em condutor em equilíbrio, a carga em excesso fica na superfície.",
+                  "Na indução, a ordem das etapas é decisiva.",
+                  "Atração não prova necessariamente cargas opostas.",
                 ]}
               />
 
-              <NoteBox title="Ideia final" type="dark">
+              <NoteBox title="Observações" type="dark">
                 Eletrostática não é uma coleção de continhas com Coulomb. É a
                 base para entender campo, potencial, energia, condutores,
-                indução, blindagem e praticamente todo o resto da eletricidade.
+                indução, blindagem e praticamente todo o resto da Eletricidade.
               </NoteBox>
             </SectionCard>
           </>
