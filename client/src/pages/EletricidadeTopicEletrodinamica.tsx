@@ -21,8 +21,26 @@ import { Link } from "wouter";
 import { MathFormula } from "@/components/MathFormula";
 
 type Tab = "teoria" | "exemplos" | "resumo";
-
 type NoteType = "info" | "warning" | "success" | "dark" | "danger";
+
+type DiagramKind =
+  | "series"
+  | "parallel"
+  | "mixed"
+  | "generator"
+  | "receiver"
+  | "meters"
+  | "wheatstone"
+  | "shortCircuit"
+  | "capacitor"
+  | "transmission"
+  | "nodes";
+
+type DiagramData = {
+  kind: DiagramKind;
+  title: string;
+  caption: string;
+};
 
 type DerivationStepData = {
   title: string;
@@ -44,6 +62,7 @@ type TheorySection = {
   title: string;
   accent: string;
   paragraphs: string[];
+  diagram?: DiagramData;
   numbered?: string[];
   bullets?: string[];
   panels?: EquationPanelData[];
@@ -143,8 +162,8 @@ function EquationPanel({ panel }: { panel: EquationPanelData }) {
         {panel.title}
       </h3>
 
-      <div className="flex min-h-[150px] items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-10">
-        <div className="text-center text-slate-100 [&_.katex]:text-3xl [&_.katex]:text-slate-100 [&_.katex-display]:my-0 md:[&_.katex]:text-5xl">
+      <div className="flex min-h-[150px] items-center justify-center overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-10">
+        <div className="min-w-max text-center text-slate-100 [&_.katex]:text-2xl [&_.katex]:text-slate-100 [&_.katex-display]:my-0 md:[&_.katex]:text-5xl">
           <MathFormula formula={panel.formula} display={true} />
         </div>
       </div>
@@ -190,6 +209,490 @@ function EquationPanel({ panel }: { panel: EquationPanelData }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CircuitDiagram({ diagram }: { diagram: DiagramData }) {
+  return (
+    <div className="my-8 overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-indigo-50 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+      <div className="border-b border-slate-200 bg-slate-950 px-6 py-4">
+        <h3 className="text-lg font-black text-white">{diagram.title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-300">{diagram.caption}</p>
+      </div>
+
+      <div className="overflow-x-auto p-5 md:p-7">
+        <div className="min-w-[680px]">
+          {diagram.kind === "series" && <SeriesDiagram />}
+          {diagram.kind === "parallel" && <ParallelDiagram />}
+          {diagram.kind === "mixed" && <MixedDiagram />}
+          {diagram.kind === "generator" && <GeneratorDiagram />}
+          {diagram.kind === "receiver" && <ReceiverDiagram />}
+          {diagram.kind === "meters" && <MetersDiagram />}
+          {diagram.kind === "wheatstone" && <WheatstoneDiagram />}
+          {diagram.kind === "shortCircuit" && <ShortCircuitDiagram />}
+          {diagram.kind === "capacitor" && <CapacitorDiagram />}
+          {diagram.kind === "transmission" && <TransmissionDiagram />}
+          {diagram.kind === "nodes" && <NodesDiagram />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Wire({
+  x1,
+  y1,
+  x2,
+  y2,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}) {
+  return (
+    <line
+      x1={x1}
+      y1={y1}
+      x2={x2}
+      y2={y2}
+      stroke="#0f172a"
+      strokeWidth="4"
+      strokeLinecap="round"
+    />
+  );
+}
+
+function Dot({ x, y, label }: { x: number; y: number; label?: string }) {
+  return (
+    <>
+      <circle cx={x} cy={y} r="7" fill="#0f172a" />
+      {label ? (
+        <text
+          x={x}
+          y={y - 16}
+          textAnchor="middle"
+          className="fill-slate-950 text-[18px] font-black"
+        >
+          {label}
+        </text>
+      ) : null}
+    </>
+  );
+}
+
+function Resistor({
+  x,
+  y,
+  label,
+}: {
+  x: number;
+  y: number;
+  label: string;
+}) {
+  return (
+    <>
+      <rect
+        x={x}
+        y={y - 22}
+        width="92"
+        height="44"
+        rx="12"
+        fill="#f8fafc"
+        stroke="#0f172a"
+        strokeWidth="4"
+      />
+      <text
+        x={x + 46}
+        y={y + 7}
+        textAnchor="middle"
+        className="fill-slate-950 text-[18px] font-black"
+      >
+        {label}
+      </text>
+    </>
+  );
+}
+
+function Battery({
+  x,
+  y,
+  label = "Fonte",
+}: {
+  x: number;
+  y: number;
+  label?: string;
+}) {
+  return (
+    <>
+      <line x1={x} y1={y - 30} x2={x} y2={y + 30} stroke="#0f172a" strokeWidth="4" />
+      <line x1={x + 18} y1={y - 18} x2={x + 18} y2={y + 18} stroke="#0f172a" strokeWidth="4" />
+      <text
+        x={x + 9}
+        y={y - 45}
+        textAnchor="middle"
+        className="fill-slate-950 text-[16px] font-black"
+      >
+        {label}
+      </text>
+      <text x={x - 12} y={y - 36} className="fill-emerald-700 text-[18px] font-black">
+        +
+      </text>
+      <text x={x + 25} y={y + 42} className="fill-red-700 text-[18px] font-black">
+        -
+      </text>
+    </>
+  );
+}
+
+function Meter({
+  x,
+  y,
+  label,
+}: {
+  x: number;
+  y: number;
+  label: string;
+}) {
+  return (
+    <>
+      <circle cx={x} cy={y} r="30" fill="#eef2ff" stroke="#0f172a" strokeWidth="4" />
+      <text
+        x={x}
+        y={y + 7}
+        textAnchor="middle"
+        className="fill-slate-950 text-[22px] font-black"
+      >
+        {label}
+      </text>
+    </>
+  );
+}
+
+function CapacitorSymbol({ x, y, label }: { x: number; y: number; label: string }) {
+  return (
+    <>
+      <line x1={x} y1={y - 35} x2={x} y2={y + 35} stroke="#0f172a" strokeWidth="5" />
+      <line x1={x + 20} y1={y - 35} x2={x + 20} y2={y + 35} stroke="#0f172a" strokeWidth="5" />
+      <text
+        x={x + 10}
+        y={y - 50}
+        textAnchor="middle"
+        className="fill-slate-950 text-[18px] font-black"
+      >
+        {label}
+      </text>
+    </>
+  );
+}
+
+function Label({
+  x,
+  y,
+  children,
+}: {
+  x: number;
+  y: number;
+  children: ReactNode;
+}) {
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      className="fill-slate-700 text-[15px] font-bold"
+    >
+      {children}
+    </text>
+  );
+}
+
+function SeriesDiagram() {
+  return (
+    <svg viewBox="0 0 760 260" className="h-[260px] w-full">
+      <rect x="15" y="15" width="730" height="230" rx="26" fill="#ffffff" />
+      <Battery x={90} y={130} />
+      <Wire x1={108} y1={130} x2={185} y2={130} />
+      <Resistor x={185} y={130} label="R₁" />
+      <Wire x1={277} y1={130} x2={340} y2={130} />
+      <Resistor x={340} y={130} label="R₂" />
+      <Wire x1={432} y1={130} x2={495} y2={130} />
+      <Resistor x={495} y={130} label="R₃" />
+      <Wire x1={587} y1={130} x2={670} y2={130} />
+      <Wire x1={670} y1={130} x2={670} y2={205} />
+      <Wire x1={670} y1={205} x2={90} y2={205} />
+      <Wire x1={90} y1={205} x2={90} y2={160} />
+      <Label x={380} y={70}>mesma corrente atravessa todos os resistores</Label>
+      <Label x={380} y={235}>a tensão total se divide entre R₁, R₂ e R₃</Label>
+    </svg>
+  );
+}
+
+function ParallelDiagram() {
+  return (
+    <svg viewBox="0 0 760 320" className="h-[320px] w-full">
+      <rect x="15" y="15" width="730" height="290" rx="26" fill="#ffffff" />
+      <Battery x={85} y={160} />
+      <Wire x1={103} y1={160} x2={165} y2={160} />
+      <Dot x={165} y={160} label="A" />
+      <Wire x1={165} y1={160} x2={165} y2={90} />
+      <Wire x1={165} y1={90} x2={310} y2={90} />
+      <Resistor x={310} y={90} label="R₁" />
+      <Wire x1={402} y1={90} x2={595} y2={90} />
+      <Wire x1={165} y1={160} x2={310} y2={160} />
+      <Resistor x={310} y={160} label="R₂" />
+      <Wire x1={402} y1={160} x2={595} y2={160} />
+      <Wire x1={165} y1={160} x2={165} y2={230} />
+      <Wire x1={165} y1={230} x2={310} y2={230} />
+      <Resistor x={310} y={230} label="R₃" />
+      <Wire x1={402} y1={230} x2={595} y2={230} />
+      <Wire x1={595} y1={90} x2={595} y2={230} />
+      <Dot x={595} y={160} label="B" />
+      <Wire x1={595} y1={160} x2={675} y2={160} />
+      <Wire x1={675} y1={160} x2={675} y2={270} />
+      <Wire x1={675} y1={270} x2={85} y2={270} />
+      <Wire x1={85} y1={270} x2={85} y2={190} />
+      <Label x={380} y={55}>todos os resistores estão entre os mesmos nós A e B</Label>
+      <Label x={380} y={300}>mesma tensão em cada ramo; corrente total se divide</Label>
+    </svg>
+  );
+}
+
+function MixedDiagram() {
+  return (
+    <svg viewBox="0 0 760 330" className="h-[330px] w-full">
+      <rect x="15" y="15" width="730" height="300" rx="26" fill="#ffffff" />
+      <Battery x={85} y={165} />
+      <Wire x1={103} y1={165} x2={185} y2={165} />
+      <Resistor x={185} y={165} label="R₁" />
+      <Wire x1={277} y1={165} x2={345} y2={165} />
+      <Dot x={345} y={165} label="A" />
+      <Wire x1={345} y1={165} x2={345} y2={105} />
+      <Wire x1={345} y1={105} x2={455} y2={105} />
+      <Resistor x={455} y={105} label="R₂" />
+      <Wire x1={547} y1={105} x2={625} y2={105} />
+      <Wire x1={345} y1={165} x2={455} y2={225} />
+      <Resistor x={455} y={225} label="R₃" />
+      <Wire x1={547} y1={225} x2={625} y2={225} />
+      <Wire x1={625} y1={105} x2={625} y2={225} />
+      <Dot x={625} y={165} label="B" />
+      <Wire x1={625} y1={165} x2={685} y2={165} />
+      <Wire x1={685} y1={165} x2={685} y2={275} />
+      <Wire x1={685} y1={275} x2={85} y2={275} />
+      <Wire x1={85} y1={275} x2={85} y2={195} />
+      <Label x={250} y={115}>R₁ em série</Label>
+      <Label x={505} y={65}>R₂ e R₃ em paralelo</Label>
+      <Label x={385} y={305}>resolva primeiro o paralelo entre A e B, depois some com R₁</Label>
+    </svg>
+  );
+}
+
+function GeneratorDiagram() {
+  return (
+    <svg viewBox="0 0 760 280" className="h-[280px] w-full">
+      <rect x="15" y="15" width="730" height="250" rx="26" fill="#ffffff" />
+      <Battery x={90} y={140} label="ε" />
+      <Wire x1={108} y1={140} x2={210} y2={140} />
+      <Resistor x={210} y={140} label="r" />
+      <Wire x1={302} y1={140} x2={420} y2={140} />
+      <Resistor x={420} y={140} label="R" />
+      <Wire x1={512} y1={140} x2={670} y2={140} />
+      <Wire x1={670} y1={140} x2={670} y2={220} />
+      <Wire x1={670} y1={220} x2={90} y2={220} />
+      <Wire x1={90} y1={220} x2={90} y2={170} />
+      <Label x={255} y={95}>resistência interna do gerador</Label>
+      <Label x={465} y={95}>circuito externo</Label>
+      <Label x={380} y={250}>U = ε - ri: a tensão útil é menor que a fem</Label>
+    </svg>
+  );
+}
+
+function ReceiverDiagram() {
+  return (
+    <svg viewBox="0 0 760 280" className="h-[280px] w-full">
+      <rect x="15" y="15" width="730" height="250" rx="26" fill="#ffffff" />
+      <Battery x={90} y={140} label="Fonte" />
+      <Wire x1={108} y1={140} x2={220} y2={140} />
+      <circle cx={270} cy={140} r="42" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
+      <text x={270} y={147} textAnchor="middle" className="fill-slate-950 text-[20px] font-black">
+        Motor
+      </text>
+      <Wire x1={312} y1={140} x2={395} y2={140} />
+      <Resistor x={395} y={140} label="r′" />
+      <Wire x1={487} y1={140} x2={670} y2={140} />
+      <Wire x1={670} y1={140} x2={670} y2={220} />
+      <Wire x1={670} y1={220} x2={90} y2={220} />
+      <Wire x1={90} y1={220} x2={90} y2={170} />
+      <Label x={270} y={85}>conversão útil: ε′</Label>
+      <Label x={440} y={95}>perda interna: r′i</Label>
+      <Label x={380} y={250}>U = ε′ + r′i: a fonte precisa vencer as duas partes</Label>
+    </svg>
+  );
+}
+
+function MetersDiagram() {
+  return (
+    <svg viewBox="0 0 760 330" className="h-[330px] w-full">
+      <rect x="15" y="15" width="730" height="300" rx="26" fill="#ffffff" />
+      <Battery x={80} y={165} />
+      <Wire x1={98} y1={165} x2={170} y2={165} />
+      <Meter x={210} y={165} label="A" />
+      <Wire x1={240} y1={165} x2={330} y2={165} />
+      <Resistor x={330} y={165} label="R" />
+      <Wire x1={422} y1={165} x2={625} y2={165} />
+      <Wire x1={625} y1={165} x2={625} y2={260} />
+      <Wire x1={625} y1={260} x2={80} y2={260} />
+      <Wire x1={80} y1={260} x2={80} y2={195} />
+      <Wire x1={330} y1={165} x2={330} y2={90} />
+      <Wire x1={422} y1={165} x2={422} y2={90} />
+      <Wire x1={330} y1={90} x2={355} y2={90} />
+      <Meter x={385} y={90} label="V" />
+      <Wire x1={415} y1={90} x2={422} y2={90} />
+      <Label x={210} y={115}>amperímetro em série</Label>
+      <Label x={385} y={45}>voltímetro em paralelo</Label>
+      <Label x={380} y={300}>A mede corrente do ramo; V mede tensão nos terminais do resistor</Label>
+    </svg>
+  );
+}
+
+function WheatstoneDiagram() {
+  return (
+    <svg viewBox="0 0 760 390" className="h-[390px] w-full">
+      <rect x="15" y="15" width="730" height="360" rx="26" fill="#ffffff" />
+      <Battery x={80} y={195} />
+      <Dot x={170} y={195} label="P" />
+      <Dot x={610} y={195} label="Q" />
+      <Wire x1={98} y1={195} x2={170} y2={195} />
+      <Wire x1={610} y1={195} x2={680} y2={195} />
+      <Wire x1={680} y1={195} x2={680} y2={320} />
+      <Wire x1={680} y1={320} x2={80} y2={320} />
+      <Wire x1={80} y1={320} x2={80} y2={225} />
+
+      <Wire x1={170} y1={195} x2={270} y2={95} />
+      <Resistor x={270} y={95} label="R₁" />
+      <Wire x1={362} y1={95} x2={610} y2={195} />
+
+      <Wire x1={170} y1={195} x2={270} y2={295} />
+      <Resistor x={270} y={295} label="R₂" />
+      <Wire x1={362} y1={295} x2={610} y2={195} />
+
+      <Wire x1={390} y1={143} x2={500} y2={143} />
+      <Resistor x={500} y={143} label="R₃" />
+      <Wire x1={592} y1={143} x2={610} y2={195} />
+
+      <Wire x1={390} y1={247} x2={500} y2={247} />
+      <Resistor x={500} y={247} label="R₄" />
+      <Wire x1={592} y1={247} x2={610} y2={195} />
+
+      <Meter x={420} y={195} label="G" />
+      <Wire x1={362} y1={95} x2={390} y2={143} />
+      <Wire x1={362} y1={295} x2={390} y2={247} />
+      <Wire x1={390} y1={143} x2={390} y2={165} />
+      <Wire x1={390} y1={225} x2={390} y2={247} />
+
+      <Label x={420} y={55}>ponte equilibrada: corrente no galvanômetro é zero</Label>
+      <Label x={420} y={360}>condição: R₁/R₂ = R₃/R₄</Label>
+    </svg>
+  );
+}
+
+function ShortCircuitDiagram() {
+  return (
+    <svg viewBox="0 0 760 310" className="h-[310px] w-full">
+      <rect x="15" y="15" width="730" height="280" rx="26" fill="#ffffff" />
+      <Battery x={90} y={155} />
+      <Wire x1={108} y1={155} x2={220} y2={155} />
+      <Resistor x={220} y={155} label="R" />
+      <Wire x1={312} y1={155} x2={650} y2={155} />
+      <Wire x1={650} y1={155} x2={650} y2={245} />
+      <Wire x1={650} y1={245} x2={90} y2={245} />
+      <Wire x1={90} y1={245} x2={90} y2={185} />
+
+      <path d="M 170 155 C 255 55, 500 55, 610 155" fill="none" stroke="#dc2626" strokeWidth="8" strokeLinecap="round" />
+      <text x={390} y={75} textAnchor="middle" className="fill-red-700 text-[20px] font-black">
+        caminho de resistência muito baixa
+      </text>
+
+      <Label x={385} y={115}>a corrente prefere o caminho mais fácil</Label>
+      <Label x={380} y={280}>curto-circuito pode gerar corrente enorme e aquecimento perigoso</Label>
+    </svg>
+  );
+}
+
+function CapacitorDiagram() {
+  return (
+    <svg viewBox="0 0 760 290" className="h-[290px] w-full">
+      <rect x="15" y="15" width="730" height="260" rx="26" fill="#ffffff" />
+      <Battery x={90} y={145} />
+      <Wire x1={108} y1={145} x2={270} y2={145} />
+      <CapacitorSymbol x={330} y={145} label="C" />
+      <Wire x1={350} y1={145} x2={650} y2={145} />
+      <Wire x1={650} y1={145} x2={650} y2={230} />
+      <Wire x1={650} y1={230} x2={90} y2={230} />
+      <Wire x1={90} y1={230} x2={90} y2={175} />
+      <text x={310} y={105} className="fill-emerald-700 text-[20px] font-black">+</text>
+      <text x={365} y={105} className="fill-red-700 text-[20px] font-black">−</text>
+      <Label x={380} y={70}>capacitor armazena carga nas placas</Label>
+      <Label x={380} y={265}>após muito tempo em corrente contínua: circuito aberto ideal</Label>
+    </svg>
+  );
+}
+
+function TransmissionDiagram() {
+  return (
+    <svg viewBox="0 0 760 300" className="h-[300px] w-full">
+      <rect x="15" y="15" width="730" height="270" rx="26" fill="#ffffff" />
+      <circle cx={105} cy={150} r="38" fill="#eef2ff" stroke="#0f172a" strokeWidth="4" />
+      <text x={105} y={157} textAnchor="middle" className="fill-slate-950 text-[17px] font-black">
+        Usina
+      </text>
+      <rect x={205} y={105} width="100" height="90" rx="16" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
+      <text x={255} y={145} textAnchor="middle" className="fill-slate-950 text-[15px] font-black">
+        Trafo
+      </text>
+      <text x={255} y={167} textAnchor="middle" className="fill-slate-950 text-[13px] font-bold">
+        eleva U
+      </text>
+      <rect x={455} y={105} width="100" height="90" rx="16" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
+      <text x={505} y={145} textAnchor="middle" className="fill-slate-950 text-[15px] font-black">
+        Trafo
+      </text>
+      <text x={505} y={167} textAnchor="middle" className="fill-slate-950 text-[13px] font-bold">
+        reduz U
+      </text>
+      <rect x={625} y={115} width="75" height="70" rx="14" fill="#ecfeff" stroke="#0f172a" strokeWidth="4" />
+      <text x={662} y={157} textAnchor="middle" className="fill-slate-950 text-[16px] font-black">
+        Casa
+      </text>
+
+      <Wire x1={143} y1={150} x2={205} y2={150} />
+      <Wire x1={305} y1={135} x2={455} y2={135} />
+      <Wire x1={305} y1={165} x2={455} y2={165} />
+      <Wire x1={555} y1={150} x2={625} y2={150} />
+      <Label x={380} y={105}>alta tensão na transmissão</Label>
+      <Label x={380} y={220}>para mesma potência: U maior → i menor → perdas Ri² menores</Label>
+    </svg>
+  );
+}
+
+function NodesDiagram() {
+  return (
+    <svg viewBox="0 0 760 290" className="h-[290px] w-full">
+      <rect x="15" y="15" width="730" height="260" rx="26" fill="#ffffff" />
+      <Dot x={170} y={145} label="Nó A" />
+      <Dot x={590} y={145} label="Nó B" />
+      <Wire x1={170} y1={145} x2={260} y2={90} />
+      <Resistor x={260} y={90} label="R₁" />
+      <Wire x1={352} y1={90} x2={590} y2={145} />
+      <Wire x1={170} y1={145} x2={260} y2={145} />
+      <Resistor x={260} y={145} label="R₂" />
+      <Wire x1={352} y1={145} x2={590} y2={145} />
+      <Wire x1={170} y1={145} x2={260} y2={200} />
+      <Resistor x={260} y={200} label="R₃" />
+      <Wire x1={352} y1={200} x2={590} y2={145} />
+      <Label x={380} y={55}>três caminhos diferentes entre os mesmos dois nós</Label>
+      <Label x={380} y={250}>se compartilham A e B, estão em paralelo, mesmo desenhados de formas diferentes</Label>
+    </svg>
   );
 }
 
@@ -335,9 +838,7 @@ function FormulaSummaryCard({ item }: { item: FormulaSummary }) {
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h3 className="mb-3 text-base font-black text-slate-950">{item.title}</h3>
       <FormulaBlock formula={item.formula} />
-      <p className="mt-3 text-sm leading-6 text-slate-600">
-        {item.description}
-      </p>
+      <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
     </div>
   );
 }
@@ -354,9 +855,7 @@ function ExampleAccordion({ example }: { example: Example }) {
       >
         <div className="flex items-start justify-between gap-5">
           <div>
-            <h3 className="text-lg font-black text-slate-950">
-              {example.title}
-            </h3>
+            <h3 className="text-lg font-black text-slate-950">{example.title}</h3>
 
             <p className="mt-2 text-sm leading-7 text-slate-600">
               {example.statement}
@@ -364,11 +863,7 @@ function ExampleAccordion({ example }: { example: Example }) {
           </div>
 
           <div className="flex-shrink-0 rounded-full bg-slate-950 p-2 text-white">
-            {open ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
+            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </div>
         </div>
       </button>
@@ -401,10 +896,10 @@ const theorySections: TheorySection[] = [
     title: "1. Contexto físico e histórico",
     accent: "from-indigo-600 to-purple-700",
     paragraphs: [
-      "A Eletrodinâmica é a parte da Eletricidade que estuda as cargas elétricas em movimento e os efeitos associados a esse movimento. Enquanto a Eletrostática se concentra em cargas em repouso, campos elétricos estáticos, potencial elétrico e equilíbrio eletrostático, a Eletrodinâmica entra em cena quando as cargas passam a se deslocar de forma ordenada, dando origem à corrente elétrica.",
-      "O ponto essencial é perceber que a Eletrodinâmica não aparece do nada. Ela nasce naturalmente da Eletrostática. Para que exista corrente em um condutor, normalmente há uma diferença de potencial entre dois pontos. Essa diferença de potencial estabelece um campo elétrico no condutor. O campo exerce força elétrica sobre os portadores livres, e esses portadores passam a apresentar movimento médio ordenado.",
-      "Historicamente, a eletricidade só se tornou uma ferramenta técnica poderosa quando foi possível manter corrente elétrica de forma contínua. Antes disso, muitos fenômenos elétricos eram observados como atrações, faíscas e choques. Com a pilha de Volta e o desenvolvimento posterior de circuitos, instrumentos e motores, a eletricidade passou a ser controlada, medida e aplicada.",
-      "É por isso que Eletrodinâmica é uma ponte entre conceitos abstratos e aplicações concretas. Ela liga campo elétrico, energia potencial elétrica e potencial elétrico a lâmpadas, chuveiros, motores, baterias, linhas de transmissão, fusíveis, disjuntores, placas eletrônicas e praticamente toda a tecnologia moderna. Uma tragédia para quem queria só decorar fórmula, mas uma bênção para quem quer entender de verdade.",
+      "A Eletrodinâmica é a parte da Eletricidade que estuda cargas elétricas em movimento e os efeitos associados a esse movimento. Enquanto a Eletrostática analisa cargas em repouso, campos elétricos, potencial elétrico e equilíbrio eletrostático, a Eletrodinâmica começa quando essas cargas passam a se deslocar de maneira ordenada.",
+      "Ela não aparece do nada. Para que exista corrente em um condutor, normalmente há uma diferença de potencial entre dois pontos. Essa diferença estabelece campo elétrico no condutor. O campo exerce força sobre portadores livres, como elétrons em metais, e esses portadores passam a apresentar movimento médio ordenado.",
+      "Historicamente, a eletricidade só se tornou uma tecnologia poderosa quando foi possível manter corrente elétrica de modo contínuo. A partir de pilhas, baterias, motores e instrumentos de medição, a eletricidade deixou de ser apenas faísca e choque ocasional e virou uma linguagem técnica para controlar energia.",
+      "Por isso, a Eletrodinâmica conecta conceitos abstratos a aplicações concretas: chuveiros, lâmpadas, motores, baterias, fusíveis, disjuntores, linhas de transmissão, eletrônica e redes elétricas.",
     ],
     numbered: [
       "Uma fonte estabelece diferença de potencial.",
@@ -414,22 +909,11 @@ const theorySections: TheorySection[] = [
       "Esse movimento ordenado constitui a corrente elétrica.",
       "A energia elétrica pode ser transformada em calor, luz, movimento, som, energia química ou processamento de informação.",
     ],
-    bullets: [
-      "circuitos elétricos simples;",
-      "instalações residenciais;",
-      "lâmpadas e chuveiros elétricos;",
-      "motores elétricos;",
-      "baterias e carregadores;",
-      "linhas de transmissão;",
-      "fusíveis e disjuntores;",
-      "instrumentos de medida;",
-      "sistemas eletrônicos e redes de energia.",
-    ],
     notes: [
       {
         title: "Ideia central",
         type: "success",
-        body: "A Eletrodinâmica estuda como cargas se movem em circuitos e como a energia elétrica é transferida, transformada e dissipada.",
+        body: "Eletrodinâmica é o estudo do movimento organizado de cargas e da transferência de energia elétrica em circuitos.",
       },
     ],
   },
@@ -439,10 +923,10 @@ const theorySections: TheorySection[] = [
     title: "2. Ideia intuitiva de corrente elétrica",
     accent: "from-purple-600 to-indigo-700",
     paragraphs: [
-      "Corrente elétrica é o fluxo ordenado de cargas elétricas. A palavra mais importante aqui é ordenado. Em um metal, como cobre ou alumínio, existem elétrons livres se movimentando o tempo todo por causa da agitação térmica. Mesmo com o circuito desligado, esses elétrons já estão em movimento microscópico.",
-      "Mas esse movimento térmico é caótico. Um elétron vai para um lado, outro vai para outro, outro muda de direção, e a soma média desses deslocamentos não produz um fluxo líquido de carga em uma direção específica. É movimento, mas não é corrente resultante. Natureza fazendo bagunça microscópica, como sempre.",
-      "Quando conectamos uma fonte, como pilha ou bateria, criamos uma diferença de potencial entre os extremos do condutor. Essa diferença estabelece um campo elétrico no interior do fio. O campo elétrico exerce força sobre os elétrons livres, e então aparece um pequeno movimento médio ordenado sobreposto ao movimento térmico aleatório. Esse movimento médio é chamado de velocidade de deriva.",
-      "É importante entender que a velocidade de deriva dos elétrons costuma ser pequena. Isso não significa que o circuito demora muito para responder. O efeito elétrico se propaga rapidamente pelo circuito porque o campo elétrico se estabelece ao longo do condutor com velocidade muito alta. Não é um único elétron saindo da tomada e correndo até o aparelho como se estivesse atrasado para o ENEM.",
+      "Corrente elétrica é o fluxo ordenado de cargas elétricas. A palavra ordenado é essencial. Em um metal, os elétrons livres se movem o tempo todo por agitação térmica, mesmo sem pilha, bateria ou tomada ligada.",
+      "Esse movimento térmico, porém, é caótico. Em média, não há direção preferencial. Um elétron vai para um lado, outro para outro, e o resultado macroscópico não é uma corrente elétrica útil.",
+      "Quando uma fonte é conectada, surge uma diferença de potencial entre os extremos do condutor. Essa diferença cria campo elétrico no interior do fio. O campo atua sobre os elétrons livres, gerando um pequeno movimento médio ordenado, chamado velocidade de deriva.",
+      "A velocidade de deriva dos elétrons costuma ser pequena. O circuito responde rapidamente não porque um elétron atravessa tudo correndo, mas porque o campo elétrico se estabelece ao longo do condutor com velocidade muito alta. Não é uma corrida de elétrons; é uma reorganização coletiva do sistema.",
     ],
     panels: [
       {
@@ -450,37 +934,26 @@ const theorySections: TheorySection[] = [
         formula: String.raw`\text{sentido dos elétrons} = \text{oposto ao sentido convencional}`,
         terms: [
           "Sentido real dos elétrons: nos metais, os elétrons se deslocam, em média, do polo negativo para o polo positivo.",
-          "Sentido convencional da corrente: é definido como o sentido em que cargas positivas se moveriam.",
+          "Sentido convencional da corrente: sentido em que cargas positivas se moveriam.",
           "Campo elétrico: aponta no sentido da força elétrica sobre uma carga positiva de prova.",
         ],
         structure: [
-          "A convenção de corrente foi criada antes da identificação clara dos elétrons como portadores móveis nos metais.",
+          "A convenção foi criada antes da identificação clara dos elétrons como portadores móveis nos metais.",
           "Como o elétron tem carga negativa, a força elétrica sobre ele tem sentido oposto ao campo elétrico.",
-          "Mesmo sabendo disso, mantemos o sentido convencional porque ele é historicamente adotado e funciona de forma consistente nas equações de circuito.",
+          "Mantemos o sentido convencional por tradição e consistência na análise dos circuitos.",
         ],
         steps: [
           {
-            title: "Passo 1: força elétrica sobre uma carga",
-            body: [
-              "A força elétrica sobre uma partícula carregada em um campo elétrico é dada pela relação abaixo.",
-            ],
+            title: "Força elétrica",
             formulas: [String.raw`\vec{F} = q\vec{E}`],
           },
           {
-            title: "Passo 2: carga positiva",
-            body: [
-              "Se a carga é positiva, a força elétrica tem o mesmo sentido do campo elétrico.",
-            ],
+            title: "Carga positiva",
             formulas: [String.raw`q > 0 \Rightarrow \vec{F} \parallel \vec{E}`],
           },
           {
-            title: "Passo 3: elétron",
-            body: [
-              "Se a carga é negativa, como acontece com o elétron, a força elétrica tem sentido oposto ao campo elétrico.",
-            ],
-            formulas: [
-              String.raw`q < 0 \Rightarrow \vec{F} \text{ tem sentido oposto a } \vec{E}`,
-            ],
+            title: "Elétron",
+            formulas: [String.raw`q < 0 \Rightarrow \vec{F} \text{ tem sentido oposto a } \vec{E}`],
           },
         ],
       },
@@ -489,12 +962,7 @@ const theorySections: TheorySection[] = [
       {
         title: "Movimento de deriva",
         type: "info",
-        body: "A corrente elétrica em metais não significa que os elétrons saem disparados pelo fio. Eles continuam com movimento térmico desordenado, mas passam a ter uma pequena tendência média em uma direção.",
-      },
-      {
-        title: "Corrente contínua e alternada",
-        type: "info",
-        body: "Na corrente contínua, o sentido convencional permanece o mesmo ao longo do tempo. Na corrente alternada, o sentido muda periodicamente.",
+        body: "A corrente elétrica em metais é o resultado do movimento médio organizado dos elétrons livres, sobreposto ao movimento térmico desordenado.",
       },
     ],
   },
@@ -504,9 +972,9 @@ const theorySections: TheorySection[] = [
     title: "3. Definição formal de corrente elétrica",
     accent: "from-slate-950 to-indigo-800",
     paragraphs: [
-      "A definição formal de corrente elétrica transforma a ideia intuitiva de fluxo de cargas em uma grandeza mensurável. Em vez de dizer apenas que cargas estão passando por um fio, perguntamos: quanta carga atravessa uma seção do condutor em certo intervalo de tempo?",
-      "Imagine cortar mentalmente o fio e observar uma seção transversal, como uma espécie de porta invisível. As cargas passam por essa seção. Se muita carga passa em pouco tempo, a corrente é grande. Se pouca carga passa em muito tempo, a corrente é pequena.",
-      "Essa definição não significa que a carga fica presa na seção. A seção é apenas o ponto de contagem. É como contar quantas pessoas atravessam uma porta por segundo. A porta não guarda as pessoas, só define onde a contagem ocorre. Incrível precisar dizer isso, mas os erros de circuito mostram que sim, precisa.",
+      "A definição formal transforma a ideia de fluxo de carga em uma grandeza mensurável. Em vez de dizer apenas que cargas passam por um fio, perguntamos quanta carga atravessa uma seção do condutor em certo intervalo de tempo.",
+      "Imagine uma seção transversal do fio como uma porta invisível. As cargas passam por ela. Se muita carga passa em pouco tempo, a corrente é grande. Se pouca carga passa no mesmo tempo, a corrente é pequena.",
+      "Essa seção não armazena carga. Ela é apenas o local de contagem. Parece óbvio, mas em circuito o óbvio costuma ser a primeira vítima.",
     ],
     panels: [
       {
@@ -514,39 +982,29 @@ const theorySections: TheorySection[] = [
         formula: String.raw`i = \frac{\Delta Q}{\Delta t}`,
         terms: [
           "i: corrente elétrica média, medida em ampère.",
-          "ΔQ: quantidade de carga elétrica que atravessa uma seção do condutor.",
-          "Δt: intervalo de tempo durante o qual a passagem de carga é observada.",
+          "ΔQ: quantidade de carga elétrica que atravessa a seção do condutor.",
+          "Δt: intervalo de tempo observado.",
         ],
         structure: [
           "A corrente compara carga transportada com tempo gasto.",
-          "Se a mesma quantidade de carga passa em menos tempo, a corrente é maior.",
-          "Se menos carga passa no mesmo intervalo de tempo, a corrente é menor.",
+          "Se a mesma carga passa em menos tempo, a corrente aumenta.",
+          "Se menos carga passa no mesmo tempo, a corrente diminui.",
         ],
         steps: [
           {
-            title: "Passo 1: escolher uma seção do condutor",
-            body: [
-              "A seção transversal serve como referência de contagem. Toda carga que atravessa essa seção durante o intervalo considerado entra na quantidade ΔQ.",
-            ],
+            title: "Escolha da seção",
+            body: ["Escolhe-se uma seção transversal do condutor para contar a carga que passa por ela."],
           },
           {
-            title: "Passo 2: contar a carga transportada",
-            body: [
-              "A carga total que atravessa a seção é representada por ΔQ. Essa carga pode ser formada por elétrons, íons ou outros portadores, dependendo do meio.",
-            ],
+            title: "Carga transportada",
+            body: ["A carga total que atravessa essa seção durante o intervalo analisado é ΔQ."],
           },
           {
-            title: "Passo 3: dividir pelo tempo",
-            body: [
-              "Para transformar a quantidade total de carga em uma taxa de passagem, dividimos pelo intervalo de tempo.",
-            ],
+            title: "Taxa de passagem",
             formulas: [String.raw`i = \frac{\Delta Q}{\Delta t}`],
           },
           {
-            title: "Passo 4: interpretar a unidade",
-            body: [
-              "Um ampère significa um coulomb por segundo atravessando uma seção do condutor.",
-            ],
+            title: "Unidade",
             formulas: [String.raw`1 \ \text{A} = 1 \ \text{C/s}`],
           },
         ],
@@ -561,23 +1019,14 @@ const theorySections: TheorySection[] = [
         ],
         structure: [
           "É a versão instantânea da corrente média.",
-          "Aparece quando a carga transportada é dada como função do tempo.",
-          "Matematicamente, a corrente é a derivada da carga em relação ao tempo.",
+          "Aparece quando a carga é dada como função do tempo.",
+          "Matematicamente, corrente é derivada da carga em relação ao tempo.",
         ],
         steps: [
           {
-            title: "Passo 1: partir da corrente média",
-            formulas: [String.raw`i_m = \frac{\Delta Q}{\Delta t}`],
-          },
-          {
-            title: "Passo 2: reduzir o intervalo de tempo",
-            body: [
-              "Quando o intervalo Δt fica cada vez menor, a razão média se aproxima da taxa naquele instante.",
-            ],
-          },
-          {
-            title: "Passo 3: limite diferencial",
+            title: "Da média ao instante",
             formulas: [
+              String.raw`i_m = \frac{\Delta Q}{\Delta t}`,
               String.raw`i = \lim_{\Delta t \to 0}\frac{\Delta Q}{\Delta t} = \frac{dQ}{dt}`,
             ],
           },
@@ -589,36 +1038,27 @@ const theorySections: TheorySection[] = [
         terms: [
           "Q: carga total transportada, em módulo.",
           "n: número de elétrons transportados.",
-          "e: carga elementar, cujo módulo vale aproximadamente 1,6 × 10⁻¹⁹ C.",
+          "e: carga elementar, cujo módulo vale 1,6 × 10⁻¹⁹ C.",
         ],
         structure: [
           "Cada elétron carrega uma quantidade fixa de carga em módulo.",
-          "A carga total transportada é o número de elétrons multiplicado pela carga elementar.",
-          "Depois de encontrar Q, usamos a definição de corrente para relacionar carga e tempo.",
+          "A carga total é o número de elétrons multiplicado pela carga elementar.",
+          "Depois de encontrar Q, relacionamos essa carga com o tempo pela definição de corrente.",
         ],
         steps: [
           {
-            title: "Passo 1: carga elementar",
-            formulas: [
-              String.raw`|q_e| = e = 1{,}6 \times 10^{-19} \ \text{C}`,
-            ],
+            title: "Carga elementar",
+            formulas: [String.raw`|q_e| = e = 1{,}6 \times 10^{-19} \ \text{C}`],
           },
           {
-            title: "Passo 2: muitos elétrons",
+            title: "Muitos elétrons",
             formulas: [String.raw`Q = ne`],
           },
           {
-            title: "Passo 3: corrente associada",
+            title: "Corrente associada",
             formulas: [String.raw`i = \frac{ne}{\Delta t}`],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Leitura correta",
-        type: "warning",
-        body: "Em metais, os portadores móveis são elétrons, que têm carga negativa. Em problemas básicos de corrente, geralmente usamos o módulo da carga transportada. O sinal é importante para direção física, mas a intensidade da corrente costuma ser tratada como valor positivo.",
       },
     ],
   },
@@ -628,16 +1068,16 @@ const theorySections: TheorySection[] = [
     title: "4. Condições para existir corrente elétrica",
     accent: "from-indigo-700 to-blue-700",
     paragraphs: [
-      "Para existir corrente elétrica, não basta haver cargas. Todo material comum possui prótons e elétrons. O que importa é haver portadores de carga livres e uma causa física capaz de organizar o movimento desses portadores.",
-      "Em um metal desligado, os elétrons livres se movem aleatoriamente por causa da temperatura. Sem campo elétrico resultante, não há movimento médio em uma direção preferencial. A corrente aparece quando o circuito cria uma orientação para esse movimento.",
-      "A fonte não cria corrente como se despejasse elétrons no fio. O papel da fonte é manter uma diferença de potencial entre seus terminais. Essa diferença estabelece campo elétrico, o campo exerce força sobre os portadores livres, e então aparece corrente.",
+      "Para existir corrente elétrica, não basta haver carga elétrica. Todo material comum possui prótons e elétrons. O que importa é haver portadores móveis e uma causa que organize o movimento desses portadores.",
+      "A fonte não despeja elétrons no fio como água em uma mangueira. A fonte mantém diferença de potencial. Essa diferença gera campo elétrico. O campo exerce força sobre os portadores livres. O movimento organizado resultante é a corrente.",
+      "Em circuito aberto, o caminho é interrompido e a corrente estacionária não se mantém. Em circuito fechado, há caminho condutor contínuo. Em curto-circuito, há um caminho de resistência muito baixa, o que pode gerar corrente perigosa.",
     ],
     numbered: [
-      "Existência de portadores de carga livres.",
-      "Existência de diferença de potencial.",
-      "Estabelecimento de campo elétrico no condutor.",
-      "Caminho condutor fechado para manter a corrente.",
-      "Presença de uma fonte capaz de manter a diferença de potencial.",
+      "Portadores de carga livres.",
+      "Diferença de potencial.",
+      "Campo elétrico no condutor.",
+      "Caminho condutor fechado.",
+      "Fonte capaz de manter a diferença de potencial.",
     ],
     panels: [
       {
@@ -650,73 +1090,24 @@ const theorySections: TheorySection[] = [
           "i: corrente elétrica resultante do movimento médio ordenado.",
         ],
         structure: [
-          "A diferença de potencial é a causa energética do processo.",
-          "O campo elétrico é o agente que atua localmente sobre as cargas.",
-          "A corrente aparece como resposta coletiva dos portadores livres ao campo elétrico.",
+          "A diferença de potencial é a causa energética.",
+          "O campo elétrico atua localmente sobre as cargas.",
+          "A corrente é a resposta coletiva dos portadores livres ao campo.",
         ],
         steps: [
           {
-            title: "Passo 1: fonte mantém diferença de potencial",
-            body: [
-              "Uma pilha ou bateria mantém seus terminais em potenciais diferentes por processos internos, geralmente químicos.",
-            ],
+            title: "Fonte",
+            body: ["A fonte mantém seus terminais em potenciais diferentes."],
           },
           {
-            title: "Passo 2: campo elétrico no condutor",
-            body: [
-              "Quando o circuito é fechado, essa diferença de potencial estabelece um campo elétrico ao longo dos condutores.",
-            ],
+            title: "Campo elétrico",
+            body: ["No circuito fechado, a diferença de potencial estabelece campo elétrico ao longo dos condutores."],
           },
           {
-            title: "Passo 3: força sobre os portadores livres",
+            title: "Força sobre as cargas",
             formulas: [String.raw`\vec{F} = q\vec{E}`],
           },
-          {
-            title: "Passo 4: movimento ordenado",
-            body: [
-              "A força elétrica não elimina a agitação térmica, mas cria um pequeno movimento médio organizado. Esse movimento médio é a corrente elétrica.",
-            ],
-          },
         ],
-      },
-      {
-        title: "Circuito aberto, fechado e curto-circuito",
-        formula: String.raw`i = \frac{U}{R}`,
-        terms: [
-          "i: corrente elétrica.",
-          "U: tensão aplicada.",
-          "R: resistência equivalente do caminho condutor.",
-        ],
-        structure: [
-          "Circuito aberto equivale a resistência efetiva muito grande, então a corrente estacionária é nula.",
-          "Circuito fechado permite caminho condutor contínuo, então pode haver corrente.",
-          "Curto-circuito é caminho de resistência muito baixa entre pontos com diferença de potencial.",
-        ],
-        steps: [
-          {
-            title: "Circuito aberto",
-            formulas: [String.raw`R \to \infty \Rightarrow i = \frac{U}{R} \to 0`],
-          },
-          {
-            title: "Circuito fechado",
-            body: [
-              "Quando há caminho condutor e a fonte mantém a tensão, a corrente depende da resistência total do circuito.",
-            ],
-          },
-          {
-            title: "Curto-circuito",
-            formulas: [
-              String.raw`R \to 0 \Rightarrow i = \frac{U}{R} \text{ muito grande}`,
-            ],
-          },
-        ],
-      },
-    ],
-    notes: [
-      {
-        title: "Curto-circuito",
-        type: "danger",
-        body: "Curto-circuito não significa apenas caminho pequeno no desenho. Significa caminho de resistência muito baixa entre pontos que possuem diferença de potencial. O resultado pode ser corrente altíssima e aquecimento perigoso.",
       },
     ],
   },
@@ -726,10 +1117,9 @@ const theorySections: TheorySection[] = [
     title: "5. Tensão elétrica, diferença de potencial e energia",
     accent: "from-blue-700 to-cyan-700",
     paragraphs: [
-      "Tensão elétrica, ou diferença de potencial, é uma das grandezas mais importantes e mais confundidas da Eletrodinâmica. Ela não é corrente. Ela não é quantidade de eletricidade. Ela mede energia por unidade de carga.",
-      "Quando uma carga atravessa uma fonte ou um dispositivo, ela pode ganhar ou perder energia. A tensão informa quanta energia está associada a cada coulomb de carga. Uma bateria de 12 V, por exemplo, fornece idealmente 12 J para cada coulomb que atravessa a fonte.",
-      "Também é útil pensar em tensão como diferença de nível energético. Assim como uma diferença de altura pode estar associada a energia gravitacional, uma diferença de potencial elétrico está associada a energia elétrica por unidade de carga.",
-      "Em um resistor, a carga atravessa uma queda de potencial: ela perde energia elétrica, e essa energia aparece como aquecimento. Em um motor, parte da energia elétrica pode virar energia mecânica. Em uma bateria carregando, parte vira energia química.",
+      "Tensão elétrica, ou diferença de potencial, mede energia por unidade de carga. Ela não é corrente, não é quantidade de eletricidade e não é uma substância misteriosa andando pelo fio.",
+      "Uma bateria de 12 V fornece, idealmente, 12 J de energia para cada coulomb de carga que passa por ela. Essa interpretação é poderosa: tensão é energia por carga.",
+      "Em um resistor, a carga atravessa uma queda de potencial. Ela perde energia elétrica, e essa energia vira calor. Em um motor, parte da energia elétrica vira movimento. Em uma bateria sendo carregada, parte vira energia química.",
     ],
     panels: [
       {
@@ -741,27 +1131,21 @@ const theorySections: TheorySection[] = [
           "q: carga elétrica que atravessa o trecho, medida em coulomb.",
         ],
         structure: [
-          "A tensão responde à pergunta: quanta energia existe para cada coulomb?",
-          "Como tensão é energia dividida por carga, o volt é joule por coulomb.",
-          "Se a tensão dobra, cada coulomb transportado recebe ou perde o dobro de energia.",
+          "A tensão responde: quanta energia existe para cada coulomb?",
+          "Volt é joule por coulomb.",
+          "Se a tensão dobra, cada coulomb recebe ou perde o dobro de energia.",
         ],
         steps: [
           {
-            title: "Passo 1: energia por unidade de carga",
-            body: [
-              "Se uma carga q recebe ou perde energia W, a energia associada a cada unidade de carga é W dividido por q.",
-            ],
+            title: "Energia por carga",
             formulas: [String.raw`U = \frac{W}{q}`],
           },
           {
-            title: "Passo 2: isolando energia",
-            body: [
-              "Multiplicando a equação por q, obtemos a energia transferida quando uma carga atravessa uma diferença de potencial U.",
-            ],
+            title: "Energia transferida",
             formulas: [String.raw`W = qU`],
           },
           {
-            title: "Passo 3: unidade",
+            title: "Unidade",
             formulas: [String.raw`1 \ \text{V} = 1 \ \text{J/C}`],
           },
         ],
@@ -770,49 +1154,32 @@ const theorySections: TheorySection[] = [
         title: "Diferença de potencial entre dois pontos",
         formula: String.raw`U_{AB} = V_A - V_B`,
         terms: [
-          "U_AB: diferença de potencial entre os pontos A e B.",
+          "U_AB: diferença de potencial entre A e B.",
           "V_A: potencial elétrico no ponto A.",
           "V_B: potencial elétrico no ponto B.",
         ],
         structure: [
-          "A tensão sempre é uma diferença entre dois pontos.",
+          "Tensão sempre é diferença entre dois pontos.",
           "Não faz sentido falar em tensão de um ponto isolado sem referência.",
           "Se dois pontos têm mesmo potencial, a tensão entre eles é zero.",
         ],
         steps: [
           {
-            title: "Passo 1: potencial elétrico",
-            body: [
-              "O potencial elétrico indica energia potencial elétrica por unidade de carga em um ponto.",
-            ],
-          },
-          {
-            title: "Passo 2: diferença entre pontos",
-            body: [
-              "A tensão entre A e B mede a diferença de potencial entre esses dois pontos.",
-            ],
+            title: "Potenciais diferentes",
             formulas: [String.raw`U_{AB} = V_A - V_B`],
           },
           {
-            title: "Passo 3: pontos equipotenciais",
+            title: "Pontos equipotenciais",
             formulas: [String.raw`V_A = V_B \Rightarrow U_{AB} = 0`],
           },
         ],
       },
     ],
-    bullets: [
-      "tensão é energia por unidade de carga;",
-      "corrente é carga por unidade de tempo;",
-      "uma fonte de tensão fornece energia às cargas;",
-      "um resistor transforma energia elétrica em calor;",
-      "um motor transforma energia elétrica em movimento;",
-      "uma bateria carregando transforma energia elétrica em energia química.",
-    ],
     notes: [
       {
         title: "Não confunda",
         type: "warning",
-        body: "Tensão alta não significa automaticamente corrente alta. A corrente também depende da resistência ou impedância do caminho. Alta tensão com resistência enorme pode gerar corrente pequena. Baixa resistência com tensão moderada pode gerar corrente perigosa.",
+        body: "Tensão alta não significa automaticamente corrente alta. A corrente também depende da resistência ou impedância do caminho.",
       },
     ],
   },
@@ -822,9 +1189,9 @@ const theorySections: TheorySection[] = [
     title: "6. Resistência elétrica",
     accent: "from-cyan-700 to-teal-700",
     paragraphs: [
-      "Resistência elétrica é a oposição que um elemento oferece à passagem da corrente elétrica. A frase é simples, mas a ideia microscópica é muito mais rica.",
-      "Em um metal, os elétrons livres são acelerados pelo campo elétrico. Porém, eles não se movem por um espaço vazio perfeito. Eles interagem com a rede cristalina do material, sofrem espalhamentos e transferem energia para essa rede. Essa energia aparece macroscopicamente como aquecimento.",
-      "Assim, resistência não é uma barreira mágica. Ela mede como a tensão aplicada se relaciona com a corrente que realmente atravessa o elemento. Para uma mesma tensão, maior resistência produz menor corrente. Para a mesma corrente, maior resistência exige maior queda de tensão.",
+      "Resistência elétrica é a oposição que um elemento oferece à passagem da corrente. Microscopicamente, em metais, os elétrons livres são acelerados pelo campo elétrico, mas interagem com a rede cristalina do material.",
+      "Essas interações transferem energia para o material, aumentando sua agitação microscópica. Macroscopicamente, isso aparece como aquecimento. Por isso resistência elétrica e efeito Joule estão profundamente ligados.",
+      "Para a mesma tensão, uma resistência maior produz uma corrente menor. Para a mesma corrente, uma resistência maior exige uma queda de tensão maior.",
     ],
     panels: [
       {
@@ -832,37 +1199,24 @@ const theorySections: TheorySection[] = [
         formula: String.raw`R = \frac{U}{i}`,
         terms: [
           "R: resistência elétrica, medida em ohm.",
-          "U: tensão aplicada entre os terminais do elemento.",
+          "U: tensão aplicada entre os terminais.",
           "i: corrente que atravessa o elemento.",
         ],
         structure: [
-          "A resistência mede quanta tensão é necessária para sustentar certa corrente.",
-          "Se a tensão é fixa, maior resistência reduz a corrente.",
-          "Se a corrente é fixa, maior resistência aumenta a queda de tensão.",
+          "Resistência mede quanta tensão é necessária para sustentar certa corrente.",
+          "Para tensão fixa, maior resistência implica menor corrente.",
+          "Para corrente fixa, maior resistência implica maior queda de tensão.",
         ],
         steps: [
           {
-            title: "Passo 1: observar tensão e corrente",
-            body: [
-              "Aplicamos uma tensão entre os terminais de um elemento e observamos a corrente que passa por ele.",
-            ],
-          },
-          {
-            title: "Passo 2: definir oposição elétrica",
+            title: "Definição",
             formulas: [String.raw`R = \frac{U}{i}`],
           },
           {
-            title: "Passo 3: unidade",
+            title: "Unidade",
             formulas: [String.raw`1 \ \Omega = 1 \ \frac{\text{V}}{\text{A}}`],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Interpretação microscópica",
-        type: "info",
-        body: "Resistência está ligada à dificuldade do movimento ordenado dos portadores de carga. Em metais, essa dificuldade aparece por interações dos elétrons com a rede cristalina, impurezas, defeitos e vibrações térmicas.",
       },
     ],
   },
@@ -872,49 +1226,38 @@ const theorySections: TheorySection[] = [
     title: "7. Primeira Lei de Ohm",
     accent: "from-teal-700 to-emerald-700",
     paragraphs: [
-      "A Primeira Lei de Ohm descreve o comportamento de resistores ôhmicos. Em um resistor ôhmico, mantendo temperatura e condições físicas constantes, a tensão aplicada é diretamente proporcional à corrente elétrica.",
-      "Isso significa que, se dobramos a tensão, a corrente dobra. Se triplicamos a tensão, a corrente triplica. A razão U/i permanece constante, e essa constante é a resistência elétrica.",
-      "Essa lei não vale para qualquer componente em qualquer condição. Ela vale para condutores ou resistores que apresentam comportamento linear dentro do intervalo analisado. Diodos, lâmpadas incandescentes e termistores podem ter comportamento não ôhmico.",
+      "A Primeira Lei de Ohm descreve o comportamento de resistores ôhmicos. Em um resistor ôhmico, mantendo temperatura e condições físicas constantes, a tensão aplicada é proporcional à corrente.",
+      "Se dobramos a tensão, a corrente dobra. Se triplicamos a tensão, a corrente triplica. A razão U/i permanece constante, e essa constante é a resistência elétrica.",
+      "Nem todo componente é ôhmico. Diodos, lâmpadas incandescentes e termistores podem apresentar resistência variável. Nesses casos, usar U = Ri de forma ingênua é pedir para errar com convicção.",
     ],
     panels: [
       {
         title: "Primeira Lei de Ohm",
         formula: String.raw`U = Ri`,
         terms: [
-          "U: tensão ou queda de potencial nos terminais do resistor.",
-          "R: resistência elétrica do resistor.",
-          "i: corrente elétrica que atravessa o resistor.",
+          "U: tensão ou queda de potencial.",
+          "R: resistência elétrica.",
+          "i: corrente elétrica.",
         ],
         structure: [
           "A equação é linear porque R permanece constante.",
-          "A tensão é proporcional à corrente.",
-          "No gráfico U × i, a inclinação da reta representa a resistência elétrica.",
+          "Tensão e corrente são diretamente proporcionais.",
+          "No gráfico U × i, a inclinação da reta é a resistência.",
         ],
         steps: [
           {
-            title: "Passo 1: definição de resistência",
+            title: "Definição de resistência",
             formulas: [String.raw`R = \frac{U}{i}`],
           },
           {
-            title: "Passo 2: isolar tensão",
+            title: "Isolando a tensão",
             formulas: [String.raw`U = Ri`],
           },
           {
-            title: "Passo 3: comparação com função linear",
-            formulas: [String.raw`U = Ri`, String.raw`y = ax`],
-          },
-          {
-            title: "Passo 4: inclinação do gráfico",
+            title: "Inclinação do gráfico",
             formulas: [String.raw`R = \frac{\Delta U}{\Delta i}`],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Ôhmico x não ôhmico",
-        type: "warning",
-        body: "Em resistor ôhmico, R é constante e o gráfico U × i é uma reta que passa pela origem. Em componente não ôhmico, R pode variar com tensão, corrente ou temperatura, e o gráfico deixa de ser linear.",
       },
     ],
   },
@@ -924,52 +1267,43 @@ const theorySections: TheorySection[] = [
     title: "8. Segunda Lei de Ohm",
     accent: "from-emerald-700 to-lime-700",
     paragraphs: [
-      "A Primeira Lei de Ohm relaciona tensão, corrente e resistência. A Segunda Lei de Ohm explica de onde vem o valor da resistência de um condutor.",
-      "A resistência depende do material e da geometria. O material entra pela resistividade. A geometria entra pelo comprimento do condutor e pela área da seção transversal.",
-      "Um fio mais comprido oferece maior resistência porque os portadores precisam atravessar um caminho maior. Um fio mais grosso oferece menor resistência porque há mais caminhos microscópicos disponíveis para o fluxo de carga. É como uma estrada: mais comprimento dificulta, mais faixas facilitam. Finalmente uma analogia de trânsito servindo para algo útil.",
+      "A Segunda Lei de Ohm explica de onde vem o valor da resistência de um condutor. Ela depende do material e da geometria.",
+      "Um fio mais comprido tem maior resistência porque os portadores percorrem um caminho maior. Um fio mais grosso tem menor resistência porque oferece mais caminhos microscópicos para a passagem da corrente.",
+      "O material entra pela resistividade. Bons condutores têm baixa resistividade. Isolantes têm resistividade alta. Semicondutores têm comportamento intermediário e controlável.",
     ],
     panels: [
       {
         title: "Segunda Lei de Ohm",
         formula: String.raw`R = \rho\frac{L}{A}`,
         terms: [
-          "R: resistência elétrica do condutor.",
+          "R: resistência elétrica.",
           "ρ: resistividade do material.",
           "L: comprimento do condutor.",
           "A: área da seção transversal.",
         ],
         structure: [
-          "A resistência é diretamente proporcional ao comprimento.",
-          "A resistência é inversamente proporcional à área.",
-          "A resistividade representa a influência do material.",
+          "Resistência é diretamente proporcional ao comprimento.",
+          "Resistência é inversamente proporcional à área.",
+          "Resistividade representa a influência do material.",
         ],
         steps: [
           {
-            title: "Passo 1: influência do comprimento",
-            body: [
-              "Se o fio fica mais comprido, as cargas atravessam um percurso maior e encontram mais oportunidades de interação e dissipação.",
-            ],
+            title: "Comprimento",
             formulas: [String.raw`R \propto L`],
           },
           {
-            title: "Passo 2: influência da área",
-            body: [
-              "Se a seção transversal aumenta, há mais caminhos para a passagem dos portadores, reduzindo a resistência.",
-            ],
+            title: "Área",
             formulas: [String.raw`R \propto \frac{1}{A}`],
           },
           {
-            title: "Passo 3: influência do material",
-            body: [
-              "A constante de proporcionalidade é a resistividade ρ. Materiais bons condutores têm baixa resistividade. Isolantes têm resistividade muito alta.",
-            ],
+            title: "Material",
             formulas: [String.raw`R = \rho\frac{L}{A}`],
           },
           {
-            title: "Passo 4: unidade da resistividade",
+            title: "Unidade da resistividade",
             formulas: [
               String.raw`\rho = R\frac{A}{L}`,
-              String.raw`[\rho] = \Omega\cdot\frac{\text{m}^2}{\text{m}} = \Omega\cdot\text{m}`,
+              String.raw`[\rho] = \Omega\cdot\text{m}`,
             ],
           },
         ],
@@ -982,46 +1316,34 @@ const theorySections: TheorySection[] = [
     title: "9. Resistividade e temperatura",
     accent: "from-lime-700 to-amber-700",
     paragraphs: [
-      "A resistência elétrica também pode variar com a temperatura. Em metais, quando a temperatura aumenta, os íons da rede cristalina vibram com maior intensidade. Essas vibrações dificultam o movimento ordenado dos elétrons livres, aumentando a resistência.",
-      "Para intervalos moderados de temperatura, é comum usar uma aproximação linear. Isso não significa que a fórmula funcione para qualquer temperatura absurda. É uma aproximação, não uma licença para torturar a física.",
-      "Em metais, normalmente o coeficiente de temperatura é positivo. Em semicondutores, a resistência pode diminuir com o aumento da temperatura, porque o aquecimento pode liberar mais portadores de carga.",
+      "A resistência elétrica pode variar com a temperatura. Em metais, quando a temperatura aumenta, a rede cristalina vibra mais intensamente, dificultando o movimento ordenado dos elétrons livres.",
+      "Para intervalos moderados de temperatura, usamos uma aproximação linear. Em metais, normalmente o coeficiente de temperatura é positivo. Em semicondutores, a resistência pode diminuir com o aumento da temperatura, porque mais portadores podem ser liberados.",
     ],
     panels: [
       {
         title: "Variação da resistência com a temperatura",
         formula: String.raw`R = R_0(1 + \alpha\Delta T)`,
         terms: [
-          "R: resistência na temperatura final.",
-          "R₀: resistência na temperatura inicial de referência.",
-          "α: coeficiente de temperatura do material.",
+          "R: resistência final.",
+          "R₀: resistência inicial.",
+          "α: coeficiente de temperatura.",
           "ΔT: variação de temperatura.",
         ],
         structure: [
-          "A fórmula é linear porque é uma aproximação para variações moderadas.",
+          "A fórmula é uma aproximação linear.",
           "A variação relativa da resistência é proporcional à variação de temperatura.",
           "O sinal de α indica se a resistência aumenta ou diminui com a temperatura.",
         ],
         steps: [
           {
-            title: "Passo 1: variação relativa",
+            title: "Variação relativa",
             formulas: [String.raw`\frac{R - R_0}{R_0} = \alpha\Delta T`],
           },
           {
-            title: "Passo 2: reorganizar",
-            formulas: [
-              String.raw`R - R_0 = R_0\alpha\Delta T`,
-              String.raw`R = R_0 + R_0\alpha\Delta T`,
-              String.raw`R = R_0(1 + \alpha\Delta T)`,
-            ],
+            title: "Forma usual",
+            formulas: [String.raw`R = R_0(1 + \alpha\Delta T)`],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Cuidado",
-        type: "warning",
-        body: "Essa expressão é uma aproximação linear. Em questões, use quando o enunciado fornecer α ou deixar claro que o modelo linear deve ser aplicado.",
       },
     ],
   },
@@ -1031,42 +1353,44 @@ const theorySections: TheorySection[] = [
     title: "10. Associação de resistores em série",
     accent: "from-amber-700 to-orange-700",
     paragraphs: [
-      "Resistores estão em série quando são atravessados pela mesma corrente elétrica. Isso ocorre quando as cargas não têm escolha de caminho: elas passam por um resistor e depois pelo outro, em sequência.",
-      "Em série, a corrente é a mesma em todos os resistores. O que se divide é a tensão. Cada resistor produz uma queda de tensão proporcional ao seu valor de resistência.",
+      "Resistores estão em série quando são atravessados pela mesma corrente elétrica. Isso acontece quando as cargas não têm escolha de caminho: passam por um resistor e depois pelo outro.",
+      "Em série, a corrente é a mesma em todos os resistores. O que se divide é a tensão. Cada resistor produz uma queda de tensão proporcional à sua resistência.",
     ],
+    diagram: {
+      kind: "series",
+      title: "Diagrama visual: resistores em série",
+      caption:
+        "Os resistores estão no mesmo caminho. A corrente que passa por R₁ também passa por R₂ e R₃.",
+    },
     panels: [
       {
         title: "Resistência equivalente em série",
         formula: String.raw`R_{\text{eq}} = R_1 + R_2 + R_3 + \cdots`,
         terms: [
-          "R_eq: resistência equivalente da associação.",
+          "R_eq: resistência equivalente.",
           "R₁, R₂, R₃: resistores ligados em sequência.",
-          "i: corrente comum que atravessa todos os resistores.",
+          "i: corrente comum em todos os resistores.",
         ],
         structure: [
-          "A corrente não se divide em uma associação em série.",
+          "A corrente não se divide.",
           "A tensão total é a soma das quedas de tensão.",
-          "Como cada resistor oferece oposição em sequência, as resistências se somam.",
+          "Resistências em sequência se somam.",
         ],
         steps: [
           {
-            title: "Passo 1: mesma corrente",
+            title: "Mesma corrente",
             formulas: [String.raw`i_1 = i_2 = i_3 = \cdots = i`],
           },
           {
-            title: "Passo 2: soma das tensões",
+            title: "Soma das tensões",
             formulas: [String.raw`U = U_1 + U_2 + U_3 + \cdots`],
           },
           {
-            title: "Passo 3: aplicar a Lei de Ohm",
+            title: "Aplicando U = Ri",
             formulas: [
               String.raw`U = R_1i + R_2i + R_3i + \cdots`,
-              String.raw`U = i(R_1 + R_2 + R_3 + \cdots)`,
+              String.raw`R_{\text{eq}} = R_1 + R_2 + R_3 + \cdots`,
             ],
-          },
-          {
-            title: "Passo 4: comparar com o resistor equivalente",
-            formulas: [String.raw`U = R_{\text{eq}}i`],
           },
         ],
       },
@@ -1075,7 +1399,7 @@ const theorySections: TheorySection[] = [
       {
         title: "Divisor de tensão",
         type: "info",
-        body: "Em série, o resistor maior recebe maior parcela da tensão total, porque todos são atravessados pela mesma corrente e U = Ri.",
+        body: "Em série, o resistor maior recebe maior parcela da tensão total, pois todos são atravessados pela mesma corrente.",
       },
     ],
   },
@@ -1085,50 +1409,43 @@ const theorySections: TheorySection[] = [
     title: "11. Associação de resistores em paralelo",
     accent: "from-orange-700 to-red-700",
     paragraphs: [
-      "Resistores estão em paralelo quando seus terminais estão ligados aos mesmos dois nós. Essa é a definição que realmente importa. Não interessa se o desenho está bonito, torto ou parecendo arquitetura feita em emergência: mesmos dois nós significam paralelo.",
-      "Em paralelo, todos os resistores estão submetidos à mesma tensão. A corrente total se divide entre os ramos. O ramo de menor resistência recebe maior corrente, pois oferece menor oposição.",
-      "A resistência equivalente em paralelo é menor que a menor resistência individual. Isso faz sentido: cada novo ramo cria um novo caminho para a corrente. Mais caminhos significam menor oposição total.",
+      "Resistores estão em paralelo quando seus terminais estão ligados aos mesmos dois nós. Essa é a definição importante. Não interessa se o desenho parece paralelo, inclinado ou desenhado por alguém em surto: mesmos dois nós significam paralelo.",
+      "Em paralelo, todos os resistores estão submetidos à mesma tensão. A corrente total se divide entre os ramos. O ramo de menor resistência recebe maior corrente.",
+      "A resistência equivalente em paralelo é menor que a menor resistência individual, porque cada novo ramo cria mais um caminho para a corrente.",
     ],
+    diagram: {
+      kind: "parallel",
+      title: "Diagrama visual: resistores em paralelo",
+      caption:
+        "R₁, R₂ e R₃ estão ligados entre os mesmos nós A e B. Por isso, todos recebem a mesma tensão.",
+    },
     panels: [
       {
         title: "Resistência equivalente em paralelo",
         formula: String.raw`\frac{1}{R_{\text{eq}}} = \frac{1}{R_1} + \frac{1}{R_2} + \frac{1}{R_3} + \cdots`,
         terms: [
-          "R_eq: resistência equivalente da associação.",
-          "R₁, R₂, R₃: resistores ligados aos mesmos dois nós.",
+          "R_eq: resistência equivalente.",
+          "R₁, R₂, R₃: resistores entre os mesmos dois nós.",
           "U: tensão comum a todos os ramos.",
         ],
         structure: [
-          "Em paralelo, a tensão é a mesma em todos os resistores.",
+          "A tensão é a mesma em todos os resistores.",
           "A corrente total é a soma das correntes dos ramos.",
-          "A soma aparece nos inversos porque cada ramo conduz uma corrente U/R.",
+          "Cada ramo conduz uma corrente U/R.",
         ],
         steps: [
           {
-            title: "Passo 1: mesma tensão",
+            title: "Mesma tensão",
             formulas: [String.raw`U_1 = U_2 = U_3 = \cdots = U`],
           },
           {
-            title: "Passo 2: corrente total",
+            title: "Soma das correntes",
             formulas: [String.raw`i = i_1 + i_2 + i_3 + \cdots`],
           },
           {
-            title: "Passo 3: aplicar Lei de Ohm em cada ramo",
-            formulas: [
-              String.raw`i_1 = \frac{U}{R_1}, \quad i_2 = \frac{U}{R_2}, \quad i_3 = \frac{U}{R_3}`,
-            ],
-          },
-          {
-            title: "Passo 4: substituir na soma",
+            title: "Lei de Ohm em cada ramo",
             formulas: [
               String.raw`i = \frac{U}{R_1} + \frac{U}{R_2} + \frac{U}{R_3} + \cdots`,
-              String.raw`i = U\left(\frac{1}{R_1} + \frac{1}{R_2} + \frac{1}{R_3} + \cdots\right)`,
-            ],
-          },
-          {
-            title: "Passo 5: comparar com o equivalente",
-            formulas: [
-              String.raw`i = \frac{U}{R_{\text{eq}}}`,
               String.raw`\frac{1}{R_{\text{eq}}} = \frac{1}{R_1} + \frac{1}{R_2} + \frac{1}{R_3} + \cdots`,
             ],
           },
@@ -1149,19 +1466,24 @@ const theorySections: TheorySection[] = [
     title: "12. Associação mista e leitura de nós",
     accent: "from-red-700 to-rose-700",
     paragraphs: [
-      "Associação mista combina resistores em série e em paralelo. O maior erro é tentar resolver pela aparência do desenho. Em circuitos, aparência é fofoca. O que manda são as conexões.",
-      "Um nó é uma região condutora considerada equipotencial quando os fios são ideais. Todos os pontos ligados diretamente por fio ideal pertencem ao mesmo nó e têm o mesmo potencial. Essa ideia é a chave para reconhecer paralelos escondidos.",
+      "Associação mista combina resistores em série e em paralelo. O erro comum é resolver pela aparência do desenho. Em circuitos, aparência é fofoca. O que manda são as conexões.",
+      "Um nó é uma região condutora equipotencial quando os fios são ideais. Todos os pontos ligados diretamente por fio ideal pertencem ao mesmo nó.",
       "Dois resistores estão em paralelo se estão ligados aos mesmos dois nós. Dois resistores estão em série se são atravessados pela mesma corrente e não há ramificação entre eles.",
     ],
+    diagram: {
+      kind: "mixed",
+      title: "Diagrama visual: associação mista",
+      caption:
+        "R₂ e R₃ estão em paralelo entre os nós A e B. Esse conjunto está em série com R₁.",
+    },
     numbered: [
       "Identifique os nós do circuito.",
-      "Marque todos os pontos ligados por fios ideais como o mesmo nó.",
+      "Marque pontos ligados por fios ideais como o mesmo nó.",
       "Procure resistores ligados aos mesmos dois nós.",
       "Procure resistores em sequência sem ramificação intermediária.",
       "Substitua cada grupo por sua resistência equivalente.",
-      "Redesenhe mentalmente o circuito simplificado.",
-      "Repita o processo até chegar à resistência equivalente total.",
-      "Volte pelo circuito, se necessário, para encontrar correntes e tensões específicas.",
+      "Redesenhe o circuito simplificado.",
+      "Repita até chegar à resistência equivalente total.",
     ],
     panels: [
       {
@@ -1175,35 +1497,22 @@ const theorySections: TheorySection[] = [
         structure: [
           "O desenho não manda; as conexões mandam.",
           "Fios ideais unem pontos em um mesmo nó.",
-          "Dois componentes desenhados longe podem estar em paralelo se compartilham os mesmos nós.",
+          "Dois componentes desenhados longe podem estar em paralelo.",
         ],
         steps: [
           {
-            title: "Passo 1: identificar fios ideais",
-            body: [
-              "Pontos ligados diretamente por fios ideais pertencem ao mesmo nó.",
-            ],
+            title: "Identifique fios ideais",
+            body: ["Pontos ligados diretamente por fios ideais pertencem ao mesmo nó."],
           },
           {
-            title: "Passo 2: procurar paralelos",
-            body: [
-              "Se dois resistores ligam o mesmo par de nós, eles estão em paralelo.",
-            ],
+            title: "Procure paralelos",
+            body: ["Se dois resistores ligam o mesmo par de nós, estão em paralelo."],
           },
           {
-            title: "Passo 3: procurar séries",
-            body: [
-              "Se dois resistores estão em sequência e não há ramificação entre eles, a mesma corrente atravessa ambos.",
-            ],
+            title: "Procure séries",
+            body: ["Se dois resistores estão em sequência sem ramificação entre eles, estão em série."],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Regra de ouro",
-        type: "warning",
-        body: "Resistores próximos no desenho não necessariamente estão em série. Resistores distantes no desenho podem estar em paralelo. Circuito obedece conexão, não estética.",
       },
     ],
   },
@@ -1213,9 +1522,9 @@ const theorySections: TheorySection[] = [
     title: "13. Potência elétrica",
     accent: "from-rose-700 to-pink-700",
     paragraphs: [
-      "Potência mede a rapidez com que energia é transferida ou transformada. Em circuitos elétricos, ela indica a taxa com que energia elétrica é fornecida por uma fonte, consumida por um aparelho ou dissipada em um resistor.",
-      "A potência elétrica nasce de uma conexão muito bonita entre tensão e corrente. Tensão é energia por carga. Corrente é carga por tempo. Multiplicando as duas, a carga cancela, e sobra energia por tempo: potência.",
-      "Essa interpretação é mais importante do que decorar P = Ui. Quando você entende que tensão fala de energia por coulomb e corrente fala de coulomb por segundo, a fórmula deixa de ser mágica e vira consequência física direta.",
+      "Potência mede a rapidez com que energia é transferida ou transformada. Em circuitos, ela indica a taxa com que energia elétrica é fornecida, consumida ou dissipada.",
+      "A fórmula P = Ui vem de uma ideia simples: tensão é energia por carga, corrente é carga por tempo. Multiplicando as duas, a carga cancela e sobra energia por tempo.",
+      "Essa interpretação é melhor do que decorar fórmula. Ela mostra por que potência elétrica mede taxa de transformação de energia.",
     ],
     panels: [
       {
@@ -1223,39 +1532,30 @@ const theorySections: TheorySection[] = [
         formula: String.raw`P = Ui`,
         terms: [
           "P: potência elétrica, medida em watt.",
-          "U: tensão elétrica, energia por unidade de carga.",
-          "i: corrente elétrica, carga por unidade de tempo.",
+          "U: tensão elétrica, energia por carga.",
+          "i: corrente elétrica, carga por tempo.",
         ],
         structure: [
-          "Tensão é energia por carga.",
-          "Corrente é carga por tempo.",
-          "Multiplicando tensão por corrente, obtemos energia por tempo.",
+          "Tensão é energia por unidade de carga.",
+          "Corrente é carga por unidade de tempo.",
+          "Multiplicando, obtemos energia por unidade de tempo.",
         ],
         steps: [
           {
-            title: "Passo 1: definição de potência",
+            title: "Definição de potência",
             formulas: [String.raw`P = \frac{\Delta E}{\Delta t}`],
           },
           {
-            title: "Passo 2: energia elétrica transferida",
+            title: "Energia elétrica",
             formulas: [String.raw`E = qU`],
           },
           {
-            title: "Passo 3: substituir",
+            title: "Substituindo",
             formulas: [String.raw`P = \frac{qU}{\Delta t}`],
           },
           {
-            title: "Passo 4: reconhecer a corrente",
-            formulas: [
-              String.raw`i = \frac{q}{\Delta t}`,
-              String.raw`P = Ui`,
-            ],
-          },
-          {
-            title: "Passo 5: unidade",
-            formulas: [
-              String.raw`\text{V}\cdot\text{A} = \frac{\text{J}}{\text{C}}\cdot\frac{\text{C}}{\text{s}} = \frac{\text{J}}{\text{s}} = \text{W}`,
-            ],
+            title: "Reconhecendo corrente",
+            formulas: [String.raw`i = \frac{q}{\Delta t}`, String.raw`P = Ui`],
           },
         ],
       },
@@ -1263,26 +1563,23 @@ const theorySections: TheorySection[] = [
         title: "Potência em resistor",
         formula: String.raw`P = Ri^2 = \frac{U^2}{R}`,
         terms: [
-          "P = Ui: forma geral da potência elétrica.",
+          "P = Ui: forma geral.",
           "P = Ri²: útil quando a corrente é conhecida ou comum.",
           "P = U²/R: útil quando a tensão é conhecida ou comum.",
         ],
         structure: [
-          "As duas formas vêm da Primeira Lei de Ohm.",
-          "Em série, a corrente é comum; por isso P = Ri² costuma ser mais útil.",
-          "Em paralelo, a tensão é comum; por isso P = U²/R costuma ser mais útil.",
+          "As duas formas vêm da Lei de Ohm.",
+          "Em série, a corrente é comum.",
+          "Em paralelo, a tensão é comum.",
         ],
         steps: [
           {
             title: "Dedução de P = Ri²",
-            formulas: [String.raw`U = Ri`, String.raw`P = Ui = (Ri)i = Ri^2`],
+            formulas: [String.raw`P = Ui = (Ri)i = Ri^2`],
           },
           {
             title: "Dedução de P = U²/R",
-            formulas: [
-              String.raw`i = \frac{U}{R}`,
-              String.raw`P = Ui = U\left(\frac{U}{R}\right) = \frac{U^2}{R}`,
-            ],
+            formulas: [String.raw`P = Ui = U\left(\frac{U}{R}\right) = \frac{U^2}{R}`],
           },
         ],
       },
@@ -1291,7 +1588,7 @@ const theorySections: TheorySection[] = [
       {
         title: "Armadilha clássica",
         type: "warning",
-        body: "Se a corrente é a mesma, como em série, potência cresce com a resistência. Se a tensão é a mesma, como em paralelo, potência diminui com a resistência. Primeiro veja qual grandeza está fixa.",
+        body: "Se a corrente é a mesma, potência cresce com R. Se a tensão é a mesma, potência diminui com R. Primeiro veja qual grandeza está fixa.",
       },
     ],
   },
@@ -1301,44 +1598,37 @@ const theorySections: TheorySection[] = [
     title: "14. Efeito Joule",
     accent: "from-pink-700 to-fuchsia-700",
     paragraphs: [
-      "O efeito Joule é a transformação de energia elétrica em energia térmica devido à passagem de corrente por um resistor ou condutor real.",
-      "Microscopicamente, os portadores de carga ganham energia do campo elétrico e transferem parte dessa energia para a rede do material em interações e espalhamentos. Isso aumenta a agitação microscópica do material, isto é, sua temperatura.",
-      "É por isso que fios, resistores, chuveiros, ferros de passar e fusíveis aquecem quando atravessados por corrente elétrica. A eletricidade não desaparece; ela se transforma. E, muitas vezes, vira calor em lugares inconvenientes.",
+      "Efeito Joule é a transformação de energia elétrica em energia térmica devido à passagem de corrente por um resistor ou condutor real.",
+      "Microscopicamente, os portadores de carga recebem energia do campo elétrico e transferem parte dessa energia para a rede do material. Isso aumenta a agitação microscópica do material, ou seja, sua temperatura.",
+      "É por isso que chuveiros, ferros, secadores, aquecedores e fusíveis aquecem quando atravessados por corrente elétrica.",
     ],
     panels: [
       {
         title: "Energia dissipada por efeito Joule",
         formula: String.raw`E = Ri^2\Delta t`,
         terms: [
-          "E: energia dissipada em forma de calor.",
-          "R: resistência elétrica do condutor ou resistor.",
+          "E: energia dissipada como calor.",
+          "R: resistência elétrica.",
           "i: corrente elétrica.",
-          "Δt: intervalo de tempo de funcionamento.",
+          "Δt: intervalo de tempo.",
         ],
         structure: [
-          "A energia dissipada cresce com a resistência.",
-          "A energia dissipada cresce com o quadrado da corrente.",
-          "A energia dissipada cresce com o tempo de funcionamento.",
+          "A energia cresce com a resistência.",
+          "A energia cresce com o quadrado da corrente.",
+          "A energia cresce com o tempo de funcionamento.",
         ],
         steps: [
           {
-            title: "Passo 1: potência dissipada",
+            title: "Potência dissipada",
             formulas: [String.raw`P = Ri^2`],
           },
           {
-            title: "Passo 2: energia como potência vezes tempo",
-            formulas: [String.raw`E = P\Delta t`],
+            title: "Energia",
+            formulas: [String.raw`E = P\Delta t`, String.raw`E = Ri^2\Delta t`],
           },
           {
-            title: "Passo 3: substituir",
-            formulas: [String.raw`E = Ri^2\Delta t`],
-          },
-          {
-            title: "Passo 4: corrente dobrada",
-            formulas: [
-              String.raw`i' = 2i`,
-              String.raw`P' = R(2i)^2 = 4Ri^2 = 4P`,
-            ],
+            title: "Corrente dobrada",
+            formulas: [String.raw`P' = R(2i)^2 = 4Ri^2 = 4P`],
           },
         ],
       },
@@ -1356,7 +1646,7 @@ const theorySections: TheorySection[] = [
       {
         title: "Perigo físico",
         type: "danger",
-        body: "Corrente alta é perigosa porque o aquecimento cresce com i². Um aumento aparentemente pequeno na corrente pode gerar aumento muito grande na dissipação térmica.",
+        body: "Corrente alta é perigosa porque o aquecimento cresce com i². Um pequeno aumento de corrente pode gerar grande aumento de potência dissipada.",
       },
     ],
   },
@@ -1366,10 +1656,16 @@ const theorySections: TheorySection[] = [
     title: "15. Geradores elétricos",
     accent: "from-fuchsia-700 to-violet-700",
     paragraphs: [
-      "Gerador elétrico é um dispositivo que transforma alguma forma de energia em energia elétrica. Uma pilha transforma energia química em elétrica. Um alternador transforma energia mecânica em elétrica. Uma célula solar transforma energia luminosa em elétrica.",
-      "A grandeza central de um gerador é a força eletromotriz, representada por ε. Apesar do nome, força eletromotriz não é força. É energia por unidade de carga. O nome sobreviveu porque a tradição também comete crimes linguísticos.",
-      "Em um gerador ideal, toda energia por unidade de carga fornecida internamente aparece como tensão nos terminais. Em um gerador real, parte dessa energia é dissipada na resistência interna do próprio gerador.",
+      "Gerador elétrico transforma alguma forma de energia em energia elétrica. Uma pilha transforma energia química em elétrica. Um alternador transforma energia mecânica em elétrica.",
+      "A grandeza central do gerador é a força eletromotriz ε. Apesar do nome, força eletromotriz não é força. É energia fornecida por unidade de carga.",
+      "Em um gerador ideal, toda a energia por carga aparece como tensão nos terminais. Em um gerador real, parte da energia se perde na resistência interna.",
     ],
+    diagram: {
+      kind: "generator",
+      title: "Diagrama visual: gerador real",
+      caption:
+        "O gerador possui força eletromotriz ε e resistência interna r. A tensão útil nos terminais é menor que ε.",
+    },
     panels: [
       {
         title: "Força eletromotriz",
@@ -1380,9 +1676,9 @@ const theorySections: TheorySection[] = [
           "q: carga que atravessa o gerador.",
         ],
         structure: [
-          "A força eletromotriz mede energia fornecida por unidade de carga.",
-          "Ela tem unidade de volt, pois também é joule por coulomb.",
-          "Em gerador ideal, a tensão terminal é igual à força eletromotriz.",
+          "Mede energia fornecida por carga.",
+          "Tem unidade de volt.",
+          "Em gerador ideal, U = ε.",
         ],
         steps: [
           {
@@ -1395,74 +1691,33 @@ const theorySections: TheorySection[] = [
         title: "Gerador real",
         formula: String.raw`U = \varepsilon - ri`,
         terms: [
-          "U: tensão nos terminais do gerador.",
+          "U: tensão nos terminais.",
           "ε: força eletromotriz.",
           "r: resistência interna.",
-          "i: corrente fornecida pelo gerador.",
+          "i: corrente fornecida.",
         ],
         structure: [
           "Parte da energia por carga é perdida dentro do gerador.",
           "A queda interna vale ri.",
-          "Quanto maior a corrente, menor a tensão útil nos terminais.",
+          "Quanto maior a corrente, menor a tensão útil.",
         ],
         steps: [
           {
-            title: "Passo 1: energia por carga produzida",
-            body: [
-              "O gerador fornece energia por unidade de carga igual a ε.",
-            ],
-          },
-          {
-            title: "Passo 2: queda interna",
+            title: "Queda interna",
             formulas: [String.raw`U_{\text{interna}} = ri`],
           },
           {
-            title: "Passo 3: tensão útil nos terminais",
+            title: "Tensão útil",
             formulas: [String.raw`U = \varepsilon - ri`],
           },
-        ],
-      },
-      {
-        title: "Potências no gerador real",
-        formula: String.raw`P_{\text{útil}} = P_{\text{total}} - P_{\text{dissipada}}`,
-        terms: [
-          "P_total = εi: potência total produzida pelo gerador.",
-          "P_útil = Ui: potência entregue ao circuito externo.",
-          "P_dissipada = ri²: potência perdida na resistência interna.",
-        ],
-        structure: [
-          "Multiplicar tensão por corrente transforma energia por carga em energia por tempo.",
-          "A potência total se divide entre parte útil e perdas internas.",
-          "O rendimento compara o que foi entregue ao circuito externo com o que foi produzido pelo gerador.",
-        ],
-        steps: [
           {
-            title: "Passo 1: multiplicar a equação do gerador por i",
+            title: "Potências",
             formulas: [
-              String.raw`U = \varepsilon - ri`,
               String.raw`Ui = \varepsilon i - ri^2`,
-            ],
-          },
-          {
-            title: "Passo 2: identificar as potências",
-            formulas: [
               String.raw`P_{\text{útil}} = P_{\text{total}} - P_{\text{dissipada}}`,
             ],
           },
-          {
-            title: "Passo 3: rendimento",
-            formulas: [
-              String.raw`\eta = \frac{P_{\text{útil}}}{P_{\text{total}}} = \frac{U}{\varepsilon}`,
-            ],
-          },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Ideia física",
-        type: "warning",
-        body: "Gerador real não entrega tudo que produz. Parte da energia se perde internamente, e essa perda cresce com a corrente.",
       },
     ],
   },
@@ -1472,38 +1727,42 @@ const theorySections: TheorySection[] = [
     title: "16. Receptores elétricos",
     accent: "from-violet-700 to-indigo-800",
     paragraphs: [
-      "Receptor elétrico é um dispositivo que recebe energia elétrica e transforma parte dessa energia em outra forma útil, diferente de calor puro. Um motor transforma energia elétrica em energia mecânica. Uma bateria sendo carregada transforma energia elétrica em energia química.",
-      "Em um receptor real, a tensão aplicada precisa cumprir duas tarefas: fornecer energia para a conversão útil e compensar as perdas internas por efeito Joule. Por isso a equação do receptor real tem soma, não subtração.",
-      "A força contraeletromotriz ε' representa a energia útil por unidade de carga convertida pelo receptor. Já o termo r'i representa a queda interna associada à resistência do receptor.",
+      "Receptor elétrico recebe energia elétrica e transforma parte dela em outra forma útil, como energia mecânica em um motor ou energia química em uma bateria sendo carregada.",
+      "Em um receptor real, a tensão aplicada precisa alimentar a conversão útil e compensar as perdas internas. Por isso a equação tem soma.",
+      "A força contraeletromotriz ε′ representa a energia útil por unidade de carga convertida pelo receptor. O termo r′i representa a queda interna.",
     ],
+    diagram: {
+      kind: "receiver",
+      title: "Diagrama visual: receptor real",
+      caption:
+        "O receptor usa parte da energia de cada carga para conversão útil e parte é perdida na resistência interna.",
+    },
     panels: [
       {
         title: "Receptor real",
         formula: String.raw`U = \varepsilon' + r'i`,
         terms: [
           "U: tensão aplicada ao receptor.",
-          "ε': força contraeletromotriz.",
-          "r': resistência interna do receptor.",
-          "i: corrente que atravessa o receptor.",
+          "ε′: força contraeletromotriz.",
+          "r′: resistência interna.",
+          "i: corrente no receptor.",
         ],
         structure: [
-          "A tensão aplicada alimenta a conversão útil de energia.",
-          "Além disso, precisa compensar a queda interna por resistência.",
-          "Por isso, no receptor, o termo interno aparece somando.",
+          "A tensão aplicada alimenta a conversão útil.",
+          "Também precisa vencer a queda interna.",
+          "Por isso o termo r′i aparece somando.",
         ],
         steps: [
           {
-            title: "Passo 1: parte útil",
-            body: [
-              "A força contraeletromotriz mede a energia por unidade de carga convertida em forma útil.",
-            ],
+            title: "Conversão útil",
+            body: ["A força contraeletromotriz mede a energia útil convertida por unidade de carga."],
           },
           {
-            title: "Passo 2: queda interna",
+            title: "Queda interna",
             formulas: [String.raw`U_{\text{interna}} = r'i`],
           },
           {
-            title: "Passo 3: tensão total aplicada",
+            title: "Tensão total",
             formulas: [String.raw`U = \varepsilon' + r'i`],
           },
         ],
@@ -1511,9 +1770,9 @@ const theorySections: TheorySection[] = [
     ],
     notes: [
       {
-        title: "Comparação fundamental",
+        title: "Comparação essencial",
         type: "info",
-        body: "Gerador real: U = ε - ri. Receptor real: U = ε' + r'i. No gerador, a resistência interna reduz a tensão útil entregue. No receptor, a fonte externa precisa fornecer tensão suficiente para a conversão útil e para a perda interna.",
+        body: "Gerador real: U = ε - ri. Receptor real: U = ε′ + r′i. No gerador a perda interna reduz a tensão útil. No receptor a fonte precisa fornecer tensão para a conversão útil e para a perda interna.",
       },
     ],
   },
@@ -1523,10 +1782,16 @@ const theorySections: TheorySection[] = [
     title: "17. Instrumentos de medida",
     accent: "from-indigo-800 to-slate-950",
     paragraphs: [
-      "Instrumentos de medida precisam ser ligados de acordo com a grandeza que medem. Um erro de ligação não apenas altera a leitura: pode mudar totalmente o circuito ou danificar o instrumento.",
-      "O amperímetro mede corrente. Para medir a corrente de um ramo, ele precisa ser atravessado pela mesma corrente do ramo. Por isso, é ligado em série. O amperímetro ideal tem resistência interna nula para não alterar a corrente medida.",
-      "O voltímetro mede diferença de potencial entre dois pontos. Para medir a tensão nos terminais de um componente, ele deve ser ligado em paralelo com esse componente. O voltímetro ideal tem resistência interna infinita para não desviar corrente significativa.",
+      "Instrumentos de medida precisam ser ligados de acordo com a grandeza que medem. Um erro de ligação altera o circuito e pode danificar o instrumento.",
+      "O amperímetro mede corrente. Para medir a corrente de um ramo, ele deve ser atravessado por essa mesma corrente. Por isso fica em série.",
+      "O voltímetro mede diferença de potencial entre dois pontos. Por isso deve ser ligado em paralelo com o elemento cuja tensão queremos medir.",
     ],
+    diagram: {
+      kind: "meters",
+      title: "Diagrama visual: amperímetro e voltímetro",
+      caption:
+        "O amperímetro fica em série com o resistor. O voltímetro fica em paralelo com seus terminais.",
+    },
     panels: [
       {
         title: "Instrumentos ideais",
@@ -1534,12 +1799,12 @@ const theorySections: TheorySection[] = [
         terms: [
           "R_A: resistência interna do amperímetro.",
           "R_V: resistência interna do voltímetro.",
-          "Amperímetro: mede corrente e deve ficar em série.",
-          "Voltímetro: mede tensão e deve ficar em paralelo.",
+          "Amperímetro: mede corrente e fica em série.",
+          "Voltímetro: mede tensão e fica em paralelo.",
         ],
         structure: [
           "O amperímetro ideal não deve alterar a corrente medida.",
-          "O voltímetro ideal não deve puxar corrente significativa do circuito.",
+          "O voltímetro ideal não deve desviar corrente significativa.",
           "Por isso um tem resistência ideal nula e o outro resistência ideal infinita.",
         ],
         steps: [
@@ -1551,18 +1816,12 @@ const theorySections: TheorySection[] = [
             title: "Voltímetro ideal",
             formulas: [String.raw`R_V \to \infty`],
           },
-          {
-            title: "Ohmímetro",
-            body: [
-              "O ohmímetro mede resistência elétrica e deve ser usado com o circuito desligado, pois possui fonte interna de medição.",
-            ],
-          },
         ],
       },
     ],
     notes: [
       {
-        title: "Erro comum que destrói questão",
+        title: "Erro perigoso",
         type: "danger",
         body: "Amperímetro em paralelo pode causar curto-circuito. Voltímetro em série pode quase interromper o circuito.",
       },
@@ -1574,18 +1833,18 @@ const theorySections: TheorySection[] = [
     title: "18. Leis de Kirchhoff",
     accent: "from-slate-950 to-indigo-900",
     paragraphs: [
-      "As Leis de Kirchhoff são usadas quando o circuito não pode ser resolvido apenas por associações simples de resistores. Elas permitem analisar circuitos com vários ramos, várias fontes e várias malhas.",
-      "A Lei dos Nós é consequência da conservação da carga. A Lei das Malhas é consequência da conservação da energia. Ou seja, Kirchhoff não é ritual místico com sinais: é conservação aplicada a circuitos.",
-      "O método seguro é escolher sentidos arbitrários para as correntes, escrever equações de nós e malhas, resolver o sistema e interpretar sinais negativos. Corrente negativa não é fracasso; é aviso de que o sentido real é oposto ao escolhido.",
+      "As Leis de Kirchhoff são usadas quando o circuito não pode ser resolvido apenas por série e paralelo. Elas permitem analisar circuitos com vários ramos, fontes e malhas.",
+      "A Lei dos Nós vem da conservação da carga. A Lei das Malhas vem da conservação da energia. Kirchhoff não é ritual místico com sinais; é conservação aplicada a circuitos.",
+      "O método seguro é escolher sentidos para correntes, escrever equações, resolver o sistema e interpretar sinais negativos. Corrente negativa significa que o sentido real é oposto ao escolhido.",
     ],
     numbered: [
       "Escolha sentidos arbitrários para as correntes.",
-      "Aplique a Lei dos Nós onde houver ramificações importantes.",
+      "Aplique a Lei dos Nós onde houver ramificações.",
       "Escolha malhas independentes.",
       "Percorra cada malha em um sentido escolhido.",
-      "Atribua sinais corretamente para resistores, geradores e receptores.",
-      "Resolva o sistema de equações.",
-      "Interprete correntes negativas como sentido real oposto ao adotado.",
+      "Atribua sinais corretamente para resistores e fontes.",
+      "Resolva o sistema.",
+      "Interprete correntes negativas.",
     ],
     panels: [
       {
@@ -1594,25 +1853,17 @@ const theorySections: TheorySection[] = [
         terms: [
           "i_entrando: correntes que chegam ao nó.",
           "i_saindo: correntes que saem do nó.",
-          "Nó: região onde ramos do circuito se encontram.",
+          "Nó: região onde ramos se encontram.",
         ],
         structure: [
-          "A lei expressa conservação da carga.",
-          "Em regime estacionário, carga não se acumula indefinidamente no nó.",
-          "Tudo que entra precisa sair, considerando os sentidos adotados.",
+          "Expressa conservação da carga.",
+          "Carga não se acumula indefinidamente no nó.",
+          "Tudo que entra deve sair.",
         ],
         steps: [
           {
-            title: "Passo 1: conservação da carga",
-            body: [
-              "Se carga se acumulasse indefinidamente em um nó, o potencial do nó mudaria continuamente. Em regime estacionário, isso não ocorre.",
-            ],
-          },
-          {
-            title: "Passo 2: balanço de correntes",
-            formulas: [
-              String.raw`\sum i_{\text{entrando}} = \sum i_{\text{saindo}}`,
-            ],
+            title: "Balanço de correntes",
+            formulas: [String.raw`\sum i_{\text{entrando}} = \sum i_{\text{saindo}}`],
           },
         ],
       },
@@ -1620,48 +1871,35 @@ const theorySections: TheorySection[] = [
         title: "Lei das Malhas",
         formula: String.raw`\sum U = 0`,
         terms: [
-          "ΣU: soma algébrica das variações de potencial em uma volta fechada.",
-          "Malha: caminho fechado dentro do circuito.",
-          "Variação de potencial: aumento ou queda de tensão ao atravessar um elemento.",
+          "ΣU: soma algébrica das variações de potencial.",
+          "Malha: caminho fechado no circuito.",
+          "Variação de potencial: subida ou queda de tensão.",
         ],
         structure: [
-          "A lei expressa conservação da energia.",
-          "Ao dar uma volta completa, voltamos ao mesmo ponto e ao mesmo potencial.",
-          "Subidas e quedas de potencial devem se compensar.",
+          "Expressa conservação da energia.",
+          "Ao dar uma volta completa, voltamos ao mesmo potencial.",
+          "Subidas e quedas de potencial se compensam.",
         ],
         steps: [
           {
-            title: "Passo 1: volta fechada",
-            body: [
-              "Em uma malha, partimos de um ponto e retornamos ao mesmo ponto. O potencial final deve ser igual ao potencial inicial.",
-            ],
-          },
-          {
-            title: "Passo 2: soma algébrica",
+            title: "Soma das variações",
             formulas: [String.raw`\sum U = 0`],
           },
           {
-            title: "Passo 3: sinais em resistores",
+            title: "Resistores",
             formulas: [
               String.raw`\text{sentido da corrente} \Rightarrow -Ri`,
               String.raw`\text{contra a corrente} \Rightarrow +Ri`,
             ],
           },
           {
-            title: "Passo 4: sinais em geradores",
+            title: "Geradores",
             formulas: [
               String.raw`- \to + \Rightarrow +\varepsilon`,
               String.raw`+ \to - \Rightarrow -\varepsilon`,
             ],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Corrente negativa",
-        type: "warning",
-        body: "Se uma corrente calculada der negativa, não significa que a conta está errada. Significa que o sentido real da corrente é oposto ao sentido escolhido inicialmente.",
       },
     ],
   },
@@ -1671,13 +1909,19 @@ const theorySections: TheorySection[] = [
     title: "19. Ponte de Wheatstone",
     accent: "from-indigo-900 to-purple-900",
     paragraphs: [
-      "A Ponte de Wheatstone é um circuito usado para comparar resistências e medir resistências desconhecidas. Ela é muito cobrada porque mistura divisor de tensão, equilíbrio de potenciais e simplificação de circuitos.",
-      "A ponte está equilibrada quando não passa corrente pelo galvanômetro. Isso ocorre quando os pontos intermediários ligados pelo galvanômetro têm o mesmo potencial elétrico.",
-      "A condição da ponte não é uma fórmula caída do céu. Ela nasce da igualdade de potenciais nos pontos médios dos dois ramos. Se não há diferença de potencial no galvanômetro, não há corrente nele.",
+      "A Ponte de Wheatstone é usada para comparar resistências e medir resistência desconhecida. Ela mistura divisor de tensão, equilíbrio de potenciais e análise de circuito.",
+      "A ponte está equilibrada quando não passa corrente pelo galvanômetro. Isso ocorre quando os pontos intermediários ligados pelo galvanômetro têm o mesmo potencial.",
+      "A fórmula da ponte não é decoreba caída do céu. Ela vem da igualdade de potenciais nos pontos médios dos dois ramos.",
     ],
+    diagram: {
+      kind: "wheatstone",
+      title: "Diagrama visual: Ponte de Wheatstone",
+      caption:
+        "No equilíbrio, não passa corrente pelo galvanômetro G. Os pontos intermediários ficam equipotenciais.",
+    },
     panels: [
       {
-        title: "Condição de equilíbrio da Ponte de Wheatstone",
+        title: "Condição de equilíbrio da ponte",
         formula: String.raw`\frac{R_1}{R_2} = \frac{R_3}{R_4}`,
         terms: [
           "R₁, R₂, R₃ e R₄: resistores da ponte.",
@@ -1685,36 +1929,24 @@ const theorySections: TheorySection[] = [
           "Equilíbrio: situação em que i_G = 0.",
         ],
         structure: [
-          "A ponte fica equilibrada quando os pontos intermediários têm o mesmo potencial.",
-          "Se os potenciais são iguais, a tensão no galvanômetro é zero.",
-          "Sem tensão no galvanômetro, a corrente nele é nula.",
+          "Os pontos intermediários têm o mesmo potencial.",
+          "Sem diferença de potencial, não há corrente no galvanômetro.",
+          "A igualdade de razões vem dos divisores de tensão.",
         ],
         steps: [
           {
-            title: "Passo 1: corrente nula no galvanômetro",
+            title: "Corrente nula",
             formulas: [String.raw`i_G = 0`],
           },
           {
-            title: "Passo 2: pontos equipotenciais",
+            title: "Equipotenciais",
             formulas: [String.raw`V_A = V_B`],
           },
           {
-            title: "Passo 3: condição de equilíbrio",
+            title: "Condição final",
             formulas: [String.raw`\frac{R_1}{R_2} = \frac{R_3}{R_4}`],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Uso estratégico",
-        type: "success",
-        body: "Quando a ponte está equilibrada, o ramo do galvanômetro pode ser ignorado na análise, porque não passa corrente por ele.",
-      },
-      {
-        title: "Cuidado",
-        type: "warning",
-        body: "Se a ponte não estiver equilibrada, não pode simplesmente apagar o ramo central. Nesse caso, pode ser necessário usar Kirchhoff ou outra técnica de análise.",
       },
     ],
   },
@@ -1724,10 +1956,16 @@ const theorySections: TheorySection[] = [
     title: "20. Curto-circuito, fusíveis e disjuntores",
     accent: "from-red-700 to-slate-950",
     paragraphs: [
-      "Curto-circuito ocorre quando dois pontos com diferença de potencial são conectados por um caminho de resistência muito baixa. O perigo não está no caminho ser geometricamente curto; está no fato de a resistência ser pequena demais.",
-      "Pela Lei de Ohm, se a tensão é mantida e a resistência cai muito, a corrente cresce muito. Essa corrente alta pode aquecer fios, derreter isolantes, danificar aparelhos e causar incêndios.",
-      "Pode parecer contraditório: se a resistência é pequena, por que esquenta tanto? A resposta está no efeito Joule. A potência dissipada depende de i². Mesmo que R seja pequeno, uma corrente enorme pode produzir dissipação perigosa.",
+      "Curto-circuito ocorre quando pontos com diferença de potencial são ligados por um caminho de resistência muito baixa. O perigo não está no caminho ser geometricamente curto, mas em ter resistência pequena demais.",
+      "Pela Lei de Ohm, se a tensão é mantida e a resistência cai muito, a corrente cresce muito. Corrente alta pode aquecer fios, derreter isolantes, danificar aparelhos e causar incêndios.",
+      "Pode parecer contraditório: se R é pequeno, por que esquenta tanto? Porque o efeito Joule depende de i². A corrente pode crescer tanto que o aquecimento fica perigoso mesmo em caminho de baixa resistência.",
     ],
+    diagram: {
+      kind: "shortCircuit",
+      title: "Diagrama visual: curto-circuito",
+      caption:
+        "O caminho em vermelho tem resistência muito baixa e desvia a corrente do resistor.",
+    },
     panels: [
       {
         title: "Por que curto-circuito é perigoso?",
@@ -1738,28 +1976,22 @@ const theorySections: TheorySection[] = [
           "i: corrente que pode crescer muito.",
         ],
         structure: [
-          "Com tensão mantida, reduzir muito R aumenta muito i.",
+          "Com tensão mantida, reduzir R aumenta i.",
           "O aquecimento depende fortemente da corrente.",
-          "Fusíveis e disjuntores interrompem o circuito antes que o aquecimento cause dano grave.",
+          "Fusíveis e disjuntores interrompem o circuito em situações perigosas.",
         ],
         steps: [
           {
-            title: "Passo 1: corrente pela Lei de Ohm",
+            title: "Corrente",
             formulas: [String.raw`i = \frac{U}{R}`],
           },
           {
-            title: "Passo 2: resistência muito pequena",
+            title: "Resistência muito baixa",
             formulas: [String.raw`R \to 0 \Rightarrow i \text{ muito grande}`],
           },
           {
-            title: "Passo 3: aquecimento por efeito Joule",
+            title: "Aquecimento",
             formulas: [String.raw`P = Ri^2`],
-          },
-          {
-            title: "Passo 4: por que pode aquecer mesmo com R pequeno?",
-            body: [
-              "Porque a corrente pode ficar tão grande que o termo i² domina a dissipação. Pequena resistência não garante segurança se a corrente for enorme.",
-            ],
           },
         ],
       },
@@ -1777,48 +2009,44 @@ const theorySections: TheorySection[] = [
     title: "21. Capacitores em corrente contínua",
     accent: "from-slate-900 to-blue-900",
     paragraphs: [
-      "Capacitores armazenam carga elétrica e energia em um campo elétrico entre suas placas. Em Eletrodinâmica básica, o ponto mais importante é entender o comportamento do capacitor em corrente contínua.",
-      "Quando um capacitor descarregado é ligado a uma fonte, inicialmente há corrente no circuito. As placas começam a acumular cargas opostas, e a tensão entre elas aumenta.",
-      "Durante o processo de carga, a corrente diminui. Após muito tempo, no regime estacionário de corrente contínua, o capacitor ideal carregado se comporta como circuito aberto. Ele não permite passagem contínua de corrente pelo ramo.",
-      "Isso não significa que o capacitor sumiu do circuito. Significa apenas que, depois de carregado, ele bloqueia corrente contínua em regime permanente. Durante o transitório de carga ou descarga, a história é outra.",
+      "Capacitores armazenam carga elétrica e energia em um campo elétrico entre suas placas. Em corrente contínua, o comportamento depende do instante analisado.",
+      "No instante inicial, se o capacitor está descarregado, há corrente de carga. Durante o carregamento, a tensão no capacitor aumenta e a corrente diminui.",
+      "Depois de muito tempo, em regime estacionário de corrente contínua, o capacitor ideal carregado se comporta como circuito aberto. Ele não permite passagem contínua de corrente pelo ramo.",
     ],
+    diagram: {
+      kind: "capacitor",
+      title: "Diagrama visual: capacitor em corrente contínua",
+      caption:
+        "O capacitor acumula cargas opostas nas placas. Após muito tempo, comporta-se como circuito aberto ideal.",
+    },
     panels: [
       {
         title: "Carga armazenada em capacitor",
         formula: String.raw`Q = CU`,
         terms: [
-          "Q: carga armazenada no capacitor.",
+          "Q: carga armazenada.",
           "C: capacitância.",
           "U: tensão entre as placas.",
         ],
         structure: [
-          "Para uma mesma capacitância, maior tensão permite armazenar mais carga.",
-          "Para uma mesma tensão, maior capacitância significa maior capacidade de armazenar carga.",
+          "Maior tensão armazena mais carga para uma mesma capacitância.",
+          "Maior capacitância armazena mais carga para uma mesma tensão.",
           "Em corrente contínua estacionária, capacitor carregado se comporta como circuito aberto.",
         ],
         steps: [
           {
-            title: "Passo 1: definição de capacitância",
+            title: "Definição",
             formulas: [String.raw`C = \frac{Q}{U}`],
           },
           {
-            title: "Passo 2: isolando a carga",
+            title: "Isolando a carga",
             formulas: [String.raw`Q = CU`],
           },
           {
-            title: "Passo 3: regime estacionário em corrente contínua",
-            formulas: [
-              String.raw`\text{capacitor carregado em CC estacionária} \Rightarrow \text{circuito aberto}`,
-            ],
+            title: "Regime estacionário",
+            formulas: [String.raw`\text{capacitor carregado em CC} \Rightarrow \text{circuito aberto}`],
           },
         ],
-      },
-    ],
-    notes: [
-      {
-        title: "Como usar em questão",
-        type: "info",
-        body: "Em circuitos de corrente contínua após muito tempo, trate o capacitor ideal como circuito aberto. No instante inicial ou durante carga e descarga, a análise é transitória e exige cuidado.",
       },
     ],
   },
@@ -1828,8 +2056,8 @@ const theorySections: TheorySection[] = [
     title: "22. Gráficos importantes",
     accent: "from-blue-900 to-indigo-900",
     paragraphs: [
-      "Gráficos em Eletrodinâmica não são decoração. Eles carregam informação física. Em provas difíceis, muitas vezes o gráfico substitui parte do enunciado.",
-      "É preciso saber ler inclinação, intercepto, sinal da inclinação e significado físico de cada trecho. Gráfico U × i pode revelar resistência, força eletromotriz, resistência interna, comportamento ôhmico ou não ôhmico.",
+      "Gráficos em Eletrodinâmica carregam informação física. Em provas difíceis, o gráfico frequentemente substitui parte do enunciado.",
+      "É preciso ler inclinação, intercepto, sinal da reta e significado físico de cada trecho. Gráfico U × i pode revelar resistência, força eletromotriz, resistência interna e comportamento ôhmico ou não ôhmico.",
     ],
     panels: [
       {
@@ -1842,7 +2070,7 @@ const theorySections: TheorySection[] = [
         ],
         structure: [
           "A equação tem forma linear.",
-          "A reta passa pela origem para resistor ôhmico ideal.",
+          "A reta passa pela origem.",
           "Maior inclinação significa maior resistência.",
         ],
         steps: [
@@ -1857,37 +2085,17 @@ const theorySections: TheorySection[] = [
         ],
       },
       {
-        title: "Gráfico P × i para resistor",
-        formula: String.raw`P = Ri^2`,
-        terms: [
-          "P: potência elétrica no eixo vertical.",
-          "i: corrente elétrica no eixo horizontal.",
-          "R: fator que controla a abertura da parábola.",
-        ],
-        structure: [
-          "O gráfico é parabólico.",
-          "A potência cresce com o quadrado da corrente.",
-          "Corrente dobrada implica potência quatro vezes maior.",
-        ],
-        steps: [
-          {
-            title: "Corrente dobrada",
-            formulas: [String.raw`P' = R(2i)^2 = 4Ri^2 = 4P`],
-          },
-        ],
-      },
-      {
         title: "Gráfico U × i para gerador real",
         formula: String.raw`U = \varepsilon - ri`,
         terms: [
           "ε: intercepto vertical.",
           "-r: inclinação da reta.",
-          "U: tensão nos terminais.",
+          "U: tensão terminal.",
         ],
         structure: [
           "A reta é decrescente.",
           "Quando i = 0, U = ε.",
-          "Quanto maior a resistência interna, mais rapidamente a tensão terminal cai com a corrente.",
+          "A inclinação indica a resistência interna com sinal negativo.",
         ],
         steps: [
           {
@@ -1904,14 +2112,14 @@ const theorySections: TheorySection[] = [
         title: "Gráfico U × i para receptor real",
         formula: String.raw`U = \varepsilon' + r'i`,
         terms: [
-          "ε': intercepto vertical.",
-          "r': inclinação da reta.",
-          "U: tensão aplicada ao receptor.",
+          "ε′: intercepto vertical.",
+          "r′: inclinação da reta.",
+          "U: tensão aplicada.",
         ],
         structure: [
           "A reta é crescente.",
-          "O intercepto representa a energia útil por unidade de carga.",
-          "A inclinação representa a resistência interna do receptor.",
+          "O intercepto representa energia útil por carga.",
+          "A inclinação representa resistência interna.",
         ],
         steps: [
           {
@@ -1925,13 +2133,6 @@ const theorySections: TheorySection[] = [
         ],
       },
     ],
-    notes: [
-      {
-        title: "Prova difícil",
-        type: "warning",
-        body: "Em ITA/IME, o gráfico pode trazer os dados principais do problema. Leia interceptos, inclinações e sentido da reta antes de sair substituindo número como se a calculadora fosse te salvar da interpretação.",
-      },
-    ],
   },
   {
     id: 23,
@@ -1939,52 +2140,45 @@ const theorySections: TheorySection[] = [
     title: "23. Análise dimensional",
     accent: "from-indigo-900 to-slate-950",
     paragraphs: [
-      "Análise dimensional é uma forma de verificar se uma fórmula faz sentido em termos de unidades. Ela não resolve toda questão, mas ajuda a detectar erros grosseiros antes que eles virem vergonha organizada.",
-      "Em Eletrodinâmica, as unidades se conectam de maneira muito elegante: ampère é coulomb por segundo, volt é joule por coulomb, watt é joule por segundo, ohm é volt por ampère.",
+      "Análise dimensional verifica se as unidades fazem sentido. Ela não resolve toda questão, mas evita erros grosseiros antes que eles virem vergonha formatada em LaTeX.",
+      "Em Eletrodinâmica, ampère é coulomb por segundo, volt é joule por coulomb, watt é joule por segundo e ohm é volt por ampère.",
     ],
     panels: [
       {
-        title: "Unidades fundamentais em Eletrodinâmica",
+        title: "Unidades fundamentais",
         formula: String.raw`\text{A}, \ \text{V}, \ \Omega, \ \text{W}, \ \text{J}`,
         terms: [
-          "A: ampère, unidade de corrente elétrica.",
-          "V: volt, unidade de tensão elétrica.",
-          "Ω: ohm, unidade de resistência elétrica.",
+          "A: ampère, unidade de corrente.",
+          "V: volt, unidade de tensão.",
+          "Ω: ohm, unidade de resistência.",
           "W: watt, unidade de potência.",
           "J: joule, unidade de energia.",
         ],
         structure: [
-          "As unidades revelam o significado físico das grandezas.",
-          "Potência elétrica vem de tensão vezes corrente.",
-          "Resistência elétrica vem de tensão dividida por corrente.",
+          "As unidades revelam significado físico.",
+          "Potência vem de tensão vezes corrente.",
+          "Resistência vem de tensão dividida por corrente.",
         ],
         steps: [
           {
-            title: "Corrente elétrica",
+            title: "Corrente",
             formulas: [
               String.raw`i = \frac{\Delta Q}{\Delta t}`,
               String.raw`[i] = \frac{\text{C}}{\text{s}} = \text{A}`,
             ],
           },
           {
-            title: "Resistência elétrica",
-            formulas: [
-              String.raw`R = \frac{U}{i}`,
-              String.raw`[R] = \frac{\text{V}}{\text{A}} = \Omega`,
-            ],
-          },
-          {
-            title: "Potência elétrica",
+            title: "Potência",
             formulas: [
               String.raw`P = Ui`,
               String.raw`[P] = \frac{\text{J}}{\text{C}}\cdot\frac{\text{C}}{\text{s}} = \text{W}`,
             ],
           },
           {
-            title: "Resistividade",
+            title: "Resistência",
             formulas: [
-              String.raw`R = \rho\frac{L}{A}`,
-              String.raw`[\rho] = \Omega\cdot\text{m}`,
+              String.raw`R = \frac{U}{i}`,
+              String.raw`[R] = \frac{\text{V}}{\text{A}} = \Omega`,
             ],
           },
         ],
@@ -1997,24 +2191,30 @@ const theorySections: TheorySection[] = [
     title: "24. Aplicações práticas",
     accent: "from-amber-600 to-orange-700",
     paragraphs: [
-      "O chuveiro elétrico usa efeito Joule. A corrente atravessa uma resistência e a energia elétrica é transformada em energia térmica, aquecendo a água.",
+      "O chuveiro elétrico usa efeito Joule. A corrente atravessa uma resistência e a energia elétrica é transformada em calor, aquecendo a água.",
       "Para tensão fixa, diminuir a resistência aumenta a potência, pois P = U²/R. Por isso, em muitos chuveiros, a posição de maior aquecimento corresponde a uma resistência menor.",
       "Instalações residenciais usam associação em paralelo. Isso permite que os aparelhos recebam a mesma tensão e funcionem de forma independente.",
-      "Linhas de transmissão usam altas tensões para reduzir perdas. Para transmitir a mesma potência, aumentar a tensão reduz a corrente. Como as perdas nos fios dependem de i², reduzir a corrente reduz muito a dissipação.",
+      "Linhas de transmissão usam alta tensão para reduzir perdas. Para a mesma potência transmitida, aumentar U reduz i. Como as perdas dependem de i², reduzir corrente reduz muito a dissipação.",
     ],
+    diagram: {
+      kind: "transmission",
+      title: "Diagrama visual: transmissão de energia elétrica",
+      caption:
+        "Transformadores elevam a tensão para transmitir energia com menor corrente e menores perdas por efeito Joule.",
+    },
     panels: [
       {
         title: "Perdas em linhas de transmissão",
         formula: String.raw`P_{\text{perdida}} = Ri^2`,
         terms: [
           "P_perdida: potência dissipada nos fios.",
-          "R: resistência dos fios de transmissão.",
-          "i: corrente que percorre a linha.",
+          "R: resistência dos fios.",
+          "i: corrente na linha.",
         ],
         structure: [
           "As perdas crescem com o quadrado da corrente.",
-          "Para a mesma potência transmitida, aumentar a tensão reduz a corrente.",
-          "Por isso a transmissão de energia é feita em alta tensão.",
+          "Para mesma potência, aumentar tensão reduz corrente.",
+          "Alta tensão reduz perdas na transmissão.",
         ],
         steps: [
           {
@@ -2026,10 +2226,8 @@ const theorySections: TheorySection[] = [
             formulas: [String.raw`i = \frac{P}{U}`],
           },
           {
-            title: "Conclusão",
-            body: [
-              "Se U aumenta e P é mantida, i diminui. Como as perdas dependem de i², a redução da corrente diminui fortemente a energia perdida nos fios.",
-            ],
+            title: "Perdas",
+            formulas: [String.raw`P_{\text{perdida}} = Ri^2`],
           },
         ],
       },
@@ -2046,23 +2244,22 @@ const theorySections: TheorySection[] = [
     bullets: [
       "confundir tensão com corrente;",
       "achar que corrente é gasta no resistor;",
-      "achar que a corrente diminui ao passar por resistores em série;",
+      "achar que a corrente diminui em resistores em série;",
       "inverter série e paralelo;",
       "usar P = U²/R sem perceber qual grandeza está fixa;",
       "esquecer resistência interna do gerador;",
       "errar sinal em Kirchhoff;",
       "ligar amperímetro em paralelo;",
       "ligar voltímetro em série;",
-      "achar que elétrons se movem no sentido convencional da corrente;",
       "confundir kW com kWh;",
       "não perceber curto-circuito;",
-      "não reconhecer pontos equipotenciais em circuitos simétricos.",
+      "não reconhecer pontos equipotenciais.",
     ],
     notes: [
       {
         title: "Resumo da confusão humana",
         type: "warning",
-        body: "Corrente não é energia. Tensão não é corrente. Potência não é energia. Resistência não é resistividade. Série não é paralelo. A física é coerente; o aluno é que geralmente tenta resolver circuito no modo superstição.",
+        body: "Corrente não é energia. Tensão não é corrente. Potência não é energia. Resistência não é resistividade. Série não é paralelo. A física é coerente; o aluno é que tenta resolver no modo superstição.",
       },
     ],
   },
@@ -2072,9 +2269,15 @@ const theorySections: TheorySection[] = [
     title: "26. Pontos importantes para ITA/IME",
     accent: "from-slate-950 to-purple-900",
     paragraphs: [
-      "Em provas difíceis, Eletrodinâmica raramente aparece como aplicação direta de U = Ri. O conteúdo costuma vir misturado com simetria, energia, gráficos, geradores reais, instrumentos de medida e análise de circuitos não óbvios.",
-      "O aluno forte não começa calculando. Ele começa interpretando a estrutura do circuito: quais pontos são nós, onde a tensão é comum, onde a corrente é comum, se há simetria, se existem pontos equipotenciais e se algum instrumento altera a configuração do circuito.",
+      "Em provas difíceis, Eletrodinâmica raramente aparece como aplicação direta de U = Ri. O conteúdo costuma vir misturado com simetria, energia, gráficos, geradores reais, instrumentos e circuitos não óbvios.",
+      "O aluno forte não começa calculando. Ele começa interpretando a estrutura do circuito: nós, ramos, tensão comum, corrente comum, simetria, pontos equipotenciais e presença de resistência interna.",
     ],
+    diagram: {
+      kind: "nodes",
+      title: "Diagrama visual: nós e paralelos escondidos",
+      caption:
+        "Mesmo que os resistores estejam desenhados de formas diferentes, se ligam os mesmos dois nós, estão em paralelo.",
+    },
     bullets: [
       "circuitos com simetria e pontos equipotenciais;",
       "associações não evidentes de resistores;",
@@ -2092,7 +2295,7 @@ const theorySections: TheorySection[] = [
       {
         title: "Roteiro mental de prova",
         type: "dark",
-        body: "Antes de calcular, pergunte: quais elementos estão em série? Quais estão em paralelo? Há pontos equipotenciais? A corrente se divide? A tensão é comum? Há resistência interna? O instrumento altera o circuito? O problema pede potência máxima ou rendimento?",
+        body: "Antes de calcular, pergunte: quais elementos estão em série? Quais estão em paralelo? Há pontos equipotenciais? A corrente se divide? A tensão é comum? Há resistência interna? O instrumento altera o circuito?",
       },
     ],
   },
@@ -2116,7 +2319,7 @@ const examples: Example[] = [
       {
         title: "Resposta",
         type: "success",
-        body: "A corrente média é 4 A. Isso significa que passam, em média, 4 C por segundo pela seção analisada.",
+        body: "A corrente média é 4 A.",
       },
     ],
   },
@@ -2126,7 +2329,7 @@ const examples: Example[] = [
     statement:
       "Uma corrente de 3,2 A atravessa um fio durante 5 s. Quantos elétrons atravessam uma seção nesse intervalo?",
     explanation: [
-      "Primeiro calculamos a carga total transportada. Depois usamos a quantização da carga para determinar o número de elétrons.",
+      "Primeiro calculamos a carga total transportada. Depois usamos a quantização da carga.",
     ],
     formulas: [
       String.raw`Q = i\Delta t`,
@@ -2148,381 +2351,79 @@ const examples: Example[] = [
     title: "Exemplo 3 — Primeira Lei de Ohm",
     statement:
       "Um resistor de 8 Ω é submetido a uma tensão de 24 V. Determine a corrente.",
-    explanation: [
-      "Como o resistor é tratado como ôhmico, usamos a Primeira Lei de Ohm.",
-    ],
+    explanation: ["Como o resistor é ôhmico, usamos U = Ri."],
     formulas: [
       String.raw`U = Ri`,
       String.raw`i = \frac{U}{R}`,
       String.raw`i = \frac{24}{8}`,
       String.raw`i = 3 \ \text{A}`,
     ],
-    notes: [
-      {
-        title: "Resposta",
-        type: "success",
-        body: "A corrente elétrica vale 3 A.",
-      },
-    ],
   },
   {
     id: "ex4",
-    title: "Exemplo 4 — Segunda Lei de Ohm",
-    statement:
-      "Um fio tem comprimento 10 m, área 2,0 × 10⁻⁶ m² e resistividade 2,0 × 10⁻⁸ Ω·m. Determine sua resistência.",
-    explanation: [
-      "A resistência depende da resistividade do material, do comprimento e da área da seção transversal.",
-    ],
-    formulas: [
-      String.raw`R = \rho\frac{L}{A}`,
-      String.raw`R = 2{,}0 \times 10^{-8}\cdot\frac{10}{2{,}0 \times 10^{-6}}`,
-      String.raw`R = 0{,}10 \ \Omega`,
-    ],
-    notes: [
-      {
-        title: "Resposta",
-        type: "success",
-        body: "A resistência do fio é 0,10 Ω.",
-      },
-    ],
-  },
-  {
-    id: "ex5",
-    title: "Exemplo 5 — Associação em série",
-    statement:
-      "Três resistores de 2 Ω, 3 Ω e 5 Ω estão em série ligados a uma fonte de 20 V.",
-    explanation: [
-      "Em série, a corrente é a mesma em todos os resistores e as resistências se somam.",
-    ],
-    formulas: [
-      String.raw`R_{\text{eq}} = R_1 + R_2 + R_3`,
-      String.raw`R_{\text{eq}} = 2 + 3 + 5 = 10 \ \Omega`,
-      String.raw`i = \frac{U}{R_{\text{eq}}} = \frac{20}{10}`,
-      String.raw`i = 2 \ \text{A}`,
-    ],
-    notes: [
-      {
-        title: "Ideia importante",
-        type: "warning",
-        body: "Em série, a corrente não diminui ao passar pelos resistores. O que se divide é a tensão.",
-      },
-    ],
-  },
-  {
-    id: "ex6",
-    title: "Exemplo 6 — Associação em paralelo",
+    title: "Exemplo 4 — Associação em paralelo",
     statement:
       "Dois resistores de 6 Ω e 3 Ω estão em paralelo ligados a uma fonte de 12 V.",
     explanation: [
-      "Para dois resistores em paralelo, usamos o produto dividido pela soma. Depois aplicamos a Lei de Ohm ao circuito equivalente.",
+      "Para dois resistores em paralelo, usamos produto dividido pela soma. Depois aplicamos a Lei de Ohm ao circuito equivalente.",
     ],
     formulas: [
       String.raw`R_{\text{eq}} = \frac{R_1R_2}{R_1 + R_2}`,
       String.raw`R_{\text{eq}} = \frac{6\cdot 3}{6 + 3} = 2 \ \Omega`,
       String.raw`i = \frac{12}{2} = 6 \ \text{A}`,
     ],
-    notes: [
-      {
-        title: "Ideia importante",
-        type: "info",
-        body: "Em paralelo, a resistência equivalente é menor que a menor resistência individual.",
-      },
-    ],
   },
   {
-    id: "ex7",
-    title: "Exemplo 7 — Associação mista",
-    statement:
-      "Um resistor de 4 Ω está em série com uma associação em paralelo de 6 Ω e 3 Ω. O circuito é ligado a 18 V.",
-    explanation: [
-      "Primeiro reduzimos a associação em paralelo. Depois somamos com o resistor em série.",
-    ],
-    formulas: [
-      String.raw`R_p = \frac{6\cdot 3}{6 + 3} = 2 \ \Omega`,
-      String.raw`R_{\text{eq}} = 4 + 2 = 6 \ \Omega`,
-      String.raw`i = \frac{18}{6} = 3 \ \text{A}`,
-    ],
-    notes: [
-      {
-        title: "Leitura do circuito",
-        type: "warning",
-        body: "Em associação mista, o mais importante é identificar corretamente série, paralelo e nós.",
-      },
-    ],
-  },
-  {
-    id: "ex8",
-    title: "Exemplo 8 — Potência elétrica",
+    id: "ex5",
+    title: "Exemplo 5 — Potência elétrica",
     statement:
       "Um aparelho ligado a 220 V é atravessado por corrente de 5 A. Determine a potência elétrica.",
-    explanation: [
-      "Potência elétrica é a taxa de transformação de energia. Conhecendo tensão e corrente, usamos P = Ui.",
-    ],
+    explanation: ["Potência elétrica é a taxa de transformação de energia."],
     formulas: [
       String.raw`P = Ui`,
       String.raw`P = 220\cdot 5 = 1100 \ \text{W}`,
       String.raw`P = 1{,}1 \ \text{kW}`,
     ],
-    notes: [
-      {
-        title: "Resposta",
-        type: "success",
-        body: "O aparelho possui potência de 1100 W, ou 1,1 kW.",
-      },
-    ],
   },
   {
-    id: "ex9",
-    title: "Exemplo 9 — Consumo em kWh",
-    statement:
-      "Um chuveiro de 5500 W funciona por 30 minutos por dia durante 20 dias.",
-    explanation: [
-      "Para consumo em kWh, usamos potência em kW e tempo em horas.",
-    ],
-    formulas: [
-      String.raw`5500 \ \text{W} = 5{,}5 \ \text{kW}`,
-      String.raw`30 \ \text{min} = 0{,}5 \ \text{h}`,
-      String.raw`\Delta t = 0{,}5\cdot 20 = 10 \ \text{h}`,
-      String.raw`E = P\Delta t = 5{,}5\cdot 10`,
-      String.raw`E = 55 \ \text{kWh}`,
-    ],
-    notes: [
-      {
-        title: "Erro comum",
-        type: "warning",
-        body: "kW é potência. kWh é energia. Confundir isso é quase tradição nacional, mas não precisa participar.",
-      },
-    ],
-  },
-  {
-    id: "ex10",
-    title: "Exemplo 10 — Efeito Joule",
-    statement:
-      "Um resistor de 10 Ω é atravessado por corrente de 2 A durante 5 min. Determine a energia dissipada.",
-    explanation: [
-      "A energia dissipada por efeito Joule depende da resistência, do quadrado da corrente e do tempo.",
-    ],
-    formulas: [
-      String.raw`E = Ri^2\Delta t`,
-      String.raw`5 \ \text{min} = 300 \ \text{s}`,
-      String.raw`E = 10\cdot 2^2\cdot 300`,
-      String.raw`E = 1{,}2 \times 10^4 \ \text{J}`,
-    ],
-    notes: [
-      {
-        title: "Ideia física",
-        type: "info",
-        body: "O aquecimento cresce com o quadrado da corrente.",
-      },
-    ],
-  },
-  {
-    id: "ex11",
-    title: "Exemplo 11 — Gerador real",
+    id: "ex6",
+    title: "Exemplo 6 — Gerador real",
     statement:
       "Um gerador possui ε = 12 V e resistência interna r = 1 Ω. Ele fornece corrente de 2 A.",
     explanation: [
-      "Em um gerador real, a tensão nos terminais é menor que a força eletromotriz devido à queda interna.",
+      "Em um gerador real, a tensão útil é menor que a força eletromotriz por causa da queda interna.",
     ],
     formulas: [
       String.raw`U = \varepsilon - ri`,
       String.raw`U = 12 - 1\cdot 2 = 10 \ \text{V}`,
     ],
-    notes: [
-      {
-        title: "Resposta",
-        type: "success",
-        body: "A tensão nos terminais é 10 V.",
-      },
-    ],
   },
   {
-    id: "ex12",
-    title: "Exemplo 12 — Receptor real",
-    statement:
-      "Um motor possui ε' = 20 V e resistência interna r' = 2 Ω. Ele é atravessado por corrente de 3 A.",
-    explanation: [
-      "Em um receptor real, a tensão aplicada alimenta a conversão útil e também compensa a queda interna.",
-    ],
-    formulas: [
-      String.raw`U = \varepsilon' + r'i`,
-      String.raw`U = 20 + 2\cdot 3 = 26 \ \text{V}`,
-    ],
-    notes: [
-      {
-        title: "Resposta",
-        type: "success",
-        body: "A tensão aplicada ao receptor é 26 V.",
-      },
-    ],
-  },
-  {
-    id: "ex13",
-    title: "Exemplo 13 — Amperímetro e voltímetro",
-    statement:
-      "Deseja-se medir a corrente que passa por um resistor e a tensão em seus terminais.",
-    explanation: [
-      "O amperímetro mede corrente e deve ficar em série. O voltímetro mede tensão e deve ficar em paralelo.",
-    ],
-    formulas: [String.raw`R_A = 0`, String.raw`R_V \to \infty`],
-    notes: [
-      {
-        title: "Erro perigoso",
-        type: "danger",
-        body: "Amperímetro em paralelo pode causar curto-circuito. Voltímetro em série pode quase interromper o circuito.",
-      },
-    ],
-  },
-  {
-    id: "ex14",
-    title: "Exemplo 14 — Kirchhoff com uma malha",
-    statement:
-      "Uma bateria ideal de 12 V alimenta resistores de 2 Ω e 4 Ω em série.",
-    explanation: [
-      "Percorremos a malha no sentido da corrente. A fonte fornece energia e os resistores produzem quedas de tensão.",
-    ],
-    formulas: [
-      String.raw`+12 - 2i - 4i = 0`,
-      String.raw`12 - 6i = 0`,
-      String.raw`i = 2 \ \text{A}`,
-    ],
-    notes: [
-      {
-        title: "Interpretação",
-        type: "success",
-        body: "A soma das quedas de tensão nos resistores iguala a tensão fornecida pela fonte.",
-      },
-    ],
-  },
-  {
-    id: "ex15",
-    title: "Exemplo 15 — Kirchhoff com duas malhas",
-    statement:
-      "Duas malhas compartilham um resistor de 2 Ω. Na esquerda há fonte de 10 V e resistor de 3 Ω. Na direita há fonte de 8 V e resistor de 4 Ω.",
-    explanation: [
-      "Escolhemos correntes de malha i₁ e i₂ no sentido horário. No resistor compartilhado, a corrente depende da diferença entre as correntes de malha.",
-    ],
-    formulas: [
-      String.raw`10 - 3i_1 - 2(i_1 - i_2) = 0`,
-      String.raw`5i_1 - 2i_2 = 10`,
-      String.raw`8 - 4i_2 - 2(i_2 - i_1) = 0`,
-      String.raw`-2i_1 + 6i_2 = 8`,
-      String.raw`\begin{cases}5i_1 - 2i_2 = 10\\-2i_1 + 6i_2 = 8\end{cases}`,
-      String.raw`i_1 = \frac{38}{13} \ \text{A}`,
-      String.raw`i_2 = \frac{30}{13} \ \text{A}`,
-    ],
-    notes: [
-      {
-        title: "Resposta final",
-        type: "success",
-        body: "Como as correntes deram positivas, os sentidos escolhidos estavam corretos.",
-      },
-    ],
-  },
-  {
-    id: "ex16",
-    title: "Exemplo 16 — Ponte de Wheatstone",
+    id: "ex7",
+    title: "Exemplo 7 — Ponte de Wheatstone",
     statement:
       "Uma ponte possui R₁ = 2 Ω, R₂ = 4 Ω, R₃ = 3 Ω e R₄ desconhecido. Determine R₄ para equilíbrio.",
     explanation: [
-      "Em equilíbrio, não passa corrente pelo galvanômetro, e as razões dos resistores obedecem à condição da ponte.",
+      "Em equilíbrio, não passa corrente pelo galvanômetro, e usamos a condição da ponte.",
     ],
     formulas: [
       String.raw`\frac{R_1}{R_2} = \frac{R_3}{R_4}`,
       String.raw`\frac{2}{4} = \frac{3}{R_4}`,
       String.raw`R_4 = 6 \ \Omega`,
     ],
-    notes: [
-      {
-        title: "Resposta",
-        type: "success",
-        body: "Para equilíbrio, R₄ = 6 Ω.",
-      },
-    ],
   },
   {
-    id: "ex17",
-    title: "Exemplo 17 — Potência máxima transferida",
+    id: "ex8",
+    title: "Exemplo 8 — Pontos equipotenciais",
     statement:
-      "Um gerador real de força eletromotriz ε e resistência interna r alimenta um resistor externo variável R.",
+      "Em uma rede simétrica, dois pontos possuem o mesmo potencial. O que acontece com um resistor ligado entre eles?",
     explanation: [
-      "A potência dissipada no resistor externo depende de R. Ao maximizar a função, obtemos a condição de potência máxima transferida.",
-    ],
-    formulas: [
-      String.raw`i = \frac{\varepsilon}{R + r}`,
-      String.raw`P_R = R\left(\frac{\varepsilon}{R + r}\right)^2`,
-      String.raw`P_R = \frac{R\varepsilon^2}{(R + r)^2}`,
-      String.raw`P_{\max} \Rightarrow R = r`,
-      String.raw`P_{\max} = \frac{\varepsilon^2}{4r}`,
-    ],
-    notes: [
-      {
-        title: "Ideia de prova difícil",
-        type: "warning",
-        body: "Potência máxima e rendimento máximo não são a mesma coisa. Quando R = r, o rendimento é 50%.",
-      },
-    ],
-  },
-  {
-    id: "ex18",
-    title: "Exemplo 18 — Simetria e ponto equipotencial",
-    statement:
-      "Em uma rede simétrica, dois pontos possuem o mesmo potencial. O que acontece com um resistor ligado entre esses pontos?",
-    explanation: [
-      "Se dois pontos têm o mesmo potencial, a diferença de potencial entre eles é nula. Sem tensão, não há corrente no resistor entre esses pontos.",
+      "Se dois pontos têm o mesmo potencial, a diferença de potencial entre eles é nula. Sem tensão, não há corrente.",
     ],
     formulas: [
       String.raw`V_A = V_B`,
       String.raw`U_{AB} = V_A - V_B = 0`,
       String.raw`i = \frac{U_{AB}}{R} = 0`,
-    ],
-    notes: [
-      {
-        title: "Conclusão",
-        type: "success",
-        body: "Um resistor ligado entre pontos equipotenciais não é atravessado por corrente.",
-      },
-    ],
-  },
-  {
-    id: "ex19",
-    title: "Exemplo 19 — Voltímetro real alterando a medida",
-    statement:
-      "Um divisor de tensão possui dois resistores de 10 kΩ ligados a 12 V. Um voltímetro real de 10 kΩ mede a tensão no segundo resistor.",
-    explanation: [
-      "O voltímetro real tem resistência finita. Ao ser ligado em paralelo com o resistor medido, ele altera a resistência equivalente daquele trecho.",
-    ],
-    formulas: [
-      String.raw`R_{\text{eq}} = \frac{10\,000\cdot 10\,000}{10\,000 + 10\,000}`,
-      String.raw`R_{\text{eq}} = 5\,000 \ \Omega`,
-      String.raw`U_{\text{medido}} = 12\cdot\frac{5}{10 + 5} = 4 \ \text{V}`,
-    ],
-    notes: [
-      {
-        title: "Moral da história",
-        type: "warning",
-        body: "Instrumentos reais podem alterar o circuito. Instrumento ideal é modelo; instrumento real é problema de prova.",
-      },
-    ],
-  },
-  {
-    id: "ex20",
-    title: "Exemplo 20 — Potência em série e paralelo",
-    statement:
-      "Compare o comportamento da potência quando a corrente é fixa e quando a tensão é fixa.",
-    explanation: [
-      "Quando a corrente é fixa, usamos P = Ri². Quando a tensão é fixa, usamos P = U²/R. O comportamento da potência muda porque a grandeza mantida constante é diferente.",
-    ],
-    formulas: [
-      String.raw`\text{corrente fixa} \Rightarrow P = Ri^2`,
-      String.raw`\text{tensão fixa} \Rightarrow P = \frac{U^2}{R}`,
-    ],
-    notes: [
-      {
-        title: "Erro clássico",
-        type: "danger",
-        body: "Não escolha fórmula de potência no automático. Primeiro veja qual grandeza está fixa: corrente ou tensão.",
-      },
     ],
   },
 ];
@@ -2561,7 +2462,7 @@ const formulaSummary: FormulaSummary[] = [
   {
     title: "Primeira Lei de Ohm",
     formula: String.raw`U = Ri`,
-    description: "Relação entre tensão, resistência e corrente em resistor ôhmico.",
+    description: "Relação entre tensão, resistência e corrente.",
   },
   {
     title: "Segunda Lei de Ohm",
@@ -2584,11 +2485,6 @@ const formulaSummary: FormulaSummary[] = [
     description: "Taxa de transformação de energia elétrica.",
   },
   {
-    title: "Potência em resistor",
-    formula: String.raw`P = Ri^2 = \frac{U^2}{R}`,
-    description: "Formas úteis usando a Lei de Ohm.",
-  },
-  {
     title: "Efeito Joule",
     formula: String.raw`E = Ri^2\Delta t`,
     description: "Energia elétrica dissipada como calor.",
@@ -2604,12 +2500,12 @@ const formulaSummary: FormulaSummary[] = [
     description: "Tensão alimenta conversão útil e dissipação interna.",
   },
   {
-    title: "Lei dos nós",
+    title: "Kirchhoff: nós",
     formula: String.raw`\sum i_{\text{entrando}} = \sum i_{\text{saindo}}`,
     description: "Conservação da carga.",
   },
   {
-    title: "Lei das malhas",
+    title: "Kirchhoff: malhas",
     formula: String.raw`\sum U = 0`,
     description: "Conservação da energia.",
   },
@@ -2622,11 +2518,6 @@ const formulaSummary: FormulaSummary[] = [
     title: "Capacitor",
     formula: String.raw`Q = CU`,
     description: "Carga armazenada em um capacitor.",
-  },
-  {
-    title: "Potência máxima",
-    formula: String.raw`R = r`,
-    description: "Condição de máxima potência externa em gerador real.",
   },
 ];
 
@@ -2710,17 +2601,17 @@ export default function EletricidadeTopicEletrodinamica() {
                   </h2>
 
                   <p className="mt-5 max-w-3xl leading-8 text-slate-300">
-                    Uma abordagem completa de Eletrodinâmica: corrente, tensão,
-                    resistência, leis de Ohm, associações, potência, efeito
-                    Joule, geradores, receptores, instrumentos, Kirchhoff,
-                    Wheatstone, capacitores e gráficos.
+                    Agora com diagramas visuais integrados às explicações de
+                    série, paralelo, circuitos mistos, geradores, receptores,
+                    instrumentos, ponte, curto-circuito, capacitores e
+                    transmissão.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     ["26", "tópicos"],
-                    ["20", "exemplos"],
+                    ["8", "diagramas"],
                     ["ITA", "foco"],
                     ["IME", "nível"],
                   ].map(([value, label]) => (
@@ -2749,9 +2640,9 @@ export default function EletricidadeTopicEletrodinamica() {
                   <p key={`paragraph-${index}`}>{paragraph}</p>
                 ))}
 
-                {section.numbered ? (
-                  <NumberedList items={section.numbered} />
-                ) : null}
+                {section.diagram ? <CircuitDiagram diagram={section.diagram} /> : null}
+
+                {section.numbered ? <NumberedList items={section.numbered} /> : null}
 
                 {section.panels?.map((panel, index) => (
                   <EquationPanel key={`panel-${index}`} panel={panel} />
@@ -2775,7 +2666,7 @@ export default function EletricidadeTopicEletrodinamica() {
               icon={Target}
               eyebrow="Treino comentado"
               title="Exemplos resolvidos"
-              description="Exercícios em ordem crescente: corrente, número de elétrons, Ohm, associações, potência, Joule, geradores, receptores, instrumentos, Kirchhoff, ponte, simetria e potência máxima."
+              description="Exercícios essenciais para fixar corrente, resistores, potência, geradores, ponte e pontos equipotenciais."
               accent="from-slate-950 via-indigo-950 to-purple-950"
             />
 
@@ -2793,7 +2684,7 @@ export default function EletricidadeTopicEletrodinamica() {
               icon={Brain}
               eyebrow="Mapa final"
               title="Resumo de Eletrodinâmica"
-              description="As fórmulas principais e as diferenças conceituais que seguram o conteúdo inteiro."
+              description="As fórmulas principais e os significados físicos que seguram o conteúdo inteiro."
               accent="from-slate-950 via-slate-900 to-indigo-950"
             />
 
