@@ -261,6 +261,576 @@ function NumberedSteps({ items }: { items: ReactNode[] }) {
   );
 }
 
+type NewtonDiagramKind =
+  | "inertia"
+  | "firstLaw"
+  | "secondLaw"
+  | "freeBody"
+  | "weightNormal"
+  | "inclinedPlane"
+  | "elevator"
+  | "actionReaction"
+  | "friction"
+  | "pulley";
+
+function DiagramCard({
+  title,
+  caption,
+  kind,
+}: {
+  title: string;
+  caption: string;
+  kind: NewtonDiagramKind;
+}) {
+  return (
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-indigo-50 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+      <div className="border-b border-slate-200 bg-slate-950 px-6 py-4">
+        <p className="text-lg font-black text-white">{title}</p>
+        <p className="mt-1 text-sm leading-6 text-slate-300">{caption}</p>
+      </div>
+
+      <div className="overflow-x-auto p-5 md:p-7">
+        <div className="min-w-[720px]">
+          {kind === "inertia" && <InertiaDiagram />}
+          {kind === "firstLaw" && <FirstLawDiagram />}
+          {kind === "secondLaw" && <SecondLawDiagram />}
+          {kind === "freeBody" && <FreeBodyDiagram />}
+          {kind === "weightNormal" && <WeightNormalDiagram />}
+          {kind === "inclinedPlane" && <InclinedPlaneDiagram />}
+          {kind === "elevator" && <ElevatorDiagram />}
+          {kind === "actionReaction" && <ActionReactionDiagram />}
+          {kind === "friction" && <FrictionDiagram />}
+          {kind === "pulley" && <PulleyDiagram />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SvgLabel({
+  x,
+  y,
+  children,
+  tone = "slate",
+}: {
+  x: number;
+  y: number;
+  children: ReactNode;
+  tone?: "slate" | "blue" | "green" | "red" | "amber" | "purple";
+}) {
+  const fill = {
+    slate: "fill-slate-700",
+    blue: "fill-blue-700",
+    green: "fill-emerald-700",
+    red: "fill-red-700",
+    amber: "fill-amber-700",
+    purple: "fill-purple-700",
+  }[tone];
+
+  return (
+    <text x={x} y={y} textAnchor="middle" className={`${fill} text-[16px] font-black`}>
+      {children}
+    </text>
+  );
+}
+
+function Arrow({
+  x1,
+  y1,
+  x2,
+  y2,
+  color = "#0f172a",
+  width = 5,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color?: string;
+  width?: number;
+}) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const size = 11;
+  const ax1 = x2 - size * Math.cos(angle - Math.PI / 6);
+  const ay1 = y2 - size * Math.sin(angle - Math.PI / 6);
+  const ax2 = x2 - size * Math.cos(angle + Math.PI / 6);
+  const ay2 = y2 - size * Math.sin(angle + Math.PI / 6);
+
+  return (
+    <>
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={color}
+        strokeWidth={width}
+        strokeLinecap="round"
+      />
+      <path d={`M ${x2} ${y2} L ${ax1} ${ay1} L ${ax2} ${ay2} Z`} fill={color} />
+    </>
+  );
+}
+
+function Block({
+  x,
+  y,
+  fill = "#e0f2fe",
+  label = "m",
+}: {
+  x: number;
+  y: number;
+  fill?: string;
+  label?: string;
+}) {
+  return (
+    <>
+      <rect x={x} y={y} width="90" height="64" rx="14" fill={fill} stroke="#0f172a" strokeWidth="4" />
+      <text x={x + 45} y={y + 39} textAnchor="middle" className="fill-slate-950 text-[22px] font-black">
+        {label}
+      </text>
+    </>
+  );
+}
+
+function InertiaDiagram() {
+  return (
+    <svg viewBox="0 0 760 340" className="h-[340px] w-full">
+      <rect x="15" y="15" width="730" height="310" rx="26" fill="#ffffff" />
+      <line x1="70" y1="255" x2="330" y2="255" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={145} y={190} fill="#fee2e2" label="m" />
+      <Arrow x1={190} y1={185} x2={250} y2={185} color="#2563eb" />
+      <Arrow x1={235} y1={222} x2={165} y2={222} color="#dc2626" />
+      <SvgLabel x={220} y={170} tone="blue">v</SvgLabel>
+      <SvgLabel x={195} y={285} tone="red">com atrito: o corpo desacelera</SvgLabel>
+
+      <line x1="430" y1="255" x2="690" y2="255" stroke="#64748b" strokeWidth="5" strokeLinecap="round" strokeDasharray="10 10" />
+      <Block x={505} y={190} fill="#dcfce7" label="m" />
+      <Arrow x1={550} y1={185} x2={630} y2={185} color="#16a34a" />
+      <SvgLabel x={590} y={170} tone="green">v constante</SvgLabel>
+      <SvgLabel x={560} y={285} tone="green">sem força resultante: MRU continua</SvgLabel>
+      <SvgLabel x={380} y={62}>movimento não precisa de força resultante para continuar</SvgLabel>
+    </svg>
+  );
+}
+
+function FirstLawDiagram() {
+  return (
+    <svg viewBox="0 0 760 330" className="h-[330px] w-full">
+      <rect x="15" y="15" width="730" height="300" rx="26" fill="#ffffff" />
+      <line x1="70" y1="245" x2="690" y2="245" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={105} y={180} fill="#f8fafc" label="m" />
+      <Arrow x1={150} y1={175} x2={150} y2={115} color="#2563eb" />
+      <Arrow x1={150} y1={244} x2={150} y2={304} color="#dc2626" />
+      <SvgLabel x={150} y={100} tone="blue">N</SvgLabel>
+      <SvgLabel x={150} y={320} tone="red">P</SvgLabel>
+      <SvgLabel x={150} y={150}>repouso</SvgLabel>
+
+      <Block x={335} y={180} fill="#e0f2fe" label="m" />
+      <Arrow x1={310} y1={212} x2={260} y2={212} color="#64748b" />
+      <Arrow x1={425} y1={212} x2={475} y2={212} color="#64748b" />
+      <Arrow x1={380} y1={166} x2={455} y2={166} color="#16a34a" />
+      <SvgLabel x={380} y={150} tone="green">v constante</SvgLabel>
+      <SvgLabel x={380} y={280}>equilíbrio dinâmico</SvgLabel>
+
+      <Block x={570} y={180} fill="#dcfce7" label="m" />
+      <Arrow x1={615} y1={175} x2={615} y2={115} color="#2563eb" />
+      <Arrow x1={615} y1={244} x2={615} y2={304} color="#dc2626" />
+      <SvgLabel x={615} y={100} tone="blue">N</SvgLabel>
+      <SvgLabel x={615} y={320} tone="red">P</SvgLabel>
+      <SvgLabel x={615} y={150}>Fᵣₑₛ = 0</SvgLabel>
+      <SvgLabel x={380} y={62}>força resultante nula não significa ausência de forças</SvgLabel>
+    </svg>
+  );
+}
+
+function SecondLawDiagram() {
+  return (
+    <svg viewBox="0 0 760 350" className="h-[350px] w-full">
+      <rect x="15" y="15" width="730" height="320" rx="26" fill="#ffffff" />
+      <line x1="70" y1="155" x2="330" y2="155" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={140} y={90} fill="#dbeafe" label="m" />
+      <Arrow x1={230} y1={122} x2={305} y2={122} color="#2563eb" />
+      <Arrow x1={185} y1={82} x2={255} y2={82} color="#16a34a" />
+      <SvgLabel x={270} y={108} tone="blue">F</SvgLabel>
+      <SvgLabel x={220} y={66} tone="green">a</SvgLabel>
+      <SvgLabel x={200} y={200}>mesma massa: mais força, mais aceleração</SvgLabel>
+
+      <line x1="430" y1="155" x2="690" y2="155" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={500} y={90} fill="#fde68a" label="2m" />
+      <Arrow x1={590} y1={122} x2={665} y2={122} color="#2563eb" />
+      <Arrow x1={545} y1={82} x2={585} y2={82} color="#16a34a" />
+      <SvgLabel x={630} y={108} tone="blue">F</SvgLabel>
+      <SvgLabel x={565} y={66} tone="green">a menor</SvgLabel>
+      <SvgLabel x={560} y={200}>mesma força: mais massa, menos aceleração</SvgLabel>
+      <SvgLabel x={380} y={285}>a aceleração aponta no sentido da força resultante, não necessariamente no sentido da velocidade</SvgLabel>
+    </svg>
+  );
+}
+
+function FreeBodyDiagram() {
+  return (
+    <svg viewBox="0 0 760 380" className="h-[380px] w-full">
+      <rect x="15" y="15" width="730" height="350" rx="26" fill="#ffffff" />
+      <line x1="90" y1="270" x2="670" y2="270" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={335} y={205} fill="#e0f2fe" label="m" />
+      <Arrow x1={380} y1={205} x2={380} y2={120} color="#2563eb" />
+      <Arrow x1={380} y1={269} x2={380} y2={350} color="#dc2626" />
+      <Arrow x1={425} y1={237} x2={545} y2={237} color="#16a34a" />
+      <Arrow x1={335} y1={237} x2={225} y2={237} color="#f59e0b" />
+      <SvgLabel x={400} y={105} tone="blue">N</SvgLabel>
+      <SvgLabel x={400} y={350} tone="red">P = mg</SvgLabel>
+      <SvgLabel x={560} y={225} tone="green">F</SvgLabel>
+      <SvgLabel x={205} y={225} tone="amber">atrito</SvgLabel>
+      <SvgLabel x={380} y={62}>DCL: desenhe apenas as forças que atuam no corpo escolhido</SvgLabel>
+    </svg>
+  );
+}
+
+function WeightNormalDiagram() {
+  return (
+    <svg viewBox="0 0 760 350" className="h-[350px] w-full">
+      <rect x="15" y="15" width="730" height="320" rx="26" fill="#ffffff" />
+      <line x1="90" y1="245" x2="330" y2="245" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={165} y={180} fill="#dbeafe" label="livro" />
+      <Arrow x1={210} y1={180} x2={210} y2={110} color="#2563eb" />
+      <Arrow x1={210} y1={244} x2={210} y2={310} color="#dc2626" />
+      <SvgLabel x={235} y={100} tone="blue">N</SvgLabel>
+      <SvgLabel x={235} y={320} tone="red">P</SvgLabel>
+      <SvgLabel x={210} y={65}>forças no livro</SvgLabel>
+
+      <circle cx="510" cy="150" r="42" fill="#fef3c7" stroke="#0f172a" strokeWidth="4" />
+      <text x="510" y="158" textAnchor="middle" className="fill-slate-950 text-[18px] font-black">Terra</text>
+      <rect x="585" y="118" width="90" height="64" rx="14" fill="#dbeafe" stroke="#0f172a" strokeWidth="4" />
+      <text x="630" y="156" textAnchor="middle" className="fill-slate-950 text-[18px] font-black">livro</text>
+      <Arrow x1={585} y1={150} x2={552} y2={150} color="#dc2626" />
+      <Arrow x1={552} y1={185} x2={585} y2={185} color="#16a34a" />
+      <SvgLabel x={610} y={230}>ação e reação atuam em corpos diferentes</SvgLabel>
+      <SvgLabel x={380} y={300} tone="red">peso e normal não são par ação-reação</SvgLabel>
+    </svg>
+  );
+}
+function InclinedPlaneDiagram() {
+  return (
+    <svg viewBox="0 0 760 420" className="h-[420px] w-full">
+      <rect x="15" y="15" width="730" height="390" rx="26" fill="#ffffff" />
+      <polygon
+        points="135,315 625,315 625,110"
+        fill="#e2e8f0"
+        stroke="#0f172a"
+        strokeWidth="4"
+      />
+      <line
+        x1="135"
+        y1="315"
+        x2="625"
+        y2="110"
+        stroke="#334155"
+        strokeWidth="6"
+        strokeLinecap="round"
+      />
+
+      <g transform="translate(350 210) rotate(-23)">
+        <rect
+          x="-45"
+          y="-32"
+          width="90"
+          height="64"
+          rx="14"
+          fill="#dbeafe"
+          stroke="#0f172a"
+          strokeWidth="4"
+        />
+        <text
+          x="0"
+          y="8"
+          textAnchor="middle"
+          className="fill-slate-950 text-[22px] font-black"
+        >
+          m
+        </text>
+      </g>
+
+      <Arrow x1={350} y1={210} x2={350} y2={330} color="#dc2626" />
+      <Arrow x1={350} y1={210} x2={300} y2={95} color="#2563eb" />
+      <Arrow x1={350} y1={210} x2={255} y2={250} color="#16a34a" />
+      <Arrow x1={350} y1={210} x2={405} y2={335} color="#f59e0b" />
+
+      <SvgLabel x={372} y={344} tone="red">
+        P = mg
+      </SvgLabel>
+      <SvgLabel x={285} y={85} tone="blue">
+        N
+      </SvgLabel>
+      <SvgLabel x={230} y={255} tone="green">
+        mg sen θ
+      </SvgLabel>
+      <SvgLabel x={435} y={345} tone="amber">
+        mg cos θ
+      </SvgLabel>
+      <SvgLabel x={575} y={338}>
+        θ
+      </SvgLabel>
+      <SvgLabel x={380} y={62}>
+        no plano inclinado, o peso é decomposto nos eixos do plano
+      </SvgLabel>
+    </svg>
+  );
+}
+
+function ElevatorDiagram() {
+  return (
+    <svg viewBox="0 0 760 360" className="h-[360px] w-full">
+      <rect x="15" y="15" width="730" height="330" rx="26" fill="#ffffff" />
+
+      {[
+        { x: 95, label: "a para cima", sign: "N > P", arrow: "up" },
+        { x: 335, label: "repouso ou MRU", sign: "N = P", arrow: "zero" },
+        { x: 575, label: "a para baixo", sign: "N < P", arrow: "down" },
+      ].map((e) => (
+        <g key={e.x}>
+          <rect
+            x={e.x}
+            y="90"
+            width="130"
+            height="165"
+            rx="16"
+            fill="#f8fafc"
+            stroke="#0f172a"
+            strokeWidth="4"
+          />
+
+          <circle
+            cx={e.x + 65}
+            cy="168"
+            r="23"
+            fill="#dbeafe"
+            stroke="#0f172a"
+            strokeWidth="3"
+          />
+
+          <line
+            x1={e.x + 65}
+            y1="191"
+            x2={e.x + 65}
+            y2="226"
+            stroke="#0f172a"
+            strokeWidth="5"
+          />
+
+          <Arrow
+            x1={e.x + 65}
+            y1={166}
+            x2={e.x + 65}
+            y2={122}
+            color="#2563eb"
+            width={4}
+          />
+
+          <Arrow
+            x1={e.x + 65}
+            y1={202}
+            x2={e.x + 65}
+            y2={244}
+            color="#dc2626"
+            width={4}
+          />
+
+          {e.arrow === "up" && (
+            <Arrow
+              x1={e.x + 110}
+              y1={235}
+              x2={e.x + 110}
+              y2={160}
+              color="#16a34a"
+              width={4}
+            />
+          )}
+
+          {e.arrow === "down" && (
+            <Arrow
+              x1={e.x + 110}
+              y1={160}
+              x2={e.x + 110}
+              y2={235}
+              color="#16a34a"
+              width={4}
+            />
+          )}
+
+          {e.arrow === "zero" && (
+            <text
+              x={e.x + 110}
+              y="205"
+              textAnchor="middle"
+              className="fill-emerald-700 text-[20px] font-black"
+            >
+              a=0
+            </text>
+          )}
+
+          <SvgLabel x={e.x + 65} y={290}>
+            {e.label}
+          </SvgLabel>
+
+          <SvgLabel x={e.x + 65} y={320} tone="purple">
+            {e.sign}
+          </SvgLabel>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function ActionReactionDiagram() {
+  return (
+    <svg viewBox="0 0 760 330" className="h-[330px] w-full">
+      <rect x="15" y="15" width="730" height="300" rx="26" fill="#ffffff" />
+
+      <circle
+        cx="290"
+        cy="170"
+        r="56"
+        fill="#dbeafe"
+        stroke="#0f172a"
+        strokeWidth="4"
+      />
+      <circle
+        cx="470"
+        cy="170"
+        r="56"
+        fill="#fee2e2"
+        stroke="#0f172a"
+        strokeWidth="4"
+      />
+
+      <text
+        x="290"
+        y="180"
+        textAnchor="middle"
+        className="fill-slate-950 text-[24px] font-black"
+      >
+        A
+      </text>
+
+      <text
+        x="470"
+        y="180"
+        textAnchor="middle"
+        className="fill-slate-950 text-[24px] font-black"
+      >
+        B
+      </text>
+
+      <Arrow x1={335} y1={145} x2={420} y2={145} color="#2563eb" />
+      <Arrow x1={425} y1={195} x2={340} y2={195} color="#dc2626" />
+
+      <SvgLabel x={380} y={125} tone="blue">
+        F de A em B
+      </SvgLabel>
+      <SvgLabel x={380} y={230} tone="red">
+        F de B em A
+      </SvgLabel>
+      <SvgLabel x={380} y={62}>
+        mesmo módulo, mesma direção, sentidos opostos, corpos diferentes
+      </SvgLabel>
+      <SvgLabel x={380} y={285} tone="purple">
+        por atuarem em corpos diferentes, não se cancelam no DCL de um corpo só
+      </SvgLabel>
+    </svg>
+  );
+}
+
+function FrictionDiagram() {
+  return (
+    <svg viewBox="0 0 760 360" className="h-[360px] w-full">
+      <rect x="15" y="15" width="730" height="330" rx="26" fill="#ffffff" />
+
+      <line
+        x1="80"
+        y1="250"
+        x2="680"
+        y2="250"
+        stroke="#64748b"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      <Block x={335} y={185} fill="#fef3c7" label="m" />
+
+      <Arrow x1={425} y1={217} x2={555} y2={217} color="#2563eb" />
+      <Arrow x1={335} y1={217} x2={220} y2={217} color="#f59e0b" />
+
+      <SvgLabel x={570} y={205} tone="blue">
+        tendência de movimento
+      </SvgLabel>
+      <SvgLabel x={205} y={205} tone="amber">
+        atrito
+      </SvgLabel>
+      <SvgLabel x={380} y={80}>
+        o atrito se opõe à tendência de deslizamento ou ao deslizamento relativo
+      </SvgLabel>
+      <SvgLabel x={270} y={305} tone="amber">
+        estático: ajusta até fₑ máx
+      </SvgLabel>
+      <SvgLabel x={520} y={305} tone="blue">
+        cinético: f꜀ = μ꜀N
+      </SvgLabel>
+    </svg>
+  );
+}
+
+function PulleyDiagram() {
+  return (
+    <svg viewBox="0 0 760 390" className="h-[390px] w-full">
+      <rect x="15" y="15" width="730" height="360" rx="26" fill="#ffffff" />
+
+      <line
+        x1="90"
+        y1="285"
+        x2="420"
+        y2="285"
+        stroke="#64748b"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      <Block x={190} y={220} fill="#dbeafe" label="m₁" />
+
+      <circle
+        cx="455"
+        cy="170"
+        r="44"
+        fill="#f8fafc"
+        stroke="#0f172a"
+        strokeWidth="4"
+      />
+
+      <line x1="235" y1="220" x2="235" y2="170" stroke="#0f172a" strokeWidth="4" />
+      <line x1="235" y1="170" x2="455" y2="170" stroke="#0f172a" strokeWidth="4" />
+      <line x1="499" y1="170" x2="499" y2="255" stroke="#0f172a" strokeWidth="4" />
+
+      <Block x={454} y={255} fill="#fee2e2" label="m₂" />
+
+      <Arrow x1={280} y1={210} x2={350} y2={210} color="#2563eb" />
+      <Arrow x1={540} y1={255} x2={540} y2={315} color="#dc2626" />
+
+      <SvgLabel x={315} y={195} tone="blue">
+        T
+      </SvgLabel>
+      <SvgLabel x={570} y={305} tone="red">
+        P₂
+      </SvgLabel>
+      <SvgLabel x={380} y={60}>
+        em polias ideais, a corda impõe vínculos entre acelerações
+      </SvgLabel>
+      <SvgLabel x={385} y={340} tone="purple">
+        não escreva uma única equação para tudo: faça DCL para cada corpo
+      </SvgLabel>
+    </svg>
+  );
+}
+
 function FormulaGrid({ children }: { children: ReactNode }) {
   return <div className="grid md:grid-cols-2 gap-4">{children}</div>;
 }
@@ -288,7 +858,7 @@ function PageHero() {
 
             <p className="text-slate-300 leading-7 mt-4 max-w-2xl">
               Contexto histórico, intuição física, fórmulas explicadas, aplicações,
-              armadilhas e pontos de prova. 
+              armadilhas e pontos de prova.
             </p>
           </div>
 
@@ -313,419 +883,6 @@ function PageHero() {
     </div>
   );
 }
-
-export default function DynamicsTopicNewton() {
-  const [openExamples, setOpenExamples] = useState<Record<string, boolean>>({});
-  const [activeTab, setActiveTab] = useState<TabId>("teoria");
-
-  const toggleExample = (id: string) => {
-    setOpenExamples((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const examples: ExampleItem[] = [
-    {
-      id: "ex1",
-      title: "Bloco em superfície horizontal sem atrito",
-      enunciado:
-        "Um bloco de massa m = 5 kg está sobre uma superfície horizontal sem atrito. Uma força horizontal constante de módulo F = 20 N puxa o bloco para a direita. Determine a aceleração do bloco.",
-      content: (
-        <div className="space-y-5">
-          <NoteBox title="Antes de calcular, pense no fenômeno" tone="blue">
-            O bloco está sobre uma superfície horizontal. Verticalmente, ele não sobe nem
-            afunda. Horizontalmente, só existe uma força puxando o bloco. Como não há
-            atrito, essa força aplicada é a própria força resultante horizontal.
-          </NoteBox>
-
-          <TopicBlock title="Diagrama de corpo livre" tone="slate" icon={Eye}>
-            <BulletList
-              items={[
-                <>peso <InlineFormulaBox formula={String.raw`P = mg`} /> para baixo;</>,
-                <>normal <InlineFormulaBox formula={String.raw`N`} /> para cima;</>,
-                <>força aplicada <InlineFormulaBox formula={String.raw`F`} /> para a direita;</>,
-                <>nenhum atrito horizontal.</>,
-              ]}
-            />
-          </TopicBlock>
-
-          <FormulaGrid>
-            <TopicBlock title="Eixo vertical" tone="blue">
-              <FormulaStep
-                title="Não há aceleração vertical"
-                explanation="O bloco não atravessa a mesa nem salta. Logo, a força resultante vertical é zero."
-                formula={String.raw`a_y = 0`}
-                tone="blue"
-              />
-              <FormulaStep
-                title="Normal e peso se equilibram"
-                formula={String.raw`N - mg = 0 \Rightarrow N = mg`}
-                tone="blue"
-              />
-            </TopicBlock>
-
-            <TopicBlock title="Eixo horizontal" tone="green">
-              <FormulaStep
-                title="Aplicando a Segunda Lei"
-                formula={String.raw`\sum F_x = ma_x`}
-                tone="green"
-              />
-              <FormulaStep
-                title="Substituindo os valores"
-                formula={String.raw`F = ma \Rightarrow 20 = 5a`}
-                tone="green"
-              />
-              <FormulaStep
-                title="Resultado"
-                formula={String.raw`a = 4 \ \text{m/s}^2`}
-                tone="green"
-              />
-            </TopicBlock>
-          </FormulaGrid>
-
-          <NoteBox title="Interpretação física" tone="green">
-            A força de <InlineFormulaBox formula={String.raw`20 \ \text{N}`} /> precisa
-            acelerar uma massa de <InlineFormulaBox formula={String.raw`5 \ \text{kg}`} />.
-            Como a massa mede resistência à aceleração, a resposta do corpo é uma
-            aceleração de <InlineFormulaBox formula={String.raw`4 \ \text{m/s}^2`} />.
-          </NoteBox>
-        </div>
-      ),
-    },
-    {
-      id: "ex2",
-      title: "Bloco com atrito cinético",
-      enunciado:
-        "Um bloco de massa m = 10 kg está sobre uma superfície horizontal. Uma força horizontal de módulo F = 50 N puxa o bloco para a direita. O coeficiente de atrito cinético é μc = 0,2. Considere g = 10 m/s². Determine a aceleração do bloco.",
-      content: (
-        <div className="space-y-5">
-          <NoteBox title="Ideia física" tone="amber">
-            Aqui a força aplicada não vira toda aceleração. Uma parte dela é combatida
-            pelo atrito cinético. A aceleração vem da força que sobra depois da soma
-            vetorial.
-          </NoteBox>
-
-          <FormulaStep
-            title="Normal no eixo vertical"
-            explanation="Como o bloco não acelera verticalmente, normal e peso se equilibram."
-            formula={String.raw`N - mg = 0 \Rightarrow N = mg = 10 \cdot 10 = 100 \ \text{N}`}
-            tone="blue"
-          />
-
-          <FormulaStep
-            title="Atrito cinético"
-            explanation="Como já há deslizamento relativo, usamos o atrito cinético."
-            formula={String.raw`f_c = \mu_c N = 0{,}2 \cdot 100 = 20 \ \text{N}`}
-            tone="amber"
-          />
-
-          <FormulaStep
-            title="Segunda Lei no eixo horizontal"
-            explanation="A força aplicada aponta para a direita; o atrito aponta para a esquerda."
-            formula={String.raw`F - f_c = ma \Rightarrow 50 - 20 = 10a`}
-            tone="green"
-          />
-
-          <FormulaStep
-            title="Aceleração"
-            formula={String.raw`30 = 10a \Rightarrow a = 3 \ \text{m/s}^2`}
-            tone="green"
-          />
-        </div>
-      ),
-    },
-    {
-      id: "ex3",
-      title: "Plano inclinado sem atrito",
-      enunciado:
-        "Um bloco está sobre um plano inclinado sem atrito, com ângulo θ = 30°. Considere g = 10 m/s². Determine a aceleração do bloco ao longo do plano.",
-      content: (
-        <div className="space-y-5">
-          <NoteBox title="Ideia física" tone="green">
-            O peso aponta verticalmente para baixo, mas o movimento acontece ao longo do
-            plano. Por isso, decompomos o peso em duas partes: uma paralela ao plano e
-            outra perpendicular ao plano.
-          </NoteBox>
-
-          <FormulaGrid>
-            <TopicBlock title="Eixo perpendicular ao plano" tone="blue">
-              <FormulaStep
-                title="O bloco não atravessa o plano"
-                formula={String.raw`a_y = 0`}
-                tone="blue"
-              />
-              <FormulaStep
-                title="Normal"
-                formula={String.raw`N - mg\cos\theta = 0 \Rightarrow N = mg\cos\theta`}
-                tone="blue"
-              />
-            </TopicBlock>
-
-            <TopicBlock title="Eixo paralelo ao plano" tone="green">
-              <FormulaStep
-                title="Componente que puxa o bloco"
-                formula={String.raw`P_{\parallel} = mg\sin\theta`}
-                tone="green"
-              />
-              <FormulaStep
-                title="Segunda Lei"
-                formula={String.raw`mg\sin\theta = ma`}
-                tone="green"
-              />
-              <FormulaStep
-                title="Massa cancela"
-                formula={String.raw`a = g\sin\theta`}
-                tone="green"
-              />
-              <FormulaStep
-                title="Substituindo"
-                formula={String.raw`a = 10\sin 30^\circ = 10 \cdot \frac{1}{2} = 5 \ \text{m/s}^2`}
-                tone="green"
-              />
-            </TopicBlock>
-          </FormulaGrid>
-
-          <NoteBox title="Por que a massa cancela?" tone="purple">
-            O peso é proporcional à massa. Um corpo mais massivo tem mais peso, mas
-            também tem mais inércia. No plano sem atrito, esses dois efeitos crescem
-            juntos e acabam se cancelando na aceleração.
-          </NoteBox>
-        </div>
-      ),
-    },
-    {
-      id: "ex4",
-      title: "Elevador acelerando para cima",
-      enunciado:
-        "Uma pessoa de massa m = 70 kg está dentro de um elevador que acelera para cima com a = 2 m/s². Considere g = 10 m/s². Determine a força normal exercida pelo piso sobre a pessoa.",
-      content: (
-        <div className="space-y-5">
-          <NoteBox title="Ideia física" tone="blue">
-            A pessoa sente o piso empurrando seus pés. Essa força é a normal. Quando o
-            elevador acelera para cima, o piso precisa empurrar a pessoa com força maior
-            que o peso.
-          </NoteBox>
-
-          <FormulaStep
-            title="Forças sobre a pessoa"
-            explanation="Normal para cima e peso para baixo. Como a aceleração é para cima, escolhemos para cima como sentido positivo."
-            formula={String.raw`N - mg = ma`}
-            tone="blue"
-          />
-
-          <FormulaStep
-            title="Isolando a normal"
-            formula={String.raw`N = m(g+a)`}
-            tone="green"
-          />
-
-          <FormulaStep
-            title="Substituindo"
-            formula={String.raw`N = 70(10+2) = 840 \ \text{N}`}
-            tone="green"
-          />
-
-          <NoteBox title="Interpretação" tone="green">
-            O peso real é <InlineFormulaBox formula={String.raw`P = mg = 700 \ \text{N}`} />,
-            mas a normal é <InlineFormulaBox formula={String.raw`840 \ \text{N}`} />. A
-            balança mede a normal, não o peso gravitacional puro.
-          </NoteBox>
-        </div>
-      ),
-    },
-    {
-      id: "ex5",
-      title: "Ação e reação: livro sobre a mesa",
-      enunciado:
-        "Um livro de massa m = 2 kg está parado sobre uma mesa horizontal. Considere g = 10 m/s². Determine a normal sobre o livro e identifique corretamente os pares de ação e reação.",
-      content: (
-        <div className="space-y-5">
-          <FormulaStep
-            title="Normal sobre o livro"
-            explanation="Como o livro está parado, a resultante vertical sobre o livro é nula."
-            formula={String.raw`N - mg = 0 \Rightarrow N = mg = 2 \cdot 10 = 20 \ \text{N}`}
-            tone="green"
-          />
-
-          <FormulaGrid>
-            <NoteBox title="Par de ação e reação do peso" tone="purple">
-              A Terra puxa o livro:
-              <InlineFormulaBox formula={String.raw`\vec{P}_{\text{Terra} \to \text{livro}}`} />.
-              O livro puxa a Terra:
-              <InlineFormulaBox formula={String.raw`\vec{P}_{\text{livro} \to \text{Terra}}`} />.
-            </NoteBox>
-
-            <NoteBox title="Par de ação e reação da normal" tone="purple">
-              A mesa empurra o livro:
-              <InlineFormulaBox formula={String.raw`\vec{N}_{\text{mesa} \to \text{livro}}`} />.
-              O livro empurra a mesa:
-              <InlineFormulaBox formula={String.raw`\vec{N}_{\text{livro} \to \text{mesa}}`} />.
-            </NoteBox>
-          </FormulaGrid>
-
-          <NoteBox title="Cuidado" tone="red">
-            Peso e normal não são par de ação e reação. Eles atuam no mesmo corpo, o
-            livro. Pares de ação e reação atuam em corpos diferentes.
-          </NoteBox>
-        </div>
-      ),
-    },
-  ];
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      <header className="bg-white/85 backdrop-blur-xl border-b border-slate-200/80 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 md:px-6 h-auto md:h-20 py-3 md:py-0 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <Link href="/dinamica">
-              <a className="p-2 hover:bg-slate-100 rounded-full transition-colors border border-slate-200 bg-white shadow-sm">
-                <ArrowLeft className="w-5 h-5 text-slate-600" />
-              </a>
-            </Link>
-
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 shadow-[0_0_0_4px_rgba(79,70,229,0.12)]" />
-                <h1 className="text-xl md:text-2xl font-black text-slate-950 tracking-tight">
-                  Leis de Newton
-                </h1>
-              </div>
-              <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-                Dinâmica — aula profunda, organizada por lei
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
-            {(["teoria", "exemplos", "resumo"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all capitalize whitespace-nowrap ${
-                  activeTab === tab
-                    ? "bg-slate-950 text-white shadow-lg shadow-slate-900/20"
-                    : "text-slate-600 hover:bg-slate-100 border border-slate-200 bg-white"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-10 space-y-10">
-        {activeTab === "teoria" && (
-          <div className="space-y-10">
-            <PageHero />
-
-            <Section
-              icon={History}
-              title="Antes das Leis de Newton"
-              subtitle="Por que a humanidade precisou dessas leis para entender o movimento?"
-              gradient="bg-gradient-to-r from-amber-500 to-orange-500"
-            >
-              <TopicBlock
-                title="O problema antigo: parecia que força mantinha movimento"
-                tone="amber"
-                icon={History}
-              >
-                <Paragraph>
-                  Antes de Galileu e Newton, a interpretação do movimento era dominada por
-                  uma ideia intuitiva: parecia natural imaginar que, para um corpo continuar
-                  se movendo, alguma força deveria continuar empurrando esse corpo.
-                </Paragraph>
-
-                <Paragraph>
-                  Essa ideia parecia funcionar no cotidiano. Se você empurra uma caixa no
-                  chão, ela se move. Se para de empurrar, ela para. Se lança um carrinho,
-                  ele anda um pouco e depois também para. Então a conclusão apressada seria:
-                </Paragraph>
-
-                <NoteBox title="Conclusão intuitiva, mas errada" tone="red">
-                  “Se não existe força empurrando, o corpo não continua em movimento.”
-                </NoteBox>
-
-                <Paragraph>
-                  O erro está em confundir o movimento real do cotidiano com o movimento
-                  ideal sem resistências. No mundo comum, quase tudo tem atrito, resistência
-                  do ar, deformações e irregularidades. A caixa não para porque “acabou a
-                  força do movimento”. Ela para porque existem forças resistivas atuando
-                  contra o movimento.
-                </Paragraph>
-              </TopicBlock>
-
-              <TopicBlock
-                title="O papel de Galileu: remover o atrito da cabeça"
-                subtitle="Às vezes o maior avanço da Física é perceber que o cotidiano está mentindo para você. Bem humano, inclusive."
-                tone="blue"
-                icon={Lightbulb}
-              >
-                <Paragraph>
-                  Galileu percebeu que, quanto menor o atrito, mais tempo um corpo mantém
-                  seu movimento. Uma esfera rolando em uma superfície muito lisa percorre
-                  uma distância maior do que em uma superfície rugosa. Se a superfície fosse
-                  perfeitamente lisa e não houvesse resistência do ar, o corpo continuaria
-                  se movendo em linha reta com velocidade constante.
-                </Paragraph>
-
-                <Paragraph>
-                  A ideia revolucionária é esta: o movimento não precisa ser sustentado por
-                  força. O que precisa de força resultante é a mudança do movimento.
-                </Paragraph>
-
-                <div className="bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200 rounded-2xl p-7 text-center shadow-inner">
-                  <p className="text-amber-600 font-black text-lg mb-2">
-                    Ideia central da Dinâmica
-                  </p>
-                  <p className="text-slate-900 text-2xl font-black">
-                    Força resultante não mantém movimento.
-                  </p>
-                  <p className="text-green-700 text-2xl font-black mt-1">
-                    Força resultante altera movimento.
-                  </p>
-                </div>
-              </TopicBlock>
-
-              <TopicBlock title="O que Newton fez?" tone="indigo" icon={Brain}>
-                <Paragraph>
-                  Newton organizou essas ideias em três leis que formam a base da Mecânica
-                  Clássica. Ele não estava apenas criando três frases bonitas para decorar.
-                  Ele estava construindo uma linguagem para responder perguntas como:
-                </Paragraph>
-
-                <BulletList
-                  items={[
-                    <>O que acontece quando não sobra força resultante sobre um corpo?</>,
-                    <>O que acontece quando sobra força resultante?</>,
-                    <>Como as forças aparecem quando dois corpos interagem?</>,
-                    <>Por que corpos diferentes respondem de formas diferentes à mesma força?</>,
-                    <>Como desenhar corretamente as forças que atuam em um corpo?</>,
-                  ]}
-                />
-
-                <Paragraph>
-                  A Dinâmica nasce justamente para explicar a causa das mudanças de
-                  movimento. A Cinemática descreve o movimento. A Dinâmica pergunta quem
-                  causou aquilo.
-                </Paragraph>
-              </TopicBlock>
-            </Section>
-
-            <Section
-              icon={Shield}
-              title="Primeira Lei de Newton — Princípio da Inércia"
-              subtitle="A lei que explica o que acontece quando a força resultante é nula."
-              gradient="bg-gradient-to-r from-emerald-600 to-green-700"
-            >
-              <TopicBlock title="Por que essa lei foi criada?" tone="green" icon={History}>
-                <Paragraph>
-                  A Primeira Lei foi criada para corrigir o erro antigo de imaginar que a
-                  força é necessária para manter o movimento. Newton formalizou a ideia de
-                  que, se nada “sobrar” depois da soma das forças, o corpo não muda seu
-                  estado de movimento.
-                </Paragraph>
-
-                <Paragraph>Ela responde a uma pergunta fundamental:</Paragraph>
-
                 <NoteBox title="Pergunta central da Primeira Lei" tone="green">
                   O que acontece com um corpo quando a força resultante sobre ele é nula?
                 </NoteBox>
@@ -755,6 +912,12 @@ export default function DynamicsTopicNewton() {
                   Velocidade vetorial envolve módulo, direção e sentido. Se nenhum desses
                   três aspectos muda, a aceleração é zero.
                 </NoteBox>
+
+                <DiagramCard
+                  kind="firstLaw"
+                  title="Diagrama visual: equilíbrio estático e dinâmico"
+                  caption="Força resultante nula pode significar repouso ou movimento retilíneo uniforme. O ponto é a aceleração ser nula."
+                />
               </TopicBlock>
 
               <TopicBlock title="Enunciado formal" tone="green" icon={BookOpen}>
@@ -1038,6 +1201,12 @@ export default function DynamicsTopicNewton() {
                 </Paragraph>
               </TopicBlock>
 
+              <DiagramCard
+                kind="secondLaw"
+                title="Diagrama visual: força, massa e aceleração"
+                caption="A mesma massa acelera mais quando a força resultante aumenta; a mesma força acelera menos quando a massa aumenta."
+              />
+
               <TopicBlock title="Enunciado formal e fórmula principal" tone="indigo" icon={BookOpen}>
                 <blockquote className="border-l-4 border-indigo-500 pl-5 py-3 bg-indigo-50 rounded-r-xl text-slate-700 italic leading-8">
                   A força resultante sobre um corpo é igual ao produto da massa do corpo
@@ -1115,6 +1284,7 @@ export default function DynamicsTopicNewton() {
                 <SubTitle>
                   O termo <InlineFormulaBox formula={String.raw`m`} />
                 </SubTitle>
+                                </SubTitle>
                 <Paragraph>
                   Representa a massa do corpo. Massa não é peso. Massa mede a inércia:
                   quanto maior a massa, maior a dificuldade de alterar a velocidade do
@@ -1165,8 +1335,7 @@ export default function DynamicsTopicNewton() {
                 <NoteBox title="Exemplo clássico" tone="amber">
                   Em um lançamento vertical para cima, o corpo ainda pode estar subindo,
                   mas a força resultante é o peso para baixo. Portanto, a aceleração é para
-                  baixo. Velocidade para cima, aceleração para baixo. A natureza não consulta
-                  o velocímetro antes de decidir a aceleração.
+                  baixo. Velocidade para cima, aceleração para baixo.
                 </NoteBox>
               </TopicBlock>
 
@@ -1177,18 +1346,30 @@ export default function DynamicsTopicNewton() {
                 </Paragraph>
 
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
-                  <FormulaStep title="Segunda Lei em módulo" formula={String.raw`F = ma`} tone="blue" />
-                  <FormulaStep title="Dimensões" formula={String.raw`[F] = [m][a]`} tone="green" />
+                  <FormulaStep
+                    title="Segunda Lei em módulo"
+                    formula={String.raw`F = ma`}
+                    tone="blue"
+                  />
+
+                  <FormulaStep
+                    title="Dimensões"
+                    formula={String.raw`[F] = [m][a]`}
+                    tone="green"
+                  />
+
                   <FormulaStep
                     title="Massa e aceleração"
                     formula={String.raw`[m] = \text{kg} \qquad [a] = \frac{\text{m}}{\text{s}^2}`}
                     tone="purple"
                   />
+
                   <FormulaStep
                     title="Unidade de força"
                     formula={String.raw`[F] = \text{kg}\cdot \frac{\text{m}}{\text{s}^2}`}
                     tone="amber"
                   />
+
                   <FormulaStep
                     title="Definição de newton"
                     formula={String.raw`1 \ \text{N} = 1 \ \text{kg}\cdot \frac{\text{m}}{\text{s}^2}`}
@@ -1203,6 +1384,12 @@ export default function DynamicsTopicNewton() {
               </TopicBlock>
 
               <TopicBlock title="DCL: o mapa antes da fórmula" tone="slate" icon={ListChecks}>
+                <DiagramCard
+                  kind="freeBody"
+                  title="Diagrama visual: corpo livre em superfície horizontal"
+                  caption="Antes de escrever equações, escolha o corpo e desenhe apenas as forças que atuam nele."
+                />
+
                 <Paragraph>
                   O Diagrama de Corpo Livre é o desenho de todas as forças que atuam sobre
                   o corpo escolhido. Ele é obrigatório para resolver Dinâmica direito. Pular
@@ -1212,6 +1399,7 @@ export default function DynamicsTopicNewton() {
 
                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
                   <p className="font-bold text-indigo-900 mb-4">Sequência segura</p>
+
                   <NumberedSteps
                     items={[
                       <>Escolha o corpo ou sistema.</>,
@@ -1221,7 +1409,10 @@ export default function DynamicsTopicNewton() {
                       <>Identifique quem exerce cada força.</>,
                       <>Escolha eixos convenientes.</>,
                       <>Decomponha forças inclinadas.</>,
-                      <>Aplique <InlineFormulaBox formula={String.raw`\sum F = ma`} /> em cada eixo.</>,
+                      <>
+                        Aplique <InlineFormulaBox formula={String.raw`\sum F = ma`} /> em
+                        cada eixo.
+                      </>,
                     ]}
                   />
                 </div>
@@ -1241,8 +1432,9 @@ export default function DynamicsTopicNewton() {
                 <Paragraph>
                   A fórmula do peso aparece porque, na queda livre ideal, desprezando a
                   resistência do ar, a única força sobre o corpo é a força gravitacional.
-                  Como a aceleração de queda livre é <InlineFormulaBox formula={String.raw`\vec{g}`} />,
-                  a força gravitacional fica:
+                  Como a aceleração de queda livre é{" "}
+                  <InlineFormulaBox formula={String.raw`\vec{g}`} />, a força gravitacional
+                  fica:
                 </Paragraph>
 
                 <FormulaGrid>
@@ -1252,13 +1444,19 @@ export default function DynamicsTopicNewton() {
 
                 <NoteBox title="Massa versus peso" tone="red">
                   Massa se mede em kg. Peso se mede em N. Um corpo de massa{" "}
-                  <InlineFormulaBox formula={String.raw`70 \ \text{kg}`} /> tem, na Terra com{" "}
-                  <InlineFormulaBox formula={String.raw`g = 10 \ \text{m/s}^2`} />, peso{" "}
-                  <InlineFormulaBox formula={String.raw`P = 700 \ \text{N}`} />.
+                  <InlineFormulaBox formula={String.raw`70 \ \text{kg}`} /> tem, na Terra
+                  com <InlineFormulaBox formula={String.raw`g = 10 \ \text{m/s}^2`} />,
+                  peso <InlineFormulaBox formula={String.raw`P = 700 \ \text{N}`} />.
                 </NoteBox>
               </TopicBlock>
 
               <TopicBlock title="Normal como aplicação da Segunda Lei" tone="blue" icon={Layers}>
+                <DiagramCard
+                  kind="weightNormal"
+                  title="Diagrama visual: peso, normal e pares de interação"
+                  caption="Peso e normal podem se equilibrar no mesmo corpo, mas não formam par ação-reação."
+                />
+
                 <Paragraph>
                   A normal é a força de contato que uma superfície exerce sobre um corpo.
                   Ela é perpendicular à superfície. A normal não existe simplesmente porque
@@ -1275,6 +1473,12 @@ export default function DynamicsTopicNewton() {
                   A normal não tem fórmula fixa. Ela deve ser calculada pela Segunda Lei no
                   eixo perpendicular ao contato.
                 </NoteBox>
+
+                <DiagramCard
+                  kind="elevator"
+                  title="Diagrama visual: elevador e peso aparente"
+                  caption="A balança mede a normal. Por isso, a leitura muda quando o elevador acelera."
+                />
 
                 <FormulaGrid>
                   <FormulaStep
@@ -1354,6 +1558,12 @@ export default function DynamicsTopicNewton() {
               </TopicBlock>
 
               <TopicBlock title="Atrito como aplicação da Segunda Lei" tone="amber" icon={Layers}>
+                <DiagramCard
+                  kind="friction"
+                  title="Diagrama visual: direção do atrito"
+                  caption="O atrito se opõe à tendência de deslizamento ou ao deslizamento relativo, não necessariamente ao movimento absoluto."
+                />
+
                 <Paragraph>
                   O atrito é uma força de contato paralela à superfície. Ele se opõe à
                   tendência de deslizamento relativo entre as superfícies, não necessariamente
@@ -1405,12 +1615,17 @@ export default function DynamicsTopicNewton() {
 
                 <NoteBox title="Exemplo importante" tone="green">
                   Ao caminhar, o atrito sobre o pé aponta para frente. O pé tende a escorregar
-                  para trás em relação ao chão, então o chão exerce atrito para frente. É
-                  por isso que você anda. Sem atrito, vira coreografia triste no gelo.
+                  para trás em relação ao chão, então o chão exerce atrito para frente.
                 </NoteBox>
               </TopicBlock>
 
               <TopicBlock title="Plano inclinado dentro da Segunda Lei" tone="green" icon={Compass}>
+                <DiagramCard
+                  kind="inclinedPlane"
+                  title="Diagrama visual: decomposição do peso no plano inclinado"
+                  caption="A força peso continua vertical. Quem muda são os eixos escolhidos para analisar o movimento."
+                />
+
                 <Paragraph>
                   No plano inclinado, o peso continua apontando verticalmente para baixo.
                   Mas o movimento costuma ocorrer ao longo da rampa. Por isso, decompomos
@@ -1483,6 +1698,12 @@ export default function DynamicsTopicNewton() {
               </TopicBlock>
 
               <TopicBlock title="Sistemas de blocos e polias" tone="purple" icon={Layers}>
+                <DiagramCard
+                  kind="pulley"
+                  title="Diagrama visual: blocos, tração e vínculo da corda"
+                  caption="Em sistemas com polias, o segredo é fazer um DCL para cada corpo e respeitar os vínculos impostos pela corda."
+                />
+
                 <SubTitle>Sistema de dois blocos</SubTitle>
 
                 <Paragraph>
@@ -1682,7 +1903,6 @@ export default function DynamicsTopicNewton() {
                   e sentido oposto.
                 </Paragraph>
               </TopicBlock>
-
               <TopicBlock title="Ideia intuitiva" tone="blue" icon={Lightbulb}>
                 <Paragraph>
                   Quando você empurra uma parede, a parede empurra você. Quando o pé empurra
@@ -1714,6 +1934,7 @@ export default function DynamicsTopicNewton() {
                 <SubTitle>
                   O termo <InlineFormulaBox formula={String.raw`\vec{F}_{A \to B}`} />
                 </SubTitle>
+
                 <Paragraph>
                   Representa a força que o corpo A exerce sobre o corpo B. Portanto, essa
                   força atua em B.
@@ -1722,12 +1943,14 @@ export default function DynamicsTopicNewton() {
                 <SubTitle>
                   O termo <InlineFormulaBox formula={String.raw`\vec{F}_{B \to A}`} />
                 </SubTitle>
+
                 <Paragraph>
                   Representa a força que o corpo B exerce sobre o corpo A. Portanto, essa
                   força atua em A.
                 </Paragraph>
 
                 <SubTitle>O sinal negativo</SubTitle>
+
                 <Paragraph>
                   Indica que as forças têm sentidos opostos. Não significa que uma é “menor”
                   ou “menos importante”.
@@ -1777,6 +2000,12 @@ export default function DynamicsTopicNewton() {
               </TopicBlock>
 
               <TopicBlock title="Peso e normal: a confusão clássica" tone="rose" icon={AlertTriangle}>
+                <DiagramCard
+                  kind="actionReaction"
+                  title="Diagrama visual: Terceira Lei em corpos diferentes"
+                  caption="Ação e reação têm mesmo módulo e sentidos opostos, mas atuam em corpos diferentes."
+                />
+
                 <Paragraph>
                   Peso e normal frequentemente têm mesmo módulo em uma superfície horizontal
                   simples, mas isso não faz deles um par de ação e reação.
@@ -1795,7 +2024,8 @@ export default function DynamicsTopicNewton() {
 
                   <NoteBox title="Normal" tone="purple">
                     Normal é a força da superfície sobre o corpo:
-                    <InlineFormulaBox formula={String.raw`\vec{N}_{\text{superfície} \to \text{corpo}}`} />.
+                    <InlineFormulaBox formula={String.raw`\vec{N}_{\text{ ao peso é a força do corpo sobre a Terra:
+                    <InlineFormulaBox formula={String.raw`\vec{P}_{\text{corpo} \to \text{Terra}}superfície} \to \text{corpo}}`} />.
                   </NoteBox>
 
                   <NoteBox title="Reação à normal" tone="amber">
@@ -1953,11 +2183,13 @@ export default function DynamicsTopicNewton() {
 
         {activeTab === "exemplos" && (
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
+                        <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
               <div className="flex items-center gap-3">
                 <Calculator className="w-6 h-6 text-indigo-600" />
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900">Exemplos resolvidos</h2>
+                  <h2 className="text-2xl font-black text-slate-900">
+                    Exemplos resolvidos
+                  </h2>
                   <p className="text-slate-600 text-sm mt-1">
                     Resoluções com DCL, força resultante, fórmula e interpretação física.
                   </p>
@@ -1976,8 +2208,11 @@ export default function DynamicsTopicNewton() {
                 >
                   <div className="text-left">
                     <h3 className="font-black text-slate-900">{ex.title}</h3>
-                    <p className="text-slate-500 text-sm mt-2 leading-6">{ex.enunciado}</p>
+                    <p className="text-slate-500 text-sm mt-2 leading-6">
+                      {ex.enunciado}
+                    </p>
                   </div>
+
                   {openExamples[ex.id] ? (
                     <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0 ml-4" />
                   ) : (
@@ -2020,7 +2255,11 @@ export default function DynamicsTopicNewton() {
                 </NoteBox>
               </TopicBlock>
 
-              <TopicBlock title="Segunda Lei — Força resultante e aceleração" tone="indigo" icon={Calculator}>
+              <TopicBlock
+                title="Segunda Lei — Força resultante e aceleração"
+                tone="indigo"
+                icon={Calculator}
+              >
                 <Paragraph>
                   Se sobra força resultante, o corpo acelera. A aceleração depende da força
                   resultante e da massa.
@@ -2034,11 +2273,31 @@ export default function DynamicsTopicNewton() {
 
                 <FormulaGrid>
                   <FormulaStep title="Peso" formula={String.raw`P = mg`} tone="amber" />
-                  <FormulaStep title="Normal no plano inclinado" formula={String.raw`N = mg\cos\theta`} tone="blue" />
-                  <FormulaStep title="Atrito estático" formula={String.raw`f_e \leq \mu_e N`} tone="amber" />
-                  <FormulaStep title="Atrito cinético" formula={String.raw`f_c = \mu_c N`} tone="green" />
-                  <FormulaStep title="Plano sem atrito" formula={String.raw`a = g\sin\theta`} tone="purple" />
-                  <FormulaStep title="Elevador" formula={String.raw`N = m(g \pm a)`} tone="blue" />
+                  <FormulaStep
+                    title="Normal no plano inclinado"
+                    formula={String.raw`N = mg\cos\theta`}
+                    tone="blue"
+                  />
+                  <FormulaStep
+                    title="Atrito estático"
+                    formula={String.raw`f_e \leq \mu_e N`}
+                    tone="amber"
+                  />
+                  <FormulaStep
+                    title="Atrito cinético"
+                    formula={String.raw`f_c = \mu_c N`}
+                    tone="green"
+                  />
+                  <FormulaStep
+                    title="Plano sem atrito"
+                    formula={String.raw`a = g\sin\theta`}
+                    tone="purple"
+                  />
+                  <FormulaStep
+                    title="Elevador"
+                    formula={String.raw`N = m(g \pm a)`}
+                    tone="blue"
+                  />
                 </FormulaGrid>
               </TopicBlock>
 
