@@ -10,6 +10,8 @@ import {
   ChevronDown,
   ChevronUp,
   CircleDot,
+  Compass,
+  Flame,
   Gauge,
   Layers,
   Lightbulb,
