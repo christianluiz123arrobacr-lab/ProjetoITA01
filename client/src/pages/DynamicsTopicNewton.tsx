@@ -399,7 +399,7 @@ function FirstLawDiagram() {
       <SvgLabel x={615} y={100} tone="blue">N</SvgLabel>
       <SvgLabel x={615} y={320} tone="red">P</SvgLabel>
       <SvgLabel x={615} y={150}>Fᵣₑₛ = 0</SvgLabel>
-      <SvgLabel x={380} y={62}>força resultante nula não significa ausência de forças</SvgLabel>
+      <SvgLabel x={380} y={62}>força resultante nulla não significa ausência de forças</SvgLabel>
     </svg>
   );
 }
