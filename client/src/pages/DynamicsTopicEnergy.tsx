@@ -1,3 +1,105 @@
+import { useState, type ElementType, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
+  BatteryCharging,
+  BookOpen,
+  Brain,
+  Calculator,
+  ChevronDown,
+  ChevronUp,
+  CircleDot,
+  Gauge,
+  Layers,
+  Lightbulb,
+  Mountain,
+  Repeat,
+  Rocket,
+  Scale,
+  Target,
+  Zap,
+} from "lucide-react";
+import { Link } from "wouter";
+import { MathFormula } from "@/components/MathFormula";
+
+type Tab = "teoria" | "exemplos" | "resumo";
+type NoteType = "info" | "warning" | "success" | "dark" | "danger";
+
+type DiagramKind =
+  | "workAngle"
+  | "workSigns"
+  | "kineticTheorem"
+  | "energyBars"
+  | "dissipation"
+  | "forceGraph"
+  | "spring"
+  | "power"
+  | "inclinedEnergy"
+  | "normalWork";
+
+type DiagramData = {
+  kind: DiagramKind;
+  title: string;
+  caption: string;
+};
+
+type EquationPanelData = {
+  title: string;
+  formula: string;
+  terms: string[];
+  interpretation: string[];
+  derivation?: {
+    title: string;
+    paragraphs?: string[];
+    formulas?: string[];
+  }[];
+};
+
+type TheorySection = {
+  id: string;
+  icon: ElementType;
+  title: string;
+  accent: string;
+  intro: string[];
+  diagram?: DiagramData;
+  equations?: EquationPanelData[];
+  bullets?: string[];
+  notes?: {
+    title: string;
+    type: NoteType;
+    body: string;
+  }[];
+};
+
+type Example = {
+  id: string;
+  title: string;
+  statement: string;
+  solution: ReactNode;
+};
+
+type FormulaSummary = {
+  title: string;
+  formula: string;
+  description: string;
+};
+
+function MathDisplay({ formula }: { formula: string }) {
+  return (
+    <div className="text-slate-100 [&_.katex]:text-slate-100 [&_.katex-display]:my-0">
+      <MathFormula formula={formula} display={true} />
+    </div>
+  );
+}
+
+function InlineFormula({ formula }: { formula: string }) {
+  return (
+    <span className="mx-1 inline-flex items-center rounded-md border border-slate-700 bg-slate-950 px-2 py-0.5 align-middle text-slate-100 [&_.katex]:text-slate-100">
+      <MathFormula formula={formula} />
+    </span>
+  );
+}
 
 function FormulaBlock({ formula }: { formula: string }) {
   return (
