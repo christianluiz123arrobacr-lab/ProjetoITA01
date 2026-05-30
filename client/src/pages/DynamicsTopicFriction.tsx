@@ -265,6 +265,345 @@ function NumberedSteps({ items }: { items: ReactNode[] }) {
   );
 }
 
+
+
+type FrictionDiagramKind =
+  | "frictionDirection"
+  | "staticKinetic"
+  | "frictionGraph"
+  | "horizontalDcl"
+  | "inclinedFriction"
+  | "angledForce"
+  | "walkingCar"
+  | "circularFriction"
+  | "blockSystem";
+
+function DiagramCard({
+  title,
+  caption,
+  kind,
+}: {
+  title: string;
+  caption: string;
+  kind: FrictionDiagramKind;
+}) {
+  return (
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-amber-50 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+      <div className="border-b border-slate-200 bg-slate-950 px-6 py-4">
+        <p className="text-lg font-black text-white">{title}</p>
+        <p className="mt-1 text-sm leading-6 text-slate-300">{caption}</p>
+      </div>
+
+      <div className="overflow-x-auto p-5 md:p-7">
+        <div className="min-w-[760px]">
+          {kind === "frictionDirection" && <FrictionDirectionDiagram />}
+          {kind === "staticKinetic" && <StaticKineticDiagram />}
+          {kind === "frictionGraph" && <FrictionGraphDiagram />}
+          {kind === "horizontalDcl" && <HorizontalDclDiagram />}
+          {kind === "inclinedFriction" && <InclinedFrictionDiagram />}
+          {kind === "angledForce" && <AngledForceDiagram />}
+          {kind === "walkingCar" && <WalkingCarDiagram />}
+          {kind === "circularFriction" && <CircularFrictionDiagram />}
+          {kind === "blockSystem" && <BlockSystemFrictionDiagram />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SvgLabel({
+  x,
+  y,
+  children,
+  tone = "slate",
+}: {
+  x: number;
+  y: number;
+  children: ReactNode;
+  tone?: "slate" | "blue" | "green" | "red" | "amber" | "purple";
+}) {
+  const fill = {
+    slate: "fill-slate-700",
+    blue: "fill-blue-700",
+    green: "fill-emerald-700",
+    red: "fill-red-700",
+    amber: "fill-amber-700",
+    purple: "fill-purple-700",
+  }[tone];
+
+  return (
+    <text x={x} y={y} textAnchor="middle" className={`${fill} text-[16px] font-black`}>
+      {children}
+    </text>
+  );
+}
+
+function Arrow({
+  x1,
+  y1,
+  x2,
+  y2,
+  color = "#0f172a",
+  width = 5,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color?: string;
+  width?: number;
+}) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const size = 11;
+  const ax1 = x2 - size * Math.cos(angle - Math.PI / 6);
+  const ay1 = y2 - size * Math.sin(angle - Math.PI / 6);
+  const ax2 = x2 - size * Math.cos(angle + Math.PI / 6);
+  const ay2 = y2 - size * Math.sin(angle + Math.PI / 6);
+
+  return (
+    <>
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={color}
+        strokeWidth={width}
+        strokeLinecap="round"
+      />
+      <path d={`M ${x2} ${y2} L ${ax1} ${ay1} L ${ax2} ${ay2} Z`} fill={color} />
+    </>
+  );
+}
+
+function Block({
+  x,
+  y,
+  fill = "#e0f2fe",
+  label = "m",
+}: {
+  x: number;
+  y: number;
+  fill?: string;
+  label?: string;
+}) {
+  return (
+    <>
+      <rect x={x} y={y} width="90" height="64" rx="14" fill={fill} stroke="#0f172a" strokeWidth="4" />
+      <text x={x + 45} y={y + 39} textAnchor="middle" className="fill-slate-950 text-[22px] font-black">
+        {label}
+      </text>
+    </>
+  );
+}
+
+function FrictionDirectionDiagram() {
+  return (
+    <svg viewBox="0 0 800 350" className="h-[350px] w-full">
+      <rect x="18" y="18" width="764" height="314" rx="28" fill="#ffffff" />
+      <line x1="80" y1="255" x2="720" y2="255" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={355} y={190} fill="#fef3c7" label="m" />
+      <Arrow x1={445} y1={222} x2={610} y2={222} color="#2563eb" />
+      <Arrow x1={355} y1={222} x2={215} y2={222} color="#f59e0b" />
+      <SvgLabel x={625} y={208} tone="blue">tendência de escorregar</SvgLabel>
+      <SvgLabel x={195} y={208} tone="amber">atrito</SvgLabel>
+      <SvgLabel x={400} y={70}>o atrito se opõe ao deslizamento relativo ou à tendência de deslizamento relativo</SvgLabel>
+      <SvgLabel x={400} y={305} tone="purple">não decore “contra o movimento”: descubra a tendência de escorregamento</SvgLabel>
+    </svg>
+  );
+}
+
+function StaticKineticDiagram() {
+  return (
+    <svg viewBox="0 0 800 360" className="h-[360px] w-full">
+      <rect x="18" y="18" width="764" height="324" rx="28" fill="#ffffff" />
+
+      <line x1="80" y1="240" x2="340" y2="240" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={165} y={175} fill="#dcfce7" label="m" />
+      <Arrow x1={255} y1={207} x2={315} y2={207} color="#2563eb" />
+      <Arrow x1={165} y1={207} x2={105} y2={207} color="#16a34a" />
+      <SvgLabel x={210} y={78} tone="green">estático</SvgLabel>
+      <SvgLabel x={210} y={105}>sem deslizamento</SvgLabel>
+      <SvgLabel x={210} y={293} tone="green">fₑ se ajusta</SvgLabel>
+      <SvgLabel x={210} y={320} tone="green">fₑ ≤ μₑN</SvgLabel>
+
+      <line x1="460" y1="240" x2="720" y2="240" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={545} y={175} fill="#dbeafe" label="m" />
+      <Arrow x1={635} y1={207} x2={705} y2={207} color="#2563eb" />
+      <Arrow x1={545} y1={207} x2={465} y2={207} color="#f59e0b" />
+      <SvgLabel x={590} y={78} tone="blue">cinético</SvgLabel>
+      <SvgLabel x={590} y={105}>com deslizamento</SvgLabel>
+      <SvgLabel x={590} y={293} tone="amber">f꜀ = μ꜀N</SvgLabel>
+      <SvgLabel x={400} y={45}>estático não vale μN sempre; cinético sim no modelo básico</SvgLabel>
+    </svg>
+  );
+}
+
+function FrictionGraphDiagram() {
+  return (
+    <svg viewBox="0 0 800 420" className="h-[420px] w-full">
+      <rect x="18" y="18" width="764" height="384" rx="28" fill="#ffffff" />
+      <line x1="110" y1="320" x2="690" y2="320" stroke="#0f172a" strokeWidth="4" />
+      <line x1="110" y1="320" x2="110" y2="70" stroke="#0f172a" strokeWidth="4" />
+      <Arrow x1={110} y1={320} x2={720} y2={320} color="#0f172a" width={4} />
+      <Arrow x1={110} y1={320} x2={110} y2={45} color="#0f172a" width={4} />
+
+      <path d="M 110 320 L 375 145" fill="none" stroke="#16a34a" strokeWidth="7" strokeLinecap="round" />
+      <circle cx="375" cy="145" r="9" fill="#16a34a" />
+      <path d="M 385 185 L 665 185" fill="none" stroke="#f59e0b" strokeWidth="7" strokeLinecap="round" />
+      <line x1="375" y1="145" x2="385" y2="185" stroke="#ef4444" strokeWidth="4" strokeDasharray="8 8" />
+
+      <SvgLabel x={250} y={170} tone="green">atrito estático se ajusta</SvgLabel>
+      <SvgLabel x={430} y={130} tone="green">fₑ,máx = μₑN</SvgLabel>
+      <SvgLabel x={545} y={170} tone="amber">atrito cinético</SvgLabel>
+      <SvgLabel x={545} y={215} tone="amber">f꜀ = μ꜀N</SvgLabel>
+      <SvgLabel x={410} y={365}>força aplicada</SvgLabel>
+      <text x="62" y="188" transform="rotate(-90 62 188)" textAnchor="middle" className="fill-slate-700 text-[16px] font-black">força de atrito</text>
+      <SvgLabel x={400} y={55}>é por isso que costuma ser mais difícil começar a mover do que manter deslizando</SvgLabel>
+    </svg>
+  );
+}
+
+function HorizontalDclDiagram() {
+  return (
+    <svg viewBox="0 0 800 380" className="h-[380px] w-full">
+      <rect x="18" y="18" width="764" height="344" rx="28" fill="#ffffff" />
+      <line x1="90" y1="275" x2="710" y2="275" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={355} y={210} fill="#e0f2fe" label="m" />
+      <Arrow x1={400} y1={210} x2={400} y2={115} color="#2563eb" />
+      <Arrow x1={400} y1={274} x2={400} y2={348} color="#dc2626" />
+      <Arrow x1={445} y1={242} x2={610} y2={242} color="#16a34a" />
+      <Arrow x1={355} y1={242} x2={220} y2={242} color="#f59e0b" />
+      <SvgLabel x={423} y={102} tone="blue">N</SvgLabel>
+      <SvgLabel x={423} y={350} tone="red">P = mg</SvgLabel>
+      <SvgLabel x={625} y={228} tone="green">F</SvgLabel>
+      <SvgLabel x={200} y={228} tone="amber">f</SvgLabel>
+      <SvgLabel x={400} y={70}>DCL em mesa horizontal: a normal só vira mg se não houver aceleração vertical nem força inclinada</SvgLabel>
+    </svg>
+  );
+}
+
+function InclinedFrictionDiagram() {
+  return (
+    <svg viewBox="0 0 800 430" className="h-[430px] w-full">
+      <rect x="18" y="18" width="764" height="394" rx="28" fill="#ffffff" />
+      <polygon points="145,330 660,330 660,110" fill="#e2e8f0" stroke="#0f172a" strokeWidth="4" />
+      <line x1="145" y1="330" x2="660" y2="110" stroke="#334155" strokeWidth="6" strokeLinecap="round" />
+
+      <g transform="translate(390 235) rotate(-23)">
+        <rect x="-45" y="-32" width="90" height="64" rx="14" fill="#dbeafe" stroke="#0f172a" strokeWidth="4" />
+        <text x="0" y="8" textAnchor="middle" className="fill-slate-950 text-[22px] font-black">m</text>
+      </g>
+
+      <Arrow x1={390} y1={235} x2={390} y2={355} color="#dc2626" />
+      <Arrow x1={390} y1={235} x2={335} y2={110} color="#2563eb" />
+      <Arrow x1={390} y1={235} x2={285} y2={280} color="#16a34a" />
+      <Arrow x1={390} y1={235} x2={490} y2={190} color="#f59e0b" />
+      <Arrow x1={390} y1={235} x2={455} y2={375} color="#9333ea" />
+
+      <SvgLabel x={414} y={370} tone="red">P = mg</SvgLabel>
+      <SvgLabel x={320} y={100} tone="blue">N</SvgLabel>
+      <SvgLabel x={260} y={285} tone="green">mg sen θ</SvgLabel>
+      <SvgLabel x={520} y={190} tone="amber">atrito</SvgLabel>
+      <SvgLabel x={490} y={388} tone="purple">mg cos θ</SvgLabel>
+      <SvgLabel x={600} y={355}>θ</SvgLabel>
+      <SvgLabel x={400} y={62}>se o bloco tende a descer, o atrito aponta para cima da rampa</SvgLabel>
+    </svg>
+  );
+}
+
+function AngledForceDiagram() {
+  return (
+    <svg viewBox="0 0 800 390" className="h-[390px] w-full">
+      <rect x="18" y="18" width="764" height="354" rx="28" fill="#ffffff" />
+      <line x1="70" y1="285" x2="350" y2="285" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={165} y={220} fill="#dcfce7" label="m" />
+      <Arrow x1={255} y1={230} x2={330} y2={180} color="#16a34a" />
+      <Arrow x1={210} y1={220} x2={210} y2={145} color="#2563eb" />
+      <Arrow x1={210} y1={284} x2={210} y2={350} color="#dc2626" />
+      <SvgLabel x={255} y={170} tone="green">puxa para cima</SvgLabel>
+      <SvgLabel x={210} y={125} tone="blue">N menor</SvgLabel>
+      <SvgLabel x={210} y={365} tone="red">P</SvgLabel>
+      <SvgLabel x={210} y={78} tone="green">N = mg − F sen θ</SvgLabel>
+
+      <line x1="450" y1="285" x2="730" y2="285" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={545} y={220} fill="#fee2e2" label="m" />
+      <Arrow x1={635} y1={230} x2={710} y2={280} color="#f59e0b" />
+      <Arrow x1={590} y1={220} x2={590} y2={130} color="#2563eb" />
+      <Arrow x1={590} y1={284} x2={590} y2={350} color="#dc2626" />
+      <SvgLabel x={675} y={300} tone="amber">empurra para baixo</SvgLabel>
+      <SvgLabel x={590} y={112} tone="blue">N maior</SvgLabel>
+      <SvgLabel x={590} y={365} tone="red">P</SvgLabel>
+      <SvgLabel x={590} y={78} tone="amber">N = mg + F sen θ</SvgLabel>
+      <SvgLabel x={400} y={45}>força inclinada muda a normal; mudando a normal, muda o atrito</SvgLabel>
+    </svg>
+  );
+}
+
+function WalkingCarDiagram() {
+  return (
+    <svg viewBox="0 0 800 380" className="h-[380px] w-full">
+      <rect x="18" y="18" width="764" height="344" rx="28" fill="#ffffff" />
+      <line x1="70" y1="290" x2="730" y2="290" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+
+      <circle cx="170" cy="145" r="24" fill="#dbeafe" stroke="#0f172a" strokeWidth="3" />
+      <line x1="170" y1="170" x2="170" y2="230" stroke="#0f172a" strokeWidth="5" />
+      <line x1="170" y1="195" x2="125" y2="225" stroke="#0f172a" strokeWidth="5" strokeLinecap="round" />
+      <line x1="170" y1="195" x2="215" y2="225" stroke="#0f172a" strokeWidth="5" strokeLinecap="round" />
+      <line x1="170" y1="230" x2="125" y2="285" stroke="#0f172a" strokeWidth="5" strokeLinecap="round" />
+      <line x1="170" y1="230" x2="215" y2="285" stroke="#0f172a" strokeWidth="5" strokeLinecap="round" />
+      <Arrow x1={125} y1={285} x2={245} y2={285} color="#16a34a" />
+      <SvgLabel x={185} y={315} tone="green">atrito para frente</SvgLabel>
+      <SvgLabel x={170} y={95} tone="green">caminhada</SvgLabel>
+
+      <rect x="470" y="180" width="190" height="55" rx="18" fill="#dbeafe" stroke="#0f172a" strokeWidth="4" />
+      <circle cx="520" cy="250" r="28" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
+      <circle cx="615" cy="250" r="28" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
+      <Arrow x1={520} y1={278} x2={640} y2={278} color="#16a34a" />
+      <SvgLabel x={580} y={315} tone="green">atrito acelera o carro</SvgLabel>
+      <SvgLabel x={565} y={140} tone="blue">pneu empurra chão para trás</SvgLabel>
+      <Arrow x1={560} y1={165} x2={485} y2={165} color="#2563eb" />
+      <SvgLabel x={400} y={55}>atrito pode ter o mesmo sentido do movimento do corpo</SvgLabel>
+    </svg>
+  );
+}
+
+function CircularFrictionDiagram() {
+  return (
+    <svg viewBox="0 0 800 380" className="h-[380px] w-full">
+      <rect x="18" y="18" width="764" height="344" rx="28" fill="#ffffff" />
+      <circle cx="400" cy="200" r="115" fill="none" stroke="#94a3b8" strokeWidth="6" strokeDasharray="10 10" />
+      <rect x="498" y="178" width="86" height="46" rx="14" fill="#dbeafe" stroke="#0f172a" strokeWidth="4" />
+      <circle cx="518" cy="228" r="12" fill="#0f172a" />
+      <circle cx="564" cy="228" r="12" fill="#0f172a" />
+      <Arrow x1={540} y1={200} x2={425} y2={200} color="#f59e0b" />
+      <SvgLabel x={482} y={185} tone="amber">atrito estático</SvgLabel>
+      <SvgLabel x={400} y={200}>centro</SvgLabel>
+      <SvgLabel x={400} y={58}>em curva plana, o atrito estático pode fornecer a força centrípeta</SvgLabel>
+      <SvgLabel x={400} y={330} tone="purple">fₑ = mv²/R, com fₑ ≤ μₑN</SvgLabel>
+    </svg>
+  );
+}
+
+function BlockSystemFrictionDiagram() {
+  return (
+    <svg viewBox="0 0 800 380" className="h-[380px] w-full">
+      <rect x="18" y="18" width="764" height="344" rx="28" fill="#ffffff" />
+      <line x1="90" y1="290" x2="710" y2="290" stroke="#64748b" strokeWidth="5" strokeLinecap="round" />
+      <Block x={305} y={225} fill="#dbeafe" label="m₁" />
+      <Block x={405} y={225} fill="#fee2e2" label="m₂" />
+      <Arrow x1={495} y1={257} x2={650} y2={257} color="#2563eb" />
+      <Arrow x1={305} y1={257} x2={190} y2={257} color="#f59e0b" />
+      <Arrow x1={405} y1={257} x2={330} y2={257} color="#f59e0b" />
+      <SvgLabel x={665} y={244} tone="blue">F</SvgLabel>
+      <SvgLabel x={190} y={244} tone="amber">atrito externo</SvgLabel>
+      <SvgLabel x={368} y={215} tone="purple">contato interno</SvgLabel>
+      <SvgLabel x={400} y={70}>no sistema completo, forças internas se cancelam; atritos externos permanecem</SvgLabel>
+      <SvgLabel x={400} y={335} tone="purple">para achar contato entre blocos, isole um corpo</SvgLabel>
+    </svg>
+  );
+}
+
 function FormulaGrid({ children }: { children: ReactNode }) {
   return <div className="grid md:grid-cols-2 gap-4">{children}</div>;
 }
@@ -760,6 +1099,12 @@ export default function DynamicsTopicFriction() {
                   superfície horizontal continuaria em movimento retilíneo uniforme.
                 </Paragraph>
 
+                <DiagramCard
+                  kind="frictionDirection"
+                  title="Diagrama visual: atrito e tendência de escorregamento"
+                  caption="O atrito não é uma força contra o movimento absoluto. Ele se opõe ao deslizamento relativo ou à tendência de deslizamento relativo entre as superfícies."
+                />
+
                 <FormulaStep
                   title="Ligação com a Primeira Lei de Newton"
                   explanation="Se não existe força resultante, não existe aceleração. Logo, a velocidade permanece constante."
@@ -822,6 +1167,12 @@ export default function DynamicsTopicFriction() {
                   </NoteBox>
                 </ThreeGrid>
 
+                <DiagramCard
+                  kind="frictionDirection"
+                  title="Diagrama visual: sentido do atrito"
+                  caption="Antes de escolher o sentido do atrito, descubra para onde uma superfície tende a escorregar em relação à outra."
+                />
+
                 <FormulaStep
                   title="Definição formal"
                   formula={String.raw`\text{força de atrito} \Rightarrow \text{força de contato paralela à superfície}`}
@@ -859,6 +1210,12 @@ export default function DynamicsTopicFriction() {
                     <>a área aparente de contato não entra diretamente nas fórmulas básicas;</>,
                     <>efeitos como temperatura, lubrificação, desgaste e velocidade são desprezados.</>,
                   ]}
+                />
+
+                <DiagramCard
+                  kind="staticKinetic"
+                  title="Diagrama visual: atrito estático versus cinético"
+                  caption="O atrito estático se ajusta até um máximo. O atrito cinético aparece quando já existe deslizamento relativo."
                 />
 
                 <FormulaGrid>
@@ -956,6 +1313,12 @@ export default function DynamicsTopicFriction() {
               </TopicBlock>
 
               <TopicBlock title="Força inclinada altera a normal" tone="amber" icon={Compass}>
+                <DiagramCard
+                  kind="angledForce"
+                  title="Diagrama visual: força inclinada mudando a normal"
+                  caption="Puxar para cima diminui a normal. Empurrar para baixo aumenta a normal. Como o atrito depende de N, o atrito também muda."
+                />
+
                 <Paragraph>
                   Quando uma força inclinada puxa o bloco para cima, ela reduz a normal.
                   Quando empurra o bloco para baixo, ela aumenta a normal. Como o atrito
@@ -1012,6 +1375,12 @@ export default function DynamicsTopicFriction() {
               gradient="bg-gradient-to-r from-emerald-600 to-green-700"
             >
               <TopicBlock title="O que é força de atrito estático?" tone="green" icon={Shield}>
+                <DiagramCard
+                  kind="frictionGraph"
+                  title="Diagrama visual: crescimento do atrito estático"
+                  caption="Enquanto não há deslizamento, o atrito estático acompanha a força aplicada até atingir seu máximo."
+                />
+
                 <Paragraph>
                   A força de atrito estático atua quando não há deslizamento relativo entre
                   as superfícies. O corpo pode estar em movimento em relação ao solo, como
@@ -1091,6 +1460,12 @@ export default function DynamicsTopicFriction() {
               gradient="bg-gradient-to-r from-blue-600 to-cyan-700"
             >
               <TopicBlock title="O que é força de atrito cinético?" tone="blue" icon={MoveRight}>
+                <DiagramCard
+                  kind="staticKinetic"
+                  title="Diagrama visual: quando entra o atrito cinético"
+                  caption="Depois que as superfícies passam a deslizar uma sobre a outra, usamos o modelo f_c = μ_cN."
+                />
+
                 <Paragraph>
                   A força de atrito cinético atua quando as superfícies já estão deslizando
                   uma em relação à outra. Um bloco escorregando sobre uma mesa, uma caixa
@@ -1206,6 +1581,12 @@ export default function DynamicsTopicFriction() {
               gradient="bg-gradient-to-r from-green-700 to-emerald-800"
             >
               <TopicBlock title="Decomposição do peso" tone="green" icon={Compass}>
+                <DiagramCard
+                  kind="inclinedFriction"
+                  title="Diagrama visual: plano inclinado com atrito"
+                  caption="No plano inclinado, o peso é decomposto. O atrito fica paralelo ao plano e depende da tendência de movimento."
+                />
+
                 <Paragraph>
                   No plano inclinado, o peso aponta verticalmente para baixo, mas o movimento
                   acontece ao longo do plano. Por isso, decompomos o peso em duas partes.
@@ -1330,6 +1711,12 @@ export default function DynamicsTopicFriction() {
               gradient="bg-gradient-to-r from-slate-700 to-slate-900"
             >
               <TopicBlock title="Bloco puxado por força horizontal" tone="blue" icon={MoveRight}>
+                <DiagramCard
+                  kind="horizontalDcl"
+                  title="Diagrama visual: DCL em superfície horizontal"
+                  caption="O caso básico: peso e normal no eixo vertical; força aplicada e atrito no eixo horizontal."
+                />
+
                 <Paragraph>
                   Em superfície horizontal simples, se não há aceleração vertical, a normal é
                   igual ao peso. Se o bloco está parado, o atrito é estático. Se desliza, o
@@ -1364,6 +1751,12 @@ export default function DynamicsTopicFriction() {
               </TopicBlock>
 
               <TopicBlock title="Sistema de blocos" tone="purple" icon={Layers}>
+                <DiagramCard
+                  kind="blockSystem"
+                  title="Diagrama visual: sistema de blocos com atrito"
+                  caption="No sistema completo, forças internas somem. Para achar contato ou tração, isole um dos corpos."
+                />
+
                 <Paragraph>
                   Em sistemas, o método é mais importante que a fórmula. Escolha o sistema,
                   faça o DCL, separe forças internas e externas e aplique a Segunda Lei.
@@ -1402,6 +1795,12 @@ export default function DynamicsTopicFriction() {
               subtitle="Onde o atrito aparece no mesmo sentido do movimento e humilha a frase decorada."
               gradient="bg-gradient-to-r from-blue-700 to-indigo-800"
             >
+              <DiagramCard
+                kind="walkingCar"
+                title="Diagrama visual: atrito ajudando o movimento"
+                caption="Na caminhada e no carro acelerando, o atrito estático pode apontar para frente. Ele não é automaticamente contrário ao movimento."
+              />
+
               <ThreeGrid>
                 <TopicBlock title="Caminhada" tone="green" icon={Footprints}>
                   <Paragraph>
@@ -1440,6 +1839,12 @@ export default function DynamicsTopicFriction() {
               gradient="bg-gradient-to-r from-violet-700 to-purple-800"
             >
               <TopicBlock title="Gráfico da força de atrito pela força aplicada" tone="purple" icon={Activity}>
+                <DiagramCard
+                  kind="frictionGraph"
+                  title="Diagrama visual: gráfico do atrito"
+                  caption="O gráfico mostra o crescimento do atrito estático, o limite máximo e a transição para o atrito cinético."
+                />
+
                 <Paragraph>
                   Enquanto o bloco não escorrega, a força de atrito estático se ajusta para
                   equilibrar a força aplicada.
@@ -1502,6 +1907,59 @@ export default function DynamicsTopicFriction() {
                   O coeficiente de atrito é adimensional. O certo é escrever{" "}
                   <InlineFormulaBox formula={String.raw`\mu = 0{,}4`} />, não{" "}
                   <InlineFormulaBox formula={String.raw`\mu = 0{,}4 \ \text{N}`} />.
+                </NoteBox>
+              </TopicBlock>
+            </Section>
+
+            <Section
+              icon={Car}
+              title="Atrito em movimento circular"
+              subtitle="Quando o atrito não atrapalha: ele pode ser a força que permite a curva."
+              gradient="bg-gradient-to-r from-emerald-700 to-teal-800"
+            >
+              <TopicBlock title="Carro fazendo curva em pista plana" tone="green" icon={Car}>
+                <DiagramCard
+                  kind="circularFriction"
+                  title="Diagrama visual: atrito como força centrípeta"
+                  caption="Em uma curva plana, o atrito estático aponta para o centro da trajetória e fornece a resultante centrípeta."
+                />
+
+                <Paragraph>
+                  Em uma pista plana, sem inclinação, a força que permite ao carro fazer a
+                  curva é o atrito estático entre pneus e pista. Se não houvesse atrito, o
+                  carro não conseguiria alterar a direção de sua velocidade e seguiria pela
+                  tangente.
+                </Paragraph>
+
+                <FormulaGrid>
+                  <FormulaStep
+                    title="Atrito como centrípeta"
+                    formula={String.raw`f_e = \frac{mv^2}{R}`}
+                    tone="green"
+                  />
+
+                  <FormulaStep
+                    title="Limite do atrito estático"
+                    formula={String.raw`f_e \leq \mu_e N`}
+                    tone="amber"
+                  />
+
+                  <FormulaStep
+                    title="Em pista plana"
+                    formula={String.raw`N = mg`}
+                    tone="blue"
+                  />
+
+                  <FormulaStep
+                    title="Velocidade máxima"
+                    formula={String.raw`v_{\max} = \sqrt{\mu_e gR}`}
+                    tone="purple"
+                  />
+                </FormulaGrid>
+
+                <NoteBox title="Ideia importante" tone="green">
+                  O atrito não é sempre uma força que “atrapalha”. Em muitos casos, ele é
+                  justamente a força que torna o movimento possível.
                 </NoteBox>
               </TopicBlock>
             </Section>
