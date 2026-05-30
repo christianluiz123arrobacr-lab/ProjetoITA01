@@ -1314,7 +1314,7 @@ export default function DynamicsTopicEnergy() {
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/85 shadow-sm backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
           <div className="flex items-center gap-4">
-            <Link href="/dynamics">
+            <Link href="/dinamica">
               <a className="rounded-full border border-slate-200 bg-white p-2 transition-colors hover:bg-slate-100">
                 <ArrowLeft className="h-5 w-5 text-slate-700" />
               </a>
