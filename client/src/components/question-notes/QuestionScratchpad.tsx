@@ -1841,6 +1841,7 @@ export function QuestionScratchpad({
   questionId,
   questionCode,
 }: QuestionScratchpadProps) {
+  const fullscreenRootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
@@ -3502,6 +3503,68 @@ export function QuestionScratchpad({
   }
 
   useEffect(() => {
+    function handleFullscreenChange() {
+      const isBrowserFullscreen = Boolean(document.fullscreenElement);
+
+      if (!isBrowserFullscreen && fullscreen) {
+        setFullscreen(false);
+      }
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, [fullscreen]);
+
+  function enterScratchpadFullscreen() {
+    setOpen(true);
+    setFullscreen(true);
+    setNotesPanelOpen(false);
+    updateView({
+      zoom: 1,
+      offsetX: 0,
+      offsetY: 0,
+    });
+
+    window.setTimeout(() => {
+      const element = fullscreenRootRef.current;
+
+      if (element?.requestFullscreen && !document.fullscreenElement) {
+        void element.requestFullscreen().catch(() => {
+          // Se o navegador negar fullscreen real, o modo fixed ainda funciona.
+        });
+      }
+
+      redrawCanvas();
+    }, 80);
+  }
+
+  function exitScratchpadFullscreen() {
+    setFullscreen(false);
+
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {
+        // Navegador sendo navegador. O estado visual já sai.
+      });
+    }
+
+    window.setTimeout(() => {
+      redrawCanvas();
+    }, 80);
+  }
+
+  function toggleScratchpadFullscreen() {
+    if (fullscreen) {
+      exitScratchpadFullscreen();
+      return;
+    }
+
+    enterScratchpadFullscreen();
+  }
+
+  useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
       if (!(target instanceof HTMLElement)) return false;
 
@@ -3575,11 +3638,11 @@ export function QuestionScratchpad({
   }, [selectedIds, size, strokes]);
 
   const containerClassName = fullscreen
-    ? "fixed inset-0 z-[100] flex h-dvh w-dvw flex-col overflow-hidden bg-slate-950 text-slate-100"
+    ? "fixed inset-0 z-[100] flex h-dvh w-dvw flex-col overflow-hidden bg-black text-slate-100"
     : "mb-6 overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 shadow-sm";
 
   const canvasWrapperClassName = fullscreen
-    ? "flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-none border-0 bg-slate-900 p-3"
+    ? "flex min-h-0 flex-1 items-stretch justify-stretch overflow-hidden rounded-none border-0 bg-black p-0"
     : "rounded-2xl border border-slate-200 bg-white p-2 shadow-inner";
 
   const canvasCursorClass =
@@ -3594,7 +3657,7 @@ export function QuestionScratchpad({
             : "cursor-cell";
 
   return (
-    <div className={containerClassName}>
+    <div ref={fullscreenRootRef} className={containerClassName}>
       <button
         type="button"
         onClick={() => {
@@ -3610,9 +3673,11 @@ export function QuestionScratchpad({
           </div>
 
           <div>
-            <p className="font-black text-slate-950">Rascunho manuscrito</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">
-              Use presets, atalhos, páginas, texto, imagem, formas perfeitas e borracha em tempo real.
+            <p className={`font-black ${fullscreen ? "text-white" : "text-slate-950"}`}>
+              {fullscreen ? "Rascunho" : "Rascunho manuscrito"}
+            </p>
+            <p className={`mt-1 text-sm leading-6 ${fullscreen ? "text-slate-400" : "text-slate-600"}`}>
+              {fullscreen ? "Modo tela cheia: escreva em toda a área, como um caderno digital." : "Use presets, atalhos, páginas, texto, imagem, formas perfeitas e borracha em tempo real."}
             </p>
           </div>
         </div>
@@ -3643,7 +3708,7 @@ export function QuestionScratchpad({
       </button>
 
       {open ? (
-        <div className={`${fullscreen ? "flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-slate-950 p-3" : "border-t border-violet-100 p-4 md:p-5"}`}>
+        <div className={`${fullscreen ? "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden bg-black p-0" : "border-t border-violet-100 p-4 md:p-5"}`}>
           {!userId ? (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -3674,7 +3739,7 @@ export function QuestionScratchpad({
             }}
           />
 
-          <div className={`${fullscreen ? "mb-0 shrink-0 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 text-slate-100 shadow-2xl" : "mb-4 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex flex-wrap items-center gap-2`}>
+          <div className={`${fullscreen ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-2`}>
             <span className="px-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
               Páginas
             </span>
@@ -3708,7 +3773,7 @@ export function QuestionScratchpad({
             </button>
           </div>
 
-          <div className={`${fullscreen ? "mb-0 shrink-0 rounded-2xl border border-slate-800 bg-slate-900/80 p-2 text-slate-100" : "mb-4 rounded-2xl border border-slate-200 bg-white p-2"} ${notesPanelOpen ? "block" : "hidden"}`}>
+          <div className={`${fullscreen ? "mb-0 max-h-36 shrink-0 overflow-y-auto border-b border-slate-800 bg-slate-900 p-2 text-slate-100" : "mb-4 rounded-2xl border border-slate-200 bg-white p-2"} ${notesPanelOpen ? "block" : "hidden"}`}>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="px-2 text-xs font-black uppercase tracking-wide text-slate-400">Meus rascunhos locais</p>
               <button
@@ -3746,7 +3811,7 @@ export function QuestionScratchpad({
             )}
           </div>
 
-          <div className={`${fullscreen ? "mb-0 max-h-[26vh] shrink-0 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl" : "mb-4 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex flex-wrap items-center gap-3`}>
+          <div className={`${fullscreen ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-900 px-3 py-2 shadow-none" : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-3`}>
             <ToolbarGroup label="Favoritos">
               {PEN_PRESETS.map((preset) => (
                 <button
@@ -3878,7 +3943,7 @@ export function QuestionScratchpad({
               <button type="button" onClick={resetZoom} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
                 <Move className="h-4 w-4" /> 100%
               </button>
-              <button type="button" onClick={() => setFullscreen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
+              <button type="button" onClick={toggleScratchpadFullscreen} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
                 {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                 {fullscreen ? "Sair" : "Tela cheia"}
               </button>
@@ -3914,7 +3979,7 @@ export function QuestionScratchpad({
           </div>
 
           {selectedIds.length > 0 ? (
-            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm">
+            <div className={`${fullscreen ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-900 px-3 py-2 text-sm" : "mb-4 flex-wrap rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm"} flex shrink-0 items-center gap-2`}>
               <span className="font-black text-violet-900">
                 {selectedIds.length} item(ns) selecionado(s)
               </span>
@@ -4003,7 +4068,7 @@ export function QuestionScratchpad({
                 }}
                 onWheel={handleWheel}
                 onDoubleClick={handleCanvasDoubleClick}
-                className={`block w-full rounded-xl bg-white ${canvasCursorClass} ${fullscreen ? "h-full max-h-full w-auto max-w-full object-contain" : ""}`}
+                className={`${fullscreen ? "block h-full w-full rounded-none bg-white" : "block w-full rounded-xl bg-white"} ${canvasCursorClass}`}
                 style={{
                   aspectRatio: fullscreen ? undefined : `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
                   touchAction: "none",
