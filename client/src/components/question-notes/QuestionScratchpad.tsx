@@ -32,7 +32,7 @@ type QuestionScratchpadProps = {
   questionCode?: string | null;
 };
 
-type ScratchpadTool = "pen" | "areaEraser" | "strokeEraser";
+type ScratchpadTool = "pen" | "areaEraser" | "strokeEraser" | "pan";
 
 type CanvasView = {
   zoom: number;
@@ -51,6 +51,12 @@ type GestureState = {
   initialDistance: number;
   initialZoom: number;
   initialCenterLogical: { x: number; y: number };
+};
+
+type PanState = {
+  pointerId: number;
+  startRaw: { x: number; y: number };
+  startView: CanvasView;
 };
 
 type EraserPreview = {
@@ -308,46 +314,40 @@ function shouldAppendPoint(
   return distance(previousPoint, nextPoint) >= 0.75;
 }
 
-function drawGridLines(ctx: CanvasRenderingContext2D) {
+function drawGridLines(ctx: CanvasRenderingContext2D, view: CanvasView) {
   ctx.save();
 
-  ctx.strokeStyle = "#e2e8f0";
-  ctx.lineWidth = 1;
+  const left = -view.offsetX / view.zoom;
+  const top = -view.offsetY / view.zoom;
+  const right = (CANVAS_WIDTH - view.offsetX) / view.zoom;
+  const bottom = (CANVAS_HEIGHT - view.offsetY) / view.zoom;
 
-  const smallStep = 25;
+  const drawLines = (step: number, strokeStyle: string, lineWidth: number) => {
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth / view.zoom;
 
-  for (let x = 0; x <= CANVAS_WIDTH; x += smallStep) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, CANVAS_HEIGHT);
-    ctx.stroke();
-  }
+    const startX = Math.floor(left / step) * step;
+    const endX = Math.ceil(right / step) * step;
+    const startY = Math.floor(top / step) * step;
+    const endY = Math.ceil(bottom / step) * step;
 
-  for (let y = 0; y <= CANVAS_HEIGHT; y += smallStep) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(CANVAS_WIDTH, y);
-    ctx.stroke();
-  }
+    for (let x = startX; x <= endX; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+      ctx.stroke();
+    }
 
-  ctx.strokeStyle = "#cbd5e1";
-  ctx.lineWidth = 1.4;
+    for (let y = startY; y <= endY; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+      ctx.stroke();
+    }
+  };
 
-  const bigStep = 100;
-
-  for (let x = 0; x <= CANVAS_WIDTH; x += bigStep) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, CANVAS_HEIGHT);
-    ctx.stroke();
-  }
-
-  for (let y = 0; y <= CANVAS_HEIGHT; y += bigStep) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(CANVAS_WIDTH, y);
-    ctx.stroke();
-  }
+  drawLines(25, "#e2e8f0", 1);
+  drawLines(100, "#cbd5e1", 1.4);
 
   ctx.restore();
 }
@@ -364,10 +364,7 @@ function drawPaper(
 
   ctx.translate(view.offsetX, view.offsetY);
   ctx.scale(view.zoom, view.zoom);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  drawGridLines(ctx);
+  drawGridLines(ctx, view);
 
   ctx.restore();
 }
@@ -401,7 +398,7 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
   ctx.strokeStyle = stroke.color;
 
   if (stroke.brush === "brush") {
-    ctx.globalAlpha = 0.96;
+    ctx.globalAlpha = 0.98;
   }
 
   if (stroke.points.length === 1) {
@@ -411,12 +408,21 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
   }
 
   for (let i = 1; i < stroke.points.length; i += 1) {
+    const previousPrevious = stroke.points[i - 2];
     const previous = stroke.points[i - 1];
     const current = stroke.points[i];
 
+    const startPoint = previousPrevious
+      ? midpoint(previousPrevious, previous)
+      : previous;
+
+    const endPoint = i === stroke.points.length - 1
+      ? current
+      : midpoint(previous, current);
+
     ctx.beginPath();
-    ctx.moveTo(previous.x, previous.y);
-    ctx.lineTo(current.x, current.y);
+    ctx.moveTo(startPoint.x, startPoint.y);
+    ctx.quadraticCurveTo(previous.x, previous.y, endPoint.x, endPoint.y);
     ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke)) / 2;
     ctx.stroke();
   }
@@ -535,6 +541,7 @@ export function QuestionScratchpad({
   const dirtyRef = useRef(false);
   const activePointerIdRef = useRef<number | null>(null);
   const activePointersRef = useRef<Map<number, PointerSnapshot>>(new Map());
+  const panStateRef = useRef<PanState | null>(null);
   const gestureRef = useRef<GestureState | null>(null);
   const lastPenInteractionAtRef = useRef(0);
   const viewRef = useRef<CanvasView>({
@@ -820,6 +827,7 @@ export function QuestionScratchpad({
   function cancelCurrentInkInteraction() {
     currentStrokeRef.current = null;
     eraserPathRef.current = [];
+    panStateRef.current = null;
     activePointerIdRef.current = null;
     setIsDrawing(false);
     redrawCanvas();
@@ -899,10 +907,19 @@ export function QuestionScratchpad({
         continue;
       }
 
+      const smoothing = (currentStrokeRef.current.brush ?? "pen") === "brush" ? 0.16 : 0.2;
+      const smoothedPoint = previousPoint
+        ? {
+            ...rawPoint,
+            x: previousPoint.x * smoothing + rawPoint.x * (1 - smoothing),
+            y: previousPoint.y * smoothing + rawPoint.y * (1 - smoothing),
+          }
+        : rawPoint;
+
       const pointWithWidth = {
-        ...rawPoint,
+        ...smoothedPoint,
         width: calculatePointWidth({
-          point: rawPoint,
+          point: smoothedPoint,
           previousPoint,
           size: currentStrokeRef.current.size,
           brush: currentStrokeRef.current.brush ?? "pen",
@@ -956,10 +973,20 @@ export function QuestionScratchpad({
     }
 
     const point = getCanvasPointFromNative(event.nativeEvent, event.pointerType);
+    const rawPoint = getRawCanvasPoint(event.clientX, event.clientY);
 
     activePointerIdRef.current = event.pointerId;
     setIsDrawing(true);
     setStatus("");
+
+    if (tool === "pan") {
+      panStateRef.current = {
+        pointerId: event.pointerId,
+        startRaw: rawPoint,
+        startView: viewRef.current,
+      };
+      return;
+    }
 
     if (tool === "pen") {
       const pointWithWidth = {
@@ -1009,6 +1036,20 @@ export function QuestionScratchpad({
     if (hasTwoTouchPointers) {
       event.preventDefault();
       startTwoFingerGesture();
+      return;
+    }
+
+    if (panStateRef.current && event.pointerId === panStateRef.current.pointerId) {
+      event.preventDefault();
+
+      const rawPoint = getRawCanvasPoint(event.clientX, event.clientY);
+      const panState = panStateRef.current;
+
+      updateView({
+        zoom: panState.startView.zoom,
+        offsetX: panState.startView.offsetX + rawPoint.x - panState.startRaw.x,
+        offsetY: panState.startView.offsetY + rawPoint.y - panState.startRaw.y,
+      });
       return;
     }
 
@@ -1067,6 +1108,13 @@ export function QuestionScratchpad({
       return;
     }
 
+    if (panStateRef.current && (!event || event.pointerId === panStateRef.current.pointerId)) {
+      panStateRef.current = null;
+      activePointerIdRef.current = null;
+      setIsDrawing(false);
+      return;
+    }
+
     if (currentStrokeRef.current) {
       const finishedStroke = currentStrokeRef.current;
 
@@ -1090,6 +1138,7 @@ export function QuestionScratchpad({
     if (event.pointerId === activePointerIdRef.current) {
       currentStrokeRef.current = null;
       eraserPathRef.current = [];
+      panStateRef.current = null;
       activePointerIdRef.current = null;
       setIsDrawing(false);
       redrawCanvas();
@@ -1211,7 +1260,7 @@ export function QuestionScratchpad({
           <div>
             <p className="font-black text-slate-950">Rascunho manuscrito</p>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Escreva com mouse, dedo, caneta do tablet ou mesa digitalizadora. Use dois dedos para mover e dar zoom.
+              Escreva com mouse, dedo, caneta do tablet ou mesa digitalizadora. Use dois dedos ou o modo Mover para navegar.
             </p>
           </div>
         </div>
@@ -1310,6 +1359,19 @@ export function QuestionScratchpad({
             >
               <Eraser className="h-4 w-4" />
               Apagar traço
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTool("pan")}
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${
+                tool === "pan"
+                  ? "bg-violet-600 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              <Move className="h-4 w-4" />
+              Mover
             </button>
 
             <div className="mx-1 h-8 w-px bg-slate-200" />
@@ -1469,7 +1531,11 @@ export function QuestionScratchpad({
                 }}
                 onWheel={handleWheel}
                 className={`block w-full rounded-xl bg-white ${
-                  tool === "pen" ? "cursor-crosshair" : "cursor-cell"
+                  tool === "pen"
+                    ? "cursor-crosshair"
+                    : tool === "pan"
+                      ? "cursor-grab active:cursor-grabbing"
+                      : "cursor-cell"
                 } ${fullscreen ? "max-h-full flex-1 object-contain" : ""}`}
                 style={{
                   aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
@@ -1481,7 +1547,7 @@ export function QuestionScratchpad({
 
           <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
-              Caneta e pincel usam renderização em alta resolução. Dois dedos movem/dão zoom sem criar rabisco gigante. O rascunho só salva no botão Salvar ou ao sair/trocar de questão.
+              Caneta e pincel usam renderização em alta resolução e suavização extra. Dois dedos movem/dão zoom no touch; no notebook, use o botão Mover. O rascunho só salva no botão Salvar ou ao sair/trocar de questão.
             </p>
 
             <button
