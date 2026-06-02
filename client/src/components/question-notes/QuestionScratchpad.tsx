@@ -15,6 +15,7 @@ import {
 import {
   getQuestionNote,
   saveQuestionNote,
+  type ScratchpadBrush,
   type ScratchpadPoint,
   type ScratchpadStroke,
 } from "@/services/question-notes.service";
@@ -23,6 +24,13 @@ type QuestionScratchpadProps = {
   userId?: string | null;
   questionId: string;
   questionCode?: string | null;
+};
+
+type ScratchpadTool = "pen" | "areaEraser" | "strokeEraser";
+
+type EraserPreview = {
+  point: ScratchpadPoint;
+  radius: number;
 };
 
 const CANVAS_WIDTH = 1200;
@@ -39,6 +47,143 @@ const COLORS = [
 
 function createStrokeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function distance(a: ScratchpadPoint, b: ScratchpadPoint) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function distancePointToSegment(
+  point: ScratchpadPoint,
+  start: ScratchpadPoint,
+  end: ScratchpadPoint
+) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+
+  if (lengthSquared === 0) {
+    return distance(point, start);
+  }
+
+  const t = clamp(
+    ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared,
+    0,
+    1
+  );
+
+  return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy));
+}
+
+function isPointNearPath(
+  point: ScratchpadPoint,
+  path: ScratchpadPoint[],
+  radius: number
+) {
+  if (path.length === 0) return false;
+
+  if (path.length === 1) {
+    return distance(point, path[0]) <= radius;
+  }
+
+  for (let i = 1; i < path.length; i += 1) {
+    if (distancePointToSegment(point, path[i - 1], path[i]) <= radius) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isStrokeTouchedByPath(
+  stroke: ScratchpadStroke,
+  path: ScratchpadPoint[],
+  radius: number
+) {
+  return stroke.points.some((point) => isPointNearPath(point, path, radius));
+}
+
+function splitStrokeByEraser(
+  stroke: ScratchpadStroke,
+  path: ScratchpadPoint[],
+  radius: number
+) {
+  if (stroke.tool !== "pen") return [stroke];
+
+  const chunks: ScratchpadPoint[][] = [];
+  let currentChunk: ScratchpadPoint[] = [];
+  let changed = false;
+
+  for (const point of stroke.points) {
+    if (isPointNearPath(point, path, radius)) {
+      changed = true;
+
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = [];
+      }
+    } else {
+      currentChunk.push(point);
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  if (!changed) return [stroke];
+
+  return chunks.map((points, index) => ({
+    ...stroke,
+    id: `${stroke.id}-cut-${index}-${createStrokeId()}`,
+    points,
+  }));
+}
+
+function eraseStrokesByArea(
+  strokes: ScratchpadStroke[],
+  path: ScratchpadPoint[],
+  radius: number
+) {
+  return strokes.flatMap((stroke) => splitStrokeByEraser(stroke, path, radius));
+}
+
+function eraseWholeStrokes(
+  strokes: ScratchpadStroke[],
+  path: ScratchpadPoint[],
+  radius: number
+) {
+  return strokes.filter((stroke) => {
+    if (stroke.tool !== "pen") return true;
+    return !isStrokeTouchedByPath(stroke, path, radius);
+  });
+}
+
+function normalizePressure(event: React.PointerEvent<HTMLCanvasElement>) {
+  if (event.pointerType === "mouse") return 0.65;
+
+  if (typeof event.pressure !== "number" || event.pressure <= 0) {
+    return 0.5;
+  }
+
+  return clamp(event.pressure, 0.08, 1);
+}
+
+function getPointWidth(
+  point: ScratchpadPoint,
+  stroke: ScratchpadStroke
+) {
+  const pressure = clamp(point.pressure ?? 0.5, 0.08, 1);
+
+  if (stroke.brush === "brush") {
+    return clamp(stroke.size * (0.2 + pressure * 1.55), 0.6, stroke.size * 1.9);
+  }
+
+  return clamp(stroke.size * (0.45 + pressure * 0.85), 0.6, stroke.size * 1.35);
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D) {
@@ -88,15 +233,75 @@ function drawGrid(ctx: CanvasRenderingContext2D) {
   ctx.restore();
 }
 
-function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+function drawRoundDot(
+  ctx: CanvasRenderingContext2D,
+  point: ScratchpadPoint,
+  radius: number,
+  color: string
+) {
+  ctx.beginPath();
+  ctx.fillStyle = color;
+  ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+  if (stroke.points.length === 0) return;
+
+  const firstPoint = stroke.points[0];
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = stroke.color;
+
+  if (stroke.brush === "brush") {
+    ctx.globalAlpha = 0.92;
+    ctx.shadowColor = stroke.color;
+    ctx.shadowBlur = Math.max(0.8, stroke.size * 0.35);
+  }
+
+  if (stroke.points.length === 1) {
+    drawRoundDot(ctx, firstPoint, getPointWidth(firstPoint, stroke) / 2, stroke.color);
+    ctx.restore();
+    return;
+  }
+
+  let previous = firstPoint;
+
+  for (let i = 1; i < stroke.points.length; i += 1) {
+    const current = stroke.points[i];
+    const midpoint = {
+      x: (previous.x + current.x) / 2,
+      y: (previous.y + current.y) / 2,
+      pressure: ((previous.pressure ?? 0.5) + (current.pressure ?? 0.5)) / 2,
+    };
+
+    ctx.beginPath();
+    ctx.moveTo(previous.x, previous.y);
+    ctx.quadraticCurveTo(previous.x, previous.y, midpoint.x, midpoint.y);
+    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke)) / 2;
+    ctx.stroke();
+
+    previous = current;
+  }
+
+  ctx.restore();
+}
+
+function drawLegacyEraserStroke(
+  ctx: CanvasRenderingContext2D,
+  stroke: ScratchpadStroke
+) {
   if (stroke.points.length === 0) return;
 
   ctx.save();
-
+  ctx.globalCompositeOperation = "destination-out";
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.lineWidth = stroke.tool === "eraser" ? stroke.size * 4 : stroke.size;
-  ctx.strokeStyle = stroke.tool === "eraser" ? "#ffffff" : stroke.color;
+  ctx.lineWidth = stroke.size * 4;
+  ctx.strokeStyle = "rgba(0, 0, 0, 1)";
 
   ctx.beginPath();
 
@@ -116,6 +321,30 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
   ctx.restore();
 }
 
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+  if (stroke.tool === "eraser") {
+    drawLegacyEraserStroke(ctx, stroke);
+    return;
+  }
+
+  drawPenStroke(ctx, stroke);
+}
+
+function drawEraserPreview(
+  ctx: CanvasRenderingContext2D,
+  preview: EraserPreview
+) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(preview.point.x, preview.point.y, preview.radius, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(124, 58, 237, 0.08)";
+  ctx.strokeStyle = "rgba(124, 58, 237, 0.65)";
+  ctx.lineWidth = 2;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function QuestionScratchpad({
   userId,
   questionId,
@@ -123,12 +352,15 @@ export function QuestionScratchpad({
 }: QuestionScratchpadProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
+  const eraserPathRef = useRef<ScratchpadPoint[]>([]);
   const autoSaveTimerRef = useRef<number | null>(null);
 
   const [open, setOpen] = useState(false);
-  const [tool, setTool] = useState<"pen" | "eraser">("pen");
+  const [tool, setTool] = useState<ScratchpadTool>("pen");
+  const [brush, setBrush] = useState<ScratchpadBrush>("pen");
   const [color, setColor] = useState("#0f172a");
   const [size, setSize] = useState(4);
+  const [eraserSize, setEraserSize] = useState(24);
   const [strokes, setStrokes] = useState<ScratchpadStroke[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -143,7 +375,7 @@ export function QuestionScratchpad({
   }, [questionCode]);
 
   const redrawCanvas = useCallback(
-    (extraStroke?: ScratchpadStroke | null) => {
+    (extraStroke?: ScratchpadStroke | null, eraserPreview?: EraserPreview | null) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -152,12 +384,25 @@ export function QuestionScratchpad({
 
       drawGrid(ctx);
 
+      const inkLayer = document.createElement("canvas");
+      inkLayer.width = CANVAS_WIDTH;
+      inkLayer.height = CANVAS_HEIGHT;
+
+      const inkCtx = inkLayer.getContext("2d");
+      if (!inkCtx) return;
+
       for (const stroke of strokes) {
-        drawStroke(ctx, stroke);
+        drawStroke(inkCtx, stroke);
       }
 
       if (extraStroke) {
-        drawStroke(ctx, extraStroke);
+        drawStroke(inkCtx, extraStroke);
+      }
+
+      ctx.drawImage(inkLayer, 0, 0);
+
+      if (eraserPreview) {
+        drawEraserPreview(ctx, eraserPreview);
       }
     },
     [strokes]
@@ -269,15 +514,28 @@ export function QuestionScratchpad({
 
   function getCanvasPoint(event: React.PointerEvent<HTMLCanvasElement>): ScratchpadPoint {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0, pressure: event.pressure };
+    if (!canvas) {
+      return { x: 0, y: 0, pressure: normalizePressure(event) };
+    }
 
     const rect = canvas.getBoundingClientRect();
 
     return {
       x: ((event.clientX - rect.left) / rect.width) * CANVAS_WIDTH,
       y: ((event.clientY - rect.top) / rect.height) * CANVAS_HEIGHT,
-      pressure: event.pressure,
+      pressure: normalizePressure(event),
     };
+  }
+
+  function applyEraser(path: ScratchpadPoint[]) {
+    if (tool === "areaEraser") {
+      setStrokes((previous) => eraseStrokesByArea(previous, path, eraserSize));
+      return;
+    }
+
+    if (tool === "strokeEraser") {
+      setStrokes((previous) => eraseWholeStrokes(previous, path, eraserSize));
+    }
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -290,34 +548,52 @@ export function QuestionScratchpad({
 
     const point = getCanvasPoint(event);
 
-    const stroke: ScratchpadStroke = {
-      id: createStrokeId(),
-      tool,
-      color,
-      size,
-      points: [point],
-    };
-
-    currentStrokeRef.current = stroke;
     setIsDrawing(true);
     setStatus("");
 
-    redrawCanvas(stroke);
+    if (tool === "pen") {
+      const stroke: ScratchpadStroke = {
+        id: createStrokeId(),
+        tool: "pen",
+        color,
+        size,
+        brush,
+        points: [point],
+      };
+
+      currentStrokeRef.current = stroke;
+      redrawCanvas(stroke);
+      return;
+    }
+
+    currentStrokeRef.current = null;
+    eraserPathRef.current = [point];
+    applyEraser(eraserPathRef.current);
+    redrawCanvas(null, { point, radius: eraserSize });
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!isDrawing || !currentStrokeRef.current) return;
+    if (!isDrawing) return;
 
     event.preventDefault();
 
     const point = getCanvasPoint(event);
 
-    currentStrokeRef.current = {
-      ...currentStrokeRef.current,
-      points: [...currentStrokeRef.current.points, point],
-    };
+    if (tool === "pen" && currentStrokeRef.current) {
+      currentStrokeRef.current = {
+        ...currentStrokeRef.current,
+        points: [...currentStrokeRef.current.points, point],
+      };
 
-    redrawCanvas(currentStrokeRef.current);
+      redrawCanvas(currentStrokeRef.current);
+      return;
+    }
+
+    if (tool === "areaEraser" || tool === "strokeEraser") {
+      eraserPathRef.current = [...eraserPathRef.current, point];
+      applyEraser(eraserPathRef.current);
+      redrawCanvas(null, { point, radius: eraserSize });
+    }
   }
 
   function finishStroke(event?: React.PointerEvent<HTMLCanvasElement>) {
@@ -325,17 +601,17 @@ export function QuestionScratchpad({
       event.preventDefault();
     }
 
-    if (!currentStrokeRef.current) {
+    if (currentStrokeRef.current) {
+      const finishedStroke = currentStrokeRef.current;
+
+      currentStrokeRef.current = null;
       setIsDrawing(false);
+      setStrokes((previous) => [...previous, finishedStroke]);
       return;
     }
 
-    const finishedStroke = currentStrokeRef.current;
-
-    currentStrokeRef.current = null;
+    eraserPathRef.current = [];
     setIsDrawing(false);
-
-    setStrokes((previous) => [...previous, finishedStroke]);
   }
 
   function handleUndo() {
@@ -350,6 +626,11 @@ export function QuestionScratchpad({
 
     setStatus("");
     setStrokes([]);
+  }
+
+  function activatePen(nextBrush: ScratchpadBrush) {
+    setTool("pen");
+    setBrush(nextBrush);
   }
 
   return (
@@ -414,9 +695,9 @@ export function QuestionScratchpad({
           <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
             <button
               type="button"
-              onClick={() => setTool("pen")}
+              onClick={() => activatePen("pen")}
               className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${
-                tool === "pen"
+                tool === "pen" && brush === "pen"
                   ? "bg-violet-600 text-white"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
@@ -427,15 +708,41 @@ export function QuestionScratchpad({
 
             <button
               type="button"
-              onClick={() => setTool("eraser")}
+              onClick={() => activatePen("brush")}
               className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${
-                tool === "eraser"
+                tool === "pen" && brush === "brush"
+                  ? "bg-violet-600 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              <PenLine className="h-4 w-4" />
+              Pincel
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTool("areaEraser")}
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${
+                tool === "areaEraser"
                   ? "bg-violet-600 text-white"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
               <Eraser className="h-4 w-4" />
-              Borracha
+              Borracha livre
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTool("strokeEraser")}
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${
+                tool === "strokeEraser"
+                  ? "bg-violet-600 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              <Eraser className="h-4 w-4" />
+              Apagar traço
             </button>
 
             <div className="mx-1 h-8 w-px bg-slate-200" />
@@ -467,12 +774,25 @@ export function QuestionScratchpad({
               <input
                 type="range"
                 min={2}
-                max={14}
+                max={18}
                 value={size}
                 onChange={(event) => setSize(Number(event.target.value))}
                 className="w-28 accent-violet-600"
               />
               <span className="w-6 text-right text-xs text-slate-500">{size}</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              Borracha
+              <input
+                type="range"
+                min={8}
+                max={70}
+                value={eraserSize}
+                onChange={(event) => setEraserSize(Number(event.target.value))}
+                className="w-28 accent-violet-600"
+              />
+              <span className="w-7 text-right text-xs text-slate-500">{eraserSize}</span>
             </label>
 
             <div className="ml-auto flex flex-wrap gap-2">
@@ -530,7 +850,9 @@ export function QuestionScratchpad({
                     finishStroke();
                   }
                 }}
-                className="block w-full cursor-crosshair rounded-xl bg-white"
+                className={`block w-full rounded-xl bg-white ${
+                  tool === "pen" ? "cursor-crosshair" : "cursor-cell"
+                }`}
                 style={{
                   aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
                   touchAction: "none",
@@ -541,7 +863,7 @@ export function QuestionScratchpad({
 
           <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
-              Dica: use caneta, dedo ou mesa digitalizadora. A área salva automaticamente depois de alguns segundos.
+              A caneta e o pincel usam pressão quando o dispositivo suporta. A borracha livre corta só a tinta; a borracha de traço apaga a linha inteira tocada.
             </p>
 
             <button
