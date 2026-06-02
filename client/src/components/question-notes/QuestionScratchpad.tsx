@@ -10,6 +10,7 @@ import {
   Minimize2,
   Move,
   PenLine,
+  Redo2,
   RotateCcw,
   Save,
   Trash2,
@@ -351,9 +352,13 @@ function drawGridLines(ctx: CanvasRenderingContext2D) {
   ctx.restore();
 }
 
-function drawPaper(ctx: CanvasRenderingContext2D, view: CanvasView) {
+function drawPaper(
+  ctx: CanvasRenderingContext2D,
+  view: CanvasView,
+  pixelRatio = 1
+) {
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -396,9 +401,7 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
   ctx.strokeStyle = stroke.color;
 
   if (stroke.brush === "brush") {
-    ctx.globalAlpha = 0.92;
-    ctx.shadowColor = stroke.color;
-    ctx.shadowBlur = Math.max(0.8, stroke.size * 0.22);
+    ctx.globalAlpha = 0.96;
   }
 
   if (stroke.points.length === 1) {
@@ -476,6 +479,44 @@ function drawEraserPreview(
   ctx.restore();
 }
 
+function getCanvasPixelRatio() {
+  return Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+}
+
+function ensureCanvasBitmap(canvas: HTMLCanvasElement) {
+  const pixelRatio = getCanvasPixelRatio();
+  const nextWidth = Math.round(CANVAS_WIDTH * pixelRatio);
+  const nextHeight = Math.round(CANVAS_HEIGHT * pixelRatio);
+
+  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+  }
+
+  return pixelRatio;
+}
+
+function getReadableErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const maybeError = error as {
+      message?: string;
+      details?: string;
+      hint?: string;
+      code?: string;
+    };
+
+    return [maybeError.message, maybeError.details, maybeError.hint, maybeError.code]
+      .filter(Boolean)
+      .join(" | ");
+  }
+
+  return "Erro desconhecido.";
+}
+
 function getTwoTouchPointers(activePointers: Map<number, PointerSnapshot>) {
   return Array.from(activePointers.values())
     .filter((pointer) => pointer.pointerType === "touch")
@@ -490,7 +531,8 @@ export function QuestionScratchpad({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
-  const autoSaveTimerRef = useRef<number | null>(null);
+  const strokesRef = useRef<ScratchpadStroke[]>([]);
+  const dirtyRef = useRef(false);
   const activePointerIdRef = useRef<number | null>(null);
   const activePointersRef = useRef<Map<number, PointerSnapshot>>(new Map());
   const gestureRef = useRef<GestureState | null>(null);
@@ -508,6 +550,8 @@ export function QuestionScratchpad({
   const [size, setSize] = useState(4);
   const [eraserSize, setEraserSize] = useState(24);
   const [strokes, setStrokes] = useState<ScratchpadStroke[]>([]);
+  const [redoStack, setRedoStack] = useState<ScratchpadStroke[]>([]);
+  const [dirty, setDirty] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -592,17 +636,25 @@ export function QuestionScratchpad({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      const pixelRatio = ensureCanvasBitmap(canvas);
 
-      drawPaper(ctx, viewRef.current);
+      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      drawPaper(ctx, viewRef.current, pixelRatio);
 
       const inkLayer = document.createElement("canvas");
-      inkLayer.width = CANVAS_WIDTH;
-      inkLayer.height = CANVAS_HEIGHT;
+      inkLayer.width = Math.round(CANVAS_WIDTH * pixelRatio);
+      inkLayer.height = Math.round(CANVAS_HEIGHT * pixelRatio);
 
       const inkCtx = inkLayer.getContext("2d");
       if (!inkCtx) return;
+
+      inkCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      inkCtx.imageSmoothingEnabled = true;
+      inkCtx.imageSmoothingQuality = "high";
 
       inkCtx.save();
       applyView(inkCtx, viewRef.current);
@@ -621,7 +673,7 @@ export function QuestionScratchpad({
 
       inkCtx.restore();
 
-      ctx.drawImage(inkLayer, 0, 0);
+      ctx.drawImage(inkLayer, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     },
     [strokes]
   );
@@ -630,8 +682,7 @@ export function QuestionScratchpad({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
+    ensureCanvasBitmap(canvas);
 
     redrawCanvas();
   }, [open, fullscreen, redrawCanvas]);
@@ -642,6 +693,7 @@ export function QuestionScratchpad({
   }, [view, redrawCanvas]);
 
   useEffect(() => {
+    strokesRef.current = strokes;
     redrawCanvas();
   }, [strokes, redrawCanvas]);
 
@@ -655,6 +707,9 @@ export function QuestionScratchpad({
 
       if (!userId || !questionId) {
         setStrokes([]);
+        setRedoStack([]);
+        dirtyRef.current = false;
+        setDirty(false);
         setLoaded(true);
         return;
       }
@@ -665,6 +720,9 @@ export function QuestionScratchpad({
         if (cancelled) return;
 
         setStrokes(Array.isArray(note?.strokes) ? note.strokes : []);
+        setRedoStack([]);
+        dirtyRef.current = false;
+        setDirty(false);
       } catch (loadError) {
         console.error("Erro ao carregar rascunho:", loadError);
 
@@ -706,10 +764,13 @@ export function QuestionScratchpad({
           title,
         });
 
+        dirtyRef.current = false;
+        setDirty(false);
         setStatus("Rascunho salvo.");
       } catch (saveError) {
+        const readableMessage = getReadableErrorMessage(saveError);
         console.error("Erro ao salvar rascunho:", saveError);
-        setError("Não foi possível salvar o rascunho.");
+        setError(`Não foi possível salvar o rascunho. Detalhe: ${readableMessage}`);
       } finally {
         setSaving(false);
       }
@@ -717,23 +778,31 @@ export function QuestionScratchpad({
     [canSave, questionId, strokes, title, userId]
   );
 
+  function markDirty() {
+    dirtyRef.current = true;
+    setDirty(true);
+    setStatus("Alterações não salvas.");
+    setError("");
+  }
+
   useEffect(() => {
-    if (!loaded || !canSave) return;
-
-    if (autoSaveTimerRef.current) {
-      window.clearTimeout(autoSaveTimerRef.current);
-    }
-
-    autoSaveTimerRef.current = window.setTimeout(() => {
-      handleSave(strokes);
-    }, 1800);
-
     return () => {
-      if (autoSaveTimerRef.current) {
-        window.clearTimeout(autoSaveTimerRef.current);
-      }
+      if (!dirtyRef.current || !canSave || !userId) return;
+
+      void saveQuestionNote({
+        userId,
+        questionId,
+        strokes: strokesRef.current,
+        canvasWidth: CANVAS_WIDTH,
+        canvasHeight: CANVAS_HEIGHT,
+        backgroundType: "grid",
+        title,
+      }).catch((saveError) => {
+        console.error("Erro ao salvar rascunho ao sair da questão:", saveError);
+      });
     };
-  }, [strokes, loaded, canSave, handleSave]);
+  }, [canSave, questionId, title, userId]);
+
 
   function updateActivePointer(event: React.PointerEvent<HTMLCanvasElement>) {
     activePointersRef.current.set(event.pointerId, {
@@ -805,11 +874,15 @@ export function QuestionScratchpad({
 
   function applyEraser(path: ScratchpadPoint[]) {
     if (tool === "areaEraser") {
+      setRedoStack([]);
+      markDirty();
       setStrokes((previous) => eraseStrokesByArea(previous, path, eraserSize));
       return;
     }
 
     if (tool === "strokeEraser") {
+      setRedoStack([]);
+      markDirty();
       setStrokes((previous) => eraseWholeStrokes(previous, path, eraserSize));
     }
   }
@@ -1000,6 +1073,8 @@ export function QuestionScratchpad({
       currentStrokeRef.current = null;
       activePointerIdRef.current = null;
       setIsDrawing(false);
+      setRedoStack([]);
+      markDirty();
       setStrokes((previous) => [...previous, finishedStroke]);
       return;
     }
@@ -1026,8 +1101,25 @@ export function QuestionScratchpad({
   }
 
   function handleUndo() {
+    if (strokes.length === 0) return;
+
+    const removedStroke = strokes[strokes.length - 1];
+
     setStatus("");
+    setRedoStack((previous) => [...previous, removedStroke]);
     setStrokes((previous) => previous.slice(0, -1));
+    markDirty();
+  }
+
+  function handleRedo() {
+    if (redoStack.length === 0) return;
+
+    const restoredStroke = redoStack[redoStack.length - 1];
+
+    setStatus("");
+    setRedoStack((previous) => previous.slice(0, -1));
+    setStrokes((previous) => [...previous, restoredStroke]);
+    markDirty();
   }
 
   function handleClear() {
@@ -1036,6 +1128,8 @@ export function QuestionScratchpad({
     if (!shouldClear) return;
 
     setStatus("");
+    setRedoStack([]);
+    markDirty();
     setStrokes([]);
   }
 
@@ -1127,6 +1221,10 @@ export function QuestionScratchpad({
             <span className="hidden items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 md:inline-flex">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               salvando
+            </span>
+          ) : dirty ? (
+            <span className="hidden items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 md:inline-flex">
+              alterações não salvas
             </span>
           ) : status ? (
             <span className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 md:inline-flex">
@@ -1317,6 +1415,16 @@ export function QuestionScratchpad({
 
               <button
                 type="button"
+                onClick={handleRedo}
+                disabled={redoStack.length === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Redo2 className="h-4 w-4" />
+                Refazer
+              </button>
+
+              <button
+                type="button"
                 onClick={handleClear}
                 disabled={strokes.length === 0}
                 className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1373,7 +1481,7 @@ export function QuestionScratchpad({
 
           <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
-              Caneta e pincel agora desenham linhas contínuas com pressão, suavização e velocidade. Dois dedos movem/dão zoom sem criar rabisco gigante. A borracha continua apagando só a tinta.
+              Caneta e pincel usam renderização em alta resolução. Dois dedos movem/dão zoom sem criar rabisco gigante. O rascunho só salva no botão Salvar ou ao sair/trocar de questão.
             </p>
 
             <button
