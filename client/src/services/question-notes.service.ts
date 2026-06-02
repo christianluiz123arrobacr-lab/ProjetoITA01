@@ -14,13 +14,18 @@ export type ScratchpadBackground = "grid" | "dots" | "lined" | "blank" | "cartes
 
 export type ScratchpadStroke = {
   id: string;
-  tool: "pen" | "eraser" | "shape";
+  tool: "pen" | "eraser" | "shape" | "text" | "image" | "meta";
   color: string;
   size: number;
   points: ScratchpadPoint[];
   brush?: ScratchpadBrush;
   shape?: ScratchpadShape;
   opacity?: number;
+  text?: string;
+  imageData?: string;
+  rotation?: number;
+  pageId?: string;
+  payload?: unknown;
 };
 
 export type QuestionNote = {
@@ -132,3 +137,4 @@ export async function deleteQuestionNote({
     throw error;
   }
 }
+
