@@ -48,7 +48,7 @@ type QuestionScratchpadProps = {
 };
 
 type ScratchpadTool = "pen" | "pan" | "areaEraser" | "strokeEraser" | "select" | "shape" | "text";
-type FullscreenPanel = "tools" | "shapes" | "colors" | "adjust" | "pages" | "actions" | null;
+type FullscreenPanel = "tools" | "shapes" | "colors" | "size" | "view" | "selection" | "pages" | "actions" | null;
 type InteractionMode = "none" | "stroke" | "erase" | "pan" | "shape" | "text" | "lasso" | "selectionMove" | "selectionResize" | "selectionRotate";
 
 type CanvasView = {
@@ -3716,6 +3716,12 @@ export function QuestionScratchpad({
     };
   }, [handleSave, selectedIds.length]);
 
+  useEffect(() => {
+    if (selectedIds.length === 0 && fullscreenPanel === "selection") {
+      setFullscreenPanel(null);
+    }
+  }, [fullscreenPanel, selectedIds.length]);
+
   const selectedAverageSize = useMemo(() => {
     if (selectedIds.length === 0) return size;
 
@@ -3903,14 +3909,15 @@ export function QuestionScratchpad({
           </div>
 
           {fullscreen ? (
-            <div className="shrink-0 border-b border-slate-800 bg-[#222222] text-white">
-              <div className="flex items-center gap-2 overflow-x-auto px-3 py-2">
+            <div className="shrink-0 border-b border-slate-800 bg-[#202020] text-white">
+              <div className="flex h-[50px] items-center gap-2 overflow-x-auto px-3">
                 <button
                   type="button"
                   onClick={() => toggleFullscreenPanel("tools")}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-bold transition ${
-                    fullscreenPanel === "tools" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-bold transition ${
+                    fullscreenPanel === "tools" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
                   }`}
+                  title="Ferramentas"
                 >
                   <PenLine className="h-4 w-4" />
                   {getCurrentToolLabel()}
@@ -3918,21 +3925,11 @@ export function QuestionScratchpad({
 
                 <button
                   type="button"
-                  onClick={() => toggleFullscreenPanel("shapes")}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-bold transition ${
-                    fullscreenPanel === "shapes" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
-                  }`}
-                >
-                  {shapeTool === "ellipse" ? <Circle className="h-4 w-4" /> : shapeTool === "triangle" ? <Triangle className="h-4 w-4" /> : shapeTool === "rectangle" ? <Square className="h-4 w-4" /> : shapeTool === "arrow" ? <ArrowRight className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
-                  {getCurrentShapeLabel()}
-                </button>
-
-                <button
-                  type="button"
                   onClick={() => toggleFullscreenPanel("colors")}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-bold transition ${
-                    fullscreenPanel === "colors" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-bold transition ${
+                    fullscreenPanel === "colors" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
                   }`}
+                  title="Cores"
                 >
                   <span className="h-5 w-5 rounded-full ring-2 ring-white/60" style={{ backgroundColor: color }} />
                   Cor
@@ -3940,10 +3937,49 @@ export function QuestionScratchpad({
 
                 <button
                   type="button"
-                  onClick={() => toggleFullscreenPanel("adjust")}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-bold transition ${
-                    fullscreenPanel === "adjust" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                  onClick={() => toggleFullscreenPanel("size")}
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-bold transition ${
+                    fullscreenPanel === "size" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
                   }`}
+                  title="Grossura da caneta e borracha"
+                >
+                  <Minus className="h-4 w-4" />
+                  {tool === "areaEraser" || tool === "strokeEraser" ? `Borracha ${eraserSize}` : `Esp. ${size}`}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => toggleFullscreenPanel("shapes")}
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-bold transition ${
+                    fullscreenPanel === "shapes" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                  }`}
+                  title="Formas"
+                >
+                  {shapeTool === "ellipse" ? <Circle className="h-4 w-4" /> : shapeTool === "triangle" ? <Triangle className="h-4 w-4" /> : shapeTool === "rectangle" ? <Square className="h-4 w-4" /> : shapeTool === "arrow" ? <ArrowRight className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                  {getCurrentShapeLabel()}
+                </button>
+
+                {selectedIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleFullscreenPanel("selection")}
+                    className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-bold transition ${
+                      fullscreenPanel === "selection" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                    }`}
+                    title="Ajustar seleção"
+                  >
+                    <MousePointer2 className="h-4 w-4" />
+                    Seleção {selectedIds.length}
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => toggleFullscreenPanel("view")}
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-bold transition ${
+                    fullscreenPanel === "view" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                  }`}
+                  title="Zoom e fundo"
                 >
                   <Move className="h-4 w-4" />
                   {Math.round(view.zoom * 100)}%
@@ -3952,9 +3988,10 @@ export function QuestionScratchpad({
                 <button
                   type="button"
                   onClick={() => toggleFullscreenPanel("actions")}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-bold transition ${
-                    fullscreenPanel === "actions" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-bold transition ${
+                    fullscreenPanel === "actions" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100 hover:bg-slate-700"
                   }`}
+                  title="Ações"
                 >
                   <Save className="h-4 w-4" />
                   Ações
@@ -3964,7 +4001,8 @@ export function QuestionScratchpad({
                   type="button"
                   onClick={handleUndo}
                   disabled={historyDepth === 0}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-700 disabled:opacity-40"
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 text-sm font-bold text-slate-100 transition hover:bg-slate-700 disabled:opacity-40"
+                  title="Desfazer"
                 >
                   <Undo2 className="h-4 w-4" />
                 </button>
@@ -3973,7 +4011,8 @@ export function QuestionScratchpad({
                   type="button"
                   onClick={handleRedo}
                   disabled={redoDepth === 0}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-700 disabled:opacity-40"
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 text-sm font-bold text-slate-100 transition hover:bg-slate-700 disabled:opacity-40"
+                  title="Refazer"
                 >
                   <Redo2 className="h-4 w-4" />
                 </button>
@@ -3982,7 +4021,7 @@ export function QuestionScratchpad({
                   type="button"
                   onClick={() => handleSave()}
                   disabled={!canSave || saving}
-                  className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-sm font-black text-white transition hover:bg-violet-500 disabled:opacity-50"
+                  className="ml-auto inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-violet-600 px-4 text-sm font-black text-white transition hover:bg-violet-500 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Salvar
@@ -3991,7 +4030,7 @@ export function QuestionScratchpad({
                 <button
                   type="button"
                   onClick={exitScratchpadFullscreen}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-900 transition hover:bg-white"
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-slate-100 px-4 text-sm font-black text-slate-900 transition hover:bg-white"
                 >
                   <Minimize2 className="h-4 w-4" />
                   Sair
@@ -3999,41 +4038,17 @@ export function QuestionScratchpad({
               </div>
 
               {fullscreenPanel ? (
-                <div className="flex items-center gap-2 overflow-x-auto border-t border-slate-700 bg-[#2b2b2b] px-3 py-2">
+                <div className="flex min-h-[44px] items-center gap-2 overflow-x-auto border-t border-slate-700 bg-[#2b2b2b] px-3 py-2">
                   {fullscreenPanel === "tools" ? (
                     <>
-                      {PEN_PRESETS.map((preset) => (
-                        <button
-                          key={preset.label}
-                          type="button"
-                          onClick={() => {
-                            applyPenPreset(preset);
-                            setFullscreenPanel(null);
-                          }}
-                          className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-
-                      <button type="button" onClick={() => { activatePen("pen"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Caneta</button>
-                      <button type="button" onClick={() => { activatePen("brush"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Pincel</button>
-                      <button type="button" onClick={() => { activatePen("highlighter"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Marca-texto</button>
-                      <button type="button" onClick={() => { setTool("select"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-500">Selecionar</button>
-                      <button type="button" onClick={() => { setTool("text"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Texto</button>
-                      <button type="button" onClick={() => { setTool("pan"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Mover</button>
-                      <button type="button" onClick={() => { setTool("areaEraser"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Borracha</button>
-                      <button type="button" onClick={() => { setTool("strokeEraser"); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Traço inteiro</button>
-                    </>
-                  ) : null}
-
-                  {fullscreenPanel === "shapes" ? (
-                    <>
-                      <button type="button" onClick={() => { activateShape("line"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Minus className="h-4 w-4" />Reta</button>
-                      <button type="button" onClick={() => { activateShape("arrow"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><ArrowRight className="h-4 w-4" />Seta</button>
-                      <button type="button" onClick={() => { activateShape("rectangle"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Square className="h-4 w-4" />Retângulo</button>
-                      <button type="button" onClick={() => { activateShape("ellipse"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Circle className="h-4 w-4" />Círculo</button>
-                      <button type="button" onClick={() => { activateShape("triangle"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Triangle className="h-4 w-4" />Triângulo</button>
+                      <button type="button" onClick={() => { activatePen("pen"); setFullscreenPanel("size"); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-500"><PenLine className="h-4 w-4" />Caneta</button>
+                      <button type="button" onClick={() => { activatePen("brush"); setFullscreenPanel("size"); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><PenLine className="h-4 w-4" />Pincel</button>
+                      <button type="button" onClick={() => { activatePen("highlighter"); setFullscreenPanel("size"); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><PenLine className="h-4 w-4" />Marca-texto</button>
+                      <button type="button" onClick={() => { setTool("select"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><MousePointer2 className="h-4 w-4" />Selecionar</button>
+                      <button type="button" onClick={() => { setTool("text"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Type className="h-4 w-4" />Texto</button>
+                      <button type="button" onClick={() => { setTool("pan"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Move className="h-4 w-4" />Mover</button>
+                      <button type="button" onClick={() => { setTool("areaEraser"); setFullscreenPanel("size"); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Eraser className="h-4 w-4" />Borracha</button>
+                      <button type="button" onClick={() => { setTool("strokeEraser"); setFullscreenPanel("size"); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Eraser className="h-4 w-4" />Traço inteiro</button>
                     </>
                   ) : null}
 
@@ -4058,20 +4073,61 @@ export function QuestionScratchpad({
                     </>
                   ) : null}
 
-                  {fullscreenPanel === "adjust" ? (
+                  {fullscreenPanel === "size" ? (
                     <>
-                      <label className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-100">
+                      <label className="flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100">
                         Espessura
-                        <input type="range" min={2} max={18} value={size} onChange={(event) => setSize(Number(event.target.value))} className="w-28 accent-violet-500" />
+                        <input type="range" min={2} max={18} value={size} onChange={(event) => setSize(Number(event.target.value))} className="w-36 accent-violet-500" />
                         <span className="w-6 text-right">{size}</span>
                       </label>
 
-                      <label className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-100">
+                      <label className="flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100">
                         Borracha
-                        <input type="range" min={8} max={70} value={eraserSize} onChange={(event) => setEraserSize(Number(event.target.value))} className="w-28 accent-violet-500" />
+                        <input type="range" min={8} max={70} value={eraserSize} onChange={(event) => setEraserSize(Number(event.target.value))} className="w-36 accent-violet-500" />
                         <span className="w-7 text-right">{eraserSize}</span>
                       </label>
+                    </>
+                  ) : null}
 
+                  {fullscreenPanel === "shapes" ? (
+                    <>
+                      <button type="button" onClick={() => { activateShape("line"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Minus className="h-4 w-4" />Reta</button>
+                      <button type="button" onClick={() => { activateShape("arrow"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><ArrowRight className="h-4 w-4" />Seta</button>
+                      <button type="button" onClick={() => { activateShape("rectangle"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Square className="h-4 w-4" />Retângulo</button>
+                      <button type="button" onClick={() => { activateShape("ellipse"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Circle className="h-4 w-4" />Círculo</button>
+                      <button type="button" onClick={() => { activateShape("triangle"); setFullscreenPanel(null); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700"><Triangle className="h-4 w-4" />Triângulo</button>
+                    </>
+                  ) : null}
+
+                  {fullscreenPanel === "selection" ? (
+                    <>
+                      {selectedIds.length === 1 && strokes.find((stroke) => stroke.id === selectedIds[0])?.tool === "text" ? (
+                        <button type="button" onClick={editSelectedText} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Editar texto</button>
+                      ) : null}
+                      <button type="button" onClick={() => scaleSelection(1.15)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Aumentar</button>
+                      <button type="button" onClick={() => scaleSelection(0.87)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Diminuir</button>
+                      <label className="flex shrink-0 items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100">
+                        Grossura
+                        <input type="range" min={1} max={40} value={selectedAverageSize} onChange={(event) => setSelectionThickness(Number(event.target.value))} className="w-28 accent-violet-500" />
+                        <span className="w-6 text-right">{selectedAverageSize}</span>
+                      </label>
+                      <button type="button" onClick={straightenSelection} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Endireitar</button>
+                      <button type="button" onClick={autoPerfectSelection} className="shrink-0 rounded-full bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-500">Forma perfeita</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("line")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Reta</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("arrow")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Seta</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("rectangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Retângulo</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("ellipse")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Círculo</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("triangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Triângulo</button>
+                      <button type="button" onClick={() => rotateSelectionBy(-Math.PI / 18)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Girar -</button>
+                      <button type="button" onClick={() => rotateSelectionBy(Math.PI / 18)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Girar +</button>
+                      <button type="button" onClick={duplicateSelection} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Duplicar</button>
+                      <button type="button" onClick={deleteSelection} className="shrink-0 rounded-full bg-red-950 px-3 py-2 text-xs font-black text-red-200 hover:bg-red-900">Excluir</button>
+                      <button type="button" onClick={() => { setSelectedIds([]); setFullscreenPanel(null); }} className="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-xs font-black text-slate-900 hover:bg-white">Tirar seleção</button>
+                    </>
+                  ) : null}
+
+                  {fullscreenPanel === "view" ? (
+                    <>
                       <select value={backgroundType} onChange={(event) => handleBackgroundChange(event.target.value as ScratchpadBackground)} className="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-black text-slate-100">
                         {BACKGROUNDS.map((item) => (
                           <option key={item.value} value={item.value}>{item.label}</option>
@@ -4081,6 +4137,7 @@ export function QuestionScratchpad({
                       <button type="button" onClick={() => handleZoomButton("out")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Zoom -</button>
                       <button type="button" onClick={() => handleZoomButton("in")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Zoom +</button>
                       <button type="button" onClick={resetZoom} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">100%</button>
+                      <span className="shrink-0 rounded-full bg-slate-950 px-3 py-2 text-xs font-black text-slate-300">{getBackgroundLabel()}</span>
                     </>
                   ) : null}
 
@@ -4268,8 +4325,8 @@ export function QuestionScratchpad({
             </ToolbarGroup>
           </div>
 
-          {selectedIds.length > 0 ? (
-            <div className={`${fullscreen ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-900 px-3 py-2 text-sm" : "mb-4 flex-wrap rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm"} flex shrink-0 items-center gap-2`}>
+          {selectedIds.length > 0 && !fullscreen ? (
+            <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm">
               <span className="font-black text-violet-900">
                 {selectedIds.length} item(ns) selecionado(s)
               </span>
