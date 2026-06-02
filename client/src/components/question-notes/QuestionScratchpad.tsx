@@ -1435,20 +1435,35 @@ function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
   }
 
   const aspectLooksCircular = aspect > 0.72 && aspect < 1.38;
+
+  /*
+   * Triângulo precisa ser MUITO evidente.
+   *
+   * A pontuação triangular tende a ficar artificialmente boa para círculos e retângulos,
+   * porque qualquer forma fechada acaba tendo alguns pontos perto das três arestas de um
+   * triângulo imaginário. Se a gente deixa o triângulo competir de igual para igual,
+   * tudo vira triângulo. Sim, a geometria resolveu fazer cosplay de bug.
+   */
   const triangleClearlyBetter =
-    triangleScore < rectangleScore * 0.82 &&
-    triangleScore < ellipseScore * 0.82;
-  const ellipseClearlyBetter = ellipseScore < rectangleScore * 0.78 && ellipseScore < triangleScore * 0.92;
-  const rectangleClearlyBetter = rectangleScore < ellipseScore * 0.74 && rectangleScore < triangleScore * 0.88;
+    triangleScore < rectangleScore * 0.52 &&
+    triangleScore < ellipseScore * 0.52 &&
+    aspect > 0.45 &&
+    aspect < 2.15;
 
-  if (triangleClearlyBetter) return "triangle";
+  const ellipseClearlyBetter =
+    ellipseScore <= rectangleScore * 0.95 &&
+    (aspectLooksCircular || ellipseScore < triangleScore * 0.7);
+
+  const rectangleClearlyBetter =
+    rectangleScore < ellipseScore * 0.9 &&
+    rectangleScore < triangleScore * 0.82;
+
+  if (ellipseClearlyBetter) return "ellipse";
   if (rectangleClearlyBetter) return "rectangle";
-  if (ellipseClearlyBetter || aspectLooksCircular) return "ellipse";
+  if (triangleClearlyBetter) return "triangle";
 
-  const best = Math.min(ellipseScore, rectangleScore, triangleScore);
-  if (best === triangleScore) return "triangle";
-  if (best === rectangleScore) return "rectangle";
-  return "ellipse";
+  if (aspectLooksCircular) return "ellipse";
+  return rectangleScore <= ellipseScore ? "rectangle" : "ellipse";
 }
 
 function shouldAutoPerfectStroke(stroke: ScratchpadStroke, pointerUpTime?: number) {
@@ -1465,7 +1480,7 @@ function shouldAutoPerfectStroke(stroke: ScratchpadStroke, pointerUpTime?: numbe
   const lastMoveTime = last.time ?? first.time ?? 0;
   const holdTime = typeof pointerUpTime === "number" && lastMoveTime > 0 ? pointerUpTime - lastMoveTime : 0;
   const looksLikeLine = metrics.straightness < 0.05 && metrics.closedness > 0.45;
-  const looksLikeClosedShape = metrics.closedness < 0.34 && metrics.diagonal > 45;
+  const looksLikeClosedShape = metrics.closedness < 0.28 && metrics.diagonal > 45;
 
   return holdTime >= AUTO_SHAPE_HOLD_MS && (looksLikeLine || looksLikeClosedShape);
 }
