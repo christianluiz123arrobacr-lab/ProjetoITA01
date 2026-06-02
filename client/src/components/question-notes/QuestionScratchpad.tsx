@@ -6,11 +6,16 @@ import {
   ChevronUp,
   Eraser,
   Loader2,
+  Maximize2,
+  Minimize2,
+  Move,
   PenLine,
   RotateCcw,
   Save,
   Trash2,
   Undo2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import {
   getQuestionNote,
@@ -28,13 +33,44 @@ type QuestionScratchpadProps = {
 
 type ScratchpadTool = "pen" | "areaEraser" | "strokeEraser";
 
+type CanvasView = {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+type PointerSnapshot = {
+  pointerId: number;
+  pointerType: string;
+  clientX: number;
+  clientY: number;
+};
+
+type GestureState = {
+  initialDistance: number;
+  initialZoom: number;
+  initialCenterLogical: { x: number; y: number };
+};
+
 type EraserPreview = {
   point: ScratchpadPoint;
   radius: number;
 };
 
+type NativePointerLike = {
+  clientX: number;
+  clientY: number;
+  pressure?: number;
+  pointerType?: string;
+  timeStamp?: number;
+};
+
 const CANVAS_WIDTH = 1200;
 const CANVAS_HEIGHT = 700;
+const MIN_ZOOM = 0.75;
+const MAX_ZOOM = 3.25;
+const PAN_MARGIN = 90;
+const PALM_REJECTION_MS = 900;
 
 const COLORS = [
   "#0f172a",
@@ -55,6 +91,40 @@ function clamp(value: number, min: number, max: number) {
 
 function distance(a: ScratchpadPoint, b: ScratchpadPoint) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function distanceXY(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function midpoint(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  };
+}
+
+function clampView(view: CanvasView): CanvasView {
+  const zoom = clamp(view.zoom, MIN_ZOOM, MAX_ZOOM);
+
+  if (zoom <= 1) {
+    return {
+      zoom,
+      offsetX: 0,
+      offsetY: 0,
+    };
+  }
+
+  const minX = CANVAS_WIDTH - CANVAS_WIDTH * zoom - PAN_MARGIN;
+  const maxX = PAN_MARGIN;
+  const minY = CANVAS_HEIGHT - CANVAS_HEIGHT * zoom - PAN_MARGIN;
+  const maxY = PAN_MARGIN;
+
+  return {
+    zoom,
+    offsetX: clamp(view.offsetX, minX, maxX),
+    offsetY: clamp(view.offsetY, minY, maxY),
+  };
 }
 
 function distancePointToSegment(
@@ -137,11 +207,13 @@ function splitStrokeByEraser(
 
   if (!changed) return [stroke];
 
-  return chunks.map((points, index) => ({
-    ...stroke,
-    id: `${stroke.id}-cut-${index}-${createStrokeId()}`,
-    points,
-  }));
+  return chunks
+    .filter((points) => points.length > 0)
+    .map((points, index) => ({
+      ...stroke,
+      id: `${stroke.id}-cut-${index}-${createStrokeId()}`,
+      points,
+    }));
 }
 
 function eraseStrokesByArea(
@@ -163,34 +235,80 @@ function eraseWholeStrokes(
   });
 }
 
-function normalizePressure(event: React.PointerEvent<HTMLCanvasElement>) {
-  if (event.pointerType === "mouse") return 0.65;
+function normalizePressure(pressure: number | undefined, pointerType: string) {
+  if (pointerType === "mouse") return 0.65;
 
-  if (typeof event.pressure !== "number" || event.pressure <= 0) {
-    return 0.5;
+  if (typeof pressure !== "number" || pressure <= 0) {
+    return pointerType === "touch" ? 0.55 : 0.5;
   }
 
-  return clamp(event.pressure, 0.08, 1);
+  return clamp(pressure, 0.08, 1);
 }
 
-function getPointWidth(
-  point: ScratchpadPoint,
-  stroke: ScratchpadStroke
-) {
+function getFallbackWidth(point: ScratchpadPoint, stroke: ScratchpadStroke) {
   const pressure = clamp(point.pressure ?? 0.5, 0.08, 1);
 
   if (stroke.brush === "brush") {
-    return clamp(stroke.size * (0.2 + pressure * 1.55), 0.6, stroke.size * 1.9);
+    return clamp(stroke.size * (0.2 + pressure * 1.55), 0.7, stroke.size * 1.9);
   }
 
-  return clamp(stroke.size * (0.45 + pressure * 0.85), 0.6, stroke.size * 1.35);
+  return clamp(stroke.size * (0.45 + pressure * 0.85), 0.7, stroke.size * 1.35);
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D) {
-  ctx.save();
+function getPointWidth(point: ScratchpadPoint, stroke: ScratchpadStroke) {
+  if (typeof point.width === "number" && Number.isFinite(point.width)) {
+    return clamp(point.width, 0.6, stroke.size * 2.2);
+  }
 
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  return getFallbackWidth(point, stroke);
+}
+
+function calculatePointWidth({
+  point,
+  previousPoint,
+  size,
+  brush,
+}: {
+  point: ScratchpadPoint;
+  previousPoint?: ScratchpadPoint;
+  size: number;
+  brush: ScratchpadBrush;
+}) {
+  const pressure = clamp(point.pressure ?? 0.5, 0.08, 1);
+
+  const pressureFactor =
+    brush === "brush" ? 0.18 + pressure * 1.7 : 0.46 + pressure * 0.9;
+
+  let speedFactor = 1;
+
+  if (previousPoint?.time && point.time && point.time > previousPoint.time) {
+    const distanceBetweenPoints = distance(point, previousPoint);
+    const deltaTime = point.time - previousPoint.time;
+    const velocity = distanceBetweenPoints / Math.max(deltaTime, 1);
+
+    speedFactor = clamp(1.12 - velocity * 0.35, 0.62, 1.12);
+  }
+
+  const rawWidth = clamp(size * pressureFactor * speedFactor, 0.65, size * 2.05);
+
+  if (typeof previousPoint?.width === "number") {
+    return previousPoint.width * 0.72 + rawWidth * 0.28;
+  }
+
+  return rawWidth;
+}
+
+function shouldAppendPoint(
+  previousPoint: ScratchpadPoint | undefined,
+  nextPoint: ScratchpadPoint
+) {
+  if (!previousPoint) return true;
+
+  return distance(previousPoint, nextPoint) >= 0.75;
+}
+
+function drawGridLines(ctx: CanvasRenderingContext2D) {
+  ctx.save();
 
   ctx.strokeStyle = "#e2e8f0";
   ctx.lineWidth = 1;
@@ -233,6 +351,27 @@ function drawGrid(ctx: CanvasRenderingContext2D) {
   ctx.restore();
 }
 
+function drawPaper(ctx: CanvasRenderingContext2D, view: CanvasView) {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  ctx.translate(view.offsetX, view.offsetY);
+  ctx.scale(view.zoom, view.zoom);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  drawGridLines(ctx);
+
+  ctx.restore();
+}
+
+function applyView(ctx: CanvasRenderingContext2D, view: CanvasView) {
+  ctx.translate(view.offsetX, view.offsetY);
+  ctx.scale(view.zoom, view.zoom);
+}
+
 function drawRoundDot(
   ctx: CanvasRenderingContext2D,
   point: ScratchpadPoint,
@@ -259,7 +398,7 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
   if (stroke.brush === "brush") {
     ctx.globalAlpha = 0.92;
     ctx.shadowColor = stroke.color;
-    ctx.shadowBlur = Math.max(0.8, stroke.size * 0.35);
+    ctx.shadowBlur = Math.max(0.8, stroke.size * 0.22);
   }
 
   if (stroke.points.length === 1) {
@@ -268,23 +407,15 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
     return;
   }
 
-  let previous = firstPoint;
-
   for (let i = 1; i < stroke.points.length; i += 1) {
+    const previous = stroke.points[i - 1];
     const current = stroke.points[i];
-    const midpoint = {
-      x: (previous.x + current.x) / 2,
-      y: (previous.y + current.y) / 2,
-      pressure: ((previous.pressure ?? 0.5) + (current.pressure ?? 0.5)) / 2,
-    };
 
     ctx.beginPath();
     ctx.moveTo(previous.x, previous.y);
-    ctx.quadraticCurveTo(previous.x, previous.y, midpoint.x, midpoint.y);
+    ctx.lineTo(current.x, current.y);
     ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke)) / 2;
     ctx.stroke();
-
-    previous = current;
   }
 
   ctx.restore();
@@ -345,6 +476,12 @@ function drawEraserPreview(
   ctx.restore();
 }
 
+function getTwoTouchPointers(activePointers: Map<number, PointerSnapshot>) {
+  return Array.from(activePointers.values())
+    .filter((pointer) => pointer.pointerType === "touch")
+    .slice(0, 2);
+}
+
 export function QuestionScratchpad({
   userId,
   questionId,
@@ -354,6 +491,15 @@ export function QuestionScratchpad({
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
   const autoSaveTimerRef = useRef<number | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const activePointersRef = useRef<Map<number, PointerSnapshot>>(new Map());
+  const gestureRef = useRef<GestureState | null>(null);
+  const lastPenInteractionAtRef = useRef(0);
+  const viewRef = useRef<CanvasView>({
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+  });
 
   const [open, setOpen] = useState(false);
   const [tool, setTool] = useState<ScratchpadTool>("pen");
@@ -367,12 +513,76 @@ export function QuestionScratchpad({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [view, setView] = useState<CanvasView>(viewRef.current);
 
   const canSave = Boolean(userId && questionId);
 
   const title = useMemo(() => {
     return questionCode ? `Rascunho da questão ${questionCode}` : "Rascunho da questão";
   }, [questionCode]);
+
+  const updateView = useCallback((nextView: CanvasView | ((previous: CanvasView) => CanvasView)) => {
+    setView((previous) => {
+      const rawNext = typeof nextView === "function" ? nextView(previous) : nextView;
+      const clamped = clampView(rawNext);
+      viewRef.current = clamped;
+      return clamped;
+    });
+  }, []);
+
+  const getRawCanvasPoint = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      x: ((clientX - rect.left) / rect.width) * CANVAS_WIDTH,
+      y: ((clientY - rect.top) / rect.height) * CANVAS_HEIGHT,
+    };
+  }, []);
+
+  const getCanvasPointFromNative = useCallback(
+    (nativeEvent: NativePointerLike, pointerTypeFallback: string): ScratchpadPoint => {
+      const rawPoint = getRawCanvasPoint(nativeEvent.clientX, nativeEvent.clientY);
+      const currentView = viewRef.current;
+
+      return {
+        x: (rawPoint.x - currentView.offsetX) / currentView.zoom,
+        y: (rawPoint.y - currentView.offsetY) / currentView.zoom,
+        pressure: normalizePressure(
+          nativeEvent.pressure,
+          nativeEvent.pointerType ?? pointerTypeFallback
+        ),
+        time: nativeEvent.timeStamp ?? performance.now(),
+      };
+    },
+    [getRawCanvasPoint]
+  );
+
+  const getCanvasPointsFromEvent = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      const nativeEvent = event.nativeEvent as PointerEvent & {
+        getCoalescedEvents?: () => PointerEvent[];
+      };
+
+      const coalescedEvents =
+        typeof nativeEvent.getCoalescedEvents === "function"
+          ? nativeEvent.getCoalescedEvents()
+          : [];
+
+      const sourceEvents = coalescedEvents.length > 0 ? coalescedEvents : [nativeEvent];
+
+      return sourceEvents.map((sourceEvent) =>
+        getCanvasPointFromNative(sourceEvent, event.pointerType)
+      );
+    },
+    [getCanvasPointFromNative]
+  );
 
   const redrawCanvas = useCallback(
     (extraStroke?: ScratchpadStroke | null, eraserPreview?: EraserPreview | null) => {
@@ -382,7 +592,10 @@ export function QuestionScratchpad({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      drawGrid(ctx);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      drawPaper(ctx, viewRef.current);
 
       const inkLayer = document.createElement("canvas");
       inkLayer.width = CANVAS_WIDTH;
@@ -390,6 +603,9 @@ export function QuestionScratchpad({
 
       const inkCtx = inkLayer.getContext("2d");
       if (!inkCtx) return;
+
+      inkCtx.save();
+      applyView(inkCtx, viewRef.current);
 
       for (const stroke of strokes) {
         drawStroke(inkCtx, stroke);
@@ -399,11 +615,13 @@ export function QuestionScratchpad({
         drawStroke(inkCtx, extraStroke);
       }
 
-      ctx.drawImage(inkLayer, 0, 0);
-
       if (eraserPreview) {
-        drawEraserPreview(ctx, eraserPreview);
+        drawEraserPreview(inkCtx, eraserPreview);
       }
+
+      inkCtx.restore();
+
+      ctx.drawImage(inkLayer, 0, 0);
     },
     [strokes]
   );
@@ -416,7 +634,12 @@ export function QuestionScratchpad({
     canvas.height = CANVAS_HEIGHT;
 
     redrawCanvas();
-  }, [open, redrawCanvas]);
+  }, [open, fullscreen, redrawCanvas]);
+
+  useEffect(() => {
+    viewRef.current = view;
+    redrawCanvas();
+  }, [view, redrawCanvas]);
 
   useEffect(() => {
     redrawCanvas();
@@ -512,19 +735,72 @@ export function QuestionScratchpad({
     };
   }, [strokes, loaded, canSave, handleSave]);
 
-  function getCanvasPoint(event: React.PointerEvent<HTMLCanvasElement>): ScratchpadPoint {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return { x: 0, y: 0, pressure: normalizePressure(event) };
-    }
+  function updateActivePointer(event: React.PointerEvent<HTMLCanvasElement>) {
+    activePointersRef.current.set(event.pointerId, {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+  }
 
-    const rect = canvas.getBoundingClientRect();
+  function removeActivePointer(event: React.PointerEvent<HTMLCanvasElement>) {
+    activePointersRef.current.delete(event.pointerId);
+  }
 
-    return {
-      x: ((event.clientX - rect.left) / rect.width) * CANVAS_WIDTH,
-      y: ((event.clientY - rect.top) / rect.height) * CANVAS_HEIGHT,
-      pressure: normalizePressure(event),
+  function cancelCurrentInkInteraction() {
+    currentStrokeRef.current = null;
+    eraserPathRef.current = [];
+    activePointerIdRef.current = null;
+    setIsDrawing(false);
+    redrawCanvas();
+  }
+
+  function startTwoFingerGesture() {
+    const touchPointers = getTwoTouchPointers(activePointersRef.current);
+
+    if (touchPointers.length < 2) return false;
+
+    const firstRawPoint = getRawCanvasPoint(touchPointers[0].clientX, touchPointers[0].clientY);
+    const secondRawPoint = getRawCanvasPoint(touchPointers[1].clientX, touchPointers[1].clientY);
+    const centerRaw = midpoint(firstRawPoint, secondRawPoint);
+    const currentView = viewRef.current;
+
+    gestureRef.current = {
+      initialDistance: Math.max(distanceXY(firstRawPoint, secondRawPoint), 1),
+      initialZoom: currentView.zoom,
+      initialCenterLogical: {
+        x: (centerRaw.x - currentView.offsetX) / currentView.zoom,
+        y: (centerRaw.y - currentView.offsetY) / currentView.zoom,
+      },
     };
+
+    cancelCurrentInkInteraction();
+    return true;
+  }
+
+  function updateTwoFingerGesture() {
+    const gesture = gestureRef.current;
+    const touchPointers = getTwoTouchPointers(activePointersRef.current);
+
+    if (!gesture || touchPointers.length < 2) return;
+
+    const firstRawPoint = getRawCanvasPoint(touchPointers[0].clientX, touchPointers[0].clientY);
+    const secondRawPoint = getRawCanvasPoint(touchPointers[1].clientX, touchPointers[1].clientY);
+    const currentCenterRaw = midpoint(firstRawPoint, secondRawPoint);
+    const currentDistance = Math.max(distanceXY(firstRawPoint, secondRawPoint), 1);
+
+    const nextZoom = clamp(
+      gesture.initialZoom * (currentDistance / gesture.initialDistance),
+      MIN_ZOOM,
+      MAX_ZOOM
+    );
+
+    updateView({
+      zoom: nextZoom,
+      offsetX: currentCenterRaw.x - gesture.initialCenterLogical.x * nextZoom,
+      offsetY: currentCenterRaw.y - gesture.initialCenterLogical.y * nextZoom,
+    });
   }
 
   function applyEraser(path: ScratchpadPoint[]) {
@@ -538,27 +814,97 @@ export function QuestionScratchpad({
     }
   }
 
+  function appendPointsToCurrentStroke(points: ScratchpadPoint[]) {
+    if (!currentStrokeRef.current) return;
+
+    const nextPoints = [...currentStrokeRef.current.points];
+
+    for (const rawPoint of points) {
+      const previousPoint = nextPoints[nextPoints.length - 1];
+
+      if (!shouldAppendPoint(previousPoint, rawPoint)) {
+        continue;
+      }
+
+      const pointWithWidth = {
+        ...rawPoint,
+        width: calculatePointWidth({
+          point: rawPoint,
+          previousPoint,
+          size: currentStrokeRef.current.size,
+          brush: currentStrokeRef.current.brush ?? "pen",
+        }),
+      };
+
+      nextPoints.push(pointWithWidth);
+    }
+
+    currentStrokeRef.current = {
+      ...currentStrokeRef.current,
+      points: nextPoints,
+    };
+  }
+
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     event.preventDefault();
 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    canvas.setPointerCapture(event.pointerId);
+    updateActivePointer(event);
 
-    const point = getCanvasPoint(event);
+    if (event.pointerType === "pen") {
+      lastPenInteractionAtRef.current = Date.now();
+    }
 
+    const isPalmAfterPen =
+      event.pointerType === "touch" &&
+      Date.now() - lastPenInteractionAtRef.current < PALM_REJECTION_MS;
+
+    if (isPalmAfterPen) {
+      return;
+    }
+
+    const hasTwoTouchPointers = getTwoTouchPointers(activePointersRef.current).length >= 2;
+
+    if (hasTwoTouchPointers) {
+      startTwoFingerGesture();
+      return;
+    }
+
+    if (gestureRef.current || activePointerIdRef.current !== null) {
+      return;
+    }
+
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // Alguns navegadores reclamam quando o ponteiro já foi solto. Drama de API web.
+    }
+
+    const point = getCanvasPointFromNative(event.nativeEvent, event.pointerType);
+
+    activePointerIdRef.current = event.pointerId;
     setIsDrawing(true);
     setStatus("");
 
     if (tool === "pen") {
+      const pointWithWidth = {
+        ...point,
+        width: calculatePointWidth({
+          point,
+          size,
+          brush,
+        }),
+      };
+
       const stroke: ScratchpadStroke = {
         id: createStrokeId(),
         tool: "pen",
         color,
         size,
         brush,
-        points: [point],
+        points: [pointWithWidth],
       };
 
       currentStrokeRef.current = stroke;
@@ -573,45 +919,110 @@ export function QuestionScratchpad({
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!isDrawing) return;
+    updateActivePointer(event);
+
+    if (event.pointerType === "pen") {
+      lastPenInteractionAtRef.current = Date.now();
+    }
+
+    if (gestureRef.current) {
+      event.preventDefault();
+      updateTwoFingerGesture();
+      return;
+    }
+
+    const hasTwoTouchPointers = getTwoTouchPointers(activePointersRef.current).length >= 2;
+
+    if (hasTwoTouchPointers) {
+      event.preventDefault();
+      startTwoFingerGesture();
+      return;
+    }
+
+    if (!isDrawing || event.pointerId !== activePointerIdRef.current) return;
 
     event.preventDefault();
 
-    const point = getCanvasPoint(event);
+    const points = getCanvasPointsFromEvent(event);
 
     if (tool === "pen" && currentStrokeRef.current) {
-      currentStrokeRef.current = {
-        ...currentStrokeRef.current,
-        points: [...currentStrokeRef.current.points, point],
-      };
-
+      appendPointsToCurrentStroke(points);
       redrawCanvas(currentStrokeRef.current);
       return;
     }
 
     if (tool === "areaEraser" || tool === "strokeEraser") {
-      eraserPathRef.current = [...eraserPathRef.current, point];
+      const nextPoints = points.filter((point) =>
+        shouldAppendPoint(eraserPathRef.current[eraserPathRef.current.length - 1], point)
+      );
+
+      if (nextPoints.length === 0) return;
+
+      eraserPathRef.current = [...eraserPathRef.current, ...nextPoints];
       applyEraser(eraserPathRef.current);
-      redrawCanvas(null, { point, radius: eraserSize });
+
+      const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
+      redrawCanvas(null, { point: lastPoint, radius: eraserSize });
     }
   }
 
   function finishStroke(event?: React.PointerEvent<HTMLCanvasElement>) {
     if (event) {
       event.preventDefault();
+      removeActivePointer(event);
+
+      const canvas = canvasRef.current;
+
+      if (canvas) {
+        try {
+          canvas.releasePointerCapture(event.pointerId);
+        } catch {
+          // Se o navegador já soltou a captura, vida que segue.
+        }
+      }
+    }
+
+    if (gestureRef.current) {
+      if (getTwoTouchPointers(activePointersRef.current).length < 2) {
+        gestureRef.current = null;
+      }
+
+      return;
+    }
+
+    if (event && activePointerIdRef.current !== null && event.pointerId !== activePointerIdRef.current) {
+      return;
     }
 
     if (currentStrokeRef.current) {
       const finishedStroke = currentStrokeRef.current;
 
       currentStrokeRef.current = null;
+      activePointerIdRef.current = null;
       setIsDrawing(false);
       setStrokes((previous) => [...previous, finishedStroke]);
       return;
     }
 
     eraserPathRef.current = [];
+    activePointerIdRef.current = null;
     setIsDrawing(false);
+  }
+
+  function handlePointerCancel(event: React.PointerEvent<HTMLCanvasElement>) {
+    removeActivePointer(event);
+
+    if (event.pointerId === activePointerIdRef.current) {
+      currentStrokeRef.current = null;
+      eraserPathRef.current = [];
+      activePointerIdRef.current = null;
+      setIsDrawing(false);
+      redrawCanvas();
+    }
+
+    if (getTwoTouchPointers(activePointersRef.current).length < 2) {
+      gestureRef.current = null;
+    }
   }
 
   function handleUndo() {
@@ -633,12 +1044,70 @@ export function QuestionScratchpad({
     setBrush(nextBrush);
   }
 
+  function resetZoom() {
+    updateView({
+      zoom: 1,
+      offsetX: 0,
+      offsetY: 0,
+    });
+  }
+
+  function zoomAtCanvasPoint(rawPoint: { x: number; y: number }, nextZoom: number) {
+    const currentView = viewRef.current;
+    const logicalPoint = {
+      x: (rawPoint.x - currentView.offsetX) / currentView.zoom,
+      y: (rawPoint.y - currentView.offsetY) / currentView.zoom,
+    };
+
+    updateView({
+      zoom: nextZoom,
+      offsetX: rawPoint.x - logicalPoint.x * nextZoom,
+      offsetY: rawPoint.y - logicalPoint.y * nextZoom,
+    });
+  }
+
+  function handleZoomButton(direction: "in" | "out") {
+    const currentView = viewRef.current;
+    const factor = direction === "in" ? 1.18 : 1 / 1.18;
+    const nextZoom = clamp(currentView.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+
+    zoomAtCanvasPoint(
+      {
+        x: CANVAS_WIDTH / 2,
+        y: CANVAS_HEIGHT / 2,
+      },
+      nextZoom
+    );
+  }
+
+  function handleWheel(event: React.WheelEvent<HTMLCanvasElement>) {
+    if (!event.ctrlKey && !event.metaKey) return;
+
+    event.preventDefault();
+
+    const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+    const nextZoom = clamp(viewRef.current.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    const rawPoint = getRawCanvasPoint(event.clientX, event.clientY);
+
+    zoomAtCanvasPoint(rawPoint, nextZoom);
+  }
+
+  const containerClassName = fullscreen
+    ? "fixed inset-0 z-[80] flex flex-col overflow-hidden bg-white p-3 md:p-5"
+    : "mb-6 overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 shadow-sm";
+
+  const canvasWrapperClassName = fullscreen
+    ? "flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-2 shadow-inner"
+    : "rounded-2xl border border-slate-200 bg-white p-2 shadow-inner";
+
   return (
-    <div className="mb-6 overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 shadow-sm">
+    <div className={containerClassName}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/60 md:px-6"
+        className={`flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/60 md:px-6 ${
+          fullscreen ? "rounded-2xl border border-violet-100 bg-violet-50" : ""
+        }`}
       >
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-sm">
@@ -648,7 +1117,7 @@ export function QuestionScratchpad({
           <div>
             <p className="font-black text-slate-950">Rascunho manuscrito</p>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Abra uma área para resolver a questão com mouse, dedo, caneta do tablet ou mesa digitalizadora.
+              Escreva com mouse, dedo, caneta do tablet ou mesa digitalizadora. Use dois dedos para mover e dar zoom.
             </p>
           </div>
         </div>
@@ -675,7 +1144,7 @@ export function QuestionScratchpad({
       </button>
 
       {open ? (
-        <div className="border-t border-violet-100 p-4 md:p-5">
+        <div className={`border-t border-violet-100 p-4 md:p-5 ${fullscreen ? "flex min-h-0 flex-1 flex-col" : ""}`}>
           {!userId ? (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -798,6 +1267,46 @@ export function QuestionScratchpad({
             <div className="ml-auto flex flex-wrap gap-2">
               <button
                 type="button"
+                onClick={() => handleZoomButton("out")}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+              >
+                <ZoomOut className="h-4 w-4" />
+                Zoom
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleZoomButton("in")}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+              >
+                <ZoomIn className="h-4 w-4" />
+                {Math.round(view.zoom * 100)}%
+              </button>
+
+              <button
+                type="button"
+                onClick={resetZoom}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+              >
+                <Move className="h-4 w-4" />
+                100%
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFullscreen((value) => !value)}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+              >
+                {fullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
+                {fullscreen ? "Sair" : "Tela cheia"}
+              </button>
+
+              <button
+                type="button"
                 onClick={handleUndo}
                 disabled={strokes.length === 0}
                 className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
@@ -832,7 +1341,7 @@ export function QuestionScratchpad({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-inner">
+          <div className={canvasWrapperClassName}>
             {!loaded ? (
               <div className="flex min-h-[280px] items-center justify-center gap-3 text-sm font-bold text-slate-500">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -844,15 +1353,16 @@ export function QuestionScratchpad({
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={finishStroke}
-                onPointerCancel={finishStroke}
-                onPointerLeave={() => {
-                  if (isDrawing) {
-                    finishStroke();
+                onPointerCancel={handlePointerCancel}
+                onPointerLeave={(event) => {
+                  if (isDrawing && event.pointerId === activePointerIdRef.current) {
+                    finishStroke(event);
                   }
                 }}
+                onWheel={handleWheel}
                 className={`block w-full rounded-xl bg-white ${
                   tool === "pen" ? "cursor-crosshair" : "cursor-cell"
-                }`}
+                } ${fullscreen ? "max-h-full flex-1 object-contain" : ""}`}
                 style={{
                   aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
                   touchAction: "none",
@@ -863,7 +1373,7 @@ export function QuestionScratchpad({
 
           <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
-              A caneta e o pincel usam pressão quando o dispositivo suporta. A borracha livre corta só a tinta; a borracha de traço apaga a linha inteira tocada.
+              Caneta e pincel agora desenham linhas contínuas com pressão, suavização e velocidade. Dois dedos movem/dão zoom sem criar rabisco gigante. A borracha continua apagando só a tinta.
             </p>
 
             <button
