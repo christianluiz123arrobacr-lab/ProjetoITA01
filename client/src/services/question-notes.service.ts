@@ -4,6 +4,8 @@ export type ScratchpadPoint = {
   x: number;
   y: number;
   pressure?: number;
+  width?: number;
+  time?: number;
 };
 
 export type ScratchpadBrush = "pen" | "brush";
@@ -68,23 +70,37 @@ export async function saveQuestionNote({
   backgroundType?: string;
   title?: string | null;
 }) {
+  const payload = {
+    user_id: userId,
+    question_id: questionId,
+    strokes,
+    canvas_width: canvasWidth,
+    canvas_height: canvasHeight,
+    background_type: backgroundType,
+    title: title ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const existing = await getQuestionNote({ userId, questionId });
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("question_notes")
+      .update(payload)
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data as QuestionNote;
+  }
+
   const { data, error } = await supabase
     .from("question_notes")
-    .upsert(
-      {
-        user_id: userId,
-        question_id: questionId,
-        strokes,
-        canvas_width: canvasWidth,
-        canvas_height: canvasHeight,
-        background_type: backgroundType,
-        title: title ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "user_id,question_id",
-      }
-    )
+    .insert(payload)
     .select("*")
     .single();
 
