@@ -629,16 +629,13 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
             </div>
           ) : null}
         </div>
-     </div>
 
-    <QuestionScratchpad
-      userId={user?.id}
-      questionId={question.id}
-     questionCode={question.codigo}
-      />
+        <QuestionScratchpad
+          userId={user?.id}
+          questionId={question.id}
+          questionCode={question.codigo}
+        />
 
-      <div className="space-y-3 mb-6">
-       {question.options.map((option) => {
         <div className="space-y-3 mb-6">
           {question.options.map((option) => {
             const isSelected = selectedAnswer === option.id;
