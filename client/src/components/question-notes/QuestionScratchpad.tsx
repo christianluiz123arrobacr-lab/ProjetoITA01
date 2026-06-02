@@ -135,6 +135,7 @@ const MAX_HISTORY = 60;
 const LOCAL_DRAFT_VERSION = "v3";
 const PAGE_META_STROKE_ID = "__scratchpad_pages_v1";
 const AUTO_SHAPE_HOLD_MS = 360;
+const ERASER_LIVE_APPLY_MS = 55;
 
 const COLORS = [
   "#0f172a",
@@ -1902,11 +1903,15 @@ export function QuestionScratchpad({
 }: QuestionScratchpadProps) {
   const fullscreenRootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const committedLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const committedLayerDirtyRef = useRef(true);
+  const inkPreviewFrameRef = useRef<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
   const shapeStrokeRef = useRef<ScratchpadStroke | null>(null);
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
   const eraserFrameRef = useRef<number | null>(null);
+  const eraserLastApplyAtRef = useRef(0);
   const lassoPathRef = useRef<ScratchpadPoint[]>([]);
   const panLastRawPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionLastPointRef = useRef<ScratchpadPoint | null>(null);
@@ -1916,6 +1921,7 @@ export function QuestionScratchpad({
   const selectionMovedRef = useRef(false);
   const strokesRef = useRef<ScratchpadStroke[]>([]);
   const dirtyRef = useRef(false);
+  const localDraftTimerRef = useRef<number | null>(null);
   const backgroundTypeRef = useRef<ScratchpadBackground>("grid");
   const activePointerIdRef = useRef<number | null>(null);
   const activePointersRef = useRef<Map<number, PointerSnapshot>>(new Map());
@@ -1974,6 +1980,7 @@ export function QuestionScratchpad({
 
   const replaceStrokes = useCallback((nextStrokes: ScratchpadStroke[]) => {
     strokesRef.current = nextStrokes;
+    committedLayerDirtyRef.current = true;
     setStrokesState(nextStrokes);
   }, []);
 
@@ -2167,6 +2174,53 @@ export function QuestionScratchpad({
     [getCanvasPointFromNative]
   );
 
+  function markCommittedLayerDirty() {
+    committedLayerDirtyRef.current = true;
+  }
+
+  function getCommittedInkLayer(pixelRatio: number) {
+    const width = Math.round(CANVAS_WIDTH * pixelRatio);
+    const height = Math.round(CANVAS_HEIGHT * pixelRatio);
+
+    let layer = committedLayerRef.current;
+
+    if (!layer) {
+      layer = document.createElement("canvas");
+      committedLayerRef.current = layer;
+      committedLayerDirtyRef.current = true;
+    }
+
+    if (layer.width !== width || layer.height !== height) {
+      layer.width = width;
+      layer.height = height;
+      committedLayerDirtyRef.current = true;
+    }
+
+    if (committedLayerDirtyRef.current) {
+      const layerCtx = layer.getContext("2d");
+
+      if (!layerCtx) return layer;
+
+      layerCtx.setTransform(1, 0, 0, 1, 0, 0);
+      layerCtx.clearRect(0, 0, layer.width, layer.height);
+      layerCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      layerCtx.imageSmoothingEnabled = true;
+      layerCtx.imageSmoothingQuality = "high";
+
+      layerCtx.save();
+      applyView(layerCtx, viewRef.current);
+
+      for (const stroke of strokesRef.current) {
+        drawStroke(layerCtx, stroke);
+      }
+
+      layerCtx.restore();
+      committedLayerDirtyRef.current = false;
+    }
+
+    return layer;
+  }
+
   const redrawCanvas = useCallback(
     (
       extraStroke?: ScratchpadStroke | null,
@@ -2188,45 +2242,33 @@ export function QuestionScratchpad({
 
       drawPaper(ctx, viewRef.current, backgroundTypeRef.current, pixelRatio);
 
-      const inkLayer = document.createElement("canvas");
-      inkLayer.width = Math.round(CANVAS_WIDTH * pixelRatio);
-      inkLayer.height = Math.round(CANVAS_HEIGHT * pixelRatio);
+      const committedLayer = getCommittedInkLayer(pixelRatio);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(committedLayer, 0, 0);
 
-      const inkCtx = inkLayer.getContext("2d");
-      if (!inkCtx) return;
-
-      inkCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      inkCtx.imageSmoothingEnabled = true;
-      inkCtx.imageSmoothingQuality = "high";
-
-      inkCtx.save();
-      applyView(inkCtx, viewRef.current);
-
-      for (const stroke of strokesRef.current) {
-        drawStroke(inkCtx, stroke);
-      }
+      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      ctx.save();
+      applyView(ctx, viewRef.current);
 
       if (extraStroke) {
-        drawStroke(inkCtx, extraStroke);
+        drawStroke(ctx, extraStroke);
       }
 
       if (eraserPreview) {
-        drawEraserPreview(inkCtx, eraserPreview);
+        drawEraserPreview(ctx, eraserPreview);
       }
 
       if (lassoPreview) {
-        drawLassoPreview(inkCtx, lassoPreview, viewRef.current);
+        drawLassoPreview(ctx, lassoPreview, viewRef.current);
       }
 
       drawSelectionBox(
-        inkCtx,
+        ctx,
         getSelectedBounds(strokesRef.current, selectedIds),
         viewRef.current
       );
 
-      inkCtx.restore();
-
-      ctx.drawImage(inkLayer, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
     },
     [selectedIds]
   );
@@ -2242,11 +2284,13 @@ export function QuestionScratchpad({
 
   useEffect(() => {
     viewRef.current = view;
+    markCommittedLayerDirty();
     redrawCanvas();
   }, [view, redrawCanvas]);
 
   useEffect(() => {
     strokesRef.current = strokes;
+    markCommittedLayerDirty();
     redrawCanvas();
   }, [strokes, redrawCanvas]);
 
@@ -2264,7 +2308,7 @@ export function QuestionScratchpad({
         page.id === activePageId
           ? {
               ...page,
-              strokes: cloneStrokes(strokes),
+              strokes,
               backgroundType,
             }
           : page
@@ -2275,20 +2319,35 @@ export function QuestionScratchpad({
   useEffect(() => {
     if (!loaded || !questionId || !dirtyRef.current) return;
 
-    const pagesForDraft = getPagesForPersistence(strokes, backgroundType);
-
-    const draft = writeLocalDraft({
-      userId,
-      questionId,
-      pages: pagesForDraft,
-      activePageId,
-      backgroundType,
-    });
-
-    if (draft) {
-      setLocalStatus("Backup local salvo no navegador.");
-      refreshLocalNotesPanel();
+    if (localDraftTimerRef.current !== null) {
+      window.clearTimeout(localDraftTimerRef.current);
     }
+
+    localDraftTimerRef.current = window.setTimeout(() => {
+      const pagesForDraft = getPagesForPersistence(strokesRef.current, backgroundTypeRef.current);
+
+      const draft = writeLocalDraft({
+        userId,
+        questionId,
+        pages: pagesForDraft,
+        activePageId,
+        backgroundType: backgroundTypeRef.current,
+      });
+
+      if (draft) {
+        setLocalStatus("Backup local salvo no navegador.");
+        refreshLocalNotesPanel();
+      }
+
+      localDraftTimerRef.current = null;
+    }, 650);
+
+    return () => {
+      if (localDraftTimerRef.current !== null) {
+        window.clearTimeout(localDraftTimerRef.current);
+        localDraftTimerRef.current = null;
+      }
+    };
   }, [activePageId, backgroundType, loaded, pages, questionId, strokes, userId]);
 
   useEffect(() => {
@@ -2495,6 +2554,12 @@ export function QuestionScratchpad({
       window.cancelAnimationFrame(eraserFrameRef.current);
       eraserFrameRef.current = null;
     }
+
+    if (inkPreviewFrameRef.current !== null) {
+      window.cancelAnimationFrame(inkPreviewFrameRef.current);
+      inkPreviewFrameRef.current = null;
+    }
+
     eraserPathRef.current = [];
     lassoPathRef.current = [];
     panLastRawPointRef.current = null;
@@ -2565,15 +2630,30 @@ export function QuestionScratchpad({
     }
   }
 
+  function getOptimizedEraserPath(path: ScratchpadPoint[]) {
+    if (path.length <= 180) return path;
+
+    const step = Math.ceil(path.length / 180);
+    const optimized = path.filter((_, index) => index % step === 0);
+    const lastPoint = path[path.length - 1];
+
+    if (optimized[optimized.length - 1] !== lastPoint) {
+      optimized.push(lastPoint);
+    }
+
+    return optimized;
+  }
+
   function getEraserResultFromBase(path: ScratchpadPoint[]) {
     const base = strokesBeforeInteractionRef.current ?? strokesRef.current;
+    const optimizedPath = getOptimizedEraserPath(path);
 
     if (tool === "areaEraser") {
-      return eraseStrokesByArea(base, path, eraserSize);
+      return eraseStrokesByArea(base, optimizedPath, eraserSize);
     }
 
     if (tool === "strokeEraser") {
-      return eraseWholeStrokes(base, path, eraserSize);
+      return eraseWholeStrokes(base, optimizedPath, eraserSize);
     }
 
     return base;
@@ -2602,14 +2682,34 @@ export function QuestionScratchpad({
 
       if (interactionModeRef.current !== "erase") return;
 
-      const nextStrokes = getEraserResultFromBase(eraserPathRef.current);
-      replaceStrokes(nextStrokes);
-
       const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
 
-      if (lastPoint) {
+      if (!lastPoint) return;
+
+      const now = performance.now();
+      const canApplyLive = now - eraserLastApplyAtRef.current >= ERASER_LIVE_APPLY_MS;
+
+      if (!canApplyLive) {
         redrawCanvas(null, { point: lastPoint, radius: eraserSize });
+        return;
       }
+
+      eraserLastApplyAtRef.current = now;
+
+      const nextStrokes = getEraserResultFromBase(eraserPathRef.current);
+      replaceStrokes(nextStrokes);
+      redrawCanvas(null, { point: lastPoint, radius: eraserSize });
+    });
+  }
+
+  function scheduleInkPreview(extraStrokeGetter: () => ScratchpadStroke | null) {
+    if (inkPreviewFrameRef.current !== null) return;
+
+    inkPreviewFrameRef.current = window.requestAnimationFrame(() => {
+      inkPreviewFrameRef.current = null;
+
+      const extraStroke = extraStrokeGetter();
+      redrawCanvas(extraStroke);
     });
   }
 
@@ -2813,6 +2913,7 @@ export function QuestionScratchpad({
     }
 
     strokesBeforeInteractionRef.current = cloneStrokes(strokesRef.current);
+    eraserLastApplyAtRef.current = 0;
     currentStrokeRef.current = null;
     eraserPathRef.current = [point];
     setSelectedIds([]);
@@ -2969,13 +3070,13 @@ export function QuestionScratchpad({
         points: [shapeStrokeRef.current.points[0], lastPoint],
       };
 
-      redrawCanvas(shapeStrokeRef.current);
+      scheduleInkPreview(() => shapeStrokeRef.current);
       return;
     }
 
     if (mode === "stroke" && currentStrokeRef.current) {
       appendPointsToCurrentStroke(points);
-      redrawCanvas(currentStrokeRef.current);
+      scheduleInkPreview(() => currentStrokeRef.current);
       return;
     }
 
@@ -2994,13 +3095,64 @@ export function QuestionScratchpad({
     }
   }
 
+  function didStrokeChange(previous: ScratchpadStroke, current: ScratchpadStroke) {
+    if (
+      previous.id !== current.id ||
+      previous.tool !== current.tool ||
+      previous.color !== current.color ||
+      previous.size !== current.size ||
+      previous.brush !== current.brush ||
+      previous.shape !== current.shape ||
+      previous.opacity !== current.opacity ||
+      previous.rotation !== current.rotation ||
+      previous.text !== current.text ||
+      previous.imageData !== current.imageData ||
+      previous.points.length !== current.points.length
+    ) {
+      return true;
+    }
+
+    const indexes = [
+      0,
+      Math.floor(previous.points.length / 2),
+      previous.points.length - 1,
+    ].filter((index, position, list) => index >= 0 && list.indexOf(index) === position);
+
+    return indexes.some((index) => {
+      const a = previous.points[index];
+      const b = current.points[index];
+
+      return (
+        !a ||
+        !b ||
+        a.x !== b.x ||
+        a.y !== b.y ||
+        a.width !== b.width ||
+        a.pressure !== b.pressure
+      );
+    });
+  }
+
+  function didStrokeCollectionChange(previous: ScratchpadStroke[], current: ScratchpadStroke[]) {
+    if (previous === current) return false;
+    if (previous.length !== current.length) return true;
+
+    for (let index = 0; index < previous.length; index += 1) {
+      if (didStrokeChange(previous[index], current[index])) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function finalizeHistoryIfChanged() {
     const base = strokesBeforeInteractionRef.current;
     strokesBeforeInteractionRef.current = null;
 
     if (!base) return;
 
-    const changed = JSON.stringify(base) !== JSON.stringify(strokesRef.current);
+    const changed = didStrokeCollectionChange(base, strokesRef.current);
 
     if (changed) {
       pushHistorySnapshot(base);
