@@ -9,6 +9,8 @@ import {
   Copy,
   Download,
   Eraser,
+  FileText,
+  ImagePlus,
   Highlighter,
   Loader2,
   Maximize2,
@@ -19,9 +21,11 @@ import {
   PenLine,
   Redo2,
   RotateCcw,
+  RotateCw,
   Save,
   Square,
   Trash2,
+  Type,
   Undo2,
   ZoomIn,
   ZoomOut,
@@ -42,8 +46,8 @@ type QuestionScratchpadProps = {
   questionCode?: string | null;
 };
 
-type ScratchpadTool = "pen" | "pan" | "areaEraser" | "strokeEraser" | "select" | "shape";
-type InteractionMode = "none" | "stroke" | "erase" | "pan" | "shape" | "lasso" | "selectionMove" | "selectionResize";
+type ScratchpadTool = "pen" | "pan" | "areaEraser" | "strokeEraser" | "select" | "shape" | "text";
+type InteractionMode = "none" | "stroke" | "erase" | "pan" | "shape" | "text" | "lasso" | "selectionMove" | "selectionResize" | "selectionRotate";
 
 type CanvasView = {
   zoom: number;
@@ -58,17 +62,38 @@ type Bounds = {
   maxY: number;
 };
 
-type SelectionHandle = "nw" | "ne" | "sw" | "se";
+type SelectionHandle = "nw" | "ne" | "sw" | "se" | "rotate";
 
 type ResizeState = {
-  handle: SelectionHandle;
+  handle: Exclude<SelectionHandle, "rotate">;
   baseBounds: Bounds;
   baseStrokes: ScratchpadStroke[];
 };
 
-type LocalScratchpadDraft = {
+type RotateState = {
+  baseBounds: Bounds;
+  baseStrokes: ScratchpadStroke[];
+  startAngle: number;
+};
+
+type ScratchpadPage = {
+  id: string;
+  title: string;
   strokes: ScratchpadStroke[];
   backgroundType: ScratchpadBackground;
+};
+
+type StoredPagesPayload = {
+  kind: "scratchpad-pages-v1";
+  activePageId: string;
+  pages: ScratchpadPage[];
+};
+
+type LocalScratchpadDraft = {
+  strokes?: ScratchpadStroke[];
+  backgroundType?: ScratchpadBackground;
+  pages?: ScratchpadPage[];
+  activePageId?: string;
   updatedAt: string;
 };
 
@@ -105,7 +130,9 @@ const MAX_ZOOM = 4;
 const PAN_MARGIN = 140;
 const PALM_REJECTION_MS = 900;
 const MAX_HISTORY = 60;
-const LOCAL_DRAFT_VERSION = "v2";
+const LOCAL_DRAFT_VERSION = "v3";
+const PAGE_META_STROKE_ID = "__scratchpad_pages_v1";
+const AUTO_SHAPE_HOLD_MS = 480;
 
 const COLORS = [
   "#0f172a",
@@ -131,6 +158,114 @@ const BACKGROUNDS: { value: ScratchpadBackground; label: string }[] = [
   { value: "blank", label: "Branco" },
   { value: "cartesian", label: "Cartesiano" },
 ];
+
+const IMAGE_CACHE = new Map<string, HTMLImageElement>();
+
+function createPageId() {
+  return `page-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createScratchpadPage(index = 1): ScratchpadPage {
+  return {
+    id: createPageId(),
+    title: `Página ${index}`,
+    strokes: [],
+    backgroundType: "grid",
+  };
+}
+
+function clonePage(page: ScratchpadPage): ScratchpadPage {
+  return {
+    ...page,
+    strokes: cloneStrokes(page.strokes),
+  };
+}
+
+function normalizePages(rawPages: unknown, fallbackBackground: ScratchpadBackground): ScratchpadPage[] {
+  if (!Array.isArray(rawPages)) {
+    return [createScratchpadPage(1)];
+  }
+
+  const pages = rawPages
+    .map((page, index) => {
+      const maybePage = page as Partial<ScratchpadPage>;
+
+      return {
+        id: typeof maybePage.id === "string" ? maybePage.id : createPageId(),
+        title: typeof maybePage.title === "string" ? maybePage.title : `Página ${index + 1}`,
+        strokes: Array.isArray(maybePage.strokes)
+          ? maybePage.strokes.filter((stroke) => stroke?.tool !== "meta")
+          : [],
+        backgroundType: isValidBackground(maybePage.backgroundType)
+          ? maybePage.backgroundType
+          : fallbackBackground,
+      };
+    })
+    .filter((page) => page.id);
+
+  return pages.length > 0 ? pages : [createScratchpadPage(1)];
+}
+
+function encodePagesForStorage(pages: ScratchpadPage[], activePageId: string): ScratchpadStroke[] {
+  const payload: StoredPagesPayload = {
+    kind: "scratchpad-pages-v1",
+    activePageId,
+    pages: pages.map(clonePage),
+  };
+
+  return [
+    {
+      id: PAGE_META_STROKE_ID,
+      tool: "meta",
+      color: "#000000",
+      size: 0,
+      points: [],
+      payload,
+    },
+  ];
+}
+
+function decodePagesFromStorage({
+  storedStrokes,
+  backgroundType,
+}: {
+  storedStrokes: ScratchpadStroke[] | null | undefined;
+  backgroundType: ScratchpadBackground;
+}) {
+  const metaStroke = Array.isArray(storedStrokes)
+    ? storedStrokes.find((stroke) => stroke?.id === PAGE_META_STROKE_ID || stroke?.tool === "meta")
+    : null;
+
+  const payload = metaStroke?.payload as StoredPagesPayload | undefined;
+
+  if (payload?.kind === "scratchpad-pages-v1") {
+    const pages = normalizePages(payload.pages, backgroundType);
+    const activePage = pages.some((page) => page.id === payload.activePageId)
+      ? payload.activePageId
+      : pages[0].id;
+
+    return {
+      pages,
+      activePageId: activePage,
+    };
+  }
+
+  const page = createScratchpadPage(1);
+  page.id = "page-1";
+  page.strokes = Array.isArray(storedStrokes)
+    ? storedStrokes.filter((stroke) => stroke?.tool !== "meta")
+    : [];
+  page.backgroundType = backgroundType;
+
+  return {
+    pages: [page],
+    activePageId: page.id,
+  };
+}
+
+function getPageNumberLabel(index: number) {
+  return `P${index + 1}`;
+}
 
 function createStrokeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -679,12 +814,20 @@ function drawShapeStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  if (stroke.shape === "rectangle") {
-    ctx.strokeRect(x, y, width, height);
-  } else if (stroke.shape === "ellipse") {
-    ctx.beginPath();
-    ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
-    ctx.stroke();
+  if (stroke.shape === "rectangle" || stroke.shape === "ellipse") {
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+
+    ctx.translate(centerX, centerY);
+    ctx.rotate(stroke.rotation ?? 0);
+
+    if (stroke.shape === "rectangle") {
+      ctx.strokeRect(-width / 2, -height / 2, width, height);
+    } else {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, width / 2, height / 2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   } else {
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
@@ -730,7 +873,82 @@ function drawLegacyEraserStroke(
   ctx.restore();
 }
 
+function drawTextStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+  if (!stroke.text || stroke.points.length === 0) return;
+
+  const point = stroke.points[0];
+  const fontSize = Math.max(12, stroke.size * 5);
+
+  ctx.save();
+  ctx.globalAlpha = stroke.opacity ?? 1;
+  ctx.translate(point.x, point.y);
+  ctx.rotate(stroke.rotation ?? 0);
+  ctx.fillStyle = stroke.color;
+  ctx.font = `700 ${fontSize}px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.textBaseline = "top";
+
+  const lines = stroke.text.split("\n");
+
+  lines.forEach((line, index) => {
+    ctx.fillText(line, 0, index * fontSize * 1.25);
+  });
+
+  ctx.restore();
+}
+
+function getImageFromCache(src: string) {
+  const cached = IMAGE_CACHE.get(src);
+
+  if (cached) return cached;
+
+  const image = new Image();
+  image.src = src;
+  IMAGE_CACHE.set(src, image);
+
+  return image;
+}
+
+function drawImageStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+  if (!stroke.imageData || stroke.points.length < 2) return;
+
+  const start = stroke.points[0];
+  const end = stroke.points[stroke.points.length - 1];
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const width = Math.max(Math.abs(end.x - start.x), 8);
+  const height = Math.max(Math.abs(end.y - start.y), 8);
+  const center = {
+    x: x + width / 2,
+    y: y + height / 2,
+  };
+  const image = getImageFromCache(stroke.imageData);
+
+  ctx.save();
+  ctx.globalAlpha = stroke.opacity ?? 1;
+  ctx.translate(center.x, center.y);
+  ctx.rotate(stroke.rotation ?? 0);
+
+  if (image.complete && image.naturalWidth > 0) {
+    ctx.drawImage(image, -width / 2, -height / 2, width, height);
+  } else {
+    ctx.fillStyle = "#f8fafc";
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 2;
+    ctx.fillRect(-width / 2, -height / 2, width, height);
+    ctx.strokeRect(-width / 2, -height / 2, width, height);
+    ctx.fillStyle = "#64748b";
+    ctx.font = "700 18px ui-sans-serif, system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Imagem", 0, 0);
+  }
+
+  ctx.restore();
+}
+
 function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+  if (stroke.tool === "meta") return;
+
   if (stroke.tool === "eraser") {
     drawLegacyEraserStroke(ctx, stroke);
     return;
@@ -738,6 +956,16 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
 
   if (stroke.tool === "shape") {
     drawShapeStroke(ctx, stroke);
+    return;
+  }
+
+  if (stroke.tool === "text") {
+    drawTextStroke(ctx, stroke);
+    return;
+  }
+
+  if (stroke.tool === "image") {
+    drawImageStroke(ctx, stroke);
     return;
   }
 
@@ -785,7 +1013,33 @@ function drawLassoPreview(ctx: CanvasRenderingContext2D, path: ScratchpadPoint[]
 }
 
 function getStrokeBounds(stroke: ScratchpadStroke): Bounds | null {
+  if (stroke.tool === "meta") return null;
   if (stroke.points.length === 0) return null;
+
+  if (stroke.tool === "text") {
+    const point = stroke.points[0];
+    const text = stroke.text ?? "";
+    const fontSize = Math.max(12, stroke.size * 5);
+    const lines = text.split("\n");
+    const maxChars = Math.max(...lines.map((line) => line.length), 1);
+    return {
+      minX: point.x - 8,
+      minY: point.y - 8,
+      maxX: point.x + maxChars * fontSize * 0.62 + 8,
+      maxY: point.y + lines.length * fontSize * 1.25 + 8,
+    };
+  }
+
+  if (stroke.tool === "image" && stroke.points.length >= 2) {
+    const start = stroke.points[0];
+    const end = stroke.points[stroke.points.length - 1];
+    return {
+      minX: Math.min(start.x, end.x) - 8,
+      minY: Math.min(start.y, end.y) - 8,
+      maxX: Math.max(start.x, end.x) + 8,
+      maxY: Math.max(start.y, end.y) + 8,
+    };
+  }
 
   let minX = Infinity;
   let minY = Infinity;
@@ -861,19 +1115,27 @@ function drawSelectionBox(ctx: CanvasRenderingContext2D, bounds: Bounds | null, 
   ctx.strokeRect(bounds.minX, bounds.minY, width, height);
   ctx.setLineDash([]);
 
-  const handles = [
-    [bounds.minX, bounds.minY],
-    [bounds.maxX, bounds.minY],
-    [bounds.minX, bounds.maxY],
-    [bounds.maxX, bounds.maxY],
-  ];
+  const handles = getSelectionHandles(bounds);
 
-  for (const [x, y] of handles) {
-    ctx.fillStyle = "#ffffff";
+  for (const item of handles) {
+    ctx.fillStyle = item.handle === "rotate" ? "#7c3aed" : "#ffffff";
     ctx.strokeStyle = "#7c3aed";
     ctx.lineWidth = 2 / view.zoom;
-    ctx.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
-    ctx.strokeRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+
+    if (item.handle === "rotate") {
+      ctx.beginPath();
+      ctx.moveTo((bounds.minX + bounds.maxX) / 2, bounds.minY);
+      ctx.lineTo(item.x, item.y);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, handleSize * 0.72, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillRect(item.x - handleSize / 2, item.y - handleSize / 2, handleSize, handleSize);
+      ctx.strokeRect(item.x - handleSize / 2, item.y - handleSize / 2, handleSize, handleSize);
+    }
   }
 
   ctx.restore();
@@ -885,6 +1147,7 @@ function getSelectionHandles(bounds: Bounds) {
     { handle: "ne" as const, x: bounds.maxX, y: bounds.minY },
     { handle: "sw" as const, x: bounds.minX, y: bounds.maxY },
     { handle: "se" as const, x: bounds.maxX, y: bounds.maxY },
+    { handle: "rotate" as const, x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY - 32 },
   ];
 }
 
@@ -904,7 +1167,7 @@ function getSelectionHandleAtPoint(
   return null;
 }
 
-function getOppositeCorner(bounds: Bounds, handle: SelectionHandle) {
+function getOppositeCorner(bounds: Bounds, handle: Exclude<SelectionHandle, "rotate">) {
   if (handle === "nw") return { x: bounds.maxX, y: bounds.maxY };
   if (handle === "ne") return { x: bounds.minX, y: bounds.maxY };
   if (handle === "sw") return { x: bounds.maxX, y: bounds.minY };
@@ -914,7 +1177,7 @@ function getOppositeCorner(bounds: Bounds, handle: SelectionHandle) {
 function scaleStrokeFromBounds(
   stroke: ScratchpadStroke,
   baseBounds: Bounds,
-  handle: SelectionHandle,
+  handle: Exclude<SelectionHandle, "rotate">,
   currentPoint: ScratchpadPoint
 ) {
   const anchor = getOppositeCorner(baseBounds, handle);
@@ -930,8 +1193,6 @@ function scaleStrokeFromBounds(
 
   const scaleX = Math.abs(baseDx) < 1 ? 1 : clamp(nextDx / baseDx, 0.12, 8);
   const scaleY = Math.abs(baseDy) < 1 ? 1 : clamp(nextDy / baseDy, 0.12, 8);
-  const widthScale = clamp((Math.abs(scaleX) + Math.abs(scaleY)) / 2, 0.25, 4);
-
   return transformStrokePoints(
     stroke,
     (point) => ({
@@ -939,8 +1200,50 @@ function scaleStrokeFromBounds(
       x: anchor.x + (point.x - anchor.x) * scaleX,
       y: anchor.y + (point.y - anchor.y) * scaleY,
     }),
-    widthScale
+    1
   );
+}
+
+function getBoundsCenter(bounds: Bounds) {
+  return {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+}
+
+function getAngleFromCenter(center: ScratchpadPoint, point: ScratchpadPoint) {
+  return Math.atan2(point.y - center.y, point.x - center.x);
+}
+
+function rotatePointAround(point: ScratchpadPoint, center: ScratchpadPoint, angle: number): ScratchpadPoint {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+
+  return {
+    ...point,
+    x: center.x + dx * cos - dy * sin,
+    y: center.y + dx * sin + dy * cos,
+  };
+}
+
+function rotateStroke(stroke: ScratchpadStroke, center: ScratchpadPoint, angle: number): ScratchpadStroke {
+  if (stroke.tool === "shape" && (stroke.shape === "rectangle" || stroke.shape === "ellipse")) {
+    return {
+      ...stroke,
+      rotation: (stroke.rotation ?? 0) + angle,
+    };
+  }
+
+  if (stroke.tool === "text" || stroke.tool === "image") {
+    return {
+      ...stroke,
+      rotation: (stroke.rotation ?? 0) + angle,
+    };
+  }
+
+  return transformStrokePoints(stroke, (point) => rotatePointAround(point, center, angle), 1);
 }
 
 function getStraightnessScore(stroke: ScratchpadStroke) {
@@ -1017,6 +1320,25 @@ function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
   return "rectangle";
 }
 
+function shouldAutoPerfectStroke(stroke: ScratchpadStroke, pointerUpTime?: number) {
+  if (stroke.tool !== "pen" || stroke.brush === "highlighter" || stroke.points.length < 8) {
+    return false;
+  }
+
+  const first = stroke.points[0];
+  const last = stroke.points[stroke.points.length - 1];
+  const lastMoveTime = last.time ?? first.time ?? 0;
+  const holdTime = typeof pointerUpTime === "number" && lastMoveTime > 0 ? pointerUpTime - lastMoveTime : 0;
+  const bounds = getStrokeBounds(stroke);
+  const strokeWidth = bounds ? bounds.maxX - bounds.minX : 0;
+  const strokeHeight = bounds ? bounds.maxY - bounds.minY : 0;
+  const looksLikeLine = getStraightnessScore(stroke) < 0.035;
+  const looksClosed = distance(first, last) < Math.max(strokeWidth, strokeHeight) * 0.22;
+  const hasShapeSize = Math.max(strokeWidth, strokeHeight) > 35;
+
+  return holdTime >= AUTO_SHAPE_HOLD_MS && hasShapeSize && (looksLikeLine || looksClosed);
+}
+
 function smoothFreehandStroke(stroke: ScratchpadStroke): ScratchpadStroke {
   if (stroke.tool !== "pen" || stroke.points.length < 5) return stroke;
 
@@ -1083,6 +1405,18 @@ function enrichPointPath(points: ScratchpadPoint[]) {
 
 
 function isPointNearStroke(point: ScratchpadPoint, stroke: ScratchpadStroke, radius: number) {
+  if (stroke.tool === "meta") return false;
+
+  if ((stroke.tool === "text" || stroke.tool === "image") && getStrokeBounds(stroke)) {
+    const bounds = getStrokeBounds(stroke);
+    return Boolean(bounds && isPointInsideBounds(point, {
+      minX: bounds.minX - radius,
+      minY: bounds.minY - radius,
+      maxX: bounds.maxX + radius,
+      maxY: bounds.maxY + radius,
+    }));
+  }
+
   if (stroke.tool === "shape" && stroke.points.length >= 2) {
     const start = stroke.points[0];
     const end = stroke.points[stroke.points.length - 1];
@@ -1265,6 +1599,14 @@ function readLocalDraft(userId: string | null | undefined, questionId: string) {
 
     const parsed = JSON.parse(raw) as LocalScratchpadDraft;
 
+    if (Array.isArray(parsed.pages)) {
+      return {
+        ...parsed,
+        pages: normalizePages(parsed.pages, parsed.backgroundType ?? "grid"),
+        activePageId: typeof parsed.activePageId === "string" ? parsed.activePageId : undefined,
+      };
+    }
+
     if (!Array.isArray(parsed.strokes) || !isValidBackground(parsed.backgroundType)) {
       return null;
     }
@@ -1280,17 +1622,23 @@ function writeLocalDraft({
   questionId,
   strokes,
   backgroundType,
+  pages,
+  activePageId,
 }: {
   userId?: string | null;
   questionId: string;
-  strokes: ScratchpadStroke[];
-  backgroundType: ScratchpadBackground;
+  strokes?: ScratchpadStroke[];
+  backgroundType?: ScratchpadBackground;
+  pages?: ScratchpadPage[];
+  activePageId?: string;
 }) {
   if (typeof window === "undefined") return null;
 
   const draft: LocalScratchpadDraft = {
     strokes,
     backgroundType,
+    pages: pages?.map(clonePage),
+    activePageId,
     updatedAt: new Date().toISOString(),
   };
 
@@ -1347,6 +1695,7 @@ export function QuestionScratchpad({
   questionCode,
 }: QuestionScratchpadProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
   const shapeStrokeRef = useRef<ScratchpadStroke | null>(null);
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
@@ -1354,6 +1703,7 @@ export function QuestionScratchpad({
   const panLastRawPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionLastPointRef = useRef<ScratchpadPoint | null>(null);
   const resizeStateRef = useRef<ResizeState | null>(null);
+  const rotateStateRef = useRef<RotateState | null>(null);
   const strokesBeforeInteractionRef = useRef<ScratchpadStroke[] | null>(null);
   const selectionMovedRef = useRef(false);
   const strokesRef = useRef<ScratchpadStroke[]>([]);
@@ -1373,6 +1723,8 @@ export function QuestionScratchpad({
   });
 
   const [open, setOpen] = useState(false);
+  const [pages, setPages] = useState<ScratchpadPage[]>(() => [createScratchpadPage(1)]);
+  const [activePageId, setActivePageId] = useState(() => pages[0]?.id ?? "page-1");
   const [tool, setTool] = useState<ScratchpadTool>("pen");
   const [brush, setBrush] = useState<ScratchpadBrush>("pen");
   const [shapeTool, setShapeTool] = useState<ScratchpadShape>("line");
@@ -1409,6 +1761,114 @@ export function QuestionScratchpad({
     strokesRef.current = nextStrokes;
     setStrokesState(nextStrokes);
   }, []);
+
+  function getPagesForPersistence(
+    nextStrokes = strokesRef.current,
+    nextBackground = backgroundTypeRef.current
+  ) {
+    return pages.map((page) =>
+      page.id === activePageId
+        ? {
+            ...page,
+            strokes: cloneStrokes(nextStrokes),
+            backgroundType: nextBackground,
+          }
+        : clonePage(page)
+    );
+  }
+
+  function resetPageHistory() {
+    historyRef.current = [];
+    redoHistoryRef.current = [];
+    setHistoryDepth(0);
+    setRedoDepth(0);
+  }
+
+  function openPage(pageId: string) {
+    const targetPage = pages.find((page) => page.id === pageId);
+    if (!targetPage || targetPage.id === activePageId) return;
+
+    const currentPages = getPagesForPersistence();
+    const nextTargetPage = currentPages.find((page) => page.id === pageId);
+
+    if (!nextTargetPage) return;
+
+    setPages(currentPages);
+    setActivePageId(pageId);
+    replaceStrokes(cloneStrokes(nextTargetPage.strokes));
+    setBackgroundType(nextTargetPage.backgroundType);
+    backgroundTypeRef.current = nextTargetPage.backgroundType;
+    setSelectedIds([]);
+    resetPageHistory();
+    resetZoom();
+  }
+
+  function addPage() {
+    const nextPages = [...getPagesForPersistence(), createScratchpadPage(pages.length + 1)];
+    const nextPage = nextPages[nextPages.length - 1];
+
+    setPages(nextPages);
+    setActivePageId(nextPage.id);
+    replaceStrokes([]);
+    setBackgroundType(nextPage.backgroundType);
+    backgroundTypeRef.current = nextPage.backgroundType;
+    setSelectedIds([]);
+    resetPageHistory();
+    markDirty("Nova página criada. Clique em Salvar para guardar.");
+  }
+
+  function duplicateCurrentPage() {
+    const currentPages = getPagesForPersistence();
+    const currentPage = currentPages.find((page) => page.id === activePageId);
+
+    if (!currentPage) return;
+
+    const copy: ScratchpadPage = {
+      ...clonePage(currentPage),
+      id: createPageId(),
+      title: `${currentPage.title} cópia`,
+      strokes: currentPage.strokes.map((stroke) => ({
+        ...stroke,
+        id: createStrokeId(),
+        points: stroke.points.map((point) => ({ ...point, x: point.x + 24, y: point.y + 24 })),
+      })),
+    };
+
+    const nextPages = [...currentPages, copy];
+
+    setPages(nextPages);
+    setActivePageId(copy.id);
+    replaceStrokes(cloneStrokes(copy.strokes));
+    setBackgroundType(copy.backgroundType);
+    backgroundTypeRef.current = copy.backgroundType;
+    setSelectedIds([]);
+    resetPageHistory();
+    markDirty("Página duplicada. Clique em Salvar para guardar.");
+  }
+
+  function deleteCurrentPage() {
+    if (pages.length <= 1) {
+      handleClear();
+      return;
+    }
+
+    const shouldDelete = window.confirm("Excluir esta página do rascunho?");
+    if (!shouldDelete) return;
+
+    const currentPages = getPagesForPersistence();
+    const currentIndex = currentPages.findIndex((page) => page.id === activePageId);
+    const nextPages = currentPages.filter((page) => page.id !== activePageId);
+    const nextPage = nextPages[Math.max(0, currentIndex - 1)] ?? nextPages[0];
+
+    setPages(nextPages);
+    setActivePageId(nextPage.id);
+    replaceStrokes(cloneStrokes(nextPage.strokes));
+    setBackgroundType(nextPage.backgroundType);
+    backgroundTypeRef.current = nextPage.backgroundType;
+    setSelectedIds([]);
+    resetPageHistory();
+    markDirty("Página excluída. Clique em Salvar para guardar.");
+  }
 
   function pushHistorySnapshot(snapshot: ScratchpadStroke[]) {
     historyRef.current = [...historyRef.current, cloneStrokes(snapshot)].slice(-MAX_HISTORY);
@@ -1582,19 +2042,38 @@ export function QuestionScratchpad({
 
 
   useEffect(() => {
+    if (!loaded) return;
+
+    setPages((previous) =>
+      previous.map((page) =>
+        page.id === activePageId
+          ? {
+              ...page,
+              strokes: cloneStrokes(strokes),
+              backgroundType,
+            }
+          : page
+      )
+    );
+  }, [activePageId, backgroundType, loaded, strokes]);
+
+  useEffect(() => {
     if (!loaded || !questionId || !dirtyRef.current) return;
+
+    const pagesForDraft = getPagesForPersistence(strokes, backgroundType);
 
     const draft = writeLocalDraft({
       userId,
       questionId,
-      strokes,
+      pages: pagesForDraft,
+      activePageId,
       backgroundType,
     });
 
     if (draft) {
       setLocalStatus("Backup local salvo no navegador.");
     }
-  }, [backgroundType, loaded, questionId, strokes, userId]);
+  }, [activePageId, backgroundType, loaded, pages, questionId, strokes, userId]);
 
   useEffect(() => {
     redrawCanvas();
@@ -1608,13 +2087,37 @@ export function QuestionScratchpad({
       setStatus("");
       setError("");
 
+      function loadPagesFromDraft(localDraft: LocalScratchpadDraft | null) {
+        if (localDraft?.pages?.length) {
+          const normalized = normalizePages(localDraft.pages, localDraft.backgroundType ?? "grid");
+          const active = localDraft.activePageId && normalized.some((page) => page.id === localDraft.activePageId)
+            ? localDraft.activePageId
+            : normalized[0].id;
+
+          return { pages: normalized, activePageId: active };
+        }
+
+        if (Array.isArray(localDraft?.strokes)) {
+          const page = createScratchpadPage(1);
+          page.id = "page-1";
+          page.strokes = localDraft.strokes;
+          page.backgroundType = localDraft.backgroundType ?? "grid";
+          return { pages: [page], activePageId: page.id };
+        }
+
+        return null;
+      }
+
       if (!userId || !questionId) {
+        const page = createScratchpadPage(1);
+        page.id = "page-1";
+        setPages([page]);
+        setActivePageId(page.id);
         replaceStrokes([]);
+        setBackgroundType("grid");
+        backgroundTypeRef.current = "grid";
         setSelectedIds([]);
-        historyRef.current = [];
-        redoHistoryRef.current = [];
-        setHistoryDepth(0);
-        setRedoDepth(0);
+        resetPageHistory();
         dirtyRef.current = false;
         setDirty(false);
         setLoaded(true);
@@ -1627,26 +2130,25 @@ export function QuestionScratchpad({
 
         if (cancelled) return;
 
+        const remoteBackground = isValidBackground(note?.background_type)
+          ? note.background_type
+          : "grid";
+        const remotePages = decodePagesFromStorage({
+          storedStrokes: Array.isArray(note?.strokes) ? note.strokes : [],
+          backgroundType: remoteBackground,
+        });
+        const localPages = loadPagesFromDraft(localDraft);
         const shouldUseLocal = isLocalDraftNewer(localDraft, note?.updated_at);
-        const loadedStrokes = shouldUseLocal
-          ? localDraft?.strokes ?? []
-          : Array.isArray(note?.strokes)
-            ? note.strokes
-            : localDraft?.strokes ?? [];
-        const loadedBackground = shouldUseLocal
-          ? localDraft?.backgroundType ?? "grid"
-          : isValidBackground(note?.background_type)
-            ? note.background_type
-            : localDraft?.backgroundType ?? "grid";
+        const loadedPages = shouldUseLocal && localPages ? localPages : remotePages;
+        const activePage = loadedPages.pages.find((page) => page.id === loadedPages.activePageId) ?? loadedPages.pages[0];
 
-        replaceStrokes(loadedStrokes);
-        setBackgroundType(loadedBackground);
-        backgroundTypeRef.current = loadedBackground;
+        setPages(loadedPages.pages.map(clonePage));
+        setActivePageId(activePage.id);
+        replaceStrokes(cloneStrokes(activePage.strokes));
+        setBackgroundType(activePage.backgroundType);
+        backgroundTypeRef.current = activePage.backgroundType;
         setSelectedIds([]);
-        historyRef.current = [];
-        redoHistoryRef.current = [];
-        setHistoryDepth(0);
-        setRedoDepth(0);
+        resetPageHistory();
         dirtyRef.current = shouldUseLocal;
         setDirty(shouldUseLocal);
         setLocalStatus(shouldUseLocal ? "Rascunho local recuperado. Clique em Salvar para enviar à nuvem." : "Backup local ativo.");
@@ -1658,11 +2160,16 @@ export function QuestionScratchpad({
 
         if (!cancelled) {
           const localDraft = readLocalDraft(userId, questionId);
+          const localPages = loadPagesFromDraft(localDraft);
 
-          if (localDraft) {
-            replaceStrokes(localDraft.strokes);
-            setBackgroundType(localDraft.backgroundType);
-            backgroundTypeRef.current = localDraft.backgroundType;
+          if (localPages) {
+            const activePage = localPages.pages.find((page) => page.id === localPages.activePageId) ?? localPages.pages[0];
+
+            setPages(localPages.pages.map(clonePage));
+            setActivePageId(activePage.id);
+            replaceStrokes(cloneStrokes(activePage.strokes));
+            setBackgroundType(activePage.backgroundType);
+            backgroundTypeRef.current = activePage.backgroundType;
             dirtyRef.current = true;
             setDirty(true);
             setLocalStatus("Rascunho local recuperado. A nuvem falhou, mas o navegador salvou sua pele.");
@@ -1692,6 +2199,9 @@ export function QuestionScratchpad({
         return;
       }
 
+      const pagesForSave = getPagesForPersistence(nextStrokes, backgroundTypeRef.current);
+      const storageStrokes = encodePagesForStorage(pagesForSave, activePageId);
+
       try {
         setSaving(true);
         setError("");
@@ -1699,7 +2209,7 @@ export function QuestionScratchpad({
         await saveQuestionNote({
           userId,
           questionId,
-          strokes: nextStrokes,
+          strokes: storageStrokes,
           canvasWidth: CANVAS_WIDTH,
           canvasHeight: CANVAS_HEIGHT,
           backgroundType: backgroundTypeRef.current,
@@ -1709,9 +2219,11 @@ export function QuestionScratchpad({
         writeLocalDraft({
           userId,
           questionId,
-          strokes: nextStrokes,
+          pages: pagesForSave,
+          activePageId,
           backgroundType: backgroundTypeRef.current,
         });
+        setPages(pagesForSave);
         dirtyRef.current = false;
         setDirty(false);
         setLocalStatus("Backup local e nuvem sincronizados.");
@@ -1724,17 +2236,19 @@ export function QuestionScratchpad({
         setSaving(false);
       }
     },
-    [canSave, questionId, title, userId]
+    [activePageId, canSave, pages, questionId, title, userId]
   );
 
   useEffect(() => {
     return () => {
       if (!dirtyRef.current || !canSave || !userId) return;
 
+      const pagesForSave = getPagesForPersistence(strokesRef.current, backgroundTypeRef.current);
+
       void saveQuestionNote({
         userId,
         questionId,
-        strokes: strokesRef.current,
+        strokes: encodePagesForStorage(pagesForSave, activePageId),
         canvasWidth: CANVAS_WIDTH,
         canvasHeight: CANVAS_HEIGHT,
         backgroundType: backgroundTypeRef.current,
@@ -1743,7 +2257,7 @@ export function QuestionScratchpad({
         console.error("Erro ao salvar rascunho ao sair da questão:", saveError);
       });
     };
-  }, [canSave, questionId, title, userId]);
+  }, [activePageId, canSave, pages, questionId, title, userId]);
 
   function updateActivePointer(event: React.PointerEvent<HTMLCanvasElement>) {
     activePointersRef.current.set(event.pointerId, {
@@ -1766,6 +2280,7 @@ export function QuestionScratchpad({
     panLastRawPointRef.current = null;
     selectionLastPointRef.current = null;
     resizeStateRef.current = null;
+    rotateStateRef.current = null;
     activePointerIdRef.current = null;
     interactionModeRef.current = "none";
     setIsDrawing(false);
@@ -1924,12 +2439,22 @@ export function QuestionScratchpad({
         const selectedHandle = getSelectionHandleAtPoint(point, currentSelectedBounds, viewRef.current);
 
         if (selectedHandle) {
-          beginInteraction(event, "selectionResize");
-          resizeStateRef.current = {
-            handle: selectedHandle,
-            baseBounds: currentSelectedBounds,
-            baseStrokes: cloneStrokes(strokesRef.current),
-          };
+          if (selectedHandle === "rotate") {
+            beginInteraction(event, "selectionRotate");
+            rotateStateRef.current = {
+              baseBounds: currentSelectedBounds,
+              baseStrokes: cloneStrokes(strokesRef.current),
+              startAngle: getAngleFromCenter(getBoundsCenter(currentSelectedBounds), point),
+            };
+          } else {
+            beginInteraction(event, "selectionResize");
+            resizeStateRef.current = {
+              handle: selectedHandle,
+              baseBounds: currentSelectedBounds,
+              baseStrokes: cloneStrokes(strokesRef.current),
+            };
+          }
+
           strokesBeforeInteractionRef.current = cloneStrokes(strokesRef.current);
           selectionMovedRef.current = false;
           return;
@@ -1947,6 +2472,27 @@ export function QuestionScratchpad({
       beginInteraction(event, "lasso");
       lassoPathRef.current = [point];
       redrawCanvas(null, null, lassoPathRef.current);
+      return;
+    }
+
+    if (tool === "text") {
+      const text = window.prompt("Digite o texto que você quer inserir no rascunho:");
+
+      if (!text?.trim()) return;
+
+      const previous = strokesRef.current;
+      const textStroke: ScratchpadStroke = {
+        id: createStrokeId(),
+        tool: "text",
+        color,
+        size,
+        points: [point],
+        text: text.trim(),
+        opacity: 1,
+      };
+
+      commitStrokes([...previous, textStroke], previous);
+      setSelectedIds([textStroke.id]);
       return;
     }
 
@@ -2002,7 +2548,6 @@ export function QuestionScratchpad({
     currentStrokeRef.current = null;
     eraserPathRef.current = [point];
     setSelectedIds([]);
-    applyEraser(eraserPathRef.current);
     redrawCanvas(null, { point, radius: eraserSize });
   }
 
@@ -2099,6 +2644,26 @@ export function QuestionScratchpad({
       return;
     }
 
+    if (mode === "selectionRotate") {
+      const rotateState = rotateStateRef.current;
+      const currentPoint = points[points.length - 1];
+
+      if (!rotateState) return;
+
+      const center = getBoundsCenter(rotateState.baseBounds);
+      const currentAngle = getAngleFromCenter(center, currentPoint);
+      const deltaAngle = currentAngle - rotateState.startAngle;
+      const selectedSet = new Set(selectedIds);
+      const nextStrokes = rotateState.baseStrokes.map((stroke) => {
+        if (!selectedSet.has(stroke.id)) return stroke;
+        return rotateStroke(stroke, center, deltaAngle);
+      });
+
+      selectionMovedRef.current = true;
+      replaceStrokes(nextStrokes);
+      return;
+    }
+
     if (mode === "selectionMove") {
       const currentPoint = points[points.length - 1];
       const previousPoint = selectionLastPointRef.current;
@@ -2153,7 +2718,6 @@ export function QuestionScratchpad({
       if (nextPoints.length === 0) return;
 
       eraserPathRef.current = [...eraserPathRef.current, ...nextPoints];
-      applyEraser(eraserPathRef.current);
 
       const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
       redrawCanvas(null, { point: lastPoint, radius: eraserSize });
@@ -2205,8 +2769,13 @@ export function QuestionScratchpad({
     const mode = interactionModeRef.current;
 
     if (mode === "stroke" && currentStrokeRef.current) {
-      const finishedStroke = smoothFreehandStroke(currentStrokeRef.current);
+      let finishedStroke = smoothFreehandStroke(currentStrokeRef.current);
       const previous = strokesRef.current;
+      const pointerUpTime = event?.nativeEvent.timeStamp;
+
+      if (shouldAutoPerfectStroke(finishedStroke, pointerUpTime)) {
+        finishedStroke = transformStrokeToPerfectShape(finishedStroke, guessPerfectShape(finishedStroke));
+      }
 
       currentStrokeRef.current = null;
       commitStrokes([...previous, finishedStroke], previous);
@@ -2219,8 +2788,26 @@ export function QuestionScratchpad({
         commitStrokes([...previous, finishedShape], previous);
       }
     } else if (mode === "erase") {
-      finalizeHistoryIfChanged();
-    } else if (mode === "selectionMove" || mode === "selectionResize") {
+      const base = strokesBeforeInteractionRef.current;
+      const path = eraserPathRef.current;
+
+      if (base && path.length > 0) {
+        const nextStrokes =
+          tool === "areaEraser"
+            ? eraseStrokesByArea(base, path, eraserSize)
+            : eraseWholeStrokes(base, path, eraserSize);
+
+        strokesBeforeInteractionRef.current = null;
+
+        if (JSON.stringify(base) !== JSON.stringify(nextStrokes)) {
+          pushHistorySnapshot(base);
+          replaceStrokes(nextStrokes);
+          markDirty();
+        }
+      } else {
+        strokesBeforeInteractionRef.current = null;
+      }
+    } else if (mode === "selectionMove" || mode === "selectionResize" || mode === "selectionRotate") {
       if (selectionMovedRef.current) {
         finalizeHistoryIfChanged();
       } else {
@@ -2247,6 +2834,7 @@ export function QuestionScratchpad({
     panLastRawPointRef.current = null;
     selectionLastPointRef.current = null;
     resizeStateRef.current = null;
+    rotateStateRef.current = null;
     activePointerIdRef.current = null;
     interactionModeRef.current = "none";
     selectionMovedRef.current = false;
@@ -2264,6 +2852,7 @@ export function QuestionScratchpad({
       lassoPathRef.current = [];
       strokesBeforeInteractionRef.current = null;
       resizeStateRef.current = null;
+      rotateStateRef.current = null;
       activePointerIdRef.current = null;
       interactionModeRef.current = "none";
       setIsDrawing(false);
@@ -2412,9 +3001,45 @@ export function QuestionScratchpad({
           x: center.x + (point.x - center.x) * factor,
           y: center.y + (point.y - center.y) * factor,
         }),
-        factor
+        1
       )
     );
+  }
+
+  function rotateSelectionBy(angle: number) {
+    const bounds = getSelectedBounds(strokesRef.current, selectedIds);
+    if (!bounds) return;
+
+    const center = getBoundsCenter(bounds);
+
+    applyTransformToSelection((stroke) => rotateStroke(stroke, center, angle));
+  }
+
+  function adjustSelectionThickness(factor: number) {
+    applyTransformToSelection((stroke) => ({
+      ...stroke,
+      size: clamp(stroke.size * factor, 1, 60),
+      points: stroke.points.map((point) => ({
+        ...point,
+        width: typeof point.width === "number" ? clamp(point.width * factor, 0.6, 90) : point.width,
+      })),
+    }));
+  }
+
+  function setSelectionThickness(nextSize: number) {
+    applyTransformToSelection((stroke) => {
+      const safeSize = clamp(nextSize, 1, 60);
+      const factor = stroke.size > 0 ? safeSize / stroke.size : 1;
+
+      return {
+        ...stroke,
+        size: safeSize,
+        points: stroke.points.map((point) => ({
+          ...point,
+          width: typeof point.width === "number" ? clamp(point.width * factor, 0.6, 90) : point.width,
+        })),
+      };
+    });
   }
 
   function straightenSelection() {
@@ -2463,32 +3088,158 @@ export function QuestionScratchpad({
     commitStrokes(next, previous);
   }
 
-  function exportAsPng() {
-    const pixelRatio = 2;
+  function renderPageToDataUrl(page: ScratchpadPage, pixelRatio = 2) {
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = CANVAS_WIDTH * pixelRatio;
     exportCanvas.height = CANVAS_HEIGHT * pixelRatio;
 
     const ctx = exportCanvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return "";
 
     const exportView: CanvasView = { zoom: 1, offsetX: 0, offsetY: 0 };
-    drawPaper(ctx, exportView, backgroundTypeRef.current, pixelRatio);
+    drawPaper(ctx, exportView, page.backgroundType, pixelRatio);
 
     ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    for (const stroke of strokesRef.current) {
+    for (const stroke of page.strokes) {
       drawStroke(ctx, stroke);
     }
 
-    const url = exportCanvas.toDataURL("image/png");
+    return exportCanvas.toDataURL("image/png");
+  }
+
+  function getActivePageForExport(): ScratchpadPage {
+    return {
+      id: activePageId,
+      title: pages.find((page) => page.id === activePageId)?.title ?? "Página atual",
+      strokes: cloneStrokes(strokesRef.current),
+      backgroundType: backgroundTypeRef.current,
+    };
+  }
+
+  function exportAsPng() {
+    const url = renderPageToDataUrl(getActivePageForExport(), 2);
+
+    if (!url) return;
+
     const link = document.createElement("a");
     link.href = url;
     link.download = `${questionCode ?? "rascunho"}-${new Date().toISOString().slice(0, 10)}.png`;
     link.click();
   }
+
+  function exportAsPdf() {
+    const pagesForExport = getPagesForPersistence(strokesRef.current, backgroundTypeRef.current);
+    const images = pagesForExport.map((page) => ({
+      title: page.title,
+      url: renderPageToDataUrl(page, 2),
+    }));
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) {
+      setError("O navegador bloqueou a janela de exportação. Libere pop-ups para exportar PDF.");
+      return;
+    }
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            @page { size: landscape; margin: 10mm; }
+            body { margin: 0; font-family: Arial, sans-serif; background: #fff; }
+            .page { page-break-after: always; padding: 8mm; }
+            .page:last-child { page-break-after: auto; }
+            h1 { font-size: 14px; margin: 0 0 8px; color: #111827; }
+            img { width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 10px; }
+          </style>
+        </head>
+        <body>
+          ${images
+            .map(
+              (image, index) => `
+                <section class="page">
+                  <h1>${title} - ${image.title || `Página ${index + 1}`}</h1>
+                  <img src="${image.url}" />
+                </section>
+              `
+            )
+            .join("")}
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+
+  function importImageFile(file: File) {
+    if (file.type === "application/pdf") {
+      setError("Importação direta de PDF precisa de PDF.js. Por enquanto, exportação em PDF já está pronta e importação aceita imagens.");
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Envie uma imagem em PNG, JPG, WEBP ou SVG.");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const imageData = String(reader.result ?? "");
+      if (!imageData) return;
+
+      const previous = strokesRef.current;
+      const imageStroke: ScratchpadStroke = {
+        id: createStrokeId(),
+        tool: "image",
+        color: "#0f172a",
+        size: 2,
+        points: [
+          { x: 120, y: 90, pressure: 0.6 },
+          { x: 520, y: 390, pressure: 0.6 },
+        ],
+        imageData,
+        opacity: 1,
+      };
+
+      commitStrokes([...previous, imageStroke], previous);
+      setSelectedIds([imageStroke.id]);
+
+      setTimeout(() => {
+        redrawCanvas();
+      }, 180);
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+
+
+  const selectedAverageSize = useMemo(() => {
+    if (selectedIds.length === 0) return size;
+
+    const selectedSet = new Set(selectedIds);
+    const selectedStrokes = strokes.filter((stroke) => selectedSet.has(stroke.id));
+
+    if (selectedStrokes.length === 0) return size;
+
+    const total = selectedStrokes.reduce((sum, stroke) => sum + stroke.size, 0);
+    return Math.round(total / selectedStrokes.length);
+  }, [selectedIds, size, strokes]);
 
   const containerClassName = fullscreen
     ? "fixed inset-0 z-[80] flex flex-col overflow-hidden bg-white p-3 md:p-5"
@@ -2503,7 +3254,7 @@ export function QuestionScratchpad({
       ? "cursor-crosshair"
       : tool === "pan"
         ? "cursor-grab active:cursor-grabbing"
-        : tool === "select"
+        : tool === "select" || tool === "text"
           ? "cursor-pointer"
           : tool === "shape"
             ? "cursor-crosshair"
@@ -2526,7 +3277,7 @@ export function QuestionScratchpad({
           <div>
             <p className="font-black text-slate-950">Rascunho manuscrito</p>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Escreva com alta suavização, selecione, redimensione pelos cantos, transforme rabiscos em formas e mantenha backup local.
+              Use páginas, texto, imagem, seleção com rotação, formas perfeitas, PDF e backup local.
             </p>
           </div>
         </div>
@@ -2574,6 +3325,54 @@ export function QuestionScratchpad({
             </div>
           ) : null}
 
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                importImageFile(file);
+              }
+              event.currentTarget.value = "";
+            }}
+          />
+
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+            <span className="px-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
+              Páginas
+            </span>
+
+            {pages.map((page, index) => (
+              <button
+                key={page.id}
+                type="button"
+                onClick={() => openPage(page.id)}
+                className={`rounded-xl px-3 py-2 text-sm font-black transition ${
+                  page.id === activePageId
+                    ? "bg-violet-600 text-white"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+                title={page.title}
+              >
+                {getPageNumberLabel(index)}
+              </button>
+            ))}
+
+            <button type="button" onClick={addPage} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200">
+              + Nova
+            </button>
+
+            <button type="button" onClick={duplicateCurrentPage} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200">
+              Duplicar página
+            </button>
+
+            <button type="button" onClick={deleteCurrentPage} className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-100">
+              Excluir página
+            </button>
+          </div>
+
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
             <ToolbarGroup label="Ferramentas">
               <button type="button" onClick={() => activatePen("pen")} className={toolButtonClass(tool === "pen" && brush === "pen")}> 
@@ -2587,6 +3386,9 @@ export function QuestionScratchpad({
               </button>
               <button type="button" onClick={() => setTool("select")} className={toolButtonClass(tool === "select")}> 
                 <MousePointer2 className="h-4 w-4" /> Selecionar
+              </button>
+              <button type="button" onClick={() => setTool("text")} className={toolButtonClass(tool === "text")}> 
+                <Type className="h-4 w-4" /> Texto
               </button>
               <button type="button" onClick={() => setTool("pan")} className={toolButtonClass(tool === "pan")}> 
                 <Move className="h-4 w-4" /> Mover
@@ -2692,6 +3494,12 @@ export function QuestionScratchpad({
               <button type="button" onClick={exportAsPng} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
                 <Download className="h-4 w-4" /> PNG
               </button>
+              <button type="button" onClick={exportAsPdf} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
+                <FileText className="h-4 w-4" /> PDF
+              </button>
+              <button type="button" onClick={() => imageInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
+                <ImagePlus className="h-4 w-4" /> Imagem
+              </button>
             </ToolbarGroup>
 
             <ToolbarGroup label="Ações">
@@ -2717,11 +3525,29 @@ export function QuestionScratchpad({
                 {selectedIds.length} item(ns) selecionado(s)
               </span>
               <button type="button" onClick={() => scaleSelection(1.15)} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
-                Aumentar
+                Aumentar tamanho
               </button>
               <button type="button" onClick={() => scaleSelection(0.87)} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
-                Diminuir
+                Diminuir tamanho
               </button>
+              <button type="button" onClick={() => adjustSelectionThickness(0.85)} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                Afinar linha
+              </button>
+              <button type="button" onClick={() => adjustSelectionThickness(1.18)} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                Engrossar linha
+              </button>
+              <label className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200">
+                Grossura
+                <input
+                  type="range"
+                  min={1}
+                  max={40}
+                  value={selectedAverageSize}
+                  onChange={(event) => setSelectionThickness(Number(event.target.value))}
+                  className="w-24 accent-violet-600"
+                />
+                <span className="w-6 text-right text-xs text-violet-500">{selectedAverageSize}</span>
+              </label>
               <button type="button" onClick={straightenSelection} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 Endireitar traço
               </button>
@@ -2739,6 +3565,12 @@ export function QuestionScratchpad({
               </button>
               <button type="button" onClick={() => transformSelectionToPerfectShape("ellipse")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Circle className="h-4 w-4" /> Círculo
+              </button>
+              <button type="button" onClick={() => rotateSelectionBy(-Math.PI / 18)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                <RotateCw className="h-4 w-4 -scale-x-100" /> Girar -
+              </button>
+              <button type="button" onClick={() => rotateSelectionBy(Math.PI / 18)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                <RotateCw className="h-4 w-4" /> Girar +
               </button>
               <button type="button" onClick={duplicateSelection} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Copy className="h-4 w-4" /> Duplicar
