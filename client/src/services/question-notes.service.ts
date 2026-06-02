@@ -9,7 +9,7 @@ export type ScratchpadPoint = {
 };
 
 export type ScratchpadBrush = "pen" | "brush" | "highlighter";
-export type ScratchpadShape = "line" | "arrow" | "rectangle" | "ellipse";
+export type ScratchpadShape = "line" | "arrow" | "rectangle" | "ellipse" | "triangle";
 export type ScratchpadBackground = "grid" | "dots" | "lined" | "blank" | "cartesian";
 
 export type ScratchpadStroke = {
