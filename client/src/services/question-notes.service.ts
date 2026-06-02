@@ -8,15 +8,19 @@ export type ScratchpadPoint = {
   time?: number;
 };
 
-export type ScratchpadBrush = "pen" | "brush";
+export type ScratchpadBrush = "pen" | "brush" | "highlighter";
+export type ScratchpadShape = "line" | "arrow" | "rectangle" | "ellipse";
+export type ScratchpadBackground = "grid" | "dots" | "lined" | "blank" | "cartesian";
 
 export type ScratchpadStroke = {
   id: string;
-  tool: "pen" | "eraser";
+  tool: "pen" | "eraser" | "shape";
   color: string;
   size: number;
   points: ScratchpadPoint[];
   brush?: ScratchpadBrush;
+  shape?: ScratchpadShape;
+  opacity?: number;
 };
 
 export type QuestionNote = {
@@ -26,7 +30,7 @@ export type QuestionNote = {
   strokes: ScratchpadStroke[];
   canvas_width: number;
   canvas_height: number;
-  background_type: string;
+  background_type: ScratchpadBackground | string;
   title: string | null;
   created_at: string;
   updated_at: string;
@@ -67,7 +71,7 @@ export async function saveQuestionNote({
   strokes: ScratchpadStroke[];
   canvasWidth: number;
   canvasHeight: number;
-  backgroundType?: string;
+  backgroundType?: ScratchpadBackground;
   title?: string | null;
 }) {
   const payload = {
