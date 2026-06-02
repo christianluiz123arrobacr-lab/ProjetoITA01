@@ -43,7 +43,7 @@ type QuestionScratchpadProps = {
 };
 
 type ScratchpadTool = "pen" | "pan" | "areaEraser" | "strokeEraser" | "select" | "shape";
-type InteractionMode = "none" | "stroke" | "erase" | "pan" | "shape" | "lasso" | "selectionMove";
+type InteractionMode = "none" | "stroke" | "erase" | "pan" | "shape" | "lasso" | "selectionMove" | "selectionResize";
 
 type CanvasView = {
   zoom: number;
@@ -56,6 +56,20 @@ type Bounds = {
   minY: number;
   maxX: number;
   maxY: number;
+};
+
+type SelectionHandle = "nw" | "ne" | "sw" | "se";
+
+type ResizeState = {
+  handle: SelectionHandle;
+  baseBounds: Bounds;
+  baseStrokes: ScratchpadStroke[];
+};
+
+type LocalScratchpadDraft = {
+  strokes: ScratchpadStroke[];
+  backgroundType: ScratchpadBackground;
+  updatedAt: string;
 };
 
 type PointerSnapshot = {
@@ -91,6 +105,7 @@ const MAX_ZOOM = 4;
 const PAN_MARGIN = 140;
 const PALM_REJECTION_MS = 900;
 const MAX_HISTORY = 60;
+const LOCAL_DRAFT_VERSION = "v2";
 
 const COLORS = [
   "#0f172a",
@@ -578,7 +593,7 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
   ctx.strokeStyle = stroke.color;
 
   if (stroke.brush === "brush") {
-    ctx.globalAlpha = stroke.opacity ?? 0.96;
+    ctx.globalAlpha = stroke.opacity ?? 0.97;
   }
 
   if (stroke.points.length === 1) {
@@ -599,22 +614,25 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
     return;
   }
 
-  for (let i = 1; i < stroke.points.length - 1; i += 1) {
-    const previous = stroke.points[i - 1];
-    const current = stroke.points[i];
-    const next = stroke.points[i + 1];
-    const control = current;
-    const end = {
+  const points = stroke.points;
+
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const previous = points[i - 1];
+    const current = points[i];
+    const next = points[i + 1];
+    const startMid = {
+      x: (previous.x + current.x) / 2,
+      y: (previous.y + current.y) / 2,
+    };
+    const endMid = {
       x: (current.x + next.x) / 2,
       y: (current.y + next.y) / 2,
-      pressure: current.pressure,
-      width: current.width,
     };
 
     ctx.beginPath();
-    ctx.moveTo(previous.x, previous.y);
-    ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
-    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke)) / 2;
+    ctx.moveTo(startMid.x, startMid.y);
+    ctx.quadraticCurveTo(current.x, current.y, endMid.x, endMid.y);
+    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke) + getPointWidth(next, stroke)) / 3;
     ctx.stroke();
   }
 
@@ -861,6 +879,209 @@ function drawSelectionBox(ctx: CanvasRenderingContext2D, bounds: Bounds | null, 
   ctx.restore();
 }
 
+function getSelectionHandles(bounds: Bounds) {
+  return [
+    { handle: "nw" as const, x: bounds.minX, y: bounds.minY },
+    { handle: "ne" as const, x: bounds.maxX, y: bounds.minY },
+    { handle: "sw" as const, x: bounds.minX, y: bounds.maxY },
+    { handle: "se" as const, x: bounds.maxX, y: bounds.maxY },
+  ];
+}
+
+function getSelectionHandleAtPoint(
+  point: ScratchpadPoint,
+  bounds: Bounds,
+  view: CanvasView
+): SelectionHandle | null {
+  const hitRadius = 15 / view.zoom;
+
+  for (const item of getSelectionHandles(bounds)) {
+    if (Math.abs(point.x - item.x) <= hitRadius && Math.abs(point.y - item.y) <= hitRadius) {
+      return item.handle;
+    }
+  }
+
+  return null;
+}
+
+function getOppositeCorner(bounds: Bounds, handle: SelectionHandle) {
+  if (handle === "nw") return { x: bounds.maxX, y: bounds.maxY };
+  if (handle === "ne") return { x: bounds.minX, y: bounds.maxY };
+  if (handle === "sw") return { x: bounds.maxX, y: bounds.minY };
+  return { x: bounds.minX, y: bounds.minY };
+}
+
+function scaleStrokeFromBounds(
+  stroke: ScratchpadStroke,
+  baseBounds: Bounds,
+  handle: SelectionHandle,
+  currentPoint: ScratchpadPoint
+) {
+  const anchor = getOppositeCorner(baseBounds, handle);
+  const baseHandlePoint = {
+    x: handle === "nw" || handle === "sw" ? baseBounds.minX : baseBounds.maxX,
+    y: handle === "nw" || handle === "ne" ? baseBounds.minY : baseBounds.maxY,
+  };
+
+  const baseDx = baseHandlePoint.x - anchor.x;
+  const baseDy = baseHandlePoint.y - anchor.y;
+  const nextDx = currentPoint.x - anchor.x;
+  const nextDy = currentPoint.y - anchor.y;
+
+  const scaleX = Math.abs(baseDx) < 1 ? 1 : clamp(nextDx / baseDx, 0.12, 8);
+  const scaleY = Math.abs(baseDy) < 1 ? 1 : clamp(nextDy / baseDy, 0.12, 8);
+  const widthScale = clamp((Math.abs(scaleX) + Math.abs(scaleY)) / 2, 0.25, 4);
+
+  return transformStrokePoints(
+    stroke,
+    (point) => ({
+      ...point,
+      x: anchor.x + (point.x - anchor.x) * scaleX,
+      y: anchor.y + (point.y - anchor.y) * scaleY,
+    }),
+    widthScale
+  );
+}
+
+function getStraightnessScore(stroke: ScratchpadStroke) {
+  if (stroke.points.length < 3) return 1;
+
+  const first = stroke.points[0];
+  const last = stroke.points[stroke.points.length - 1];
+  const length = Math.max(distance(first, last), 1);
+  const averageDeviation =
+    stroke.points.reduce((total, point) => total + distancePointToSegment(point, first, last), 0) /
+    stroke.points.length;
+
+  return averageDeviation / length;
+}
+
+function transformStrokeToPerfectShape(
+  stroke: ScratchpadStroke,
+  shape: ScratchpadShape
+): ScratchpadStroke {
+  const bounds = getStrokeBounds(stroke);
+
+  if (!bounds) return stroke;
+
+  if (shape === "line" || shape === "arrow") {
+    if (stroke.points.length >= 2) {
+      const first = stroke.points[0];
+      const last = stroke.points[stroke.points.length - 1];
+      const averageWidth =
+        stroke.points.reduce((total, point) => total + (point.width ?? getFallbackWidth(point, stroke)), 0) /
+        Math.max(stroke.points.length, 1);
+
+      return {
+        ...stroke,
+        tool: "shape",
+        shape,
+        opacity: stroke.opacity ?? 1,
+        points: [
+          { ...first, width: averageWidth },
+          { ...last, width: averageWidth },
+        ],
+      };
+    }
+  }
+
+  const width = Math.max(bounds.maxX - bounds.minX, 8);
+  const height = Math.max(bounds.maxY - bounds.minY, 8);
+  const size = Math.max(2, stroke.size);
+
+  return {
+    ...stroke,
+    tool: "shape",
+    shape,
+    opacity: stroke.opacity ?? 1,
+    size,
+    points: [
+      { x: bounds.minX, y: bounds.minY, pressure: 0.6, width: size },
+      { x: bounds.minX + width, y: bounds.minY + height, pressure: 0.6, width: size },
+    ],
+  };
+}
+
+function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
+  const bounds = getStrokeBounds(stroke);
+
+  if (!bounds) return "line";
+
+  const width = Math.max(bounds.maxX - bounds.minX, 1);
+  const height = Math.max(bounds.maxY - bounds.minY, 1);
+  const aspect = width / height;
+
+  if (stroke.tool === "shape" && stroke.shape) return stroke.shape;
+  if (getStraightnessScore(stroke) < 0.12) return "line";
+  if (aspect > 0.72 && aspect < 1.38) return "ellipse";
+  return "rectangle";
+}
+
+function smoothFreehandStroke(stroke: ScratchpadStroke): ScratchpadStroke {
+  if (stroke.tool !== "pen" || stroke.points.length < 5) return stroke;
+
+  const points = stroke.points.map((point, index, list) => {
+    if (index === 0 || index === list.length - 1) return point;
+
+    const previous = list[index - 1];
+    const next = list[index + 1];
+
+    return {
+      ...point,
+      x: previous.x * 0.18 + point.x * 0.64 + next.x * 0.18,
+      y: previous.y * 0.18 + point.y * 0.64 + next.y * 0.18,
+      width:
+        typeof point.width === "number"
+          ? ((previous.width ?? point.width) * 0.2 + point.width * 0.6 + (next.width ?? point.width) * 0.2)
+          : point.width,
+      pressure:
+        typeof point.pressure === "number"
+          ? ((previous.pressure ?? point.pressure) * 0.2 + point.pressure * 0.6 + (next.pressure ?? point.pressure) * 0.2)
+          : point.pressure,
+    };
+  });
+
+  return {
+    ...stroke,
+    points,
+  };
+}
+
+function enrichPointPath(points: ScratchpadPoint[]) {
+  if (points.length < 2) return points;
+
+  const enriched: ScratchpadPoint[] = [points[0]];
+
+  for (let i = 1; i < points.length; i += 1) {
+    const previous = enriched[enriched.length - 1];
+    const current = points[i];
+    const gap = distance(previous, current);
+    const steps = Math.min(6, Math.floor(gap / 5));
+
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / (steps + 1);
+      enriched.push({
+        x: previous.x + (current.x - previous.x) * t,
+        y: previous.y + (current.y - previous.y) * t,
+        pressure: (previous.pressure ?? 0.5) + ((current.pressure ?? 0.5) - (previous.pressure ?? 0.5)) * t,
+        width:
+          typeof previous.width === "number" && typeof current.width === "number"
+            ? previous.width + (current.width - previous.width) * t
+            : current.width,
+        time:
+          typeof previous.time === "number" && typeof current.time === "number"
+            ? previous.time + (current.time - previous.time) * t
+            : current.time,
+      });
+    }
+
+    enriched.push(current);
+  }
+
+  return enriched;
+}
+
+
 function isPointNearStroke(point: ScratchpadPoint, stroke: ScratchpadStroke, radius: number) {
   if (stroke.tool === "shape" && stroke.points.length >= 2) {
     const start = stroke.points[0];
@@ -1031,6 +1252,64 @@ function getReadableErrorMessage(error: unknown) {
   return "Erro desconhecido.";
 }
 
+function getLocalDraftKey(userId: string | null | undefined, questionId: string) {
+  return `${LOCAL_DRAFT_VERSION}:question-note:${userId ?? "anonymous"}:${questionId}`;
+}
+
+function readLocalDraft(userId: string | null | undefined, questionId: string) {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(getLocalDraftKey(userId, questionId));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as LocalScratchpadDraft;
+
+    if (!Array.isArray(parsed.strokes) || !isValidBackground(parsed.backgroundType)) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalDraft({
+  userId,
+  questionId,
+  strokes,
+  backgroundType,
+}: {
+  userId?: string | null;
+  questionId: string;
+  strokes: ScratchpadStroke[];
+  backgroundType: ScratchpadBackground;
+}) {
+  if (typeof window === "undefined") return null;
+
+  const draft: LocalScratchpadDraft = {
+    strokes,
+    backgroundType,
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    window.localStorage.setItem(getLocalDraftKey(userId, questionId), JSON.stringify(draft));
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function isLocalDraftNewer(localDraft: LocalScratchpadDraft | null, remoteUpdatedAt?: string | null) {
+  if (!localDraft) return false;
+  if (!remoteUpdatedAt) return true;
+
+  return new Date(localDraft.updatedAt).getTime() - new Date(remoteUpdatedAt).getTime() > 15000;
+}
+
+
 function getTwoTouchPointers(activePointers: Map<number, PointerSnapshot>) {
   return Array.from(activePointers.values())
     .filter((pointer) => pointer.pointerType === "touch")
@@ -1074,6 +1353,7 @@ export function QuestionScratchpad({
   const lassoPathRef = useRef<ScratchpadPoint[]>([]);
   const panLastRawPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionLastPointRef = useRef<ScratchpadPoint | null>(null);
+  const resizeStateRef = useRef<ResizeState | null>(null);
   const strokesBeforeInteractionRef = useRef<ScratchpadStroke[] | null>(null);
   const selectionMovedRef = useRef(false);
   const strokesRef = useRef<ScratchpadStroke[]>([]);
@@ -1112,6 +1392,7 @@ export function QuestionScratchpad({
   const [view, setView] = useState<CanvasView>(viewRef.current);
   const [historyDepth, setHistoryDepth] = useState(0);
   const [redoDepth, setRedoDepth] = useState(0);
+  const [localStatus, setLocalStatus] = useState("");
 
   const canSave = Boolean(userId && questionId);
 
@@ -1299,6 +1580,22 @@ export function QuestionScratchpad({
     redrawCanvas();
   }, [backgroundType, redrawCanvas]);
 
+
+  useEffect(() => {
+    if (!loaded || !questionId || !dirtyRef.current) return;
+
+    const draft = writeLocalDraft({
+      userId,
+      questionId,
+      strokes,
+      backgroundType,
+    });
+
+    if (draft) {
+      setLocalStatus("Backup local salvo no navegador.");
+    }
+  }, [backgroundType, loaded, questionId, strokes, userId]);
+
   useEffect(() => {
     redrawCanvas();
   }, [selectedIds, redrawCanvas]);
@@ -1326,13 +1623,21 @@ export function QuestionScratchpad({
 
       try {
         const note = await getQuestionNote({ userId, questionId });
+        const localDraft = readLocalDraft(userId, questionId);
 
         if (cancelled) return;
 
-        const loadedStrokes = Array.isArray(note?.strokes) ? note.strokes : [];
-        const loadedBackground = isValidBackground(note?.background_type)
-          ? note.background_type
-          : "grid";
+        const shouldUseLocal = isLocalDraftNewer(localDraft, note?.updated_at);
+        const loadedStrokes = shouldUseLocal
+          ? localDraft?.strokes ?? []
+          : Array.isArray(note?.strokes)
+            ? note.strokes
+            : localDraft?.strokes ?? [];
+        const loadedBackground = shouldUseLocal
+          ? localDraft?.backgroundType ?? "grid"
+          : isValidBackground(note?.background_type)
+            ? note.background_type
+            : localDraft?.backgroundType ?? "grid";
 
         replaceStrokes(loadedStrokes);
         setBackgroundType(loadedBackground);
@@ -1342,13 +1647,29 @@ export function QuestionScratchpad({
         redoHistoryRef.current = [];
         setHistoryDepth(0);
         setRedoDepth(0);
-        dirtyRef.current = false;
-        setDirty(false);
+        dirtyRef.current = shouldUseLocal;
+        setDirty(shouldUseLocal);
+        setLocalStatus(shouldUseLocal ? "Rascunho local recuperado. Clique em Salvar para enviar à nuvem." : "Backup local ativo.");
+        if (shouldUseLocal) {
+          setStatus("Rascunho local recuperado.");
+        }
       } catch (loadError) {
         console.error("Erro ao carregar rascunho:", loadError);
 
         if (!cancelled) {
-          setError("Não foi possível carregar o rascunho desta questão.");
+          const localDraft = readLocalDraft(userId, questionId);
+
+          if (localDraft) {
+            replaceStrokes(localDraft.strokes);
+            setBackgroundType(localDraft.backgroundType);
+            backgroundTypeRef.current = localDraft.backgroundType;
+            dirtyRef.current = true;
+            setDirty(true);
+            setLocalStatus("Rascunho local recuperado. A nuvem falhou, mas o navegador salvou sua pele.");
+            setStatus("Rascunho local recuperado.");
+          } else {
+            setError("Não foi possível carregar o rascunho desta questão.");
+          }
         }
       } finally {
         if (!cancelled) {
@@ -1385,8 +1706,15 @@ export function QuestionScratchpad({
           title,
         });
 
+        writeLocalDraft({
+          userId,
+          questionId,
+          strokes: nextStrokes,
+          backgroundType: backgroundTypeRef.current,
+        });
         dirtyRef.current = false;
         setDirty(false);
+        setLocalStatus("Backup local e nuvem sincronizados.");
         setStatus("Rascunho salvo.");
       } catch (saveError) {
         const readableMessage = getReadableErrorMessage(saveError);
@@ -1437,6 +1765,7 @@ export function QuestionScratchpad({
     lassoPathRef.current = [];
     panLastRawPointRef.current = null;
     selectionLastPointRef.current = null;
+    resizeStateRef.current = null;
     activePointerIdRef.current = null;
     interactionModeRef.current = "none";
     setIsDrawing(false);
@@ -1506,7 +1835,7 @@ export function QuestionScratchpad({
 
     const nextPoints = [...currentStrokeRef.current.points];
 
-    for (const rawPoint of points) {
+    for (const rawPoint of enrichPointPath(points)) {
       const previousPoint = nextPoints[nextPoints.length - 1];
 
       if (!shouldAppendPoint(previousPoint, rawPoint)) {
@@ -1590,6 +1919,22 @@ export function QuestionScratchpad({
 
     if (tool === "select") {
       const currentSelectedBounds = getSelectedBounds(strokesRef.current, selectedIds);
+
+      if (currentSelectedBounds) {
+        const selectedHandle = getSelectionHandleAtPoint(point, currentSelectedBounds, viewRef.current);
+
+        if (selectedHandle) {
+          beginInteraction(event, "selectionResize");
+          resizeStateRef.current = {
+            handle: selectedHandle,
+            baseBounds: currentSelectedBounds,
+            baseStrokes: cloneStrokes(strokesRef.current),
+          };
+          strokesBeforeInteractionRef.current = cloneStrokes(strokesRef.current);
+          selectionMovedRef.current = false;
+          return;
+        }
+      }
 
       if (currentSelectedBounds && isPointInsideBounds(point, currentSelectedBounds)) {
         beginInteraction(event, "selectionMove");
@@ -1731,6 +2076,29 @@ export function QuestionScratchpad({
 
     const points = getCanvasPointsFromEvent(event);
 
+    if (mode === "selectionResize") {
+      const resizeState = resizeStateRef.current;
+      const currentPoint = points[points.length - 1];
+
+      if (!resizeState) return;
+
+      const selectedSet = new Set(selectedIds);
+      const nextStrokes = resizeState.baseStrokes.map((stroke) => {
+        if (!selectedSet.has(stroke.id)) return stroke;
+
+        return scaleStrokeFromBounds(
+          stroke,
+          resizeState.baseBounds,
+          resizeState.handle,
+          currentPoint
+        );
+      });
+
+      selectionMovedRef.current = true;
+      replaceStrokes(nextStrokes);
+      return;
+    }
+
     if (mode === "selectionMove") {
       const currentPoint = points[points.length - 1];
       const previousPoint = selectionLastPointRef.current;
@@ -1837,7 +2205,7 @@ export function QuestionScratchpad({
     const mode = interactionModeRef.current;
 
     if (mode === "stroke" && currentStrokeRef.current) {
-      const finishedStroke = currentStrokeRef.current;
+      const finishedStroke = smoothFreehandStroke(currentStrokeRef.current);
       const previous = strokesRef.current;
 
       currentStrokeRef.current = null;
@@ -1852,7 +2220,7 @@ export function QuestionScratchpad({
       }
     } else if (mode === "erase") {
       finalizeHistoryIfChanged();
-    } else if (mode === "selectionMove") {
+    } else if (mode === "selectionMove" || mode === "selectionResize") {
       if (selectionMovedRef.current) {
         finalizeHistoryIfChanged();
       } else {
@@ -1878,6 +2246,7 @@ export function QuestionScratchpad({
     lassoPathRef.current = [];
     panLastRawPointRef.current = null;
     selectionLastPointRef.current = null;
+    resizeStateRef.current = null;
     activePointerIdRef.current = null;
     interactionModeRef.current = "none";
     selectionMovedRef.current = false;
@@ -1894,6 +2263,7 @@ export function QuestionScratchpad({
       eraserPathRef.current = [];
       lassoPathRef.current = [];
       strokesBeforeInteractionRef.current = null;
+      resizeStateRef.current = null;
       activePointerIdRef.current = null;
       interactionModeRef.current = "none";
       setIsDrawing(false);
@@ -2051,6 +2421,14 @@ export function QuestionScratchpad({
     applyTransformToSelection(straightenStroke);
   }
 
+  function transformSelectionToPerfectShape(shape: ScratchpadShape) {
+    applyTransformToSelection((stroke) => transformStrokeToPerfectShape(stroke, shape));
+  }
+
+  function autoPerfectSelection() {
+    applyTransformToSelection((stroke) => transformStrokeToPerfectShape(stroke, guessPerfectShape(stroke)));
+  }
+
   function deleteSelection() {
     if (selectedIds.length === 0) return;
 
@@ -2148,7 +2526,7 @@ export function QuestionScratchpad({
           <div>
             <p className="font-black text-slate-950">Rascunho manuscrito</p>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Escreva, selecione, mova, endireite traços, use formas rápidas e exporte o rascunho.
+              Escreva com alta suavização, selecione, redimensione pelos cantos, transforme rabiscos em formas e mantenha backup local.
             </p>
           </div>
         </div>
@@ -2347,6 +2725,21 @@ export function QuestionScratchpad({
               <button type="button" onClick={straightenSelection} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 Endireitar traço
               </button>
+              <button type="button" onClick={autoPerfectSelection} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                Forma perfeita
+              </button>
+              <button type="button" onClick={() => transformSelectionToPerfectShape("line")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                <Minus className="h-4 w-4" /> Reta
+              </button>
+              <button type="button" onClick={() => transformSelectionToPerfectShape("arrow")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                <ArrowRight className="h-4 w-4" /> Seta
+              </button>
+              <button type="button" onClick={() => transformSelectionToPerfectShape("rectangle")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                <Square className="h-4 w-4" /> Retângulo
+              </button>
+              <button type="button" onClick={() => transformSelectionToPerfectShape("ellipse")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                <Circle className="h-4 w-4" /> Círculo
+              </button>
               <button type="button" onClick={duplicateSelection} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Copy className="h-4 w-4" /> Duplicar
               </button>
@@ -2389,7 +2782,8 @@ export function QuestionScratchpad({
 
           <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
-              Selecionar: clique em um traço para selecionar ou contorne vários com o laço. Com seleção ativa, arraste para mover, aumente/diminua ou use “Endireitar traço”.
+              Selecionar: clique em um traço ou contorne vários com o laço. Arraste a caixa para mover, arraste os cantos para redimensionar e use “Forma perfeita” para limpar rabiscos.
+              {localStatus ? <span className="mt-1 block font-bold text-violet-600">{localStatus}</span> : null}
             </p>
 
             <button
