@@ -132,7 +132,7 @@ const PALM_REJECTION_MS = 900;
 const MAX_HISTORY = 60;
 const LOCAL_DRAFT_VERSION = "v3";
 const PAGE_META_STROKE_ID = "__scratchpad_pages_v1";
-const AUTO_SHAPE_HOLD_MS = 480;
+const AUTO_SHAPE_HOLD_MS = 420;
 
 const COLORS = [
   "#0f172a",
@@ -157,6 +157,25 @@ const BACKGROUNDS: { value: ScratchpadBackground; label: string }[] = [
   { value: "lined", label: "Linhas" },
   { value: "blank", label: "Branco" },
   { value: "cartesian", label: "Cartesiano" },
+];
+
+type PenPreset = {
+  label: string;
+  tool: ScratchpadTool;
+  brush?: ScratchpadBrush;
+  color?: string;
+  size?: number;
+  eraserSize?: number;
+};
+
+const PEN_PRESETS: PenPreset[] = [
+  { label: "Preta fina", tool: "pen", brush: "pen", color: "#0f172a", size: 3 },
+  { label: "Azul média", tool: "pen", brush: "pen", color: "#2563eb", size: 5 },
+  { label: "Vermelha", tool: "pen", brush: "pen", color: "#dc2626", size: 4 },
+  { label: "Pincel", tool: "pen", brush: "brush", color: "#0f172a", size: 7 },
+  { label: "Marca-texto", tool: "pen", brush: "highlighter", color: "#fde047", size: 13 },
+  { label: "Borracha", tool: "areaEraser", eraserSize: 26 },
+  { label: "Traço inteiro", tool: "strokeEraser", eraserSize: 28 },
 ];
 
 const IMAGE_CACHE = new Map<string, HTMLImageElement>();
@@ -1305,19 +1324,88 @@ function transformStrokeToPerfectShape(
   };
 }
 
-function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
+function getStrokeShapeMetrics(stroke: ScratchpadStroke) {
   const bounds = getStrokeBounds(stroke);
 
-  if (!bounds) return "line";
+  if (!bounds) {
+    return null;
+  }
 
   const width = Math.max(bounds.maxX - bounds.minX, 1);
   const height = Math.max(bounds.maxY - bounds.minY, 1);
+  const diagonal = Math.hypot(width, height);
+  const first = stroke.points[0];
+  const last = stroke.points[stroke.points.length - 1];
+  const closedness = first && last ? distance(first, last) / Math.max(diagonal, 1) : 1;
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const rx = width / 2;
+  const ry = height / 2;
   const aspect = width / height;
 
+  let ellipseScore = 0;
+  let rectangleScore = 0;
+
+  const points = stroke.points.length > 80
+    ? stroke.points.filter((_, index) => index % Math.ceil(stroke.points.length / 80) === 0)
+    : stroke.points;
+
+  for (const point of points) {
+    const normalizedEllipse =
+      Math.sqrt(
+        ((point.x - cx) * (point.x - cx)) / Math.max(rx * rx, 1) +
+          ((point.y - cy) * (point.y - cy)) / Math.max(ry * ry, 1)
+      );
+
+    ellipseScore += Math.abs(normalizedEllipse - 1);
+
+    const dxToEdge = Math.min(Math.abs(point.x - bounds.minX), Math.abs(point.x - bounds.maxX)) / width;
+    const dyToEdge = Math.min(Math.abs(point.y - bounds.minY), Math.abs(point.y - bounds.maxY)) / height;
+    rectangleScore += Math.min(dxToEdge, dyToEdge);
+  }
+
+  const count = Math.max(points.length, 1);
+
+  return {
+    bounds,
+    width,
+    height,
+    diagonal,
+    aspect,
+    closedness,
+    straightness: getStraightnessScore(stroke),
+    ellipseScore: ellipseScore / count,
+    rectangleScore: rectangleScore / count,
+  };
+}
+
+function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
   if (stroke.tool === "shape" && stroke.shape) return stroke.shape;
-  if (getStraightnessScore(stroke) < 0.12) return "line";
-  if (aspect > 0.72 && aspect < 1.38) return "ellipse";
-  return "rectangle";
+
+  const metrics = getStrokeShapeMetrics(stroke);
+
+  if (!metrics) return "line";
+
+  const { aspect, closedness, straightness, ellipseScore, rectangleScore } = metrics;
+
+  if (straightness < 0.055 && closedness > 0.45) {
+    return "line";
+  }
+
+  const looksClosed = closedness < 0.32;
+
+  if (!looksClosed) {
+    return straightness < 0.1 ? "line" : "rectangle";
+  }
+
+  const aspectLooksCircular = aspect > 0.72 && aspect < 1.38;
+  const ellipseClearlyBetter = ellipseScore < rectangleScore * 0.82;
+  const rectangleClearlyBetter = rectangleScore < ellipseScore * 0.78;
+
+  if (rectangleClearlyBetter) return "rectangle";
+  if (ellipseClearlyBetter || aspectLooksCircular) return "ellipse";
+
+  return rectangleScore <= ellipseScore ? "rectangle" : "ellipse";
 }
 
 function shouldAutoPerfectStroke(stroke: ScratchpadStroke, pointerUpTime?: number) {
@@ -1325,18 +1413,18 @@ function shouldAutoPerfectStroke(stroke: ScratchpadStroke, pointerUpTime?: numbe
     return false;
   }
 
+  const metrics = getStrokeShapeMetrics(stroke);
+
+  if (!metrics || metrics.diagonal < 35) return false;
+
   const first = stroke.points[0];
   const last = stroke.points[stroke.points.length - 1];
   const lastMoveTime = last.time ?? first.time ?? 0;
   const holdTime = typeof pointerUpTime === "number" && lastMoveTime > 0 ? pointerUpTime - lastMoveTime : 0;
-  const bounds = getStrokeBounds(stroke);
-  const strokeWidth = bounds ? bounds.maxX - bounds.minX : 0;
-  const strokeHeight = bounds ? bounds.maxY - bounds.minY : 0;
-  const looksLikeLine = getStraightnessScore(stroke) < 0.035;
-  const looksClosed = distance(first, last) < Math.max(strokeWidth, strokeHeight) * 0.22;
-  const hasShapeSize = Math.max(strokeWidth, strokeHeight) > 35;
+  const looksLikeLine = metrics.straightness < 0.05 && metrics.closedness > 0.45;
+  const looksLikeClosedShape = metrics.closedness < 0.28 && metrics.diagonal > 45;
 
-  return holdTime >= AUTO_SHAPE_HOLD_MS && hasShapeSize && (looksLikeLine || looksClosed);
+  return holdTime >= AUTO_SHAPE_HOLD_MS && (looksLikeLine || looksLikeClosedShape);
 }
 
 function smoothFreehandStroke(stroke: ScratchpadStroke): ScratchpadStroke {
@@ -1680,8 +1768,8 @@ function ToolbarGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 p-2 ring-1 ring-slate-100">
-      <span className="px-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200">
+      <span className="px-1 text-[10px] font-black uppercase tracking-wide text-slate-400">
         {label}
       </span>
       {children}
@@ -1699,6 +1787,7 @@ export function QuestionScratchpad({
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
   const shapeStrokeRef = useRef<ScratchpadStroke | null>(null);
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
+  const eraserFrameRef = useRef<number | null>(null);
   const lassoPathRef = useRef<ScratchpadPoint[]>([]);
   const panLastRawPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionLastPointRef = useRef<ScratchpadPoint | null>(null);
@@ -2275,6 +2364,10 @@ export function QuestionScratchpad({
   function cancelCurrentInkInteraction() {
     currentStrokeRef.current = null;
     shapeStrokeRef.current = null;
+    if (eraserFrameRef.current !== null) {
+      window.cancelAnimationFrame(eraserFrameRef.current);
+      eraserFrameRef.current = null;
+    }
     eraserPathRef.current = [];
     lassoPathRef.current = [];
     panLastRawPointRef.current = null;
@@ -2343,6 +2436,54 @@ export function QuestionScratchpad({
     if (tool === "strokeEraser") {
       replaceStrokes(eraseWholeStrokes(strokesRef.current, path, eraserSize));
     }
+  }
+
+  function getEraserResultFromBase(path: ScratchpadPoint[]) {
+    const base = strokesBeforeInteractionRef.current ?? strokesRef.current;
+
+    if (tool === "areaEraser") {
+      return eraseStrokesByArea(base, path, eraserSize);
+    }
+
+    if (tool === "strokeEraser") {
+      return eraseWholeStrokes(base, path, eraserSize);
+    }
+
+    return base;
+  }
+
+  function flushLiveEraser() {
+    if (eraserFrameRef.current !== null) {
+      window.cancelAnimationFrame(eraserFrameRef.current);
+      eraserFrameRef.current = null;
+    }
+
+    if (eraserPathRef.current.length === 0) return;
+
+    const nextStrokes = getEraserResultFromBase(eraserPathRef.current);
+    replaceStrokes(nextStrokes);
+
+    const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
+    redrawCanvas(null, { point: lastPoint, radius: eraserSize });
+  }
+
+  function scheduleLiveEraser() {
+    if (eraserFrameRef.current !== null) return;
+
+    eraserFrameRef.current = window.requestAnimationFrame(() => {
+      eraserFrameRef.current = null;
+
+      if (interactionModeRef.current !== "erase") return;
+
+      const nextStrokes = getEraserResultFromBase(eraserPathRef.current);
+      replaceStrokes(nextStrokes);
+
+      const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
+
+      if (lastPoint) {
+        redrawCanvas(null, { point: lastPoint, radius: eraserSize });
+      }
+    });
   }
 
   function appendPointsToCurrentStroke(points: ScratchpadPoint[]) {
@@ -2549,6 +2690,7 @@ export function QuestionScratchpad({
     eraserPathRef.current = [point];
     setSelectedIds([]);
     redrawCanvas(null, { point, radius: eraserSize });
+    scheduleLiveEraser();
   }
 
   function moveSelectedByDelta(dx: number, dy: number) {
@@ -2721,6 +2863,7 @@ export function QuestionScratchpad({
 
       const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
       redrawCanvas(null, { point: lastPoint, radius: eraserSize });
+      scheduleLiveEraser();
     }
   }
 
@@ -2788,25 +2931,8 @@ export function QuestionScratchpad({
         commitStrokes([...previous, finishedShape], previous);
       }
     } else if (mode === "erase") {
-      const base = strokesBeforeInteractionRef.current;
-      const path = eraserPathRef.current;
-
-      if (base && path.length > 0) {
-        const nextStrokes =
-          tool === "areaEraser"
-            ? eraseStrokesByArea(base, path, eraserSize)
-            : eraseWholeStrokes(base, path, eraserSize);
-
-        strokesBeforeInteractionRef.current = null;
-
-        if (JSON.stringify(base) !== JSON.stringify(nextStrokes)) {
-          pushHistorySnapshot(base);
-          replaceStrokes(nextStrokes);
-          markDirty();
-        }
-      } else {
-        strokesBeforeInteractionRef.current = null;
-      }
+      flushLiveEraser();
+      finalizeHistoryIfChanged();
     } else if (mode === "selectionMove" || mode === "selectionResize" || mode === "selectionRotate") {
       if (selectionMovedRef.current) {
         finalizeHistoryIfChanged();
@@ -2848,6 +2974,10 @@ export function QuestionScratchpad({
     if (event.pointerId === activePointerIdRef.current) {
       currentStrokeRef.current = null;
       shapeStrokeRef.current = null;
+      if (eraserFrameRef.current !== null) {
+        window.cancelAnimationFrame(eraserFrameRef.current);
+        eraserFrameRef.current = null;
+      }
       eraserPathRef.current = [];
       lassoPathRef.current = [];
       strokesBeforeInteractionRef.current = null;
@@ -2916,6 +3046,28 @@ export function QuestionScratchpad({
   function activateShape(nextShape: ScratchpadShape) {
     setTool("shape");
     setShapeTool(nextShape);
+  }
+
+  function applyPenPreset(preset: PenPreset) {
+    setTool(preset.tool);
+
+    if (preset.brush) {
+      setBrush(preset.brush);
+    }
+
+    if (preset.color) {
+      setColor(preset.color);
+    }
+
+    if (typeof preset.size === "number") {
+      setSize(preset.size);
+    }
+
+    if (typeof preset.eraserSize === "number") {
+      setEraserSize(preset.eraserSize);
+    }
+
+    setStatus(`Preset aplicado: ${preset.label}.`);
   }
 
   function handleBackgroundChange(nextBackground: ScratchpadBackground) {
@@ -3229,6 +3381,67 @@ export function QuestionScratchpad({
 
 
 
+  useEffect(() => {
+    function isTypingTarget(target: EventTarget | null) {
+      if (!(target instanceof HTMLElement)) return false;
+
+      const tag = target.tagName.toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select" || target.isContentEditable;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) return;
+
+      const key = event.key.toLowerCase();
+
+      if ((event.ctrlKey || event.metaKey) && key === "s") {
+        event.preventDefault();
+        void handleSave();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      if (((event.ctrlKey || event.metaKey) && event.shiftKey && key === "z") || ((event.ctrlKey || event.metaKey) && key === "y")) {
+        event.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      if (key === "delete" || key === "backspace") {
+        if (selectedIds.length > 0) {
+          event.preventDefault();
+          deleteSelection();
+        }
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      if (key === "p") activatePen("pen");
+      if (key === "b") activatePen("brush");
+      if (key === "h") activatePen("highlighter");
+      if (key === "e") setTool("areaEraser");
+      if (key === "s") setTool("select");
+      if (key === "m") setTool("pan");
+      if (key === "t") setTool("text");
+      if (key === "l") activateShape("line");
+      if (key === "a") activateShape("arrow");
+      if (key === "r") activateShape("rectangle");
+      if (key === "c") activateShape("ellipse");
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleSave, selectedIds.length]);
+
   const selectedAverageSize = useMemo(() => {
     if (selectedIds.length === 0) return size;
 
@@ -3277,7 +3490,7 @@ export function QuestionScratchpad({
           <div>
             <p className="font-black text-slate-950">Rascunho manuscrito</p>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Use páginas, texto, imagem, seleção com rotação, formas perfeitas, PDF e backup local.
+              Use presets, atalhos, páginas, texto, imagem, formas perfeitas e borracha em tempo real.
             </p>
           </div>
         </div>
@@ -3374,6 +3587,24 @@ export function QuestionScratchpad({
           </div>
 
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+            <ToolbarGroup label="Favoritos">
+              {PEN_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => applyPenPreset(preset)}
+                  className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                    (preset.tool === tool && (!preset.brush || preset.brush === brush))
+                      ? "bg-violet-600 text-white"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                  title={`Atalho rápido: ${preset.label}`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </ToolbarGroup>
+
             <ToolbarGroup label="Ferramentas">
               <button type="button" onClick={() => activatePen("pen")} className={toolButtonClass(tool === "pen" && brush === "pen")}> 
                 <PenLine className="h-4 w-4" /> Caneta
@@ -3394,10 +3625,10 @@ export function QuestionScratchpad({
                 <Move className="h-4 w-4" /> Mover
               </button>
               <button type="button" onClick={() => setTool("areaEraser")} className={toolButtonClass(tool === "areaEraser")}> 
-                <Eraser className="h-4 w-4" /> Borracha livre
+                <Eraser className="h-4 w-4" /> Borracha
               </button>
               <button type="button" onClick={() => setTool("strokeEraser")} className={toolButtonClass(tool === "strokeEraser")}> 
-                <Eraser className="h-4 w-4" /> Apagar traço
+                <Eraser className="h-4 w-4" /> Traço inteiro
               </button>
             </ToolbarGroup>
 
@@ -3614,7 +3845,7 @@ export function QuestionScratchpad({
 
           <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
-              Selecionar: clique em um traço ou contorne vários com o laço. Arraste a caixa para mover, arraste os cantos para redimensionar e use “Forma perfeita” para limpar rabiscos.
+              Atalhos: P caneta, B pincel, H marca-texto, E borracha, S selecionar, M mover, T texto, L reta, A seta, Ctrl+S salvar. A borracha apaga em tempo real e “Forma perfeita” agora distingue melhor círculo e retângulo.
               {localStatus ? <span className="mt-1 block font-bold text-violet-600">{localStatus}</span> : null}
             </p>
 
