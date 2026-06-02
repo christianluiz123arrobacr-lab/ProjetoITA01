@@ -168,6 +168,14 @@ type PenPreset = {
   eraserSize?: number;
 };
 
+type ScratchpadListItem = {
+  key: string;
+  questionId: string;
+  title: string;
+  updatedAt: string;
+  pagesCount: number;
+};
+
 const PEN_PRESETS: PenPreset[] = [
   { label: "Preta fina", tool: "pen", brush: "pen", color: "#0f172a", size: 3 },
   { label: "Azul média", tool: "pen", brush: "pen", color: "#2563eb", size: 5 },
@@ -434,7 +442,11 @@ function splitStrokeByEraser(
   path: ScratchpadPoint[],
   radius: number
 ) {
-  if (stroke.tool !== "pen") return [stroke];
+  if (stroke.tool === "meta") return [stroke];
+
+  if (stroke.tool !== "pen") {
+    return isStrokeTouchedByPath(stroke, path, radius) ? [] : [stroke];
+  }
 
   const chunks: ScratchpadPoint[][] = [];
   let currentChunk: ScratchpadPoint[] = [];
@@ -481,7 +493,7 @@ function eraseWholeStrokes(
   path: ScratchpadPoint[],
   radius: number
 ) {
-  return strokes.filter((stroke) => !isStrokeTouchedByPath(stroke, path, radius));
+  return strokes.filter((stroke) => stroke.tool === "meta" || !isStrokeTouchedByPath(stroke, path, radius));
 }
 
 function normalizePressure(pressure: number | undefined, pointerType: string) {
@@ -1738,11 +1750,58 @@ function writeLocalDraft({
   }
 }
 
-function isLocalDraftNewer(localDraft: LocalScratchpadDraft | null, remoteUpdatedAt?: string | null) {
-  if (!localDraft) return false;
-  if (!remoteUpdatedAt) return true;
+function getLocalDraftIndexes() {
+  if (typeof window === "undefined") return [];
 
-  return new Date(localDraft.updatedAt).getTime() - new Date(remoteUpdatedAt).getTime() > 15000;
+  const prefix = `${LOCAL_DRAFT_VERSION}:question-note:`;
+  const items: ScratchpadListItem[] = [];
+
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key || !key.startsWith(prefix)) continue;
+
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw) as LocalScratchpadDraft;
+      const questionIdFromKey = key.replace(prefix, "").split(":").slice(1).join(":") || "sem-id";
+      const pagesCount = Array.isArray(parsed.pages)
+        ? parsed.pages.length
+        : Array.isArray(parsed.strokes)
+          ? 1
+          : 0;
+
+      items.push({
+        key,
+        questionId: questionIdFromKey,
+        title: questionIdFromKey === "anonymous" ? "Rascunho local" : `Questão ${questionIdFromKey.slice(0, 8)}`,
+        updatedAt: parsed.updatedAt,
+        pagesCount,
+      });
+    } catch {
+      // Ignora lixo perdido no localStorage. Até o navegador coleciona entulho.
+    }
+  }
+
+  return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+}
+
+function deleteLocalDraftByKey(key: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(key);
+}
+
+function formatLocalDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "data desconhecida";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 
@@ -1834,6 +1893,8 @@ export function QuestionScratchpad({
   const [historyDepth, setHistoryDepth] = useState(0);
   const [redoDepth, setRedoDepth] = useState(0);
   const [localStatus, setLocalStatus] = useState("");
+  const [notesPanelOpen, setNotesPanelOpen] = useState(false);
+  const [localNotes, setLocalNotes] = useState<ScratchpadListItem[]>([]);
 
   const canSave = Boolean(userId && questionId);
 
@@ -1845,6 +1906,10 @@ export function QuestionScratchpad({
     () => getSelectedBounds(strokes, selectedIds),
     [selectedIds, strokes]
   );
+
+  function refreshLocalNotesPanel() {
+    setLocalNotes(getLocalDraftIndexes());
+  }
 
   const replaceStrokes = useCallback((nextStrokes: ScratchpadStroke[]) => {
     strokesRef.current = nextStrokes;
@@ -2161,6 +2226,7 @@ export function QuestionScratchpad({
 
     if (draft) {
       setLocalStatus("Backup local salvo no navegador.");
+      refreshLocalNotesPanel();
     }
   }, [activePageId, backgroundType, loaded, pages, questionId, strokes, userId]);
 
@@ -3337,6 +3403,31 @@ export function QuestionScratchpad({
     printWindow.document.close();
   }
 
+  function editSelectedText() {
+    if (selectedIds.length !== 1) return;
+
+    const selectedId = selectedIds[0];
+    const selectedStroke = strokesRef.current.find((stroke) => stroke.id === selectedId);
+
+    if (!selectedStroke || selectedStroke.tool !== "text") return;
+
+    const nextText = window.prompt("Editar texto:", selectedStroke.text ?? "");
+
+    if (nextText === null) return;
+
+    const previous = cloneStrokes(strokesRef.current);
+    const next = strokesRef.current.map((stroke) =>
+      stroke.id === selectedId
+        ? {
+            ...stroke,
+            text: nextText.trim(),
+          }
+        : stroke
+    );
+
+    commitStrokes(next, previous);
+  }
+
   function importImageFile(file: File) {
     if (file.type === "application/pdf") {
       setError("Importação direta de PDF precisa de PDF.js. Por enquanto, exportação em PDF já está pronta e importação aceita imagens.");
@@ -3380,6 +3471,35 @@ export function QuestionScratchpad({
   }
 
 
+
+  function handleCanvasDoubleClick(event: React.MouseEvent<HTMLCanvasElement>) {
+    if (tool !== "select") return;
+
+    const point = getCanvasPointFromNative(event.nativeEvent, "mouse");
+    const clickedStroke = findStrokeAtPoint(strokesRef.current, point);
+
+    if (!clickedStroke) return;
+
+    setSelectedIds([clickedStroke.id]);
+
+    if (clickedStroke.tool === "text") {
+      const nextText = window.prompt("Editar texto:", clickedStroke.text ?? "");
+
+      if (nextText === null) return;
+
+      const previous = cloneStrokes(strokesRef.current);
+      const next = strokesRef.current.map((stroke) =>
+        stroke.id === clickedStroke.id
+          ? {
+              ...stroke,
+              text: nextText.trim(),
+            }
+          : stroke
+      );
+
+      commitStrokes(next, previous);
+    }
+  }
 
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
@@ -3455,11 +3575,11 @@ export function QuestionScratchpad({
   }, [selectedIds, size, strokes]);
 
   const containerClassName = fullscreen
-    ? "fixed inset-0 z-[80] flex flex-col overflow-hidden bg-white p-3 md:p-5"
+    ? "fixed inset-0 z-[100] flex h-dvh w-dvw flex-col overflow-hidden bg-slate-950 text-slate-100"
     : "mb-6 overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 shadow-sm";
 
   const canvasWrapperClassName = fullscreen
-    ? "flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-2 shadow-inner"
+    ? "flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-none border-0 bg-slate-900 p-3"
     : "rounded-2xl border border-slate-200 bg-white p-2 shadow-inner";
 
   const canvasCursorClass =
@@ -3477,13 +3597,15 @@ export function QuestionScratchpad({
     <div className={containerClassName}>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className={`flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/60 md:px-6 ${
-          fullscreen ? "rounded-2xl border border-violet-100 bg-violet-50" : ""
+        onClick={() => {
+          if (!fullscreen) setOpen((value) => !value);
+        }}
+        className={`flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition md:px-6 ${
+          fullscreen ? "shrink-0 border-b border-slate-800 bg-slate-950 text-white" : "hover:bg-white/60"
         }`}
       >
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-sm">
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm ${fullscreen ? "bg-violet-500" : "bg-violet-600"}`}>
             <PenLine className="h-5 w-5" />
           </div>
 
@@ -3521,7 +3643,7 @@ export function QuestionScratchpad({
       </button>
 
       {open ? (
-        <div className={`border-t border-violet-100 p-4 md:p-5 ${fullscreen ? "flex min-h-0 flex-1 flex-col" : ""}`}>
+        <div className={`${fullscreen ? "flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-slate-950 p-3" : "border-t border-violet-100 p-4 md:p-5"}`}>
           {!userId ? (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -3552,7 +3674,7 @@ export function QuestionScratchpad({
             }}
           />
 
-          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className={`${fullscreen ? "mb-0 shrink-0 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 text-slate-100 shadow-2xl" : "mb-4 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex flex-wrap items-center gap-2`}>
             <span className="px-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
               Páginas
             </span>
@@ -3586,7 +3708,45 @@ export function QuestionScratchpad({
             </button>
           </div>
 
-          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className={`${fullscreen ? "mb-0 shrink-0 rounded-2xl border border-slate-800 bg-slate-900/80 p-2 text-slate-100" : "mb-4 rounded-2xl border border-slate-200 bg-white p-2"} ${notesPanelOpen ? "block" : "hidden"}`}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="px-2 text-xs font-black uppercase tracking-wide text-slate-400">Meus rascunhos locais</p>
+              <button
+                type="button"
+                onClick={refreshLocalNotesPanel}
+                className="rounded-xl bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200"
+              >
+                Atualizar
+              </button>
+            </div>
+
+            {localNotes.length === 0 ? (
+              <p className="px-2 py-2 text-sm text-slate-500">Nenhum backup local encontrado neste navegador.</p>
+            ) : (
+              <div className="grid max-h-36 gap-2 overflow-y-auto md:grid-cols-2 lg:grid-cols-3">
+                {localNotes.map((note) => (
+                  <div key={note.key} className={`${fullscreen ? "bg-slate-950 ring-slate-800" : "bg-slate-50 ring-slate-200"} rounded-xl p-3 ring-1`}>
+                    <p className="truncate text-sm font-black">{note.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {note.pagesCount} página(s) • {formatLocalDate(note.updatedAt)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        deleteLocalDraftByKey(note.key);
+                        refreshLocalNotesPanel();
+                      }}
+                      className="mt-2 rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+                    >
+                      Remover backup local
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className={`${fullscreen ? "mb-0 max-h-[26vh] shrink-0 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl" : "mb-4 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex flex-wrap items-center gap-3`}>
             <ToolbarGroup label="Favoritos">
               {PEN_PRESETS.map((preset) => (
                 <button
@@ -3743,6 +3903,9 @@ export function QuestionScratchpad({
               <button type="button" onClick={handleClear} disabled={strokes.length === 0} className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
                 <Trash2 className="h-4 w-4" /> Limpar
               </button>
+              <button type="button" onClick={() => { refreshLocalNotesPanel(); setNotesPanelOpen((value) => !value); }} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
+                <FileText className="h-4 w-4" /> Meus rascunhos
+              </button>
               <button type="button" onClick={() => handleSave()} disabled={!canSave || saving} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Salvar
@@ -3755,6 +3918,11 @@ export function QuestionScratchpad({
               <span className="font-black text-violet-900">
                 {selectedIds.length} item(ns) selecionado(s)
               </span>
+              {selectedIds.length === 1 && strokes.find((stroke) => stroke.id === selectedIds[0])?.tool === "text" ? (
+                <button type="button" onClick={editSelectedText} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+                  Editar texto
+                </button>
+              ) : null}
               <button type="button" onClick={() => scaleSelection(1.15)} className="rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 Aumentar tamanho
               </button>
@@ -3834,16 +4002,17 @@ export function QuestionScratchpad({
                   }
                 }}
                 onWheel={handleWheel}
-                className={`block w-full rounded-xl bg-white ${canvasCursorClass} ${fullscreen ? "max-h-full flex-1 object-contain" : ""}`}
+                onDoubleClick={handleCanvasDoubleClick}
+                className={`block w-full rounded-xl bg-white ${canvasCursorClass} ${fullscreen ? "h-full max-h-full w-auto max-w-full object-contain" : ""}`}
                 style={{
-                  aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
+                  aspectRatio: fullscreen ? undefined : `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
                   touchAction: "none",
                 }}
               />
             )}
           </div>
 
-          <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
+          <div className={`${fullscreen ? "hidden" : "mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between"}`}>
             <p>
               Atalhos: P caneta, B pincel, H marca-texto, E borracha, S selecionar, M mover, T texto, L reta, A seta, Ctrl+S salvar. A borracha apaga em tempo real e “Forma perfeita” agora distingue melhor círculo e retângulo.
               {localStatus ? <span className="mt-1 block font-bold text-violet-600">{localStatus}</span> : null}
