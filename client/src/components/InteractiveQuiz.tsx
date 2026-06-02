@@ -4,6 +4,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { MathFormula } from "./MathFormula";
+import { QuestionScratchpad } from "@/components/question-notes/QuestionScratchpad";
 import { Button } from "@/components/ui/button";
 import {
   CheckCircle,
@@ -628,7 +629,16 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
             </div>
           ) : null}
         </div>
+     </div>
 
+    <QuestionScratchpad
+      userId={user?.id}
+      questionId={question.id}
+     questionCode={question.codigo}
+      />
+
+      <div className="space-y-3 mb-6">
+       {question.options.map((option) => {
         <div className="space-y-3 mb-6">
           {question.options.map((option) => {
             const isSelected = selectedAnswer === option.id;
