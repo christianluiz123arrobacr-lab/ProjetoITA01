@@ -9,8 +9,11 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import SubscriptionGuard from "./components/SubscriptionGuard";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
-import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import {
+  checkPlatformAccess,
+  getCachedPlatformAccess,
+} from "@/services/access.service";
 
 import Landing from "./pages/Landing";
 import LandingPage from "./pages/LandingPage";
@@ -182,79 +185,26 @@ function RootGate() {
         return;
       }
 
-      try {
+      const cached = getCachedPlatformAccess(user.id);
+
+      if (cached && !cancelled) {
+        setAccessState(cached.status === "allowed" ? "allowed" : "blocked");
+      } else if (!cancelled) {
         setAccessState("checking");
+      }
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role, ativo")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.warn("Erro ao buscar perfil na entrada:", profileError);
-        }
-
-        if (profile?.role === "admin") {
-          if (!cancelled) {
-            setAccessState("allowed");
-          }
-
-          return;
-        }
-
-        if (profile?.ativo === false) {
-          if (!cancelled) {
-            setAccessState("blocked");
-          }
-
-          return;
-        }
-
-        const { data: hasActiveSubscription, error: rpcError } =
-          await supabase.rpc("user_has_active_subscription", {
-            target_user_id: user.id,
-          });
-
-        if (!rpcError && typeof hasActiveSubscription === "boolean") {
-          if (!cancelled) {
-            setAccessState(hasActiveSubscription ? "allowed" : "blocked");
-          }
-
-          return;
-        }
-
-        console.warn(
-          "RPC user_has_active_subscription falhou na entrada. Usando fallback:",
-          rpcError
-        );
-
-        const now = new Date().toISOString();
-
-        const { data: subscription, error: subscriptionError } = await supabase
-          .from("billing_subscriptions")
-          .select("id")
-          .eq("user_id", user.id)
-          .in("status", ["active", "trialing"])
-          .or(`current_period_end.is.null,current_period_end.gte.${now}`)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (subscriptionError) {
-          console.warn(
-            "Erro ao buscar assinatura ativa na entrada:",
-            subscriptionError
-          );
-        }
+      try {
+        const freshAccess = await checkPlatformAccess(user.id, {
+          forceRefresh: true,
+        });
 
         if (!cancelled) {
-          setAccessState(subscription ? "allowed" : "blocked");
+          setAccessState(freshAccess.status === "allowed" ? "allowed" : "blocked");
         }
       } catch (error) {
         console.warn("Erro inesperado na entrada do site:", error);
 
-        if (!cancelled) {
+        if (!cancelled && !cached) {
           setAccessState("blocked");
         }
       }
