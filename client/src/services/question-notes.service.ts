@@ -90,34 +90,50 @@ export async function saveQuestionNote({
     updated_at: new Date().toISOString(),
   };
 
+  const { error: upsertError } = await supabase
+    .from("question_notes")
+    .upsert(payload, {
+      onConflict: "user_id,question_id",
+      ignoreDuplicates: false,
+    });
+
+  if (!upsertError) {
+    return null;
+  }
+
+  const errorCode = (upsertError as { code?: string }).code;
+
+  if (errorCode !== "42P10") {
+    throw upsertError;
+  }
+
+  console.warn(
+    "question_notes ainda não tem índice único em user_id/question_id. Usando fallback mais lento.",
+    upsertError
+  );
+
   const existing = await getQuestionNote({ userId, questionId });
 
   if (existing?.id) {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("question_notes")
       .update(payload)
-      .eq("id", existing.id)
-      .select("*")
-      .single();
+      .eq("id", existing.id);
 
     if (error) {
       throw error;
     }
 
-    return data as QuestionNote;
+    return null;
   }
 
-  const { data, error } = await supabase
-    .from("question_notes")
-    .insert(payload)
-    .select("*")
-    .single();
+  const { error } = await supabase.from("question_notes").insert(payload);
 
   if (error) {
     throw error;
   }
 
-  return data as QuestionNote;
+  return null;
 }
 
 export async function deleteQuestionNote({
