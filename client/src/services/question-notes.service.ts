@@ -6,12 +6,15 @@ export type ScratchpadPoint = {
   pressure?: number;
 };
 
+export type ScratchpadBrush = "pen" | "brush";
+
 export type ScratchpadStroke = {
   id: string;
   tool: "pen" | "eraser";
   color: string;
   size: number;
   points: ScratchpadPoint[];
+  brush?: ScratchpadBrush;
 };
 
 export type QuestionNote = {
