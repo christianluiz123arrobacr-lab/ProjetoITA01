@@ -1,4 +1,4 @@
-import { type ElementType, type ReactNode } from "react";
+import { useState, type ElementType, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -9,7 +9,6 @@ import {
   Eye,
   Layers,
   Lightbulb,
-  Orbit,
   Rainbow,
   ScanLine,
   ShieldCheck,
@@ -17,30 +16,37 @@ import {
   Target,
   Telescope,
   Waves,
-  Zap,
 } from "lucide-react";
 import { Link } from "wouter";
-
 import { MathFormula } from "@/components/MathFormula";
 
-type SectionTone = "orange" | "cyan" | "violet" | "emerald" | "blue" | "rose";
+type Tab = "teoria" | "exemplos" | "resumo";
+type NoteType = "info" | "warning" | "success";
 
-type TopicSection = {
-  number: string;
-  title: string;
+type TheorySection = {
+  id: number;
   icon: ElementType;
-  tone: SectionTone;
-  children: ReactNode;
+  title: string;
+  accent: string;
+  paragraphs: string[];
+  bullets?: string[];
+  numbered?: string[];
+  notes?: {
+    title: string;
+    type: NoteType;
+    body: string;
+  }[];
 };
 
-type FormulaItem = {
+type FormulaSummary = {
   title: string;
   formula: string;
-  explanation: string;
+  description: string;
   warning?: string;
 };
 
-type ExampleItem = {
+type Example = {
+  id: string;
   title: string;
   level: string;
   statement: string;
@@ -49,432 +55,587 @@ type ExampleItem = {
   answer: string;
 };
 
-const toneMap: Record<SectionTone, { header: string; icon: string; border: string; soft: string; text: string }> = {
-  orange: {
-    header: "from-orange-600 via-orange-600 to-red-600",
-    icon: "bg-orange-500/20 text-orange-100 ring-orange-300/30",
-    border: "border-orange-200",
-    soft: "bg-orange-50",
-    text: "text-orange-700",
-  },
-  cyan: {
-    header: "from-cyan-600 via-sky-600 to-blue-700",
-    icon: "bg-cyan-500/20 text-cyan-100 ring-cyan-300/30",
-    border: "border-cyan-200",
-    soft: "bg-cyan-50",
-    text: "text-cyan-700",
-  },
-  violet: {
-    header: "from-violet-600 via-purple-600 to-fuchsia-700",
-    icon: "bg-violet-500/20 text-violet-100 ring-violet-300/30",
-    border: "border-violet-200",
-    soft: "bg-violet-50",
-    text: "text-violet-700",
-  },
-  emerald: {
-    header: "from-emerald-600 via-teal-600 to-cyan-700",
-    icon: "bg-emerald-500/20 text-emerald-100 ring-emerald-300/30",
-    border: "border-emerald-200",
-    soft: "bg-emerald-50",
-    text: "text-emerald-700",
-  },
-  blue: {
-    header: "from-blue-700 via-indigo-700 to-slate-900",
-    icon: "bg-blue-500/20 text-blue-100 ring-blue-300/30",
-    border: "border-blue-200",
-    soft: "bg-blue-50",
-    text: "text-blue-700",
-  },
-  rose: {
-    header: "from-rose-600 via-red-600 to-orange-600",
-    icon: "bg-rose-500/20 text-rose-100 ring-rose-300/30",
-    border: "border-rose-200",
-    soft: "bg-rose-50",
-    text: "text-rose-700",
-  },
-};
+function FormulaBlock({ formula }: { formula: string }) {
+  return (
+    <div className="my-4 overflow-x-auto rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-950 via-slate-900 to-black p-5 shadow-[0_18px_45px_rgba(15,23,42,0.24)]">
+      <div className="text-slate-100 [&_.katex]:text-slate-100 [&_.katex-display]:my-0">
+        <MathFormula formula={formula} display={true} />
+      </div>
+    </div>
+  );
+}
 
-const formulas: FormulaItem[] = [
+function NoteCard({
+  title,
+  type,
+  body,
+}: {
+  title: string;
+  type: NoteType;
+  body: string;
+}) {
+  const styles = {
+    info: {
+      wrap: "border-blue-200 bg-blue-50",
+      icon: "text-blue-700",
+      title: "text-slate-950",
+      text: "text-slate-700",
+      Icon: Lightbulb,
+    },
+    warning: {
+      wrap: "border-amber-200 bg-amber-50",
+      icon: "text-amber-700",
+      title: "text-slate-950",
+      text: "text-slate-700",
+      Icon: AlertTriangle,
+    },
+    success: {
+      wrap: "border-emerald-200 bg-emerald-50",
+      icon: "text-emerald-700",
+      title: "text-slate-950",
+      text: "text-slate-700",
+      Icon: CheckCircle2,
+    },
+  }[type];
+
+  const Icon = styles.Icon;
+
+  return (
+    <div className={`rounded-2xl border p-5 ${styles.wrap}`}>
+      <div className="mb-3 flex items-center gap-3">
+        <Icon className={`h-5 w-5 ${styles.icon}`} />
+        <h4 className={`text-base font-black ${styles.title}`}>{title}</h4>
+      </div>
+      <p className={`text-justify text-[1.02rem] leading-8 ${styles.text}`}>{body}</p>
+    </div>
+  );
+}
+
+function TheorySectionCard({ section }: { section: TheorySection }) {
+  const Icon = section.icon;
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className={`bg-gradient-to-r ${section.accent} px-7 py-6 text-white md:px-9`}>
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+            <Icon className="h-6 w-6" />
+          </div>
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            {section.id}. {section.title}
+          </h2>
+        </div>
+      </div>
+
+      <div className="space-y-6 px-7 py-7 md:px-9 md:py-9">
+        {section.paragraphs.map((paragraph, index) => (
+          <p key={index} className="text-justify text-[1.06rem] leading-9 text-slate-700">
+            {paragraph}
+          </p>
+        ))}
+
+        {section.bullets ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <ul className="space-y-3">
+              {section.bullets.map((bullet, index) => (
+                <li key={index} className="flex gap-3 text-[1.02rem] leading-8 text-slate-700">
+                  <span className="mt-3 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {section.numbered ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="space-y-4">
+              {section.numbered.map((item, index) => (
+                <div key={index} className="flex gap-4">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
+                    {index + 1}
+                  </div>
+                  <p className="pt-0.5 text-[1.02rem] leading-8 text-slate-700">{item}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {section.notes ? (
+          <div className="space-y-4">
+            {section.notes.map((note, index) => (
+              <NoteCard key={index} title={note.title} type={note.type} body={note.body} />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function FormulaCard({ item }: { item: FormulaSummary }) {
+  return (
+    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.08)]">
+      <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
+        <h3 className="text-lg font-black text-slate-950">{item.title}</h3>
+      </div>
+      <div className="p-6">
+        <FormulaBlock formula={item.formula} />
+        <p className="text-justify text-[1.02rem] leading-8 text-slate-700">{item.description}</p>
+        {item.warning ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-7 text-amber-900">
+            {item.warning}
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function ExampleCard({ example, index }: { example: Example; index: number }) {
+  return (
+    <article className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
+      <div className="bg-gradient-to-r from-orange-600 to-red-600 px-6 py-5 text-white">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-100">
+              Exemplo {index + 1} · {example.level}
+            </p>
+            <h3 className="mt-1 text-2xl font-black">{example.title}</h3>
+          </div>
+          <div className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-black">
+            resolvido
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-5 px-6 py-6 md:px-8 md:py-8">
+        <div>
+          <h4 className="text-base font-black text-slate-950">Enunciado</h4>
+          <p className="mt-2 rounded-2xl bg-slate-50 p-4 text-justify text-[1.02rem] leading-8 text-slate-700">
+            {example.statement}
+          </p>
+        </div>
+
+        <NoteCard title="Ideia antes da conta" type="info" body={example.idea} />
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h4 className="mb-4 text-base font-black text-slate-950">Desenvolvimento</h4>
+          <div className="space-y-4">
+            {example.steps.map((step, stepIndex) => (
+              <div key={stepIndex} className="flex gap-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
+                  {stepIndex + 1}
+                </div>
+                <p className="pt-0.5 text-[1.02rem] leading-8 text-slate-700">{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 font-bold leading-8 text-emerald-950">
+          {example.answer}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+const theorySections: TheorySection[] = [
   {
-    title: "Relação fundamental da onda",
-    formula: "v = \\lambda f",
-    explanation:
-      "Relaciona velocidade, comprimento de onda e frequência. Quando a luz muda de meio, a frequência permanece a mesma, mas a velocidade e o comprimento de onda mudam.",
-    warning: "A frequência é determinada pela fonte. Ela não muda quando a luz passa de um meio para outro.",
+    id: 1,
+    icon: BookOpen,
+    title: "O papel desta página",
+    accent: "from-purple-600 to-fuchsia-600",
+    paragraphs: [
+      "Nesta primeira página, o foco não é estudar a Óptica inteira de uma vez. A ideia é organizar a base que sustenta quase todas as questões iniciais: raio luminoso, feixe, fonte, imagem, princípios da Óptica Geométrica, câmara escura, reflexão e refração.",
+      "Em outras palavras: esta página existe para deixar claro o que precisa estar firme antes de espelhos, lentes, instrumentos ópticos e fenômenos mais específicos.",
+    ],
+    notes: [
+      {
+        title: "O que fica nesta página",
+        type: "success",
+        body: "conceito de raio luminoso, feixe, fonte e imagem; princípios da Óptica Geométrica; câmara escura e semelhança de triângulos; base mínima de reflexão e refração; vocabulário necessário para espelhos, lentes e instrumentos.",
+      },
+      {
+        title: "O que não deve inflar esta página",
+        type: "warning",
+        body: "tabela completa de imagens em espelhos esféricos; todos os casos de lentes delgadas; instrumentos ópticos em detalhe; defeitos da visão com contas longas; difração, interferência e polarização, que pertencem melhor à Ondulatória.",
+      },
+    ],
   },
   {
-    title: "Índice de refração absoluto",
-    formula: "n = \\frac{c}{v}",
-    explanation:
-      "Mostra quantas vezes a luz é mais rápida no vácuo do que no meio analisado. Quanto maior o índice de refração, menor a velocidade da luz naquele meio.",
+    id: 2,
+    icon: Eye,
+    title: "O que a Óptica Geométrica realmente modela",
+    accent: "from-blue-700 to-slate-950",
+    paragraphs: [
+      "A Óptica Geométrica representa a luz por raios luminosos, isto é, linhas orientadas que indicam a direção e o sentido de propagação da luz.",
+      "Esse modelo é excelente quando os obstáculos, espelhos e lentes são muito maiores que o comprimento de onda da luz. Nessa situação, prever trajetórias por meio de raios funciona muito bem.",
+      "Quando aparecem difração, interferência ou polarização, o modelo ondulatório precisa entrar com mais força. Mesmo assim, para vestibulares, quase toda reflexão, refração, espelhos e lentes começa por um bom desenho de raios.",
+    ],
   },
   {
-    title: "Lei da reflexão",
-    formula: "i = r",
-    explanation:
-      "O ângulo de incidência é igual ao ângulo de reflexão. Os dois devem ser medidos em relação à normal, não em relação à superfície.",
-    warning: "Medir o ângulo pela superfície é um erro clássico e muda completamente a interpretação do desenho.",
+    id: 3,
+    icon: ScanLine,
+    title: "Fonte, objeto, imagem e observador",
+    accent: "from-cyan-600 to-blue-700",
+    paragraphs: [
+      "Uma das primeiras confusões do aluno é achar que imagem é sempre algo projetado em uma tela. Em Óptica, imagem é o ponto de encontro real ou aparente dos raios que chegam ao olho ou ao detector.",
+      "Também é importante separar fonte primária, fonte secundária, objeto e observador. Essa linguagem parece simples, mas é ela que organiza a leitura correta de praticamente toda questão básica de Óptica.",
+    ],
+    bullets: [
+      "Fonte primária emite luz própria, como Sol, lâmpada e chama.",
+      "Fonte secundária apenas reflete luz recebida, como uma folha, uma parede ou uma pessoa iluminada.",
+      "Imagem real é formada pelo encontro efetivo dos raios luminosos e pode ser projetada em uma tela.",
+      "Imagem virtual é formada pelo prolongamento dos raios e não pode ser projetada diretamente em uma tela.",
+    ],
   },
   {
-    title: "Lei de Snell-Descartes",
-    formula: "n_1\\sin i = n_2\\sin r",
-    explanation:
-      "Relaciona os índices de refração dos meios com os ângulos de incidência e refração. É a fórmula central para estudar o desvio da luz ao mudar de meio.",
+    id: 4,
+    icon: Compass,
+    title: "Os três princípios que sustentam a maioria das questões",
+    accent: "from-violet-600 to-purple-700",
+    paragraphs: [
+      "Grande parte da Óptica Geométrica de vestibular é uma aplicação cuidadosa de três princípios simples. Eles parecem inocentes, mas comandam sombras, espelhos, câmaras escuras, trajetórias reversas e desenhos de raios.",
+      "O erro comum é decorar os nomes e não usá-los no desenho da questão. Em Óptica, isso normalmente vira erro evitável.",
+    ],
+    bullets: [
+      "Propagação retilínea: em meio homogêneo e transparente, a luz se propaga em linha reta.",
+      "Independência dos raios: raios que se cruzam não se alteram mutuamente no cruzamento.",
+      "Reversibilidade: se um raio pode ir de A até B por certo caminho, também pode ir de B até A pelo mesmo caminho em sentido contrário.",
+    ],
   },
   {
-    title: "Câmara escura",
-    formula: "\\frac{i}{o} = \\frac{p'}{p}",
-    explanation:
-      "Vem diretamente da semelhança de triângulos. A imagem formada é invertida e seu tamanho depende da razão entre a profundidade da câmara e a distância do objeto.",
+    id: 5,
+    icon: Layers,
+    title: "Normal, ângulo e mudança de meio",
+    accent: "from-emerald-600 to-teal-700",
+    paragraphs: [
+      "Em reflexão e refração, os ângulos relevantes são medidos em relação à normal, não em relação à superfície. Essa frase salva pontos demais para ser tratada como detalhe.",
+      "A normal é a reta perpendicular à superfície no ponto de incidência. Ângulo de incidência, reflexão e refração são medidos entre o raio e a normal.",
+      "Ao entrar em meio de maior índice de refração, o raio se aproxima da normal. Ao entrar em meio de menor índice de refração, o raio se afasta da normal.",
+    ],
+    notes: [
+      {
+        title: "Regra de ouro",
+        type: "info",
+        body: "Antes de escrever qualquer seno, desenhe a normal. Sem ela, o risco de medir o ângulo errado é enorme.",
+      },
+    ],
   },
 ];
 
-const examples: ExampleItem[] = [
+const formulas: FormulaSummary[] = [
+  {
+    title: "Relação fundamental da onda",
+    formula: String.raw`v = \lambda f`,
+    description:
+      "Liga velocidade de propagação, comprimento de onda e frequência. Em mudança de meio, a frequência permanece constante; mudam velocidade e comprimento de onda.",
+    warning: "Não trate frequência como se mudasse na refração. Esse é um erro clássico.",
+  },
+  {
+    title: "Índice de refração absoluto",
+    formula: String.raw`n = \frac{c}{v}`,
+    description:
+      "Mede o quanto a luz fica mais lenta em um meio em comparação com o vácuo. Quanto maior o índice, menor a velocidade da luz no meio.",
+  },
+  {
+    title: "Lei da reflexão",
+    formula: String.raw`i = r`,
+    description:
+      "O ângulo de incidência é igual ao ângulo de reflexão, ambos medidos pela normal.",
+    warning: "Se medir pela superfície, a conta até pode parecer bonita, mas estará olhando para o ângulo errado.",
+  },
+  {
+    title: "Lei de Snell-Descartes",
+    formula: String.raw`n_1\sin i = n_2\sin r`,
+    description:
+      "Relaciona o desvio do raio luminoso aos índices de refração dos meios. É a ponte entre geometria e mudança de velocidade da luz.",
+  },
   {
     title: "Câmara escura",
-    level: "básico",
+    formula: String.raw`\frac{i}{o} = \frac{p'}{p}`,
+    description:
+      "Vem diretamente da semelhança de triângulos. A imagem é invertida e seu tamanho depende da razão entre a profundidade da câmara e a distância do objeto.",
+  },
+  {
+    title: "Ângulo limite",
+    formula: String.raw`\sin L = \frac{n_2}{n_1}`,
+    description:
+      "Usado para reflexão total quando a luz tenta passar do meio mais refringente para o menos refringente.",
+    warning: "Só faz sentido se n_1 > n_2. Sem isso, não há reflexão total por esse critério.",
+  },
+];
+
+const examples: Example[] = [
+  {
+    id: "camara-escura",
+    title: "Câmara escura",
+    level: "básico com semelhança",
     statement:
       "Um objeto de 1,80 m está a 4,0 m do orifício de uma câmara escura. A tela está a 20 cm do orifício. Determine o tamanho da imagem.",
     idea:
-      "O raio que sai do topo do objeto passa pelo orifício e chega à parte inferior da tela. O desenho forma dois triângulos semelhantes.",
+      "A luz se propaga em linha reta. O raio que sai do topo do objeto passa pelo orifício e chega à parte inferior da tela, formando triângulos semelhantes.",
     steps: [
-      "Converta 20 cm para metros: 20 cm = 0,20 m.",
-      "Use a relação da câmara escura: i/o = p'/p.",
+      "Converta a profundidade da câmara: 20 cm = 0,20 m.",
+      "Use a semelhança: i/o = p'/p.",
       "Substitua: i/1,80 = 0,20/4,0.",
-      "Calcule: i = 1,80 · 0,05 = 0,09 m.",
+      "Logo: i = 1,80 · 0,05 = 0,09 m.",
     ],
-    answer: "A imagem mede 0,09 m, ou seja, 9 cm, e aparece invertida.",
+    answer: "A imagem tem 0,09 m, ou seja, 9 cm, e é invertida.",
   },
   {
+    id: "refracao-vidro",
     title: "Refração do ar para o vidro",
     level: "intermediário",
     statement:
       "Um raio passa do ar para um vidro de índice 1,5 com ângulo de incidência de 30°. Considere n_ar = 1. Determine sen r.",
     idea:
-      "Como o vidro tem maior índice de refração, a luz fica mais lenta e o raio se aproxima da normal. Antes da conta, já esperamos que r seja menor que 30°.",
+      "Como o vidro tem índice maior, a luz diminui sua velocidade e se aproxima da normal. Antes da conta, já esperamos r < 30°.",
     steps: [
       "Pela lei de Snell: n_1 sen i = n_2 sen r.",
-      "Substitua os dados: 1 · sen 30° = 1,5 · sen r.",
-      "Como sen 30° = 0,5, temos 0,5 = 1,5 sen r.",
-      "Logo, sen r = 1/3.",
+      "Substituindo: 1 · sen 30° = 1,5 · sen r.",
+      "Como sen 30° = 0,5, temos: 0,5 = 1,5 sen r.",
+      "Então: sen r = 1/3.",
     ],
-    answer: "sen r = 1/3. O resultado faz sentido, pois o raio aproximou-se da normal.",
+    answer: "sen r = 1/3. O ângulo refratado é menor que 30°, como esperado fisicamente.",
+  },
+  {
+    id: "reflexao-total",
+    title: "Reflexão total",
+    level: "nível vestibular",
+    statement:
+      "Um raio está no vidro de índice 1,5 e tenta sair para o ar. Calcule o seno do ângulo limite.",
+    idea:
+      "Reflexão total só pode ocorrer do meio mais refringente para o menos refringente. No ângulo limite, o raio refratado sairia rasante, com r = 90°.",
+    steps: [
+      "Use sen L = n_2/n_1.",
+      "Aqui, n_1 = 1,5 e n_2 = 1.",
+      "Logo: sen L = 1/1,5 = 2/3.",
+      "Para incidências maiores que L, ocorre reflexão total.",
+    ],
+    answer: "sen L = 2/3.",
   },
 ];
 
 const checklist = [
-  "desenhe a normal antes de aplicar qualquer fórmula;",
-  "confira se o ângulo foi dado pela normal ou pela superfície;",
-  "preveja se o raio deve aproximar-se ou afastar-se da normal;",
-  "lembre que a frequência não muda na refração;",
-  "diferencie imagem real de imagem virtual pelo caminho dos raios;",
-  "use semelhança de triângulos em câmara escura e sombras;",
-  "não misture Óptica Geométrica com fenômenos ondulatórios sem necessidade.",
+  "desenhar a normal antes de escrever qualquer seno;",
+  "verificar se o ângulo foi dado em relação à normal ou à superfície;",
+  "prever qualitativamente se o raio aproxima ou afasta da normal;",
+  "lembrar que frequência não muda na passagem entre meios;",
+  "separar imagem real de imagem virtual pelo caminho dos raios, não por chute visual;",
+  "usar semelhança de triângulos em câmara escura, sombra e ampliações simples;",
+  "não misturar fundamentos de Óptica Geométrica com fenômenos ondulatórios sem necessidade.",
 ];
 
-function TextBlock({ children }: { children: ReactNode }) {
-  return <div className="space-y-5 text-[1.05rem] leading-9 text-slate-700">{children}</div>;
-}
-
-function Paragraph({ children }: { children: ReactNode }) {
-  return <p className="max-w-none text-justify">{children}</p>;
-}
-
-function FormulaBlock({ formula }: { formula: string }) {
-  return (
-    <div className="my-5 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-950 to-black p-8 text-white shadow-[0_18px_45px_rgba(15,23,42,0.22)] [&_.MathJax]:text-white">
-      <MathFormula formula={formula} display={true} />
-    </div>
-  );
-}
-
-function NoteBox({
-  title,
-  children,
-  icon: Icon = Lightbulb,
-  tone = "blue",
-}: {
-  title: string;
-  children: ReactNode;
-  icon?: ElementType;
-  tone?: SectionTone;
-}) {
-  const styles = toneMap[tone];
-
-  return (
-    <div className={`rounded-3xl border ${styles.border} ${styles.soft} p-5`}>
-      <div className="mb-3 flex items-center gap-3">
-        <Icon className={`h-5 w-5 ${styles.text}`} />
-        <h4 className="font-black text-slate-950">{title}</h4>
-      </div>
-      <div className="space-y-3 leading-8 text-slate-700">{children}</div>
-    </div>
-  );
-}
-
-function TopicSectionView({ section }: { section: TopicSection }) {
-  const styles = toneMap[section.tone];
-  const Icon = section.icon;
-
-  return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_22px_70px_rgba(15,23,42,0.08)]">
-      <div className={`bg-gradient-to-r ${styles.header} px-7 py-6 text-white md:px-9`}>
-        <div className="flex flex-col gap-4 md:flex-row md:items-center">
-          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1 ${styles.icon}`}>
-            <Icon className="h-7 w-7" />
-          </div>
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.22em] text-white/75">Seção {section.number}</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">
-              {section.number}. {section.title}
-            </h2>
-          </div>
-        </div>
-      </div>
-      <div className="space-y-7 px-7 py-7 md:px-9 md:py-9">{section.children}</div>
-    </section>
-  );
-}
-
-function FormulaCard({ item }: { item: FormulaItem }) {
-  return (
-    <article className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-      <h3 className="text-xl font-black text-slate-950">{item.title}</h3>
-      <FormulaBlock formula={item.formula} />
-      <p className="text-justify leading-8 text-slate-700">{item.explanation}</p>
-      {item.warning ? (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-7 text-amber-900">
-          {item.warning}
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function ExampleCard({ example, index }: { example: ExampleItem; index: number }) {
-  return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-600">
-            Exemplo {index + 1} · {example.level}
-          </p>
-          <h3 className="mt-2 text-2xl font-black text-slate-950">{example.title}</h3>
-        </div>
-        <span className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white">resolvido</span>
-      </div>
-      <p className="mt-5 rounded-2xl bg-slate-50 p-5 text-justify leading-8 text-slate-700">{example.statement}</p>
-      <div className="mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-        <NoteBox title="Ideia antes da conta" icon={Brain} tone="orange">
-          <p>{example.idea}</p>
-        </NoteBox>
-        <div className="rounded-3xl border border-slate-200 bg-white p-5">
-          <h4 className="font-black text-slate-950">Desenvolvimento</h4>
-          <ol className="mt-4 space-y-3">
-            {example.steps.map((step, stepIndex) => (
-              <li key={step} className="flex gap-3 leading-8 text-slate-700">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white">
-                  {stepIndex + 1}
-                </span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </div>
-      <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 font-bold leading-8 text-emerald-950">
-        {example.answer}
-      </div>
-    </article>
-  );
-}
-
 export default function OpticaTopicConceitos() {
-  const sections: TopicSection[] = [
-    {
-      number: "1",
-      title: "O que a Óptica Geométrica estuda",
-      icon: Eye,
-      tone: "orange",
-      children: (
-        <TextBlock>
-          <Paragraph>
-            A Óptica Geométrica é o estudo da luz quando podemos representar sua propagação por raios luminosos. Em vez de descrever a luz por frentes de onda, campos elétricos ou oscilações eletromagnéticas, usamos linhas orientadas que indicam o caminho seguido pela luz.
-          </Paragraph>
-          <Paragraph>
-            Esse modelo é simples, mas extremamente poderoso. Ele explica sombras, formação de imagens, espelhos planos, espelhos esféricos, lentes, câmaras escuras, instrumentos ópticos e boa parte das questões clássicas de vestibular.
-          </Paragraph>
-          <NoteBox title="O limite do modelo" icon={AlertTriangle} tone="rose">
-            <p>
-              Quando o problema envolve interferência, difração ou polarização, a descrição por raios luminosos deixa de ser suficiente. Nesses casos, a luz precisa ser tratada com mais força como onda eletromagnética.
-            </p>
-          </NoteBox>
-        </TextBlock>
-      ),
-    },
-    {
-      number: "2",
-      title: "Raios, feixes, fontes e imagens",
-      icon: ScanLine,
-      tone: "cyan",
-      children: (
-        <TextBlock>
-          <Paragraph>
-            Um raio luminoso é uma linha orientada que mostra a direção e o sentido de propagação da luz. Um conjunto de raios forma um feixe. Esse feixe pode ser convergente, divergente ou paralelo, dependendo de como os raios se comportam no espaço.
-          </Paragraph>
-          <div className="grid gap-5 md:grid-cols-3">
-            <NoteBox title="Feixe convergente" icon={Target} tone="cyan"><p>Os raios se aproximam e tendem a encontrar-se em uma região.</p></NoteBox>
-            <NoteBox title="Feixe divergente" icon={Zap} tone="violet"><p>Os raios se afastam uns dos outros a partir de uma região ou de uma fonte.</p></NoteBox>
-            <NoteBox title="Feixe paralelo" icon={Layers} tone="emerald"><p>Os raios seguem paralelos, como uma idealização comum para luz muito distante.</p></NoteBox>
-          </div>
-          <Paragraph>
-            Também é importante separar fonte, objeto e imagem. Uma fonte primária emite luz própria, enquanto uma fonte secundária apenas reflete luz recebida. A imagem, por sua vez, é a região de encontro real ou aparente dos raios que chegam ao observador.
-          </Paragraph>
-          <div className="grid gap-5 md:grid-cols-2">
-            <NoteBox title="Imagem real" icon={CheckCircle2} tone="emerald"><p>É formada pelo encontro efetivo dos raios luminosos. Pode ser projetada em uma tela.</p></NoteBox>
-            <NoteBox title="Imagem virtual" icon={Eye} tone="violet"><p>É formada pelo prolongamento dos raios. Parece existir atrás do espelho ou da lente, mas não pode ser projetada diretamente em uma tela.</p></NoteBox>
-          </div>
-        </TextBlock>
-      ),
-    },
-    {
-      number: "3",
-      title: "Os três princípios fundamentais",
-      icon: Compass,
-      tone: "violet",
-      children: (
-        <TextBlock>
-          <Paragraph>
-            A maioria das primeiras questões de Óptica Geométrica nasce de três princípios simples. O problema é que aluno costuma decorar os nomes e esquecer de usá-los no desenho. Aí, naturalmente, a prova cobra exatamente o raciocínio que ele ignorou.
-          </Paragraph>
-          <div className="grid gap-5 lg:grid-cols-3">
-            <NoteBox title="Propagação retilínea" icon={ScanLine} tone="orange"><p>Em meio homogêneo e transparente, a luz se propaga em linha reta. Isso explica sombras, penumbras e a formação de imagem na câmara escura.</p></NoteBox>
-            <NoteBox title="Independência dos raios" icon={Orbit} tone="cyan"><p>Raios luminosos que se cruzam não alteram seus caminhos por causa do cruzamento. Cada raio segue sua trajetória como se o outro não estivesse ali.</p></NoteBox>
-            <NoteBox title="Reversibilidade" icon={Compass} tone="violet"><p>Se a luz pode ir de A até B por certo caminho, também pode ir de B até A pelo mesmo caminho em sentido contrário.</p></NoteBox>
-          </div>
-        </TextBlock>
-      ),
-    },
-    {
-      number: "4",
-      title: "Normal, reflexão e refração",
-      icon: Layers,
-      tone: "emerald",
-      children: (
-        <TextBlock>
-          <Paragraph>
-            Em reflexão e refração, a reta mais importante do desenho quase nunca é a superfície: é a normal. A normal é a reta perpendicular à superfície no ponto em que o raio incide. Todos os ângulos importantes são medidos em relação a ela.
-          </Paragraph>
-          <NoteBox title="Regra de ouro" icon={ShieldCheck} tone="emerald"><p>Antes de aplicar qualquer fórmula, desenhe a normal. Sem ela, a chance de medir o ângulo errado é enorme, e a conta vira só decoração algébrica.</p></NoteBox>
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <h3 className="mb-3 text-xl font-black text-slate-950">Reflexão</h3>
-              <Paragraph>Na reflexão, a luz retorna ao meio de origem após atingir uma superfície. A lei fundamental é que o ângulo de incidência é igual ao ângulo de reflexão.</Paragraph>
-              <FormulaBlock formula="i = r" />
-            </div>
-            <div>
-              <h3 className="mb-3 text-xl font-black text-slate-950">Refração</h3>
-              <Paragraph>Na refração, a luz atravessa a interface entre dois meios e muda sua velocidade. Essa mudança pode provocar desvio na direção de propagação.</Paragraph>
-              <FormulaBlock formula="n_1\sin i = n_2\sin r" />
-            </div>
-          </div>
-          <NoteBox title="Interpretação física" icon={Lightbulb} tone="blue"><p>Ao entrar em um meio de maior índice de refração, a luz fica mais lenta e o raio aproxima-se da normal. Ao entrar em um meio de menor índice, a luz fica mais rápida e o raio afasta-se da normal.</p></NoteBox>
-        </TextBlock>
-      ),
-    },
-    {
-      number: "5",
-      title: "Fórmulas essenciais",
-      icon: BookOpen,
-      tone: "blue",
-      children: <div className="grid gap-5 lg:grid-cols-2">{formulas.map((item) => <FormulaCard key={item.title} item={item} />)}</div>,
-    },
-    {
-      number: "6",
-      title: "Exemplos resolvidos",
-      icon: Brain,
-      tone: "rose",
-      children: <div className="space-y-6">{examples.map((example, index) => <ExampleCard key={example.title} example={example} index={index} />)}</div>,
-    },
-    {
-      number: "7",
-      title: "Checklist para questões",
-      icon: Target,
-      tone: "orange",
-      children: (
-        <div className="grid gap-4 md:grid-cols-2">
-          {checklist.map((item) => (
-            <div key={item} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 leading-8 text-slate-700">
-              <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-orange-600" />
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
-      ),
-    },
-  ];
+  const [activeTab, setActiveTab] = useState<Tab>("teoria");
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/60 to-yellow-50">
-      <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-md">
-        <div className="container flex items-center justify-between gap-4 py-4">
-          <Link href="/optica" className="flex items-center gap-2 text-sm font-bold text-slate-600 transition-colors hover:text-orange-700">
-            <ArrowLeft className="h-5 w-5" />
-            Voltar para Óptica
-          </Link>
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-600 to-yellow-400 text-white shadow-lg"><Eye className="h-6 w-6" /></div>
-            <div className="hidden sm:block">
-              <h1 className="text-lg font-black text-slate-900">Fundamentos da Óptica</h1>
-              <p className="text-xs font-semibold text-slate-500">base para reflexão, refração, espelhos e lentes</p>
+    <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-md">
+        <div className="container flex items-center justify-between gap-4 py-5">
+          <div className="flex items-center gap-5">
+            <Link href="/optica" className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 text-slate-600 transition-colors hover:text-blue-700">
+              <ArrowLeft className="h-6 w-6" />
+            </Link>
+
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-700">
+                ÓPTICA
+              </p>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950">
+                Fundamentos da Óptica
+              </h1>
             </div>
           </div>
+
+          <nav className="hidden items-center gap-3 md:flex">
+            {[
+              { id: "teoria", label: "Teoria" },
+              { id: "exemplos", label: "Exemplos" },
+              { id: "resumo", label: "Resumo" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as Tab)}
+                className={`rounded-full px-7 py-3 text-lg font-black transition ${
+                  activeTab === tab.id
+                    ? "bg-slate-950 text-white shadow-[0_10px_30px_rgba(15,23,42,0.22)]"
+                    : "text-slate-600 hover:text-slate-950"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
         </div>
       </header>
 
-      <section className="relative overflow-hidden bg-slate-950">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.30),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(250,204,21,0.18),transparent_32%)]" />
-        <div className="container relative grid gap-10 py-14 md:grid-cols-[1.08fr_0.92fr] md:items-center md:py-20">
-          <div className="space-y-7">
-            <div className="inline-flex items-center gap-2 rounded-full border border-orange-300/30 bg-orange-400/10 px-4 py-2 text-sm font-bold text-orange-200"><Sparkles className="h-4 w-4" />Óptica geométrica com foco em prova</div>
-            <div className="space-y-5">
-              <h2 className="max-w-4xl text-4xl font-black leading-tight tracking-tight text-white md:text-6xl">Antes de decorar espelhos e lentes, entenda o caminho da luz.</h2>
-              <p className="max-w-3xl text-lg leading-8 text-slate-300 md:text-xl">Esta página organiza a base da Óptica: raios luminosos, fontes, imagens, normal, princípios fundamentais, reflexão, refração e câmara escura. É o alicerce antes de entrar em espelhos, lentes e instrumentos ópticos.</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[{ label: "princípios centrais", value: "3" }, { label: "fórmulas úteis", value: formulas.length }, { label: "seções organizadas", value: sections.length }].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur"><p className="text-3xl font-black text-white">{item.value}</p><p className="text-sm font-semibold text-slate-400">{item.label}</p></div>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 text-white shadow-2xl backdrop-blur">
-            <div className="flex items-center gap-3"><div className="rounded-2xl bg-orange-500/20 p-3 text-orange-200"><Waves className="h-6 w-6" /></div><div><h3 className="font-black">Mapa da página</h3><p className="text-sm text-slate-400">o que precisa ficar na cabeça</p></div></div>
-            <div className="mt-6 space-y-3">
-              {["raio luminoso representa direção e sentido da luz", "imagem é encontro real ou aparente dos raios", "ângulos são medidos pela normal", "refração muda velocidade e pode mudar direção", "câmara escura nasce de triângulos semelhantes"].map((item) => (
-                <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3"><span className="h-2 w-2 rounded-full bg-orange-300" /><span className="text-sm font-bold text-slate-200">{item}</span></div>
-              ))}
-            </div>
-            <div className="mt-6 rounded-3xl border border-white/10 bg-black/30 p-5 [&_.MathJax]:text-white"><MathFormula formula="n_1\sin i = n_2\sin r" display={true} /></div>
-          </div>
-        </div>
-      </section>
+      <main className="container py-10 md:py-12">
+        <section className="overflow-hidden rounded-[2.2rem] bg-gradient-to-br from-slate-950 via-[#08153d] to-[#2c3274] px-8 py-10 text-white shadow-[0_28px_80px_rgba(15,23,42,0.24)] md:px-10 md:py-12">
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-amber-300">
+                <Sparkles className="h-4 w-4" />
+                teoria completa
+              </div>
 
-      <main className="container py-10 md:py-14">
-        <div className="mx-auto max-w-6xl space-y-10">
-          {sections.map((section) => <TopicSectionView key={section.number} section={section} />)}
-          <section className="rounded-[2rem] border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-black p-7 text-slate-100 shadow-[0_24px_70px_rgba(15,23,42,0.28)] md:p-9">
-            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-              <div className="max-w-3xl space-y-3"><h2 className="text-2xl font-black md:text-3xl">Fechamento dos fundamentos</h2><p className="text-justify leading-8 text-slate-300">Óptica começa com uma pergunta simples: por onde a luz passa? Se o aluno desenha o raio, marca a normal e interpreta o tipo de imagem antes da fórmula, metade dos erros desaparece. A outra metade, infelizmente, ainda exige estudar. A física não entrega tudo de graça.</p></div>
-              <div className="grid gap-3 text-sm font-bold text-slate-300 md:min-w-[330px]"><div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">Ângulos de reflexão e refração são medidos pela normal.</div><div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">Na refração, a frequência permanece constante.</div></div>
+              <h2 className="mt-7 max-w-4xl text-4xl font-black leading-[1.08] tracking-tight md:text-6xl">
+                Antes de decorar espelhos e lentes, entenda o caminho da luz.
+              </h2>
+
+              <p className="mt-6 max-w-3xl text-lg leading-9 text-slate-300">
+                Esta página organiza a base da Óptica: raios luminosos, fontes, imagens,
+                princípios, normal, reflexão, refração, câmara escura e os primeiros cuidados
+                que realmente importam nas questões.
+              </p>
             </div>
-          </section>
-          <section className="grid gap-5 md:grid-cols-3">
-            {[{ href: "/optica/topic/fenomenos", icon: Rainbow, title: "Fenômenos ópticos", text: "refração, reflexão total, dispersão e aplicações." }, { href: "/optica/topic/lentes", icon: Telescope, title: "Espelhos e lentes", text: "formação de imagens, aumento, vergência e visão." }, { href: "/optica/quiz", icon: Brain, title: "Treino rápido", text: "questões para testar se os fundamentos estão firmes." }].map((item) => {
-              const Icon = item.icon;
-              return <Link key={item.href} href={item.href} className="block h-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-orange-300 hover:shadow-xl"><div className="mb-4 inline-flex rounded-2xl bg-orange-100 p-3 text-orange-700"><Icon className="h-6 w-6" /></div><h3 className="text-xl font-black text-slate-950">{item.title}</h3><p className="mt-2 leading-7 text-slate-600">{item.text}</p></Link>;
-            })}
-          </section>
-        </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[
+                { value: "5", label: "Seções centrais" },
+                { value: String(formulas.length), label: "Fórmulas úteis" },
+                { value: String(examples.length), label: "Exemplos" },
+                { value: "ITA", label: "Foco de treino" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-3xl border border-white/10 bg-white/10 p-6 backdrop-blur">
+                  <p className="text-4xl font-black text-white">{item.value}</p>
+                  <p className="mt-1 text-sm font-black uppercase tracking-[0.18em] text-slate-300">
+                    {item.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {activeTab === "teoria" ? (
+          <div className="mt-10 space-y-8">
+            {theorySections.map((section) => (
+              <TheorySectionCard key={section.id} section={section} />
+            ))}
+
+            <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+              <div className="bg-gradient-to-r from-red-600 to-orange-600 px-7 py-6 text-white md:px-9">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+                    <Waves className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+                    6. Fórmulas essenciais
+                  </h2>
+                </div>
+              </div>
+
+              <div className="grid gap-6 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">
+                {formulas.map((item) => (
+                  <FormulaCard key={item.title} item={item} />
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {activeTab === "exemplos" ? (
+          <div className="mt-10 space-y-8">
+            {examples.map((example, index) => (
+              <ExampleCard key={example.id} example={example} index={index} />
+            ))}
+          </div>
+        ) : null}
+
+        {activeTab === "resumo" ? (
+          <div className="mt-10 space-y-8">
+            <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+              <div className="bg-gradient-to-r from-blue-700 to-slate-950 px-7 py-6 text-white md:px-9">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+                    <Target className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+                    Resumo estratégico
+                  </h2>
+                </div>
+              </div>
+
+              <div className="space-y-6 px-7 py-7 md:px-9 md:py-9">
+                <p className="text-justify text-[1.06rem] leading-9 text-slate-700">
+                  Em fundamentos de Óptica, o mais importante não é sair colecionando fórmulas. O núcleo da matéria está em interpretar a luz como raio, desenhar corretamente a situação, marcar a normal e entender se a questão está pedindo reflexão, refração, imagem real, imagem virtual ou semelhança de triângulos.
+                </p>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {checklist.map((item, index) => (
+                    <div key={index} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-blue-700" />
+                      <p className="text-[1.01rem] leading-8 text-slate-700">{item}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-3">
+                  <NoteCard
+                    title="Ideia central"
+                    type="success"
+                    body="Óptica Geométrica é, antes de tudo, interpretação do caminho da luz. O desenho costuma vir antes da conta."
+                  />
+                  <NoteCard
+                    title="Ponto mais cobrado"
+                    type="info"
+                    body="Ângulos de reflexão e refração são medidos pela normal, e não pela superfície."
+                  />
+                  <NoteCard
+                    title="Erro clássico"
+                    type="warning"
+                    body="Achar que a frequência muda na passagem de um meio para outro, ou que imagem virtual pode ser projetada em tela."
+                  />
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        <section className="mt-10 grid gap-5 md:grid-cols-3">
+          {[
+            {
+              href: "/optica/topic/fenomenos",
+              icon: Rainbow,
+              title: "Fenômenos ópticos",
+              text: "refração, reflexão total, dispersão, prismas e aplicações.",
+            },
+            {
+              href: "/optica/topic/lentes",
+              icon: Telescope,
+              title: "Espelhos e lentes",
+              text: "formação de imagens, Gauss, aumento, vergência e visão.",
+            },
+            {
+              href: "/optica/quiz",
+              icon: Brain,
+              title: "Treino rápido",
+              text: "questões para testar se os fundamentos estão firmes.",
+            },
+          ].map((item) => {
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="block rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl"
+              >
+                <div className="mb-4 inline-flex rounded-2xl bg-blue-50 p-3 text-blue-700">
+                  <Icon className="h-6 w-6" />
+                </div>
+                <h3 className="text-xl font-black text-slate-950">{item.title}</h3>
+                <p className="mt-2 text-[1.01rem] leading-7 text-slate-600">{item.text}</p>
+              </Link>
+            );
+          })}
+        </section>
       </main>
     </div>
   );
