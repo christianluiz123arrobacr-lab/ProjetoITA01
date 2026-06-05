@@ -447,6 +447,535 @@ function EyeDefectsDiagram() {
   );
 }
 
+
+function formatDecimal(value: number, digits = 1) {
+  if (!Number.isFinite(value)) return "\\infty";
+
+  const fixed = value.toFixed(digits);
+  const clean = fixed.endsWith(".0") ? fixed.slice(0, -2) : fixed;
+
+  return clean.replace("-", "-").replace(".", "{,}");
+}
+
+function ImageFormationSimulator() {
+  const [system, setSystem] = useState<"concaveMirror" | "convexMirror" | "convergingLens" | "divergingLens">("convergingLens");
+  const [fMagnitude, setFMagnitude] = useState(10);
+  const [objectDistance, setObjectDistance] = useState(30);
+
+  const isDiverging = system === "convexMirror" || system === "divergingLens";
+  const isMirror = system === "concaveMirror" || system === "convexMirror";
+  const focal = isDiverging ? -fMagnitude : fMagnitude;
+  const denominator = objectDistance - focal;
+  const imageDistance = Math.abs(denominator) < 0.35 ? Infinity : (focal * objectDistance) / denominator;
+  const magnification = Number.isFinite(imageDistance) ? -imageDistance / objectDistance : Infinity;
+
+  const imageNature = !Number.isFinite(imageDistance)
+    ? "imagem no infinito"
+    : imageDistance > 0
+      ? "imagem real"
+      : "imagem virtual";
+
+  const orientation = !Number.isFinite(magnification)
+    ? "sem orientação finita"
+    : magnification > 0
+      ? "direita"
+      : "invertida";
+
+  const sizeKind = !Number.isFinite(magnification)
+    ? "aumento tende ao infinito"
+    : Math.abs(Math.abs(magnification) - 1) < 0.06
+      ? "mesmo tamanho"
+      : Math.abs(magnification) > 1
+        ? "maior"
+        : "menor";
+
+  const systemLabel = {
+    concaveMirror: "Espelho côncavo",
+    convexMirror: "Espelho convexo",
+    convergingLens: "Lente convergente",
+    divergingLens: "Lente divergente",
+  }[system];
+
+  const x0 = 410;
+  const axisY = 175;
+  const scale = 4;
+  const objectX = Math.max(75, x0 - objectDistance * scale);
+  const cappedImageDistance = Number.isFinite(imageDistance)
+    ? Math.min(85, Math.max(-85, imageDistance)) * scale
+    : 300;
+
+  const imageX = !Number.isFinite(imageDistance)
+    ? 745
+    : isMirror
+      ? x0 - cappedImageDistance
+      : x0 + cappedImageDistance;
+
+  const objectHeight = 72;
+  const rawImageHeight = !Number.isFinite(magnification)
+    ? -145
+    : objectHeight * magnification;
+  const imageHeight = Math.max(-145, Math.min(145, rawImageHeight));
+  const imageTopY = axisY - imageHeight;
+
+  const formulaResult = !Number.isFinite(imageDistance)
+    ? String.raw`p' \to \infty`
+    : String.raw`p' \approx ${formatDecimal(imageDistance)}\,\mathrm{cm}`;
+
+  const magnificationResult = !Number.isFinite(magnification)
+    ? String.raw`A \to \infty`
+    : String.raw`A \approx ${formatDecimal(magnification, 2)}`;
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-slate-950 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+            <Calculator className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+              Simulador rápido: mude o objeto e veja a imagem
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-slate-300">
+              A conta de Gauss muda junto com a posição do objeto. Finalmente a fórmula faz alguma coisa além de assustar.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-7 px-7 py-7 md:px-9 md:py-9 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="space-y-5">
+          <div>
+            <p className="mb-3 text-sm font-black uppercase tracking-[0.16em] text-slate-500">
+              Sistema óptico
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ["convergingLens", "Lente convergente"],
+                ["divergingLens", "Lente divergente"],
+                ["concaveMirror", "Espelho côncavo"],
+                ["convexMirror", "Espelho convexo"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSystem(value as typeof system)}
+                  className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${
+                    system === value
+                      ? "border-slate-950 bg-slate-950 text-white shadow-lg"
+                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="block rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
+                Distância focal |f|
+              </span>
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-black text-white">
+                {fMagnitude} cm
+              </span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={30}
+              step={1}
+              value={fMagnitude}
+              onChange={(event) => setFMagnitude(Number(event.target.value))}
+              className="w-full accent-blue-700"
+            />
+          </label>
+
+          <label className="block rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
+                Distância do objeto p
+              </span>
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-black text-white">
+                {objectDistance} cm
+              </span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={70}
+              step={1}
+              value={objectDistance}
+              onChange={(event) => setObjectDistance(Number(event.target.value))}
+              className="w-full accent-blue-700"
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormulaBlock formula={String.raw`f=${formatDecimal(focal)}\,\mathrm{cm}`} />
+            <FormulaBlock formula={formulaResult} />
+            <FormulaBlock formula={magnificationResult} />
+            <FormulaBlock formula={String.raw`\frac{1}{f}=\frac{1}{p}+\frac{1}{p'}`} />
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+            <div className="border-b border-slate-200 bg-white px-5 py-4">
+              <h3 className="text-lg font-black text-slate-950">{systemLabel}</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Visual simplificado pela convenção de Gauss. Use para perceber tendência, sinal e tipo de imagem.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto p-4">
+              <svg viewBox="0 0 820 360" className="min-w-[720px]">
+                <defs>
+                  <marker id="simArrowBlue" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+                  </marker>
+                  <marker id="simArrowGreen" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#16a34a" />
+                  </marker>
+                </defs>
+
+                <line x1="55" y1={axisY} x2="770" y2={axisY} stroke="#94a3b8" strokeWidth="3" />
+
+                {isMirror ? (
+                  system === "concaveMirror" ? (
+                    <path d={`M${x0} 70 Q${x0 - 65} ${axisY} ${x0} 280`} fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
+                  ) : (
+                    <path d={`M${x0} 70 Q${x0 + 65} ${axisY} ${x0} 280`} fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
+                  )
+                ) : (
+                  system === "convergingLens" ? (
+                    <path d={`M${x0} 55 Q${x0 + 40} ${axisY} ${x0} 295 Q${x0 - 40} ${axisY} ${x0} 55`} fill="#dbeafe" stroke="#0f172a" strokeWidth="4" />
+                  ) : (
+                    <>
+                      <path d={`M${x0 - 25} 60 Q${x0 + 20} ${axisY} ${x0 - 25} 290`} fill="none" stroke="#0f172a" strokeWidth="4" strokeLinecap="round" />
+                      <path d={`M${x0 + 25} 60 Q${x0 - 20} ${axisY} ${x0 + 25} 290`} fill="none" stroke="#0f172a" strokeWidth="4" strokeLinecap="round" />
+                    </>
+                  )
+                )}
+
+                <line x1={objectX} y1={axisY} x2={objectX} y2={axisY - objectHeight} stroke="#0f172a" strokeWidth="6" />
+                <polygon points={`${objectX},${axisY - objectHeight} ${objectX - 13},${axisY - objectHeight + 28} ${objectX + 13},${axisY - objectHeight + 28}`} fill="#0f172a" />
+                <text x={objectX - 28} y={axisY + 32} className="fill-slate-700 text-[14px] font-black">objeto</text>
+
+                {Number.isFinite(imageDistance) ? (
+                  <>
+                    <line
+                      x1={imageX}
+                      y1={axisY}
+                      x2={imageX}
+                      y2={imageTopY}
+                      stroke="#dc2626"
+                      strokeWidth="6"
+                    />
+                    <polygon
+                      points={`${imageX},${imageTopY} ${imageX - 13},${imageTopY + (imageHeight > 0 ? 28 : -28)} ${imageX + 13},${imageTopY + (imageHeight > 0 ? 28 : -28)}`}
+                      fill="#dc2626"
+                    />
+                    <text x={imageX - 38} y={imageHeight > 0 ? imageTopY - 12 : imageTopY + 28} className="fill-red-700 text-[14px] font-black">
+                      imagem
+                    </text>
+                  </>
+                ) : (
+                  <text x="565" y="95" className="fill-red-700 text-[18px] font-black">
+                    imagem no infinito
+                  </text>
+                )}
+
+                <line x1={objectX} y1={axisY - objectHeight} x2={x0} y2={axisY - 70} stroke="#2563eb" strokeWidth="4" strokeLinecap="round" markerEnd="url(#simArrowBlue)" />
+                <line x1={x0} y1={axisY - 70} x2={Number.isFinite(imageDistance) ? imageX : 760} y2={Number.isFinite(imageDistance) ? imageTopY : axisY - 70} stroke="#2563eb" strokeWidth="4" strokeLinecap="round" strokeDasharray={imageDistance < 0 ? "8 8" : undefined} markerEnd="url(#simArrowBlue)" />
+
+                <line x1={objectX} y1={axisY - objectHeight} x2={x0} y2={axisY} stroke="#16a34a" strokeWidth="4" strokeLinecap="round" />
+                <line x1={x0} y1={axisY} x2={Number.isFinite(imageDistance) ? imageX : 760} y2={Number.isFinite(imageDistance) ? imageTopY : axisY} stroke="#16a34a" strokeWidth="4" strokeLinecap="round" strokeDasharray={imageDistance < 0 ? "8 8" : undefined} markerEnd="url(#simArrowGreen)" />
+
+                <text x="65" y="330" className="fill-slate-600 text-[14px] font-bold">
+                  Azul/verde: raios principais simplificados. Trace o desenho real na prova, porque o vestibular infelizmente não vem com slider.
+                </text>
+              </svg>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Natureza</p>
+              <p className="mt-1 text-xl font-black text-slate-950">{imageNature}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Orientação</p>
+              <p className="mt-1 text-xl font-black text-slate-950">{orientation}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Tamanho</p>
+              <p className="mt-1 text-xl font-black text-slate-950">{sizeKind}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GaussSignalGuide() {
+  const rows = [
+    ["Espelho côncavo", "f > 0", "imagem real na frente do espelho", "imagem virtual atrás do espelho"],
+    ["Espelho convexo", "f < 0", "caso incomum para objeto real", "imagem virtual atrás do espelho"],
+    ["Lente convergente", "f > 0", "imagem real do outro lado da lente", "imagem virtual do mesmo lado do objeto"],
+    ["Lente divergente", "f < 0", "caso incomum para objeto real", "imagem virtual do mesmo lado do objeto"],
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-blue-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <Calculator className="h-7 w-7" />
+          <div>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+              Guia visual de sinais de Gauss
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-blue-100">
+              Aqui é onde muito aluno perde questão sabendo a fórmula. Um clássico deprimente.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto px-7 py-7 md:px-9 md:py-9">
+        <table className="w-full min-w-[820px] border-separate border-spacing-0 overflow-hidden rounded-2xl border border-slate-200 text-left">
+          <thead>
+            <tr className="bg-slate-950 text-white">
+              <th className="px-5 py-4 text-sm font-black uppercase tracking-[0.14em]">Sistema</th>
+              <th className="px-5 py-4 text-sm font-black uppercase tracking-[0.14em]">Sinal de f</th>
+              <th className="px-5 py-4 text-sm font-black uppercase tracking-[0.14em]">p' positivo</th>
+              <th className="px-5 py-4 text-sm font-black uppercase tracking-[0.14em]">p' negativo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={row[0]} className={index % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex} className="border-t border-slate-200 px-5 py-4 text-[1.01rem] leading-7 text-slate-700">
+                    <span className={cellIndex === 0 ? "font-black text-slate-950" : ""}>{cell}</span>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <p className="text-justify text-[1.03rem] leading-8 text-amber-950">
+            A tabela não substitui o desenho. Ela serve para conferir se o sinal encontrado pela conta conversa com a interpretação geométrica. Se o desenho diz uma coisa e a conta diz outra, alguém mentiu. Normalmente foi o sinal.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SystemComparisonPanel() {
+  const comparisons = [
+    {
+      title: "Espelho côncavo × lente convergente",
+      left: "Ambos são sistemas convergentes e podem formar imagem real ou virtual para objeto real, dependendo da posição do objeto.",
+      right: "O espelho forma imagem por reflexão; a lente forma imagem por refração. No espelho, a luz volta. Na lente, a luz atravessa.",
+    },
+    {
+      title: "Espelho convexo × lente divergente",
+      left: "Para objeto real, ambos formam imagem virtual, direita e menor.",
+      right: "O resultado parece parecido, mas a física é diferente: espelho convexo reflete e lente divergente refrata.",
+    },
+    {
+      title: "Imagem real × imagem virtual",
+      left: "Imagem real vem do encontro efetivo dos raios e pode ser projetada em tela.",
+      right: "Imagem virtual vem do encontro dos prolongamentos. Pode ser vista, mas não projetada diretamente.",
+    },
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-purple-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <Brain className="h-7 w-7" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Comparações que evitam decoreba
+          </h2>
+        </div>
+      </div>
+
+      <div className="grid gap-5 px-7 py-7 md:px-9 md:py-9">
+        {comparisons.map((item) => (
+          <div key={item.title} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-xl font-black text-slate-950">{item.title}</h3>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-justify leading-8 text-slate-700">
+                {item.left}
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-justify leading-8 text-slate-700">
+                {item.right}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ClassicCasesPanel() {
+  const cases = [
+    {
+      title: "Espelho côncavo",
+      items: [
+        "p > 2f: real, invertida e menor.",
+        "p = 2f: real, invertida e igual.",
+        "f < p < 2f: real, invertida e maior.",
+        "p = f: imagem no infinito.",
+        "0 < p < f: virtual, direita e maior.",
+      ],
+    },
+    {
+      title: "Lente convergente",
+      items: [
+        "p > 2f: real, invertida e menor.",
+        "p = 2f: real, invertida e igual.",
+        "f < p < 2f: real, invertida e maior.",
+        "p = f: imagem no infinito.",
+        "0 < p < f: virtual, direita e maior.",
+      ],
+    },
+    {
+      title: "Espelho convexo",
+      items: [
+        "Objeto real: virtual, direita e menor.",
+        "Imagem atrás do espelho.",
+        "Imagem entre foco virtual e vértice.",
+        "Aumenta campo visual, mas reduz imagem.",
+      ],
+    },
+    {
+      title: "Lente divergente",
+      items: [
+        "Objeto real: virtual, direita e menor.",
+        "Imagem do mesmo lado do objeto.",
+        "Imagem entre foco objeto e lente.",
+        "Usada na correção da miopia.",
+      ],
+    },
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-slate-950 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <Target className="h-7 w-7" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Casos clássicos para não se perder
+          </h2>
+        </div>
+      </div>
+
+      <div className="grid gap-5 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">
+        {cases.map((group) => (
+          <div key={group.title} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-xl font-black text-slate-950">{group.title}</h3>
+            <ul className="mt-4 space-y-3">
+              {group.items.map((item) => (
+                <li key={item} className="flex gap-3 text-[1.02rem] leading-8 text-slate-700">
+                  <span className="mt-3 h-2 w-2 shrink-0 rounded-full bg-blue-700" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProofModePanel() {
+  const steps = [
+    "Identifique se o sistema é espelho ou lente.",
+    "Decida se ele é convergente ou divergente.",
+    "Defina o sinal de f antes de substituir qualquer número.",
+    "Marque p com o objeto real positivo.",
+    "Use Gauss para calcular p'.",
+    "Interprete o sinal de p': real ou virtual.",
+    "Use A = -p'/p para orientação e tamanho.",
+    "Confira tudo com um desenho de raios.",
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-red-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <Zap className="h-7 w-7" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Modo prova: algoritmo de resolução
+          </h2>
+        </div>
+      </div>
+
+      <div className="px-7 py-7 md:px-9 md:py-9">
+        <div className="grid gap-4 md:grid-cols-2">
+          {steps.map((step, index) => (
+            <div key={step} className="flex gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
+                {index + 1}
+              </div>
+              <p className="text-[1.02rem] leading-8 text-slate-700">{step}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+          <p className="text-justify text-[1.03rem] leading-8 text-slate-700">
+            Esse algoritmo parece simples, mas é exatamente o que salva ponto. A fórmula de Gauss é curta; o que reprova é interpretar errado o sistema, o sinal e o tipo de imagem. A prova não tem pena, porque aparentemente esse é o passatempo dela.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RecommendedTrainingPanel() {
+  const items = [
+    "Espelhos esféricos: côncavo e convexo",
+    "Lentes delgadas: convergente e divergente",
+    "Equação de Gauss com sinais",
+    "Aumento linear transversal",
+    "Vergência e grau de óculos",
+    "Olho humano, miopia e hipermetropia",
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-emerald-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <ShieldCheck className="h-7 w-7" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Depois da teoria: treine estes blocos
+          </h2>
+        </div>
+      </div>
+
+      <div className="grid gap-4 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">
+        {items.map((item) => (
+          <div key={item} className="flex gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+            <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-emerald-700" />
+            <p className="text-[1.02rem] leading-8 text-slate-700">{item}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ExampleCard({ example, index }: { example: Example; index: number }) {
   return (
     <article className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
@@ -611,9 +1140,9 @@ const theorySections: TheorySection[] = [
     title: "Formar imagem é reorganizar raios",
     accent: "bg-slate-950",
     paragraphs: [
-      "Uma imagem se forma quando os raios vindos de um objeto chegam ao observador como se viessem de uma determinada posição. Se os raios realmente se cruzam, a imagem é real. Se apenas seus prolongamentos se cruzam, a imagem é virtual.",
-      "Em espelhos, a imagem nasce da reflexão. A luz atinge a superfície refletora e volta para o mesmo meio. Em lentes, a imagem nasce da refração. A luz atravessa a lente, muda de meio e sofre desvios sucessivos.",
-      "A pergunta mais importante é: os raios se cruzam de verdade ou apenas seus prolongamentos? Essa pergunta é melhor do que decorar frases soltas, porque funciona para espelhos, lentes e sistemas combinados.",
+      "Uma imagem se forma quando os raios vindos de um objeto chegam ao observador como se viessem de uma determinada posição. O olho não sabe a história inteira do raio; ele interpreta a direção de chegada da luz. É por isso que espelhos e lentes conseguem criar posições aparentes para objetos.",
+      "Se os raios realmente se cruzam, a imagem é real. A luz passa fisicamente pela posição da imagem e, por isso, ela pode ser projetada em uma tela. Se apenas os prolongamentos dos raios se cruzam, a imagem é virtual: ela é vista pelo observador, mas não corresponde ao encontro real da luz naquela região.",
+      "Em espelhos, a imagem nasce da reflexão. A luz atinge a superfície refletora e volta para o mesmo meio. Em lentes, a imagem nasce da refração. A luz atravessa a lente, muda de meio e sofre desvios sucessivos. A pergunta mais importante é: os raios se cruzam de verdade ou apenas seus prolongamentos? Essa pergunta vale mais que uma tabela decorada no desespero.",
     ],
     bullets: [
       "Imagem real: raios reais se encontram; pode ser projetada em tela.",
@@ -629,9 +1158,9 @@ const theorySections: TheorySection[] = [
     title: "Espelhos esféricos: elementos e aproximação de Gauss",
     accent: "bg-blue-700",
     paragraphs: [
-      "Um espelho esférico é uma parte de uma superfície esférica refletora. Se a superfície refletora está voltada para dentro, o espelho é côncavo. Se está voltada para fora, o espelho é convexo.",
-      "Os elementos principais são o vértice V, o centro de curvatura C, o raio de curvatura R, o foco F, a distância focal f e o eixo principal. Para espelhos esféricos gaussianos, vale f = R/2.",
-      "Essa relação não é mágica universal para qualquer raio. Ela vale na aproximação de Gauss, isto é, para raios próximos do eixo principal e com pequenos ângulos. Raios muito afastados geram aberração esférica.",
+      "Um espelho esférico é uma parte de uma superfície esférica refletora. Se a superfície refletora está voltada para dentro, o espelho é côncavo. Se está voltada para fora, o espelho é convexo. Essa curvatura é justamente o que permite concentrar ou espalhar raios.",
+      "Os elementos principais são o vértice V, o centro de curvatura C, o raio de curvatura R, o foco F, a distância focal f e o eixo principal. O vértice é o ponto central do espelho; o centro de curvatura é o centro da esfera original; o foco é o ponto associado aos raios paralelos ao eixo.",
+      "Para espelhos esféricos gaussianos, vale f = R/2. Essa relação não é mágica universal para qualquer raio. Ela vale na aproximação de Gauss, isto é, para raios próximos do eixo principal e com pequenos ângulos. Raios muito afastados geram aberração esférica, um jeito elegante de a natureza dizer que modelos simplificados têm limite.",
     ],
     formulas: [
       {
@@ -1033,7 +1562,7 @@ export default function OpticaTopicLentes() {
               {[
                 { value: String(theorySections.length), label: "Seções" },
                 { value: String(examples.length), label: "Exemplos" },
-                { value: "6", label: "Diagramas" },
+                { value: "7", label: "Diagramas" },
                 { value: "ITA", label: "Foco" },
               ].map((item) => (
                 <div key={item.label} className="rounded-3xl border border-white/10 bg-white/10 p-6 backdrop-blur">
@@ -1068,9 +1597,17 @@ export default function OpticaTopicLentes() {
 
         {activeTab === "teoria" ? (
           <div className="mt-10 space-y-8">
+            <ImageFormationSimulator />
+            <GaussSignalGuide />
+            <SystemComparisonPanel />
+            <ClassicCasesPanel />
+
             {theorySections.map((section) => (
               <TheorySectionCard key={section.id} section={section} />
             ))}
+
+            <ProofModePanel />
+            <RecommendedTrainingPanel />
           </div>
         ) : null}
 
@@ -1106,6 +1643,10 @@ export default function OpticaTopicLentes() {
                 </div>
               </div>
             </section>
+
+            <GaussSignalGuide />
+            <SystemComparisonPanel />
+            <ProofModePanel />
 
             <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
               <div className="bg-red-700 px-7 py-6 text-white md:px-9">
