@@ -1119,6 +1119,7 @@ const theorySections: TheorySection[] = [
     paragraphs: [
       "Espelhos e lentes são sistemas ópticos usados para controlar a trajetória da luz. Eles aparecem em retrovisores, espelhos de maquiagem, projetores, câmeras, lupas, microscópios, telescópios, óculos, lentes de contato, olho humano e instrumentos ópticos de laboratório.",
       "O tema é central porque transforma as ideias básicas da Óptica Geométrica em sistemas capazes de formar imagens. Reflexão e refração deixam de ser leis isoladas e passam a produzir imagens reais, virtuais, direitas, invertidas, ampliadas ou reduzidas.",
+      "A grande virada do conteúdo é perceber que espelhos e lentes não são apenas objetos que 'mostram imagem'. Eles reorganizam raios luminosos. Quando essa reorganização faz os raios se encontrarem de verdade, temos imagem real. Quando faz os raios parecerem vir de uma posição, temos imagem virtual.",
       "Em provas difíceis, esse conteúdo cobra três camadas ao mesmo tempo: geometria dos raios, interpretação física da imagem e matemática da equação de Gauss. Quem tenta resolver só por fórmula acaba descobrindo que sinal também reprova gente, o que é triste, mas eficiente.",
     ],
     notes: [
@@ -1140,9 +1141,10 @@ const theorySections: TheorySection[] = [
     title: "Formar imagem é reorganizar raios",
     accent: "bg-slate-950",
     paragraphs: [
-      "Uma imagem se forma quando os raios vindos de um objeto chegam ao observador como se viessem de uma determinada posição. O olho não sabe a história inteira do raio; ele interpreta a direção de chegada da luz. É por isso que espelhos e lentes conseguem criar posições aparentes para objetos.",
+      "Uma imagem se forma quando os raios vindos de um objeto chegam ao observador como se viessem de uma determinada posição. O olho não conhece a história completa do raio; ele interpreta a direção de chegada da luz. É por isso que espelhos e lentes conseguem criar posições aparentes para objetos.",
       "Se os raios realmente se cruzam, a imagem é real. A luz passa fisicamente pela posição da imagem e, por isso, ela pode ser projetada em uma tela. Se apenas os prolongamentos dos raios se cruzam, a imagem é virtual: ela é vista pelo observador, mas não corresponde ao encontro real da luz naquela região.",
-      "Em espelhos, a imagem nasce da reflexão. A luz atinge a superfície refletora e volta para o mesmo meio. Em lentes, a imagem nasce da refração. A luz atravessa a lente, muda de meio e sofre desvios sucessivos. A pergunta mais importante é: os raios se cruzam de verdade ou apenas seus prolongamentos? Essa pergunta vale mais que uma tabela decorada no desespero.",
+      "Em espelhos, a imagem nasce da reflexão. A luz atinge a superfície refletora e volta para o mesmo meio. Em lentes, a imagem nasce da refração. A luz atravessa a lente, muda de meio e sofre desvios sucessivos.",
+      "A pergunta mais importante não é 'qual fórmula eu uso?'. A pergunta é: os raios se cruzam de verdade ou apenas seus prolongamentos? Essa pergunta vale mais que uma tabela decorada no desespero, porque funciona para espelho, lente e sistema combinado.",
     ],
     bullets: [
       "Imagem real: raios reais se encontram; pode ser projetada em tela.",
@@ -1150,6 +1152,13 @@ const theorySections: TheorySection[] = [
       "Imagem direita: mantém a orientação do objeto.",
       "Imagem invertida: aparece do lado oposto do eixo em relação ao objeto.",
       "O módulo do aumento mede tamanho; o sinal do aumento mede orientação.",
+    ],
+    notes: [
+      {
+        title: "Pergunta decisiva",
+        type: "success",
+        body: "Antes de classificar uma imagem, pergunte: a luz passa realmente pelo ponto da imagem ou apenas parece vir dele?",
+      },
     ],
   },
   {
@@ -1160,7 +1169,8 @@ const theorySections: TheorySection[] = [
     paragraphs: [
       "Um espelho esférico é uma parte de uma superfície esférica refletora. Se a superfície refletora está voltada para dentro, o espelho é côncavo. Se está voltada para fora, o espelho é convexo. Essa curvatura é justamente o que permite concentrar ou espalhar raios.",
       "Os elementos principais são o vértice V, o centro de curvatura C, o raio de curvatura R, o foco F, a distância focal f e o eixo principal. O vértice é o ponto central do espelho; o centro de curvatura é o centro da esfera original; o foco é o ponto associado aos raios paralelos ao eixo.",
-      "Para espelhos esféricos gaussianos, vale f = R/2. Essa relação não é mágica universal para qualquer raio. Ela vale na aproximação de Gauss, isto é, para raios próximos do eixo principal e com pequenos ângulos. Raios muito afastados geram aberração esférica, um jeito elegante de a natureza dizer que modelos simplificados têm limite.",
+      "Para espelhos esféricos gaussianos, vale f = R/2. Essa relação não é mágica universal para qualquer raio. Ela vale na aproximação de Gauss, isto é, para raios próximos do eixo principal e com pequenos ângulos.",
+      "Raios muito afastados do eixo não convergem exatamente no mesmo ponto. Surge a aberração esférica. O modelo gaussiano ignora isso porque trabalha com raios paraxiais. É uma simplificação excelente para vestibular, desde que você lembre que ela tem condições de validade.",
     ],
     formulas: [
       {
@@ -1172,6 +1182,13 @@ const theorySections: TheorySection[] = [
         interpretation: ["Vale para raios paraxiais.", "Ajuda a marcar F e C corretamente nos desenhos."],
       },
     ],
+    notes: [
+      {
+        title: "Por que isso importa?",
+        type: "info",
+        body: "Se você confunde foco com centro de curvatura, todos os casos de imagem ficam tortos. F fica no meio entre V e C.",
+      },
+    ],
   },
   {
     id: 4,
@@ -1180,26 +1197,27 @@ const theorySections: TheorySection[] = [
     accent: "bg-indigo-800",
     paragraphs: [
       "O espelho côncavo é convergente. Raios paralelos ao eixo principal refletem passando pelo foco real, localizado na frente do espelho. Por isso, na convenção de Gauss, seu foco é positivo.",
-      "Ele é conceitualmente perigoso porque muda completamente o tipo de imagem conforme a posição do objeto. Pode formar imagem real, virtual, maior, menor, igual, direita ou invertida.",
-      "Os raios notáveis são: raio paralelo reflete pelo foco; raio que passa pelo foco reflete paralelo; raio que passa pelo centro de curvatura volta sobre si mesmo; raio no vértice reflete simetricamente em relação ao eixo principal.",
+      "Ele é conceitualmente perigoso porque muda completamente o tipo de imagem conforme a posição do objeto. Pode formar imagem real, virtual, maior, menor, igual, direita ou invertida. O espelho côncavo não tem uma única personalidade; ele muda conforme a posição do objeto, o que é muito conveniente para a prova e péssimo para quem decora errado.",
+      "A melhor forma de entender o espelho côncavo é acompanhar o movimento da imagem. Quando o objeto está muito longe, a imagem aparece perto do foco, real, invertida e pequena. À medida que o objeto se aproxima do foco pelo lado externo, a imagem real se afasta do espelho e aumenta.",
+      "Quando o objeto chega ao foco, os raios refletidos saem paralelos e a imagem vai para o infinito. Quando o objeto passa para dentro do foco, os raios refletidos deixam de se cruzar na frente do espelho; seus prolongamentos se encontram atrás do espelho. A imagem se torna virtual, direita e ampliada.",
     ],
     diagram: {
       kind: "concaveMirror",
       title: "espelho côncavo",
-      caption: "Quando os raios refletidos se cruzam na frente do espelho, a imagem é real e invertida.",
+      caption: "O espelho côncavo converge raios paralelos para o foco real.",
     },
     bullets: [
-      "Objeto além de C: imagem real, invertida e menor, entre C e F.",
-      "Objeto em C: imagem real, invertida e igual, em C.",
-      "Objeto entre C e F: imagem real, invertida e maior, além de C.",
-      "Objeto em F: raios saem paralelos; imagem no infinito.",
-      "Objeto entre F e V: imagem virtual, direita e maior, atrás do espelho.",
+      "Objeto além de C: imagem real, invertida e menor.",
+      "Objeto em C: imagem real, invertida e igual.",
+      "Objeto entre C e F: imagem real, invertida e maior.",
+      "Objeto em F: imagem no infinito.",
+      "Objeto entre F e V: imagem virtual, direita e maior.",
     ],
     notes: [
       {
-        title: "Aplicação típica",
+        title: "Visão contínua",
         type: "success",
-        body: "Espelhos de maquiagem e barbear usam o objeto dentro da distância focal para formar imagem virtual, direita e ampliada.",
+        body: "No côncavo, aproximar o objeto do foco por fora faz a imagem real se afastar e aumentar. Passou para dentro do foco, a imagem vira virtual, direita e ampliada.",
       },
     ],
   },
@@ -1209,108 +1227,142 @@ const theorySections: TheorySection[] = [
     title: "Espelho convexo",
     accent: "bg-cyan-700",
     paragraphs: [
-      "O espelho convexo é divergente. Raios paralelos ao eixo principal refletem se afastando, como se viessem de um foco virtual atrás do espelho. Seu foco é negativo na convenção de Gauss.",
-      "Para objeto real, o espelho convexo sempre forma imagem virtual, direita e menor. Isso acontece porque os raios refletidos divergem; apenas seus prolongamentos se encontram atrás do espelho.",
-      "Ele é usado quando queremos aumentar o campo visual, como em retrovisores, corredores, lojas, garagens e esquinas. Campo visual maior, porém, não significa imagem maior. O espelho convexo mostra mais região, mas reduz os objetos.",
+      "O espelho convexo é divergente. Raios paralelos ao eixo principal refletem se afastando, como se viessem de um foco virtual atrás do espelho. Por isso, na convenção de Gauss, seu foco é negativo.",
+      "Para objeto real, o espelho convexo sempre forma imagem virtual, direita e menor. Isso acontece porque os raios refletidos divergem; eles não se encontram na frente do espelho. Apenas seus prolongamentos se cruzam atrás dele.",
+      "A imagem fica reduzida porque o espelho espalha os raios e comprime a representação do objeto em uma região menor atrás da superfície refletora. É por isso que ele aumenta o campo visual, mas reduz o tamanho aparente dos objetos.",
+      "Esse é o motivo de seu uso em retrovisores externos, corredores, garagens e sistemas de segurança. Ele permite ver mais espaço, mas cobra o preço de diminuir a imagem. A física raramente oferece almoço grátis.",
     ],
     diagram: {
       kind: "convexMirror",
       title: "espelho convexo",
-      caption: "A imagem de um objeto real fica atrás do espelho, entre o foco virtual e o vértice.",
+      caption: "O foco e a imagem ficam atrás do espelho, como construções virtuais.",
     },
-    notes: [
-      {
-        title: "Armadilha clássica",
-        type: "warning",
-        body: "Retrovisor convexo aumenta o campo visual, mas diminui o tamanho aparente dos objetos. Por isso objetos podem parecer mais distantes do que realmente estão.",
-      },
+    bullets: [
+      "Sempre divergente para objeto real.",
+      "Imagem virtual: formada por prolongamentos.",
+      "Imagem direita: não há cruzamento real invertendo a orientação.",
+      "Imagem menor: o campo visual aumenta, mas a imagem reduz.",
+      "Imagem atrás do espelho, entre foco virtual e vértice.",
     ],
   },
   {
     id: 6,
-    icon: Glasses,
+    icon: ScanEye,
     title: "Lentes delgadas: convergentes e divergentes",
-    accent: "bg-emerald-700",
+    accent: "bg-blue-800",
     paragraphs: [
-      "Uma lente é um sistema transparente limitado por duas superfícies, das quais pelo menos uma é curva. Ela modifica a trajetória da luz por refração, não por reflexão.",
-      "A lente delgada é uma aproximação em que a espessura da lente é pequena diante das distâncias relevantes. Isso permite usar raios notáveis, equação de Gauss e aumento linear com boa precisão para raios paraxiais.",
-      "Uma lente convergente aproxima raios e tem foco positivo. Uma lente divergente espalha raios e tem foco negativo. Mas esse comportamento depende do índice da lente em relação ao meio externo, não apenas do formato visual.",
+      "Lentes formam imagens por refração. A luz atravessa o material da lente, muda de velocidade ao entrar e ao sair, e esses desvios sucessivos reorganizam os raios luminosos.",
+      "Uma lente delgada é uma idealização em que a espessura da lente é pequena em comparação com as distâncias do problema. Isso permite usar a equação de Gauss e os raios notáveis sem tratar cada superfície separadamente.",
+      "A lente convergente aproxima raios e possui distância focal positiva na convenção usual. A lente divergente afasta raios e possui distância focal negativa.",
+      "Mas cuidado: convergência não depende apenas do formato visual da lente. Depende do índice da lente em relação ao meio externo. Uma lente de vidro no ar pode se comportar de um jeito; em outro meio, sua potência óptica pode diminuir ou até inverter em situações específicas.",
     ],
     notes: [
       {
-        title: "Dependência do meio",
+        title: "Diferença essencial",
         type: "info",
-        body: "Uma lente pode ter sua potência reduzida ou até mudar de comportamento se for colocada em um meio cujo índice de refração se aproxime ou ultrapasse o índice da lente.",
+        body: "Espelhos formam imagem por reflexão. Lentes formam imagem por refração. Resultados parecidos não significam fenômenos iguais.",
       },
     ],
   },
   {
     id: 7,
-    icon: Glasses,
+    icon: ScanEye,
     title: "Lente convergente",
-    accent: "bg-blue-800",
+    accent: "bg-emerald-700",
     paragraphs: [
-      "A lente convergente tende a aproximar os raios luminosos. No ar, geralmente é mais espessa no centro do que nas bordas. Para objeto real, ela pode formar imagem real ou virtual, dependendo da posição do objeto.",
-      "Os raios notáveis são: raio paralelo ao eixo refrata passando pelo foco imagem; raio que passa pelo foco objeto emerge paralelo; raio que passa pelo centro óptico segue praticamente sem desvio.",
-      "Quando o objeto está além do foco, a imagem costuma ser real e invertida. Quando o objeto está entre o foco e a lente, a imagem é virtual, direita e ampliada. Esse é o caso da lupa.",
+      "A lente convergente tende a aproximar os raios luminosos. Raios paralelos ao eixo principal refratam passando pelo foco imagem. Raios que passam pelo foco objeto emergem paralelos. Raios que passam pelo centro óptico seguem praticamente sem desvio na aproximação de lente delgada.",
+      "Assim como o espelho côncavo, a lente convergente muda o tipo de imagem conforme a posição do objeto. Para objeto fora do foco, ela pode formar imagem real e invertida do outro lado da lente. Para objeto dentro do foco, forma imagem virtual, direita e ampliada do mesmo lado do objeto.",
+      "A progressão é a chave: objeto muito longe gera imagem real, invertida e menor. Ao aproximar o objeto do foco, a imagem real se afasta e cresce. No foco, a imagem vai para o infinito. Dentro do foco, a imagem deixa de ser real e passa a ser virtual, direita e ampliada.",
+      "Esse último caso é a lupa. A lupa não projeta a imagem em uma tela; ela faz o olho receber raios divergentes como se viessem de uma imagem maior e mais distante do mesmo lado do objeto.",
     ],
     diagram: {
       kind: "convergingLens",
       title: "lente convergente",
-      caption: "Para objeto além da distância focal, os raios refratados podem se cruzar do outro lado da lente.",
+      caption: "Raios paralelos convergem para o foco imagem.",
     },
     bullets: [
       "Objeto além de 2f: imagem real, invertida e menor.",
       "Objeto em 2f: imagem real, invertida e igual.",
       "Objeto entre 2f e f: imagem real, invertida e maior.",
-      "Objeto em f: imagem no infinito; raios emergem paralelos.",
+      "Objeto em f: imagem no infinito.",
       "Objeto entre f e a lente: imagem virtual, direita e maior.",
+    ],
+    notes: [
+      {
+        title: "Cuidado com a frase preguiçosa",
+        type: "warning",
+        body: "Lente convergente não forma sempre imagem real. Se o objeto estiver dentro da distância focal, a imagem é virtual, direita e ampliada.",
+      },
     ],
   },
   {
     id: 8,
-    icon: Glasses,
+    icon: ScanEye,
     title: "Lente divergente",
-    accent: "bg-slate-950",
+    accent: "bg-teal-700",
     paragraphs: [
-      "A lente divergente espalha os raios luminosos. Para objeto real, ela sempre forma imagem virtual, direita e menor, localizada do mesmo lado do objeto.",
-      "Os raios emergentes não se cruzam do outro lado da lente. O observador prolonga esses raios para trás, e os prolongamentos indicam a posição da imagem virtual.",
-      "Esse comportamento é usado na correção da miopia. A lente divergente espalha previamente os raios, permitindo que o olho focalize a imagem sobre a retina.",
+      "A lente divergente espalha os raios luminosos. Para objeto real, os raios emergentes não se cruzam do outro lado da lente; eles saem divergindo. Seus prolongamentos se encontram do mesmo lado do objeto.",
+      "Por isso, para objeto real, a lente divergente forma imagem virtual, direita e menor. Esse resultado lembra o espelho convexo, mas o fenômeno físico é outro: na lente há refração; no espelho há reflexão.",
+      "A imagem fica entre o foco objeto e a lente. Como o módulo do aumento é menor que 1, a imagem aparece reduzida. Como o aumento é positivo, ela é direita.",
+      "Essa lente é usada na correção da miopia porque espalha previamente os raios antes de entrarem no olho, deslocando a formação da imagem para trás, sobre a retina.",
     ],
     diagram: {
       kind: "divergingLens",
       title: "lente divergente",
-      caption: "Para objeto real, a imagem fica virtual, direita e menor no mesmo lado do objeto.",
+      caption: "A lente divergente espalha raios, que parecem vir do foco objeto.",
     },
+    bullets: [
+      "Para objeto real, imagem sempre virtual.",
+      "Imagem direita e menor.",
+      "Imagem no mesmo lado do objeto.",
+      "Correção típica da miopia.",
+      "Foco negativo na convenção usual.",
+    ],
   },
   {
     id: 9,
     icon: Calculator,
-    title: "Referencial de Gauss, sinais e fórmulas principais",
+    title: "Referencial de Gauss: o que cada sinal está falando",
     accent: "bg-red-700",
     paragraphs: [
-      "A equação de Gauss é curta. O problema é o sinal. Em espelhos e lentes, o aluno precisa interpretar p, p', f e A com consistência. Trocar convenção no meio da questão é o jeito mais elegante de produzir uma resposta errada com aparência de matemática séria.",
-      "Para espelhos: objeto real na frente do espelho tem p > 0; imagem real na frente tem p' > 0; imagem virtual atrás tem p' < 0; espelho côncavo tem f > 0; espelho convexo tem f < 0.",
-      "Para lentes: objeto real antes da lente tem p > 0; imagem real do outro lado tem p' > 0; imagem virtual do mesmo lado do objeto tem p' < 0; lente convergente tem f > 0; lente divergente tem f < 0.",
+      "A equação de Gauss é curta. O problema é interpretar os sinais. O sinal não é um castigo matemático; ele é uma informação física codificada. Ele diz que tipo de sistema estamos usando, onde a imagem aparece e qual é a orientação da imagem.",
+      "O sinal de f diz se o sistema é convergente ou divergente. Espelho côncavo e lente convergente têm f positivo. Espelho convexo e lente divergente têm f negativo.",
+      "O sinal de p' indica a natureza da imagem dentro da convenção adotada. Para objeto real, p' positivo indica imagem real; p' negativo indica imagem virtual. Em lentes e espelhos, os lados físicos são diferentes, por isso o desenho continua indispensável.",
+      "O sinal de A indica a orientação. A positivo indica imagem direita; A negativo indica imagem invertida. O módulo de A indica o tamanho relativo. Esse detalhe salva muita questão, porque aumento positivo não significa imagem maior. Significa imagem direita.",
     ],
     diagram: {
       kind: "gaussSigns",
       title: "sinais de Gauss",
-      caption: "Os sinais indicam natureza da imagem e tipo de sistema. O desenho ajuda a não se perder.",
+      caption: "O sinal diz onde está a imagem e como ela se orienta.",
     },
-    formulas: mainFormulas,
+    formulas: [mainFormulas[0], mainFormulas[1]],
+    notes: [
+      {
+        title: "Resumo de sobrevivência",
+        type: "success",
+        body: "Sinal de f: tipo de sistema. Sinal de p': real ou virtual. Sinal de A: direita ou invertida. Módulo de A: maior ou menor.",
+      },
+    ],
   },
   {
     id: 10,
-    icon: ScanEye,
+    icon: Calculator,
     title: "Equação dos fabricantes e vergência",
-    accent: "bg-purple-700",
+    accent: "bg-slate-950",
     paragraphs: [
-      "A vergência mede o poder óptico de uma lente. Quanto menor a distância focal em módulo, maior a capacidade da lente de convergir ou divergir raios. É a ideia por trás do grau dos óculos.",
+      "A vergência mede a potência óptica de uma lente. Quanto menor a distância focal em módulo, maior a vergência. Como a vergência é dada por V = 1/f, a unidade correta exige f em metros.",
       "A equação dos fabricantes mostra que a distância focal depende do material da lente, do meio externo e da curvatura das faces. Isso impede aquela ideia preguiçosa de que lente é convergente apenas porque parece convexa.",
-      "Em geral, lentes mais curvas têm maior vergência. Se o índice do meio externo se aproxima do índice da lente, a refração diminui e a lente perde potência.",
+      "A lente desvia luz porque há diferença de índice entre a lente e o meio. Se o índice do meio externo se aproxima do índice da lente, o desvio diminui e a lente perde potência. Se as faces são mais curvas, os desvios tendem a ser maiores e a distância focal tende a diminuir.",
+      "Esse bloco é importante para interpretar óculos, instrumentos e situações em que a lente está imersa em líquidos. O comportamento óptico pertence ao conjunto lente + meio, não à lente isolada em um universo imaginário.",
     ],
     formulas: [mainFormulas[2], mainFormulas[3]],
+    notes: [
+      {
+        title: "Unidade que derruba gente",
+        type: "warning",
+        body: "Na vergência, f precisa estar em metros. Usar centímetros aqui é pedir para errar por fator 100, uma tradição lamentável.",
+      },
+    ],
   },
   {
     id: 11,
@@ -1319,8 +1371,9 @@ const theorySections: TheorySection[] = [
     accent: "bg-indigo-800",
     paragraphs: [
       "O olho humano funciona como um sistema óptico convergente. A córnea e o cristalino refratam a luz para formar uma imagem real, invertida e reduzida sobre a retina.",
-      "O cristalino realiza acomodação visual: altera sua curvatura para ajustar a distância focal do olho. Para objetos distantes, fica menos curvo. Para objetos próximos, fica mais curvo.",
-      "Na miopia, a imagem de objetos distantes se forma antes da retina. Corrige-se com lente divergente. Na hipermetropia, a imagem tenderia a se formar depois da retina. Corrige-se com lente convergente.",
+      "O ponto essencial é que a distância entre o cristalino e a retina é praticamente fixa. Então, para focalizar objetos em distâncias diferentes, o olho precisa alterar sua distância focal. Ele faz isso mudando a curvatura do cristalino, processo chamado acomodação visual.",
+      "Para objetos distantes, os raios chegam quase paralelos e o cristalino fica menos curvo. Para objetos próximos, os raios chegam mais divergentes e o cristalino precisa ficar mais curvo, aumentando a convergência para manter a imagem sobre a retina.",
+      "Na miopia, o olho converge demais ou é alongado demais, formando a imagem de objetos distantes antes da retina. Corrige-se com lente divergente. Na hipermetropia, o olho converge pouco ou é curto demais, fazendo a imagem tender a se formar depois da retina. Corrige-se com lente convergente.",
     ],
     diagram: {
       kind: "eyeDefects",
@@ -1341,8 +1394,9 @@ const theorySections: TheorySection[] = [
     accent: "bg-cyan-700",
     paragraphs: [
       "Instrumentos ópticos usam lentes e espelhos para formar imagens com finalidades específicas. O objetivo aqui não é estudar cada instrumento com profundidade máxima, mas entender como o conteúdo desta página vira tecnologia.",
-      "A lupa usa lente convergente com objeto dentro da distância focal e forma imagem virtual, direita e ampliada. A câmera usa lente convergente para formar imagem real, invertida e reduzida no sensor. O projetor usa lente convergente para formar imagem real, invertida e ampliada em uma tela.",
-      "Microscópios combinam lentes convergentes para ampliar objetos pequenos. Telescópios usam lentes ou espelhos para coletar luz de objetos distantes e ampliar a imagem angular. Espelhos côncavos são muito usados em telescópios refletores porque evitam problemas cromáticos típicos de lentes grandes.",
+      "A lupa usa uma lente convergente com o objeto dentro da distância focal. Ela forma imagem virtual, direita e ampliada. A câmera usa uma lente convergente para formar imagem real, invertida e reduzida no sensor. O projetor usa lente convergente para formar imagem real, invertida e ampliada em uma tela.",
+      "O microscópio composto usa uma objetiva para formar uma imagem real ampliada e uma ocular que funciona como lupa. O telescópio usa lentes ou espelhos para coletar luz de objetos distantes e ampliar a imagem angular.",
+      "A diferença entre esses instrumentos não é que cada um usa uma fórmula mágica diferente. Todos manipulam a mesma ideia central: controlar onde os raios se encontram ou parecem se encontrar.",
     ],
     bullets: [
       "Lupa: lente convergente; imagem virtual, direita e ampliada.",
@@ -1350,6 +1404,32 @@ const theorySections: TheorySection[] = [
       "Projetor: lente convergente; imagem real, invertida e ampliada.",
       "Microscópio: objetiva forma imagem real ampliada; ocular atua como lupa.",
       "Telescópio: lentes ou espelhos para coletar luz e ampliar imagem angular.",
+    ],
+  },
+  {
+    id: 13,
+    icon: Brain,
+    title: "Como pensar antes de usar a fórmula",
+    accent: "bg-blue-700",
+    paragraphs: [
+      "O erro mais comum em lentes e espelhos é começar pela conta. A conta deve confirmar o raciocínio, não substituir o raciocínio. Antes de aplicar Gauss, é preciso saber se o sistema é convergente ou divergente e prever qualitativamente o tipo de imagem.",
+      "Se o sistema é côncavo ou convergente, a posição do objeto em relação ao foco muda tudo. Fora do foco, a imagem tende a ser real e invertida. Dentro do foco, a imagem tende a ser virtual, direita e ampliada. Se o sistema é convexo ou divergente, para objeto real, a imagem será virtual, direita e menor.",
+      "Depois da previsão, a equação de Gauss entra para dar posição numérica. O aumento entra para dizer orientação e tamanho. No final, você confere se o resultado conversa com o desenho. Se não conversa, a chance de erro de sinal é enorme. O desenho é o detector de mentira da conta.",
+    ],
+    numbered: [
+      "Identifique o sistema: espelho ou lente.",
+      "Decida se é convergente ou divergente.",
+      "Preveja qualitativamente o tipo de imagem.",
+      "Use Gauss para calcular p'.",
+      "Use A = -p'/p para orientação e tamanho.",
+      "Compare o resultado com o desenho dos raios.",
+    ],
+    notes: [
+      {
+        title: "Frase para guardar",
+        type: "success",
+        body: "Gauss calcula. O desenho interpreta. Um sem o outro vira chute com símbolos bonitos.",
+      },
     ],
   },
 ];
@@ -1373,6 +1453,13 @@ const examples: Example[] = [
     ],
     formulas: [String.raw`\frac{1}{10}=\frac{1}{30}+\frac{1}{p'}`, String.raw`p'=15\,\text{cm}`],
     conclusion: "A imagem se forma a 15 cm na frente do espelho. Ela é real, invertida e menor.",
+    notes: [
+      {
+        title: "O que a questão queria testar",
+        type: "info",
+        body: "Não era só substituir na fórmula. A questão testava se você reconhecia o espelho côncavo como sistema convergente e se sabia prever que objeto além de C gera imagem entre F e C.",
+      },
+    ],
   },
   {
     id: "espelho-convexo",
@@ -1392,6 +1479,13 @@ const examples: Example[] = [
     ],
     formulas: [String.raw`p'=-\frac{40}{3}\,\text{cm}`, String.raw`A\approx 0{,}33`],
     conclusion: "A imagem está cerca de 13,3 cm atrás do espelho. Ela é virtual, direita e menor.",
+    notes: [
+      {
+        title: "O que a questão queria testar",
+        type: "warning",
+        body: "O ponto perigoso era o foco negativo. Quem usa f positivo em espelho convexo obtém uma imagem que contradiz a física do sistema.",
+      },
+    ],
   },
   {
     id: "lente-convergente",
@@ -1411,6 +1505,13 @@ const examples: Example[] = [
     ],
     formulas: [String.raw`p'=15\,\text{cm}`, String.raw`A=-0{,}5`, String.raw`i=-2\,\text{cm}`],
     conclusion: "A imagem se forma 15 cm do outro lado da lente. Ela é real, invertida e menor, com altura de 2 cm.",
+    notes: [
+      {
+        title: "O que a questão queria testar",
+        type: "info",
+        body: "A questão junta Gauss com aumento. p' localiza a imagem; A interpreta orientação e tamanho. Misturar essas funções é um erro bem comum.",
+      },
+    ],
   },
   {
     id: "lente-divergente",
@@ -1430,6 +1531,13 @@ const examples: Example[] = [
     ],
     formulas: [String.raw`p'=-10\,\text{cm}`, String.raw`A=\frac{1}{3}`],
     conclusion: "A imagem se forma 10 cm da lente, do mesmo lado do objeto. Ela é virtual, direita e menor.",
+    notes: [
+      {
+        title: "O que a questão queria testar",
+        type: "warning",
+        body: "A lente divergente para objeto real deve formar imagem virtual, direita e menor. Se a conta gerar imagem real, o sinal morreu em algum lugar.",
+      },
+    ],
   },
   {
     id: "lupa",
@@ -1449,6 +1557,13 @@ const examples: Example[] = [
     ],
     formulas: [String.raw`p'=-24\,\text{cm}`, String.raw`A=3`],
     conclusion: "A imagem fica 24 cm do mesmo lado do objeto. Ela é virtual, direita e três vezes maior.",
+    notes: [
+      {
+        title: "O que a questão queria testar",
+        type: "success",
+        body: "Esse é o caso da lupa: lente convergente com objeto dentro do foco. É justamente o contraexemplo da frase errada 'lente convergente sempre forma imagem real'.",
+      },
+    ],
   },
   {
     id: "oculos-vergencia",
