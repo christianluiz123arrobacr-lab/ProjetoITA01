@@ -1712,17 +1712,32 @@ export default function OpticaTopicLentes() {
 
         {activeTab === "teoria" ? (
           <div className="mt-10 space-y-8">
-            <ImageFormationSimulator />
-            <GaussSignalGuide />
-            <SystemComparisonPanel />
-            <ClassicCasesPanel />
-
             {theorySections.map((section) => (
-              <TheorySectionCard key={section.id} section={section} />
-            ))}
+              <div key={section.id} className="space-y-8">
+                <TheorySectionCard section={section} />
 
-            <ProofModePanel />
-            <RecommendedTrainingPanel />
+                {section.id === 8 ? (
+                  <>
+                    <SystemComparisonPanel />
+                    <ClassicCasesPanel />
+                  </>
+                ) : null}
+
+                {section.id === 9 ? (
+                  <>
+                    <GaussSignalGuide />
+                    <ImageFormationSimulator />
+                  </>
+                ) : null}
+
+                {section.id === 13 ? (
+                  <>
+                    <ProofModePanel />
+                    <RecommendedTrainingPanel />
+                  </>
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : null}
 
@@ -1759,9 +1774,6 @@ export default function OpticaTopicLentes() {
               </div>
             </section>
 
-            <GaussSignalGuide />
-            <SystemComparisonPanel />
-            <ProofModePanel />
 
             <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
               <div className="bg-red-700 px-7 py-6 text-white md:px-9">
