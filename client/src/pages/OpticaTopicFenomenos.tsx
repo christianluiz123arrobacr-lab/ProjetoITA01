@@ -1,4 +1,4 @@
-import { useState, type ElementType } from "react";
+import { useMemo, useState, type ElementType } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -275,6 +275,7 @@ const theorySections: TheorySection[] = [
       "A Óptica Física é a parte da Óptica que estuda fenômenos em que a natureza ondulatória da luz se torna indispensável. A Óptica Geométrica, com raios luminosos, explica muito bem reflexão, refração, lentes, espelhos e formação de imagens quando as dimensões envolvidas são muito maiores que o comprimento de onda da luz.",
       "Mas a luz não é apenas um risquinho obediente andando em linha reta para facilitar a vida do aluno. O modelo de raio é uma aproximação. Ele funciona muito bem em muitas situações, mas falha quando surgem fenômenos como interferência, difração, polarização, franjas claras e escuras, cores em películas finas e limite de resolução de instrumentos.",
       "A Óptica Física trata a luz como onda eletromagnética. Isso significa que a luz possui campos elétrico e magnético oscilantes, perpendiculares entre si e à direção de propagação. É essa estrutura ondulatória que explica superposição, fase, coerência e polarização.",
+      "A leitura mais segura é esta: quando a questão pergunta apenas para onde a luz vai, a Óptica Geométrica costuma bastar. Quando a questão pergunta como a luz se soma, se cancela, se espalha ou tem sua direção de oscilação selecionada, a Óptica Física entra em cena.",
     ],
     notes: [
       {
@@ -358,6 +359,7 @@ const theorySections: TheorySection[] = [
       "Para entender interferência e difração, não basta saber que existe comprimento de onda. É preciso entender frequência, período, velocidade, fase, diferença de fase e diferença de caminho.",
       "A fase indica em que ponto do ciclo a onda está. Duas ondas podem ter mesma frequência e mesmo comprimento de onda, mas chegarem a um ponto em estados diferentes do ciclo. Se chegam em fase, reforçam. Se chegam em oposição de fase, podem cancelar.",
       "A diferença de caminho é a diferença entre os percursos feitos por duas ondas até um ponto. Ela se transforma em diferença de fase. É essa conexão que cria franjas claras e escuras no experimento de Young.",
+      "A regra prática é simples: se a diferença de caminho equivale a um número inteiro de comprimentos de onda, as ondas chegam em fase. Se equivale a um número semi-inteiro de comprimentos de onda, chegam em oposição de fase. A beleza disso é que uma diferença geométrica vira uma diferença luminosa na tela.",
     ],
     formulas: [formulas[0], formulas[1], formulas[2], formulas[3]],
     notes: [
@@ -450,6 +452,7 @@ const theorySections: TheorySection[] = [
       "Na difração por fenda única, a luz atravessa uma fenda estreita e forma um padrão com máximo central largo e intenso, mínimos escuros laterais e máximos secundários mais fracos.",
       "A condição a senθ = mλ fornece os mínimos de difração. Esse ponto é perigoso porque a fórmula se parece com a condição de máximos da dupla fenda. A aparência algébrica é parecida; o fenômeno cobrado é outro. A Física, como sempre, escolheu a opção menos amigável.",
       "O máximo central se alarga quando o comprimento de onda aumenta ou quando a fenda fica mais estreita. Por isso, fendas pequenas espalham mais a luz.",
+      "Essa é uma ideia contraintuitiva para quem vem da Óptica Geométrica: diminuir a abertura não melhora indefinidamente a definição. Depois de certo ponto, a abertura pequena aumenta a difração e piora a nitidez. A natureza, como sempre, cobra pedágio.",
     ],
     formulas: [formulas[7]],
     diagram: {
@@ -494,6 +497,7 @@ const theorySections: TheorySection[] = [
       "Resolver dois objetos significa conseguir distingui-los como separados. O Critério de Rayleigh diz que dois pontos estão aproximadamente resolvidos quando o máximo central de um coincide com o primeiro mínimo do outro.",
       "Para abertura circular, a separação angular mínima é aproximadamente θ_min = 1,22 λ/D. Isso mostra que telescópios maiores têm melhor resolução e que comprimentos de onda menores permitem distinguir detalhes menores.",
       "Aumentar a ampliação sem melhorar a resolução não cria detalhe novo. Só aumenta uma imagem borrada. É cruel, mas pelo menos é honesto.",
+      "Por isso, telescópios e microscópios não são limitados apenas por qualidade de lente ou espelho. Mesmo em um sistema ideal, a difração impõe um limite físico. O instrumento pode aumentar a imagem, mas não pode recuperar informação que o padrão de difração já misturou.",
     ],
     formulas: [formulas[9]],
     diagram: {
@@ -520,6 +524,7 @@ const theorySections: TheorySection[] = [
       "Luz natural é geralmente não polarizada: seu campo elétrico oscila em várias direções perpendiculares à propagação. Um polarizador seleciona uma dessas direções e transmite apenas a componente compatível com seu eixo.",
       "Se luz natural atravessa um polarizador ideal, a intensidade transmitida fica I0/2. Depois disso, se a luz polarizada atravessa outro polarizador, chamado analisador, aplicamos a Lei de Malus: I = I0 cos²θ.",
       "Quando os eixos dos polarizadores são paralelos, a transmissão é máxima. Quando são perpendiculares, a transmissão ideal é nula. Com 45°, a intensidade transmitida pelo analisador é metade da luz polarizada incidente nele.",
+      "O cuidado mais importante é separar duas situações: luz natural passando pelo primeiro polarizador e luz já polarizada passando por um analisador. No primeiro caso, um polarizador ideal transmite metade da intensidade. No segundo, a Lei de Malus decide a fração transmitida.",
     ],
     formulas: [formulas[10]],
     diagram: {
@@ -566,7 +571,54 @@ const theorySections: TheorySection[] = [
       "Polarização: direção de oscilação do campo elétrico.",
       "Malus: intensidade transmitida por analisador.",
     ],
+  },,
+
+  {
+    id: 14,
+    icon: Calculator,
+    title: "Como escolher a fórmula certa",
+    accent: "bg-blue-700",
+    paragraphs: [
+      "Óptica Física tem um problema irritante: fórmulas parecidas aparecem em fenômenos diferentes. Se o aluno escolhe fórmula olhando só o formato algébrico, erra com confiança, que é o pior tipo de erro.",
+      "O caminho correto é identificar o fenômeno antes da conta. A pergunta não é 'qual fórmula parece familiar?'. A pergunta é: existe uma fenda, duas fendas, muitas fendas, abertura circular, película fina ou polarizador?",
+      "Essa seção funciona como um mapa de decisão. Ela não substitui a teoria, mas impede que você use a fórmula certa no lugar errado, uma especialidade humana infelizmente bem documentada.",
+    ],
+    bullets: [
+      "Duas fendas coerentes: use Young, com máximos em d senθ = mλ e espaçamento Δy = λD/d.",
+      "Uma fenda única: use mínimos de difração em a senθ = mλ.",
+      "Muitas fendas: use rede de difração, com máximos principais em d senθ = mλ.",
+      "Abertura circular e resolução: use Rayleigh, θ_min ≈ 1,22λ/D.",
+      "Polarizadores: use I = I0/2 para luz natural no primeiro polarizador e Malus para analisadores.",
+      "Reflexo polarizado: use Brewster, tanθ_B = n2/n1.",
+      "Película fina: analise diferença de caminho e inversões de fase antes de decidir máximo ou mínimo.",
+    ],
+    notes: [
+      {
+        title: "Regra de prova",
+        type: "success",
+        body: "Primeiro identifique o fenômeno. Depois escolha a fórmula. A ordem inversa é como colocar o gabarito antes da pergunta e torcer pela benevolência do universo.",
+      },
+    ],
   },
+  {
+    id: 15,
+    icon: Brain,
+    title: "Leitura de gráficos de intensidade",
+    accent: "bg-indigo-800",
+    paragraphs: [
+      "Em Óptica Física, muitos resultados aparecem como padrões de intensidade. O aluno não deve enxergar as fórmulas apenas como números; deve enxergar a forma do padrão luminoso.",
+      "No experimento de Young ideal, as franjas aparecem regularmente espaçadas. Na fenda única, o máximo central é muito mais largo e intenso que os máximos laterais. Em uma rede de difração, os máximos principais ficam estreitos e bem definidos.",
+      "No Critério de Rayleigh, a intensidade ajuda a entender por que dois pontos próximos podem se misturar. Quando os padrões de difração se sobrepõem demais, o instrumento deixa de distinguir os objetos separadamente.",
+    ],
+    bullets: [
+      "Young: franjas claras e escuras aproximadamente periódicas.",
+      "Fenda única: máximo central largo; laterais menores.",
+      "Rede: máximos estreitos e bem definidos.",
+      "Rayleigh: resolução depende da separação entre padrões de difração.",
+      "Malus: intensidade varia com cos²θ.",
+    ],
+  },
+
 ];
 
 const examples: ExampleItem[] = [
@@ -679,7 +731,47 @@ const examples: ExampleItem[] = [
       "A intensidade transmitida é I0/4.",
     test:
       "A questão queria testar a aplicação direta de Malus. Se a luz fosse natural antes do primeiro polarizador, haveria o fator I0/2 antes.",
+  },,
+
+  {
+    title: "Luz natural atravessando dois polarizadores",
+    level: "intermediário clássico",
+    statement:
+      "Luz natural de intensidade I0 atravessa dois polarizadores ideais. O segundo faz 60° com o primeiro. Determine a intensidade final.",
+    idea:
+      "O primeiro polarizador recebe luz natural, então transmite metade. Só depois aplicamos Malus para o segundo polarizador.",
+    steps: [
+      "Depois do primeiro polarizador: I1 = I0/2.",
+      "No segundo polarizador, use Malus: I2 = I1 cos²60°.",
+      "Como cos60° = 1/2, temos cos²60° = 1/4.",
+      "Logo, I2 = (I0/2) · (1/4).",
+      "I2 = I0/8.",
+    ],
+    answer:
+      "A intensidade final é I0/8.",
+    test:
+      "A questão queria testar se você não aplica Malus diretamente na luz natural. Primeiro vem o fator 1/2 do primeiro polarizador.",
   },
+  {
+    title: "Rayleigh com separação linear",
+    level: "avançado aplicado",
+    statement:
+      "Um instrumento possui separação angular mínima resolvível θ = 2,0 × 10^-6 rad. Dois pontos estão a 5,0 km de distância do instrumento. Qual a menor separação linear entre eles para serem resolvidos?",
+    idea:
+      "Para pequenos ângulos, a separação linear é aproximadamente s = Lθ.",
+    steps: [
+      "Converta a distância: L = 5,0 km = 5,0 × 10^3 m.",
+      "Use s ≈ Lθ.",
+      "s ≈ 5,0 × 10^3 · 2,0 × 10^-6.",
+      "s ≈ 1,0 × 10^-2 m.",
+      "Logo, s ≈ 1,0 cm.",
+    ],
+    answer:
+      "A menor separação linear resolvível é aproximadamente 1,0 cm.",
+    test:
+      "A questão queria conectar resolução angular com separação linear. Rayleigh dá ângulo; a geometria transforma isso em distância real.",
+  },
+
 ];
 
 const traps = [
@@ -691,6 +783,7 @@ const traps = [
   "Achar que aumentar ampliação sempre melhora resolução.",
   "Aplicar Malus diretamente em luz natural sem considerar o primeiro polarizador.",
   "Confundir ângulo entre polarizadores com ângulo em relação à direção de propagação.",
+  "Usar Malus sem separar primeiro polarizador e analisador.",
   "Ignorar inversão de fase em películas finas.",
   "Achar que difração só ocorre em fendas, e não também em obstáculos.",
 ];
@@ -706,7 +799,214 @@ const checklist = [
   "Sei aplicar corretamente a Lei de Malus?",
   "Sei tratar luz natural atravessando o primeiro polarizador?",
   "Sei evitar confundir fórmulas parecidas em fenômenos diferentes?",
+  "Sei decidir a fórmula correta a partir do fenômeno físico?",
+  "Sei transformar resolução angular em separação linear usando s ≈ Lθ?",
 ];
+
+
+function decimalComma(value: number, digits = 2) {
+  if (!Number.isFinite(value)) return "∞";
+  const fixed = value.toFixed(digits);
+  return fixed.replace(".", ",").replace(/,?0+$/, "");
+}
+
+function YoungSimulator() {
+  const [lambdaNm, setLambdaNm] = useState(600);
+  const [distanceScreen, setDistanceScreen] = useState(2);
+  const [slitMm, setSlitMm] = useState(0.3);
+
+  const spacingMm = useMemo(() => {
+    const lambda = lambdaNm * 1e-9;
+    const d = slitMm * 1e-3;
+    return (lambda * distanceScreen / d) * 1000;
+  }, [lambdaNm, distanceScreen, slitMm]);
+
+  const fringes = [-3, -2, -1, 0, 1, 2, 3];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-slate-950 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+            <Rainbow className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+              Simulador rápido de Young
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-slate-300">
+              Mude λ, D e d para ver o espaçamento entre franjas.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-7 px-7 py-7 md:px-9 md:py-9 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="space-y-5">
+          <label className="block rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Comprimento de onda</span>
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-black text-white">{lambdaNm} nm</span>
+            </div>
+            <input type="range" min="400" max="700" step="10" value={lambdaNm} onChange={(e) => setLambdaNm(Number(e.target.value))} className="w-full accent-blue-700" />
+          </label>
+
+          <label className="block rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Distância até a tela</span>
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-black text-white">{decimalComma(distanceScreen, 1)} m</span>
+            </div>
+            <input type="range" min="0.5" max="5" step="0.1" value={distanceScreen} onChange={(e) => setDistanceScreen(Number(e.target.value))} className="w-full accent-blue-700" />
+          </label>
+
+          <label className="block rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Distância entre fendas</span>
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-black text-white">{decimalComma(slitMm, 2)} mm</span>
+            </div>
+            <input type="range" min="0.1" max="1.2" step="0.05" value={slitMm} onChange={(e) => setSlitMm(Number(e.target.value))} className="w-full accent-blue-700" />
+          </label>
+
+          <FormulaBlock formula={String.raw`\Delta y \approx ${decimalComma(spacingMm, 2)}\,\mathrm{mm}`} />
+        </div>
+
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+          <div className="border-b border-slate-200 bg-white px-5 py-4">
+            <h3 className="text-lg font-black text-slate-950">Padrão qualitativo na tela</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Quanto maior Δy, mais afastadas ficam as franjas. O desenho é qualitativo, o cálculo é o que vale.
+            </p>
+          </div>
+          <div className="overflow-x-auto p-5">
+            <svg viewBox="0 0 760 300" className="min-w-[680px]">
+              <rect x="40" y="35" width="680" height="230" rx="24" fill="#020617" />
+              <line x1="380" y1="45" x2="380" y2="255" stroke="#334155" strokeWidth="2" />
+              {fringes.map((m) => {
+                const x = 380 + m * Math.min(82, Math.max(22, spacingMm * 8));
+                const opacity = m === 0 ? 1 : 0.72;
+                return (
+                  <g key={m}>
+                    <rect x={x - 7} y="58" width="14" height="184" rx="7" fill="#facc15" opacity={opacity} />
+                    <text x={x - 8} y="278" className="fill-slate-600 text-[13px] font-black">{m}</text>
+                  </g>
+                );
+              })}
+              <text x="75" y="25" className="fill-slate-900 text-[16px] font-black">franjas claras: m = -3 ... 3</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MalusSimulator() {
+  const [angle, setAngle] = useState(45);
+  const ratio = useMemo(() => Math.cos((angle * Math.PI) / 180) ** 2, [angle]);
+  const naturalTwoPolarizers = 0.5 * ratio;
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-emerald-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+            <ShieldCheck className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+              Simulador da Lei de Malus
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-emerald-100">
+              Veja como a intensidade muda com o ângulo entre polarização e analisador.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-7 px-7 py-7 md:px-9 md:py-9 xl:grid-cols-[0.8fr_1.2fr]">
+        <div className="space-y-5">
+          <label className="block rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">Ângulo θ</span>
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-black text-white">{angle}°</span>
+            </div>
+            <input type="range" min="0" max="90" step="1" value={angle} onChange={(e) => setAngle(Number(e.target.value))} className="w-full accent-emerald-700" />
+          </label>
+
+          <FormulaBlock formula={String.raw`\frac{I}{I_0}=\cos^2(${angle}^{\circ})\approx ${decimalComma(ratio, 3)}`} />
+          <FormulaBlock formula={String.raw`\text{luz natural + 2 polarizadores: }\frac{I}{I_0}\approx ${decimalComma(naturalTwoPolarizers, 3)}`} />
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-[1.02rem] leading-8 text-amber-950">
+            Primeiro polarizador com luz natural: transmite metade. Segundo polarizador: aplica Malus. Esse detalhe derruba questão com uma eficiência quase ofensiva.
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+          <div className="border-b border-slate-200 bg-white px-5 py-4">
+            <h3 className="text-lg font-black text-slate-950">Curva qualitativa I/I₀ = cos²θ</h3>
+          </div>
+          <div className="overflow-x-auto p-5">
+            <svg viewBox="0 0 760 300" className="min-w-[680px]">
+              <line x1="70" y1="245" x2="710" y2="245" stroke="#0f172a" strokeWidth="3" />
+              <line x1="70" y1="245" x2="70" y2="45" stroke="#0f172a" strokeWidth="3" />
+              <path
+                d={Array.from({ length: 91 }, (_, a) => {
+                  const x = 70 + (a / 90) * 620;
+                  const y = 245 - Math.cos((a * Math.PI) / 180) ** 2 * 180;
+                  return `${a === 0 ? "M" : "L"}${x} ${y}`;
+                }).join(" ")}
+                fill="none"
+                stroke="#059669"
+                strokeWidth="5"
+              />
+              <circle cx={70 + (angle / 90) * 620} cy={245 - ratio * 180} r="8" fill="#dc2626" />
+              <text x="62" y="35" className="fill-slate-700 text-[14px] font-black">I/I₀</text>
+              <text x="690" y="275" className="fill-slate-700 text-[14px] font-black">θ</text>
+              <text x="56" y="265" className="fill-slate-700 text-[13px] font-bold">0</text>
+              <text x="52" y="72" className="fill-slate-700 text-[13px] font-bold">1</text>
+              <text x="365" y="275" className="fill-slate-700 text-[13px] font-bold">45°</text>
+              <text x="675" y="275" className="fill-slate-700 text-[13px] font-bold">90°</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PhenomenaMapPanel() {
+  const items = [
+    ["Interferência", "superposição de ondas coerentes"],
+    ["Difração", "espalhamento por abertura ou obstáculo"],
+    ["Young", "duas fendas coerentes formando franjas"],
+    ["Fenda única", "mínimos por cancelamento dentro da própria abertura"],
+    ["Rayleigh", "limite de resolução causado pela difração"],
+    ["Polarização", "seleção da direção de oscilação do campo elétrico"],
+    ["Malus", "intensidade transmitida por analisador"],
+    ["Brewster", "polarização por reflexão em ângulo especial"],
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-blue-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <Brain className="h-7 w-7" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Mapa mental dos fenômenos
+          </h2>
+        </div>
+      </div>
+      <div className="grid gap-4 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">
+        {items.map(([title, description]) => (
+          <div key={title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-lg font-black text-slate-950">{title}</h3>
+            <p className="mt-2 text-[1.02rem] leading-8 text-slate-700">{description}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function FormulaBlock({ formula }: { formula: string }) {
   return (
@@ -932,19 +1232,21 @@ function SingleSlitDiagram() {
 
 function RayleighDiagram() {
   return (
-    <svg viewBox="0 0 820 300" className="h-auto w-full">
-      <text x="70" y="40" className="fill-slate-950 text-[20px] font-black">dois pontos próximos</text>
-      <circle cx="145" cy="95" r="9" fill="#facc15" />
-      <circle cx="190" cy="95" r="9" fill="#facc15" />
+    <div className="space-y-4">
+      <svg viewBox="0 0 820 300" className="h-auto w-full">
+        <text x="70" y="40" className="fill-slate-950 text-[20px] font-black">dois pontos próximos</text>
+        <circle cx="145" cy="95" r="9" fill="#facc15" />
+        <circle cx="190" cy="95" r="9" fill="#facc15" />
 
-      <text x="430" y="40" className="fill-slate-950 text-[20px] font-black">padrões de difração</text>
-      <path d="M360 230 C390 220, 400 160, 430 120 C460 80, 500 80, 530 120 C560 160, 570 220, 600 230" fill="none" stroke="#2563eb" strokeWidth="5" />
-      <path d="M440 230 C470 220, 480 160, 510 120 C540 80, 580 80, 610 120 C640 160, 650 220, 680 230" fill="none" stroke="#dc2626" strokeWidth="5" />
-      <line x1="530" y1="120" x2="530" y2="245" stroke="#64748b" strokeWidth="2" strokeDasharray="8 8" />
-      <text x="475" y="270" className="fill-slate-700 text-[15px] font-black">limite de resolução</text>
+        <text x="430" y="40" className="fill-slate-950 text-[20px] font-black">padrões de difração</text>
+        <path d="M360 230 C390 220, 400 160, 430 120 C460 80, 500 80, 530 120 C560 160, 570 220, 600 230" fill="none" stroke="#2563eb" strokeWidth="5" />
+        <path d="M440 230 C470 220, 480 160, 510 120 C540 80, 580 80, 610 120 C640 160, 650 220, 680 230" fill="none" stroke="#dc2626" strokeWidth="5" />
+        <line x1="530" y1="120" x2="530" y2="245" stroke="#64748b" strokeWidth="2" strokeDasharray="8 8" />
+        <text x="475" y="270" className="fill-slate-700 text-[15px] font-black">limite de resolução</text>
+      </svg>
 
       <FormulaBlock formula={String.raw`\theta_{\min}\approx 1{,}22\frac{\lambda}{D}`} />
-    </svg>
+    </div>
   );
 }
 
@@ -1165,7 +1467,7 @@ export default function OpticaTopicFenomenos() {
               {[
                 { value: String(theorySections.length), label: "Seções" },
                 { value: String(formulas.length), label: "Fórmulas" },
-                { value: "5", label: "Diagramas" },
+                { value: "7", label: "Diagramas" },
                 { value: "ITA", label: "Foco" },
               ].map((item) => (
                 <div key={item.label} className="rounded-3xl border border-white/10 bg-white/10 p-6 backdrop-blur">
@@ -1197,7 +1499,11 @@ export default function OpticaTopicFenomenos() {
         {activeTab === "teoria" ? (
           <div className="mt-10 space-y-8">
             {theorySections.map((section) => (
-              <TheorySectionCard key={section.id} section={section} />
+              <div key={section.id} className="space-y-8">
+                <TheorySectionCard section={section} />
+                {section.id === 6 ? <YoungSimulator /> : null}
+                {section.id === 11 ? <MalusSimulator /> : null}
+              </div>
             ))}
           </div>
         ) : null}
@@ -1212,6 +1518,8 @@ export default function OpticaTopicFenomenos() {
 
         {activeTab === "resumo" ? (
           <div className="mt-10 space-y-8">
+            <PhenomenaMapPanel />
+
             <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
               <div className="bg-slate-950 px-7 py-6 text-white md:px-9">
                 <div className="flex items-center gap-4">
