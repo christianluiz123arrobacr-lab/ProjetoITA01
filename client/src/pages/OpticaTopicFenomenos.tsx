@@ -1,4 +1,4 @@
-import { useMemo, useState, type ElementType } from "react";
+import { useState, type ElementType } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -22,7 +22,7 @@ import { MathFormula } from "@/components/MathFormula";
 
 type Tab = "teoria" | "exemplos" | "resumo";
 type NoteType = "info" | "warning" | "success";
-type DiagramKind = "reflectionRefraction" | "totalReflection" | "prismDispersion" | "apparentDepth" | "mirage";
+type DiagramKind = "reflectionRefraction" | "totalReflection" | "prismDispersion" | "apparentDepth" | "mirage" | "parallelSlab" | "rainbowDrop";
 
 type FormulaSummary = {
   title: string;
@@ -174,166 +174,208 @@ const theorySections: TheorySection[] = [
   {
     id: 1,
     icon: BookOpen,
-    title: "O que são fenômenos ópticos",
+    title: "O papel dos fenômenos ópticos",
     accent: "bg-purple-700",
     paragraphs: [
-      "Fenômenos ópticos são efeitos observáveis ligados à propagação, reflexão, refração, dispersão e desvio da luz em diferentes meios. Esta página fica entre os fundamentos da Óptica e os sistemas de imagem: ela pega as leis básicas e mostra onde elas aparecem no mundo real.",
-      "Aqui entram reflexão regular e difusa, refração, índice de refração, Lei de Snell-Descartes, profundidade aparente, lâminas de faces paralelas, prismas, dispersão, reflexão total, fibras ópticas, arco-íris e miragens.",
-      "A ideia central é simples: a luz muda de comportamento quando encontra superfícies, interfaces ou meios com índices diferentes. A parte difícil, claro, é a prova transformar isso em desenho torto com ângulo escondido, porque a civilização aparentemente achou isso necessário.",
+      "Fenômenos ópticos são efeitos observáveis ligados ao modo como a luz interage com superfícies, interfaces e meios transparentes. Esta página fica entre os fundamentos da Óptica e os sistemas de imagem: ela pega reflexão, refração e índice de refração e mostra como essas ideias aparecem em situações reais.",
+      "O ponto central é perceber que a luz pode voltar ao meio de origem, atravessar uma interface, mudar velocidade, mudar direção, separar-se em cores, ficar presa por reflexão total ou até seguir uma trajetória curva quando o índice do meio varia gradualmente.",
+      "Essa página não deve ser lida como uma coleção de fenômenos soltos. Reflexão, refração, dispersão, reflexão total, arco-íris e miragens são variações de uma mesma ideia: a trajetória da luz depende da geometria da interface e das propriedades ópticas dos meios.",
+      "Em prova, o erro quase nunca é decorar a fórmula errada por completo. O erro costuma ser mais sutil: medir o ângulo pela superfície, confundir meio de incidência com meio de refração, tentar usar ângulo limite no sentido errado ou esquecer que uma imagem aparente não é a posição real do objeto.",
     ],
     notes: [
       {
         title: "Papel desta página",
         type: "success",
-        body: "Esta página aprofunda os fenômenos geométricos antes de lentes, espelhos esféricos e Óptica Física. Ela é o elo entre fundamentos e aplicações.",
+        body: "Esta página aprofunda os fenômenos geométricos da luz antes de lentes, espelhos esféricos e Óptica Física. Ela é o elo entre fundamentos e aplicações.",
       },
     ],
   },
   {
     id: 2,
-    icon: Eye,
-    title: "Reflexão regular e difusa",
+    icon: Brain,
+    title: "Mapa dos fenômenos e das fórmulas",
     accent: "bg-slate-950",
     paragraphs: [
-      "Reflexão é o retorno da luz ao meio de origem após atingir uma superfície. A lei da reflexão afirma que o ângulo de incidência é igual ao ângulo de reflexão, sempre medidos em relação à normal.",
-      "Na reflexão regular, uma superfície muito lisa reflete raios paralelos de forma organizada. É o caso ideal de espelhos planos. Na reflexão difusa, uma superfície irregular espalha os raios em várias direções. É por isso que conseguimos ver uma parede, uma folha de papel ou uma mesa a partir de muitos ângulos.",
-      "Reflexão difusa não significa ausência de lei da reflexão. Cada ponto microscópico da superfície ainda obedece i = r. O que muda é que as normais locais variam, espalhando os raios refletidos.",
+      "Antes de sair aplicando equação, identifique o fenômeno. A mesma luz pode refletir, refratar, dispersar ou sofrer reflexão total, mas cada caso tem uma leitura física diferente.",
+      "O mapa abaixo serve como um guia de decisão. Ele evita aquela cena deprimente em que o aluno sabe todas as fórmulas, mas escolhe a única que não pertence ao problema.",
     ],
-    formulas: [formulas[0]],
     bullets: [
-      "Reflexão regular: superfície lisa, raios refletidos organizados.",
-      "Reflexão difusa: superfície irregular, raios espalhados.",
-      "A visão cotidiana de objetos depende muito da reflexão difusa.",
-      "Em cada ponto da superfície, a lei i = r continua valendo.",
+      "Reflexão simples: a luz retorna ao meio de origem; use i = r.",
+      "Refração: a luz passa para outro meio; use n₁ sen i = n₂ sen r.",
+      "Profundidade aparente: o olho prolonga raios refratados; para observação quase normal, use h_ap ≈ h/n.",
+      "Lâmina de faces paralelas: o raio sai paralelo ao incidente, mas sofre desvio lateral.",
+      "Reflexão total: use sen L = n₂/n₁, somente se a luz vai do maior índice para o menor índice.",
+      "Dispersão e prismas: aplique a ideia de Snell para cada cor, pois cada frequência pode ter índice diferente.",
+      "Miragens: o índice muda gradualmente no ar; o raio curva aos poucos, não por uma interface única.",
+    ],
+    notes: [
+      {
+        title: "Regra de sobrevivência",
+        type: "info",
+        body: "Primeiro desenhe o caminho da luz. Depois escolha a fórmula. A fórmula sem desenho é só uma aposta com letras gregas.",
+      },
     ],
   },
   {
     id: 3,
-    icon: Waves,
-    title: "Refração e índice de refração",
+    icon: Eye,
+    title: "Reflexão regular e reflexão difusa",
     accent: "bg-blue-700",
     paragraphs: [
-      "Refração é a passagem da luz de um meio para outro com mudança de velocidade. Quando a incidência não é perpendicular à interface, essa mudança de velocidade geralmente vem acompanhada de mudança de direção.",
-      "O índice de refração mede o quanto a luz fica mais lenta em um meio em comparação com o vácuo. Quanto maior o índice, menor a velocidade da luz no meio. Vidro, água, ar e outros meios desviam a luz de formas diferentes justamente por terem índices diferentes.",
-      "A frequência da luz não muda na passagem de um meio para outro. Quem muda é a velocidade e, junto dela, o comprimento de onda. Esse detalhe conecta fenômenos ópticos com o que a gente já estudou em fundamentos e também prepara terreno para dispersão.",
+      "Reflexão é o retorno da luz ao meio de origem após atingir uma superfície. A lei da reflexão afirma que o ângulo de incidência é igual ao ângulo de reflexão, sempre medidos em relação à normal.",
+      "Na reflexão regular, uma superfície muito lisa, como um espelho plano ideal, reflete raios paralelos de maneira organizada. A imagem é nítida porque a informação direcional dos raios é preservada de modo ordenado.",
+      "Na reflexão difusa, uma superfície irregular espalha raios em várias direções. É por isso que conseguimos ver uma parede, uma folha de papel ou uma mesa a partir de diferentes posições. Esses objetos não têm luz própria; eles espalham a luz que recebem.",
+      "Reflexão difusa não significa que a lei da reflexão deixou de valer. Cada pequeno trecho da superfície ainda obedece i = r. O que muda é que as normais microscópicas têm orientações diferentes, espalhando os raios refletidos.",
     ],
-    formulas: [formulas[1], formulas[2]],
-    diagram: {
-      kind: "reflectionRefraction",
-      title: "reflexão e refração",
-      caption:
-        "Na interface entre dois meios, parte da luz pode refletir e parte pode refratar.",
-    },
+    formulas: [formulas[0]],
+    bullets: [
+      "Reflexão regular: superfície lisa, raios refletidos organizados e imagem nítida.",
+      "Reflexão difusa: superfície irregular, raios espalhados e visão possível de vários ângulos.",
+      "A lei i = r vale localmente em ambos os casos.",
+      "A diferença está na organização das normais microscópicas da superfície.",
+    ],
     notes: [
       {
-        title: "Como prever o desvio",
-        type: "info",
-        body: "Entrou em meio de maior índice: aproxima da normal. Entrou em meio de menor índice: afasta da normal.",
+        title: "Armadilha clássica",
+        type: "warning",
+        body: "Reflexão difusa não é reflexão desobediente. Ela apenas ocorre em uma superfície com muitas normais locais diferentes.",
       },
     ],
   },
   {
     id: 4,
-    icon: Calculator,
-    title: "Lei de Snell-Descartes na prática",
+    icon: Waves,
+    title: "Refração e índice de refração",
     accent: "bg-cyan-700",
     paragraphs: [
-      "A Lei de Snell-Descartes é a principal ferramenta matemática para refração. Ela relaciona os índices dos meios com os senos dos ângulos medidos em relação à normal.",
-      "Mas a fórmula sozinha não resolve o problema. Antes de substituir valores, é preciso identificar o meio de incidência, o meio de refração, a normal, o ângulo dado e o sentido esperado do desvio.",
-      "Em prova, uma boa resolução começa desenhando a normal e fazendo uma previsão qualitativa. Se a conta disser que o raio afastou da normal ao entrar em um meio de maior índice, alguém mentiu. Normalmente foi você com o sinal ou com o ângulo, uma tradição triste.",
+      "Refração é a passagem da luz de um meio para outro com mudança de velocidade. Quando a incidência não é perpendicular à interface, essa mudança de velocidade geralmente vem acompanhada de mudança de direção.",
+      "O índice de refração mede o quanto a luz fica mais lenta em um meio em comparação com o vácuo. Quanto maior o índice, menor a velocidade da luz naquele meio. Em linguagem de prova, dizemos que o meio de maior índice é mais refringente.",
+      "A frequência da luz não muda na passagem de um meio para outro. Quem muda é a velocidade e, junto dela, o comprimento de onda. Esse detalhe é fundamental para não transformar refração em uma mudança mágica de cor.",
+      "Uma forma intuitiva de entender o desvio é imaginar a frente de onda atravessando a interface. Se uma parte da frente de onda entra primeiro em uma região onde a luz fica mais lenta, essa parte atrasa em relação à outra. Essa diferença de velocidades gira a frente de onda e muda a direção do raio.",
     ],
-    formulas: [formulas[2]],
-    bullets: [
-      "Identifique meio 1 e meio 2.",
-      "Desenhe a normal.",
-      "Verifique se o ângulo dado foi medido pela normal ou pela superfície.",
-      "Preveja se o raio aproxima ou afasta da normal.",
-      "Só depois aplique Snell.",
+    formulas: [formulas[1], formulas[2]],
+    diagram: {
+      kind: "reflectionRefraction",
+      title: "reflexão e refração na interface",
+      caption: "Na interface entre dois meios, parte da luz pode refletir e parte pode refratar.",
+    },
+    notes: [
+      {
+        title: "Previsão antes da conta",
+        type: "success",
+        body: "Entrou em meio de maior índice: aproxima da normal. Entrou em meio de menor índice: afasta da normal. Incidência normal: muda velocidade, mas não muda direção.",
+      },
     ],
   },
   {
     id: 5,
-    icon: Eye,
-    title: "Profundidade aparente",
+    icon: Calculator,
+    title: "Lei de Snell-Descartes na prática",
     accent: "bg-indigo-800",
     paragraphs: [
-      "Quando olhamos um objeto no fundo de uma piscina, ele parece mais próximo da superfície do que realmente está. Isso acontece porque os raios vindos do objeto refratam ao sair da água para o ar e chegam ao olho com uma direção diferente.",
-      "O observador prolonga mentalmente os raios em linha reta, como se eles tivessem vindo de uma posição mais rasa. Essa posição é a imagem aparente do objeto.",
-      "Para observação quase normal, uma aproximação útil é h_ap ≈ h/n, quando o objeto está em um líquido de índice n e é observado do ar. Essa expressão não é uma lei universal para qualquer ângulo, mas captura bem a ideia física mais cobrada.",
+      "A Lei de Snell-Descartes é a principal ferramenta matemática para refração. Ela relaciona os índices dos meios com os senos dos ângulos medidos em relação à normal.",
+      "Mas a fórmula sozinha não resolve o problema. Antes de substituir valores, identifique o meio de incidência, o meio de refração, a normal, o ângulo dado e o sentido esperado do desvio.",
+      "Se o raio entra em meio de maior índice, deve aproximar-se da normal. Se entra em meio de menor índice, deve afastar-se da normal. Se sua conta contradiz essa previsão, desconfie da conta, não da Física. A Física tem defeitos, mas esse não costuma ser um deles.",
+      "Também existe um caso especial importante: incidência normal. Se o raio chega perpendicularmente à interface, ele não sofre desvio angular. Mesmo assim, sua velocidade e seu comprimento de onda mudam ao entrar no outro meio.",
+    ],
+    formulas: [formulas[2]],
+    bullets: [
+      "Desenhe a interface e a normal.",
+      "Identifique n₁ e n₂ pelo sentido do raio.",
+      "Confira se o ângulo foi dado pela normal ou pela superfície.",
+      "Faça a previsão qualitativa do desvio.",
+      "Aplique Snell e confira se o resultado faz sentido.",
+    ],
+  },
+  {
+    id: 6,
+    icon: Eye,
+    title: "Profundidade aparente",
+    accent: "bg-emerald-700",
+    paragraphs: [
+      "Quando olhamos um objeto no fundo de uma piscina, ele parece mais próximo da superfície do que realmente está. O objeto não subiu. O fundo da piscina não resolveu colaborar com a humanidade. O que mudou foi o caminho dos raios luminosos ao saírem da água para o ar.",
+      "Os raios vindos do objeto refratam ao passar da água para o ar e chegam ao olho com uma direção diferente. O cérebro prolonga esses raios em linha reta, como se eles tivessem vindo de uma posição mais rasa. Essa posição é a imagem aparente.",
+      "Para observação quase normal, uma aproximação útil é h_ap ≈ h/n, quando o objeto está em um líquido de índice n e é observado do ar. Essa expressão captura a ideia mais cobrada: meios mais refringentes fazem o objeto parecer mais próximo da superfície.",
+      "Exemplos cotidianos aparecem em piscina aparentemente rasa, colher parecendo quebrada em um copo, peixe parecendo mais próximo da superfície e objetos submersos vistos de fora da água.",
     ],
     formulas: [formulas[4]],
     diagram: {
       kind: "apparentDepth",
       title: "profundidade aparente",
-      caption:
-        "O prolongamento dos raios refratados faz o objeto parecer mais raso.",
+      caption: "O prolongamento dos raios refratados faz o objeto parecer mais raso.",
     },
     notes: [
       {
         title: "Armadilha clássica",
         type: "warning",
-        body: "O objeto não subiu. A imagem aparente é que aparece mais próxima da superfície por causa da refração.",
-      },
-    ],
-  },
-  {
-    id: 6,
-    icon: Target,
-    title: "Lâmina de faces paralelas",
-    accent: "bg-emerald-700",
-    paragraphs: [
-      "Uma lâmina de faces paralelas é um bloco transparente com duas faces planas e paralelas. Quando um raio entra obliquamente, ele sofre refração na primeira face, percorre a lâmina e sofre nova refração ao sair.",
-      "Como as faces são paralelas, o raio emergente sai paralelo ao raio incidente. Porém, ele não sai no mesmo alinhamento: aparece deslocado lateralmente.",
-      "Esse fenômeno é importante porque mostra que nem toda refração muda a direção final do raio. Às vezes, a direção final é a mesma, mas a trajetória foi deslocada.",
-    ],
-    formulas: [formulas[5]],
-    notes: [
-      {
-        title: "Resumo mental",
-        type: "success",
-        body: "Lâmina de faces paralelas não muda a direção final do raio; ela provoca desvio lateral.",
+        body: "A profundidade aparente é uma imagem geométrica criada pela refração. Não confunda posição aparente com deslocamento real do objeto.",
       },
     ],
   },
   {
     id: 7,
+    icon: Target,
+    title: "Lâmina de faces paralelas",
+    accent: "bg-slate-950",
+    paragraphs: [
+      "Uma lâmina de faces paralelas é um bloco transparente com duas faces planas e paralelas. Quando um raio entra obliquamente, ele refrata na primeira face, percorre a lâmina e refrata novamente ao sair.",
+      "Como as faces são paralelas, o raio emergente sai paralelo ao raio incidente. Porém, ele não sai pela mesma linha: a trajetória sofre um deslocamento lateral.",
+      "Esse fenômeno é uma armadilha boa de prova porque o aluno vê duas refrações e espera um grande desvio angular final. Mas, em uma lâmina de faces paralelas imersa no mesmo meio antes e depois, o efeito final não é mudar a direção do raio; é deslocar a trajetória.",
+      "O desvio lateral aumenta quando a espessura da lâmina aumenta, quando o ângulo de incidência aumenta e quando a diferença entre os índices de refração aumenta. A fórmula do desvio lateral resume essa geometria.",
+    ],
+    formulas: [formulas[5]],
+    diagram: {
+      kind: "parallelSlab",
+      title: "lâmina de faces paralelas",
+      caption: "O raio sai paralelo ao incidente, mas lateralmente deslocado.",
+    },
+    notes: [
+      {
+        title: "Resumo mental",
+        type: "success",
+        body: "A lâmina não muda a direção final do raio; ela desloca a trajetória. Paralelo não significa coincidente.",
+      },
+    ],
+  },
+  {
+    id: 8,
     icon: Zap,
     title: "Ângulo limite e reflexão total",
     accent: "bg-red-700",
     paragraphs: [
-      "Reflexão total ocorre quando a luz, tentando passar de um meio mais refringente para outro menos refringente, não consegue emergir e retorna completamente ao meio original.",
-      "À medida que o ângulo de incidência aumenta, o raio refratado se afasta da normal. No ângulo limite, ele sairia rasante à superfície, com ângulo de refração igual a 90°. Para incidências maiores, não há raio refratado: ocorre reflexão total.",
-      "Esse fenômeno exige duas condições: a luz deve ir do meio de maior índice para o meio de menor índice, e o ângulo de incidência deve ser maior que o ângulo limite.",
+      "Reflexão total ocorre quando a luz tenta passar de um meio mais refringente para outro menos refringente e não consegue emergir. Em vez de haver raio refratado, toda a luz retorna ao meio original por reflexão.",
+      "A progressão física é importante: para ângulos pequenos, há refração; conforme o ângulo de incidência aumenta, o raio refratado se afasta cada vez mais da normal; no ângulo limite, ele sairia rasante à superfície; para ângulos maiores, não há raio refratado.",
+      "Esse fenômeno exige duas condições obrigatórias. A luz deve estar indo do meio de maior índice para o meio de menor índice, e o ângulo de incidência deve ser maior que o ângulo limite.",
+      "Reflexão total aparece em fibras ópticas, prismas de binóculos, brilho de diamantes e certas miragens. Em fibras ópticas, a luz fica confinada no núcleo por sucessivas reflexões totais, carregando informação por longas distâncias.",
     ],
     formulas: [formulas[3]],
     diagram: {
       kind: "totalReflection",
       title: "reflexão total",
-      caption:
-        "Acima do ângulo limite, o raio não emerge: ele reflete totalmente.",
+      caption: "Acima do ângulo limite, o raio não emerge: ele reflete totalmente.",
     },
     bullets: [
-      "Só ocorre de maior índice para menor índice.",
-      "No ângulo limite, o raio refratado é rasante.",
-      "Para i > L, ocorre reflexão total.",
-      "Aplicações: fibra óptica, prismas, miragens e brilho de diamantes.",
+      "i < L: há raio refratado.",
+      "i = L: raio refratado rasante.",
+      "i > L: ocorre reflexão total.",
+      "Só existe se n₁ > n₂ no sentido de propagação da luz.",
     ],
   },
   {
-    id: 8,
+    id: 9,
     icon: Rainbow,
     title: "Dispersão da luz e prismas",
     accent: "bg-orange-700",
     paragraphs: [
-      "Dispersão é a separação da luz em diferentes cores por causa da dependência do índice de refração com o comprimento de onda. Em muitos materiais, cores diferentes têm velocidades diferentes e, por isso, sofrem desvios diferentes.",
-      "Um prisma evidencia esse efeito: a luz branca entra, sofre refração na primeira face, atravessa o vidro e refrata novamente ao sair. Como cada cor desvia de forma ligeiramente diferente, o feixe emergente se abre em um espectro.",
-      "O violeta costuma sofrer maior desvio que o vermelho em prismas comuns, porque em geral apresenta maior índice de refração no material. Isso não significa que a frequência mudou; significa que cada frequência propagou-se com velocidade diferente no meio.",
+      "Dispersão é a separação da luz em diferentes cores porque o índice de refração do meio depende do comprimento de onda. A luz branca não ganha cores dentro do prisma; ela já contém várias frequências. O prisma apenas separa essas componentes.",
+      "Ao entrar no prisma, cada cor sofre refração. Ao sair, sofre nova refração. Como cada frequência tem índice ligeiramente diferente, os desvios não são iguais. O resultado é a abertura do feixe em um espectro.",
+      "Em prismas comuns, o violeta costuma sofrer maior desvio que o vermelho, pois geralmente encontra maior índice de refração no material. O vermelho, de maior comprimento de onda, tende a desviar menos.",
+      "O desvio total em um prisma depende do ângulo do prisma, dos índices de refração e da cor da luz. Em estudos mais avançados aparece o desvio mínimo, mas aqui o essencial é entender que dispersão é refração seletiva por comprimento de onda.",
     ],
     diagram: {
       kind: "prismDispersion",
       title: "dispersão em prisma",
-      caption:
-        "A luz branca se separa porque diferentes comprimentos de onda sofrem desvios diferentes.",
+      caption: "A luz branca se separa porque diferentes comprimentos de onda sofrem desvios diferentes.",
     },
     notes: [
       {
@@ -344,63 +386,70 @@ const theorySections: TheorySection[] = [
     ],
   },
   {
-    id: 9,
+    id: 10,
     icon: Sun,
     title: "Arco-íris",
     accent: "bg-blue-800",
     paragraphs: [
-      "O arco-íris é uma aplicação natural de refração, dispersão e reflexão interna em gotículas de água. A luz solar entra na gota, refrata, dispersa, reflete internamente e refrata novamente ao sair.",
-      "Cada cor emerge em ângulos ligeiramente diferentes. Por isso, o observador vê uma separação angular das cores no céu.",
-      "O arco-íris não está em uma posição fixa no espaço como um objeto material. Ele depende da posição do Sol, das gotas de água e do observador. Mudar de observador muda o conjunto de gotas que contribui para a imagem observada.",
-    ],
-    bullets: [
-      "Entrada na gota: refração e dispersão.",
-      "Dentro da gota: reflexão interna.",
-      "Saída da gota: nova refração.",
-      "Cores aparecem em ângulos diferentes para o observador.",
-    ],
-  },
-  {
-    id: 10,
-    icon: Waves,
-    title: "Miragens",
-    accent: "bg-slate-950",
-    paragraphs: [
-      "Miragens ocorrem quando a luz atravessa camadas de ar com diferentes temperaturas e, portanto, diferentes índices de refração. Como o índice muda gradualmente, o raio luminoso se curva aos poucos.",
-      "Em dias muito quentes, o ar próximo ao solo pode ficar mais quente e menos refringente que o ar acima. Raios vindos do céu podem se curvar e chegar aos olhos como se tivessem vindo do chão. O cérebro interpreta isso como uma imagem semelhante a água no asfalto.",
-      "A miragem não é alucinação. É uma imagem óptica real no sentido de ser causada por raios luminosos seguindo trajetórias curvas em um meio não homogêneo. A interpretação errada é nossa, porque o cérebro insiste em prolongar os raios como se tivessem vindo em linha reta.",
+      "O arco-íris é uma aplicação natural de refração, dispersão e reflexão interna em gotículas de água. A luz solar entra na gota, refrata, separa-se em cores, sofre reflexão interna e sai por nova refração.",
+      "Cada cor emerge da gota em um ângulo ligeiramente diferente. Por isso, o observador recebe luz vermelha, laranja, amarela, verde, azul e violeta de diferentes conjuntos de gotículas em direções específicas.",
+      "O arco-íris não é um objeto fixo no céu. Ele depende da posição do observador, da direção da luz solar e das gotas que enviam luz para aquele observador. Duas pessoas próximas não veem exatamente o mesmo conjunto de gotas produzindo o arco.",
+      "O arco primário envolve uma reflexão interna dentro da gota. O arco secundário, quando aparece, envolve duas reflexões internas e apresenta ordem das cores invertida e menor intensidade.",
     ],
     diagram: {
-      kind: "mirage",
-      title: "miragem",
-      caption:
-        "Gradientes de índice curvam os raios e criam imagens aparentes.",
+      kind: "rainbowDrop",
+      title: "formação do arco-íris",
+      caption: "A gota combina refração, dispersão e reflexão interna.",
     },
-    notes: [
-      {
-        title: "Ideia central",
-        type: "success",
-        body: "Miragem é refração em meio não homogêneo, não imaginação do observador.",
-      },
+    bullets: [
+      "Entrada na gota: refração e dispersão.",
+      "Interior da gota: reflexão interna.",
+      "Saída da gota: nova refração.",
+      "Cada cor emerge em ângulo diferente.",
+      "O arco depende da posição do observador.",
     ],
   },
   {
     id: 11,
-    icon: Brain,
-    title: "Como resolver questões de fenômenos ópticos",
-    accent: "bg-purple-700",
+    icon: Waves,
+    title: "Miragens",
+    accent: "bg-cyan-700",
     paragraphs: [
-      "Questões de fenômenos ópticos costumam misturar desenho, interpretação e fórmula. O erro mais comum é tentar aplicar Snell ou ângulo limite sem entender o caminho da luz.",
-      "O método seguro começa pelo desenho: trace a interface, marque a normal, identifique os meios, preveja o sentido do desvio e só depois aplique a fórmula.",
-      "Em problemas com prismas, arco-íris ou dispersão, lembre que cores diferentes têm índices diferentes. Em problemas de reflexão total, verifique primeiro se a luz está indo do meio mais refringente para o menos refringente.",
+      "Miragem não é alucinação nem truque psicológico. É um fenômeno óptico real causado pela variação gradual do índice de refração do ar com a temperatura.",
+      "Próximo a um solo muito quente, o ar fica menos denso e possui menor índice de refração. Camadas mais altas, menos aquecidas, têm índice maior. Como o índice muda gradualmente, o raio não sofre uma quebra brusca como em uma interface plana; ele curva aos poucos.",
+      "O olho recebe esses raios curvados e o cérebro os prolonga em linha reta. O resultado pode ser uma imagem aparente do céu ou de objetos distantes no chão, criando a impressão de água em estradas quentes.",
+      "A ideia é parecida com profundidade aparente: o cérebro prolonga raios recebidos em linha reta, mesmo quando a trajetória real foi desviada por refração. A diferença é que, na miragem, o desvio ocorre continuamente em um meio com índice variável.",
+    ],
+    diagram: {
+      kind: "mirage",
+      title: "miragem por gradiente de índice",
+      caption: "O índice varia com a temperatura do ar, curvando a trajetória da luz.",
+    },
+    notes: [
+      {
+        title: "Ideia de prova",
+        type: "success",
+        body: "Miragem é refração em meio não homogêneo. Não é reflexão em uma poça imaginária no asfalto.",
+      },
+    ],
+  },
+  {
+    id: 12,
+    icon: ShieldCheck,
+    title: "Estratégia de prova",
+    accent: "bg-emerald-700",
+    paragraphs: [
+      "Para resolver questões de fenômenos ópticos, comece pelo desenho. Marque a interface, a normal, o sentido de propagação da luz e os meios envolvidos. Depois faça uma previsão física do comportamento do raio.",
+      "Se houver refração, pergunte se o raio entra em maior ou menor índice. Se houver reflexão total, confira primeiro se a luz vai do maior índice para o menor. Se houver prisma ou arco-íris, lembre que cores diferentes sofrem desvios diferentes. Se houver lâmina paralela, espere deslocamento lateral, não desvio angular final.",
+      "A conta entra depois como confirmação quantitativa. Quando o resultado numérico contradiz a previsão física, quase sempre o erro está na escolha do ângulo, na troca dos meios ou no uso de uma fórmula fora do fenômeno correto.",
     ],
     bullets: [
-      "Desenhe a interface e a normal.",
-      "Identifique os índices dos meios.",
-      "Preveja se o raio aproxima ou afasta da normal.",
-      "Veja se há condição para reflexão total.",
-      "Em prismas e arco-íris, analise dispersão.",
-      "Em miragens, pense em índice variando gradualmente.",
+      "Desenhe a normal sempre que houver reflexão ou refração.",
+      "Confira se o ângulo foi medido pela normal ou pela superfície.",
+      "Antes de calcular, preveja se o raio aproxima ou afasta da normal.",
+      "Use ângulo limite apenas do maior índice para o menor índice.",
+      "Em prismas e arco-íris, pense em refração + dispersão.",
+      "Em miragens, pense em índice variável e trajetória curva.",
     ],
   },
 ];
@@ -408,138 +457,201 @@ const theorySections: TheorySection[] = [
 const examples: ExampleItem[] = [
   {
     title: "Refração do ar para a água",
-    level: "básico",
+    level: "básico com Snell",
     statement:
-      "Um raio passa do ar para a água com ângulo de incidência de 30°. Considere n_ar = 1 e n_água = 4/3. Determine sen r.",
+      "Um raio passa do ar para a água com ângulo de incidência de 45°. Considere n_ar = 1,0 e n_água = 1,4. Determine aproximadamente sen r e diga se o raio aproxima ou afasta da normal.",
     idea:
-      "Como a luz entra em meio de maior índice, o raio deve aproximar-se da normal. Logo, esperamos r menor que 30°.",
+      "A luz entra em meio de maior índice. Antes da conta, já esperamos que o raio se aproxime da normal.",
     steps: [
-      "Use Snell: n₁ sen i = n₂ sen r.",
-      "Substitua: 1 · sen30° = (4/3) sen r.",
-      "Como sen30° = 1/2, temos 1/2 = (4/3) sen r.",
-      "Logo, sen r = 3/8.",
+      "Use n₁ sen i = n₂ sen r.",
+      "Substitua: 1,0 · sen45° = 1,4 · sen r.",
+      "Como sen45° ≈ 0,707, temos sen r ≈ 0,707/1,4.",
+      "sen r ≈ 0,505.",
+      "Como sen r < sen45°, o ângulo refratado é menor que o ângulo de incidência.",
     ],
     answer:
-      "sen r = 3/8. O raio aproxima-se da normal, como previsto.",
+      "sen r ≈ 0,505. O raio aproxima-se da normal.",
     test:
-      "A questão queria testar Snell e previsão qualitativa do desvio.",
+      "A questão queria testar a previsão física antes da conta: maior índice significa menor velocidade e aproximação da normal.",
+  },
+  {
+    title: "Refração da água para o ar",
+    level: "intermediário",
+    statement:
+      "Um raio passa da água para o ar com ângulo de incidência de 30°. Considere n_água = 1,33 e n_ar = 1,0. Determine sen r e interprete o desvio.",
+    idea:
+      "A luz sai de maior índice para menor índice, então o raio deve afastar-se da normal.",
+    steps: [
+      "Use n₁ sen i = n₂ sen r.",
+      "Substitua: 1,33 · sen30° = 1,0 · sen r.",
+      "Como sen30° = 0,5, temos sen r = 1,33 · 0,5.",
+      "sen r = 0,665.",
+      "Como sen r > sen30°, o ângulo refratado é maior que o incidente.",
+    ],
+    answer:
+      "sen r = 0,665. O raio afasta-se da normal.",
+    test:
+      "A questão queria testar a leitura do sentido de propagação. Trocar os meios inverte a previsão do desvio.",
   },
   {
     title: "Ângulo limite água-ar",
     level: "intermediário",
     statement:
-      "Determine o seno do ângulo limite para luz passando da água para o ar. Use n_água = 4/3 e n_ar = 1.",
+      "Determine o seno do ângulo limite para a passagem da luz da água para o ar. Use n_água = 1,33 e n_ar = 1,0.",
     idea:
-      "Reflexão total pode ocorrer porque a luz tenta sair de meio mais refringente para menos refringente.",
+      "Ângulo limite só existe quando a luz vai do maior índice para o menor índice. Aqui isso acontece: água para ar.",
     steps: [
       "Use sen L = n₂/n₁.",
-      "Aqui, n₁ = 4/3 e n₂ = 1.",
-      "sen L = 1/(4/3).",
-      "sen L = 3/4.",
+      "Aqui, n₁ = 1,33 e n₂ = 1,0.",
+      "sen L = 1,0/1,33.",
+      "sen L ≈ 0,752.",
     ],
     answer:
-      "O seno do ângulo limite é 3/4.",
+      "sen L ≈ 0,752. Para ângulos maiores que L, ocorre reflexão total.",
     test:
-      "A questão queria testar se você sabe que ângulo limite só existe de maior índice para menor índice.",
+      "A questão queria testar as duas condições da reflexão total: maior índice para menor índice e incidência acima do limite.",
+  },
+  {
+    title: "Fibra óptica e reflexão total",
+    level: "aplicação conceitual",
+    statement:
+      "Em uma fibra óptica, a luz se propaga no núcleo de maior índice e encontra a interface com a casca de menor índice. Explique por que a luz pode permanecer confinada no núcleo.",
+    idea:
+      "Se a incidência na interface núcleo-casca for maior que o ângulo limite, a luz sofre reflexão total sucessivas vezes.",
+    steps: [
+      "O núcleo possui índice maior que a casca.",
+      "A luz tenta passar do maior índice para o menor índice.",
+      "Nessa condição, existe ângulo limite.",
+      "Se o ângulo de incidência for maior que o limite, não há raio refratado.",
+      "A luz reflete totalmente e continua dentro do núcleo.",
+    ],
+    answer:
+      "A fibra óptica guia a luz por reflexões totais sucessivas no interior do núcleo.",
+    test:
+      "A questão queria testar reflexão total como aplicação, não apenas como fórmula isolada.",
   },
   {
     title: "Profundidade aparente",
-    level: "intermediário",
+    level: "básico aplicado",
     statement:
-      "Um objeto está a 2,0 m de profundidade em uma piscina. Para observação quase normal, estime a profundidade aparente. Use n = 4/3.",
+      "Um objeto está a 2,0 m de profundidade em um líquido de índice 1,25 e é observado quase verticalmente do ar. Estime a profundidade aparente.",
     idea:
-      "Objeto submerso visto do ar parece mais raso. Use h_ap ≈ h/n.",
+      "Para observação quase normal do ar, usamos h_ap ≈ h/n.",
     steps: [
       "Use h_ap ≈ h/n.",
-      "h_ap ≈ 2,0/(4/3).",
-      "h_ap ≈ 2,0 · 3/4.",
-      "h_ap ≈ 1,5 m.",
+      "Substitua: h_ap ≈ 2,0/1,25.",
+      "h_ap ≈ 1,6 m.",
+      "A imagem aparente fica mais próxima da superfície que o objeto real.",
     ],
     answer:
-      "A profundidade aparente é aproximadamente 1,5 m.",
+      "A profundidade aparente é aproximadamente 1,6 m.",
     test:
-      "A questão queria testar a interpretação da imagem aparente, não o deslocamento real do objeto.",
+      "A questão queria testar a diferença entre posição real e imagem aparente criada pela refração.",
   },
   {
     title: "Desvio lateral em lâmina",
-    level: "intermediário",
+    level: "intermediário com geometria",
     statement:
-      "Um raio atravessa uma lâmina de faces paralelas. Qual é a principal característica do raio emergente em relação ao incidente?",
+      "Uma lâmina de espessura e = 4,0 cm produz refração com i = 45° e r = 30°. Estime o desvio lateral usando d = e sen(i-r)/cos r.",
     idea:
-      "Em faces paralelas, o raio desvia dentro da lâmina, mas emerge paralelo ao raio incidente.",
+      "Em lâmina de faces paralelas, o raio emergente sai paralelo ao incidente, mas deslocado lateralmente.",
     steps: [
-      "Na primeira face, o raio refrata e muda de direção.",
-      "Dentro da lâmina, segue com ângulo r.",
-      "Na segunda face, refrata novamente.",
-      "Como as faces são paralelas, o raio emergente sai paralelo ao incidente.",
-      "Mesmo assim, há deslocamento lateral.",
+      "Use d = e sen(i-r)/cos r.",
+      "i - r = 15°.",
+      "d = 4,0 · sen15°/cos30°.",
+      "Usando sen15° ≈ 0,259 e cos30° ≈ 0,866, temos d ≈ 4,0 · 0,259/0,866.",
+      "d ≈ 1,2 cm.",
     ],
     answer:
-      "O raio emergente é paralelo ao incidente, mas lateralmente deslocado.",
+      "O desvio lateral é aproximadamente 1,2 cm.",
     test:
-      "A questão queria testar conceito, não conta. Lâmina paralela desloca, mas não muda a direção final.",
+      "A questão queria testar que lâmina paralela desloca o raio sem alterar sua direção final.",
   },
   {
     title: "Prisma e dispersão",
-    level: "conceitual",
+    level: "conceitual de prova",
     statement:
-      "Por que a luz branca se separa em cores ao atravessar um prisma?",
+      "Um feixe de luz branca atravessa um prisma de vidro. Em geral, qual cor sofre maior desvio: vermelho ou violeta? Explique.",
     idea:
-      "O índice de refração do material depende do comprimento de onda da luz.",
+      "A dispersão ocorre porque o índice de refração depende do comprimento de onda. Em vidro comum, o violeta costuma ter índice maior que o vermelho.",
     steps: [
       "A luz branca contém várias frequências.",
-      "Cada frequência pode ter índice de refração diferente no prisma.",
-      "Índices diferentes produzem desvios diferentes.",
-      "Assim, as cores emergem separadas.",
+      "Cada frequência encontra índice de refração ligeiramente diferente no vidro.",
+      "Maior índice implica maior desvio na refração.",
+      "Em geral, o violeta tem índice maior que o vermelho no vidro.",
     ],
     answer:
-      "A separação ocorre por dispersão: diferentes cores sofrem desvios diferentes.",
+      "O violeta sofre maior desvio que o vermelho em prismas comuns.",
     test:
-      "A questão queria testar que dispersão não é criação de cores; é separação das componentes já presentes.",
+      "A questão queria testar que o prisma separa cores já presentes na luz branca; ele não cria frequências novas.",
   },
   {
-    title: "Fibra óptica",
-    level: "aplicação",
+    title: "Arco-íris",
+    level: "conceitual organizado",
     statement:
-      "Explique por que fibras ópticas conseguem guiar luz por longas distâncias.",
+      "Explique por que o arco-íris depende de refração, dispersão e reflexão interna em gotículas de água.",
     idea:
-      "A fibra usa reflexão total entre o núcleo e a casca.",
+      "A gota funciona como um pequeno sistema óptico: a luz entra, separa cores, reflete internamente e sai novamente desviada.",
     steps: [
-      "O núcleo tem índice maior que a casca.",
-      "A luz tenta passar do núcleo para a casca.",
-      "Se o ângulo de incidência for maior que o limite, ocorre reflexão total.",
-      "Assim, o raio fica confinado dentro do núcleo.",
+      "Ao entrar na gota, a luz sofre refração.",
+      "Como o índice depende da cor, ocorre dispersão.",
+      "No interior da gota, há reflexão interna.",
+      "Ao sair, a luz sofre nova refração.",
+      "Cada cor emerge em ângulo diferente para o observador.",
     ],
     answer:
-      "A luz é guiada por sucessivas reflexões totais internas.",
+      "O arco-íris resulta da combinação de refração, dispersão e reflexão interna nas gotículas.",
     test:
-      "A questão queria testar as condições de reflexão total aplicadas a tecnologia.",
+      "A questão queria testar o encadeamento físico do fenômeno, não apenas a palavra 'dispersão'.",
+  },
+  {
+    title: "Miragem em estrada quente",
+    level: "conceitual avançado",
+    statement:
+      "Explique por que uma estrada quente pode parecer molhada à distância.",
+    idea:
+      "O ar perto do solo está mais quente, menos denso e com menor índice. Como o índice varia gradualmente, os raios curvam.",
+    steps: [
+      "O solo quente aquece as camadas de ar próximas a ele.",
+      "Essas camadas têm menor densidade e menor índice de refração.",
+      "A luz vinda do céu ou de objetos distantes curva ao atravessar camadas com índices diferentes.",
+      "O olho recebe o raio curvado e o prolonga em linha reta.",
+      "Esse prolongamento cria uma imagem aparente no chão, parecida com reflexão em água.",
+    ],
+    answer:
+      "A miragem é causada por refração em ar com índice variável, não por água real na estrada.",
+    test:
+      "A questão queria testar que miragem é fenômeno óptico real, causado por gradiente de índice.",
   },
 ];
 
 const traps = [
-  "Medir ângulos pela superfície em vez da normal.",
-  "Aplicar Snell sem identificar meio 1 e meio 2.",
-  "Achar que toda refração muda direção; na incidência normal não há desvio angular.",
-  "Esquecer que a frequência da luz não muda na passagem de meio.",
-  "Inventar ângulo limite quando a luz vai de menor índice para maior índice.",
-  "Achar que lâmina de faces paralelas muda a direção final do raio.",
-  "Confundir dispersão com mudança de frequência.",
-  "Achar que miragem é ilusão psicológica, e não refração em meio não homogêneo.",
-  "Confundir reflexão difusa com desobediência à lei da reflexão.",
+  "Medir ângulo pela superfície em vez da normal.",
+  "Achar que reflexão difusa não obedece à lei i = r.",
+  "Achar que refração sempre muda a direção do raio.",
+  "Esquecer que incidência normal muda velocidade, mas não muda direção.",
+  "Trocar n₁ e n₂ na Lei de Snell.",
+  "Usar ângulo limite quando a luz vai do menor índice para o maior índice.",
+  "Achar que p' negativo ou imagem aparente significam objeto impossível ou deslocado de verdade.",
+  "Pensar que a lâmina de faces paralelas muda a direção final do raio.",
+  "Achar que a luz branca ganha cores no prisma, em vez de entender que ela já contém várias frequências.",
+  "Confundir reflexão total com reflexão comum.",
+  "Explicar miragem como ilusão psicológica, e não como refração em índice variável.",
 ];
 
 const checklist = [
-  "Sei desenhar a normal antes de usar Snell?",
-  "Sei prever aproximação ou afastamento da normal?",
-  "Sei explicar índice de refração como relação entre c e v?",
-  "Sei calcular ângulo limite?",
-  "Sei dizer quando ocorre reflexão total?",
-  "Sei explicar fibra óptica por reflexão total?",
-  "Sei interpretar profundidade aparente?",
-  "Sei explicar dispersão em prismas?",
-  "Sei explicar arco-íris sem inventar magia colorida?",
+  "Sei desenhar a normal antes de usar qualquer fórmula?",
   "Sei diferenciar reflexão regular e difusa?",
+  "Sei prever se o raio aproxima ou afasta da normal?",
+  "Sei aplicar Snell identificando corretamente n₁ e n₂?",
+  "Sei explicar profundidade aparente por prolongamento de raios?",
+  "Sei explicar por que lâmina paralela desloca, mas não muda a direção final?",
+  "Sei aplicar as duas condições da reflexão total?",
+  "Sei explicar fibra óptica por reflexão total?",
+  "Sei explicar dispersão sem dizer que o prisma cria cores?",
+  "Sei organizar a formação do arco-íris em etapas?",
+  "Sei explicar miragem por gradiente de índice?",
+  "Sei escolher a fórmula a partir do fenômeno, e não por aparência algébrica?",
 ];
 
 function FormulaBlock({ formula }: { formula: string }) {
@@ -661,6 +773,8 @@ function OpticsDiagram({ diagram }: { diagram: NonNullable<TheorySection["diagra
           {diagram.kind === "prismDispersion" && <PrismDispersionDiagram />}
           {diagram.kind === "apparentDepth" && <ApparentDepthDiagram />}
           {diagram.kind === "mirage" && <MirageDiagram />}
+          {diagram.kind === "parallelSlab" && <ParallelSlabDiagram />}
+          {diagram.kind === "rainbowDrop" && <RainbowDropDiagram />}
         </div>
       </div>
     </div>
@@ -748,6 +862,52 @@ function ApparentDepthDiagram() {
       <text x="445" y="205" className="fill-slate-700 text-[15px] font-black">imagem aparente</text>
       <text x="642" y="70" className="fill-slate-900 text-[15px] font-black">olho</text>
       <text x="80" y="130" className="fill-slate-700 text-[15px] font-bold">superfície</text>
+    </svg>
+  );
+}
+
+
+function ParallelSlabDiagram() {
+  return (
+    <svg viewBox="0 0 820 320" className="h-auto w-full">
+      <defs>
+        <marker id="arrowSlab" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+        </marker>
+      </defs>
+      <polygon points="300,55 560,55 500,265 240,265" fill="#dbeafe" stroke="#0f172a" strokeWidth="4" />
+      <line x1="90" y1="95" x2="300" y2="145" stroke="#2563eb" strokeWidth="5" strokeLinecap="round" markerEnd="url(#arrowSlab)" />
+      <line x1="300" y1="145" x2="500" y2="205" stroke="#2563eb" strokeWidth="5" strokeLinecap="round" markerEnd="url(#arrowSlab)" />
+      <line x1="500" y1="205" x2="725" y2="255" stroke="#2563eb" strokeWidth="5" strokeLinecap="round" markerEnd="url(#arrowSlab)" />
+      <line x1="90" y1="145" x2="725" y2="295" stroke="#94a3b8" strokeWidth="3" strokeDasharray="10 10" />
+      <line x1="725" y1="255" x2="725" y2="295" stroke="#dc2626" strokeWidth="3" strokeDasharray="8 8" />
+      <text x="95" y="80" className="fill-blue-700 text-[15px] font-black">raio incidente</text>
+      <text x="590" y="245" className="fill-blue-700 text-[15px] font-black">raio emergente paralelo</text>
+      <text x="605" y="292" className="fill-red-700 text-[15px] font-black">desvio lateral</text>
+      <text x="335" y="45" className="fill-slate-900 text-[17px] font-black">lâmina de faces paralelas</text>
+    </svg>
+  );
+}
+
+function RainbowDropDiagram() {
+  return (
+    <svg viewBox="0 0 820 320" className="h-auto w-full">
+      <defs>
+        <marker id="arrowRain" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#0f172a" />
+        </marker>
+      </defs>
+      <circle cx="410" cy="160" r="105" fill="#dbeafe" stroke="#0f172a" strokeWidth="4" />
+      <line x1="95" y1="125" x2="318" y2="145" stroke="#facc15" strokeWidth="7" strokeLinecap="round" markerEnd="url(#arrowRain)" />
+      <path d="M318 145 Q405 90 500 135" fill="none" stroke="#facc15" strokeWidth="5" strokeLinecap="round" />
+      <path d="M500 135 Q455 225 350 220" fill="none" stroke="#facc15" strokeWidth="5" strokeLinecap="round" />
+      <line x1="350" y1="220" x2="165" y2="265" stroke="#dc2626" strokeWidth="5" strokeLinecap="round" markerEnd="url(#arrowRain)" />
+      <line x1="350" y1="220" x2="170" y2="235" stroke="#7c3aed" strokeWidth="5" strokeLinecap="round" markerEnd="url(#arrowRain)" />
+      <text x="90" y="105" className="fill-slate-900 text-[16px] font-black">luz solar</text>
+      <text x="548" y="135" className="fill-slate-700 text-[15px] font-black">reflexão interna</text>
+      <text x="120" y="287" className="fill-red-700 text-[15px] font-black">vermelho</text>
+      <text x="115" y="225" className="fill-violet-700 text-[15px] font-black">violeta</text>
+      <text x="325" y="295" className="fill-slate-700 text-[15px] font-black">refração + dispersão + reflexão interna</text>
     </svg>
   );
 }
@@ -872,7 +1032,7 @@ function TheorySectionCard({ section }: { section: TheorySection }) {
             <Icon className="h-6 w-6" />
           </div>
           <h2 className="text-2xl font-black tracking-tight md:text-3xl">
-            {section.id}. {section.title}
+            {section.title}
           </h2>
         </div>
       </div>
@@ -919,14 +1079,14 @@ function TheorySectionCard({ section }: { section: TheorySection }) {
   );
 }
 
-function ExampleCard({ example, index }: { example: ExampleItem; index: number }) {
+function ExampleCard({ example }: { example: ExampleItem }) {
   return (
     <article className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
       <div className="bg-red-700 px-6 py-5 text-white">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-red-100">
-              Exemplo {index + 1} · {example.level}
+              Exemplo resolvido · {example.level}
             </p>
             <h3 className="mt-1 text-2xl font-black">{example.title}</h3>
           </div>
@@ -1068,7 +1228,7 @@ export default function OpticaTopicFenomenos() {
             {theorySections.map((section) => (
               <div key={section.id} className="space-y-8">
                 <TheorySectionCard section={section} />
-                {section.id === 4 ? <SnellSimulator /> : null}
+                {section.id === 5 ? <SnellSimulator /> : null}
               </div>
             ))}
           </div>
@@ -1076,8 +1236,8 @@ export default function OpticaTopicFenomenos() {
 
         {activeTab === "exemplos" ? (
           <div className="mt-10 space-y-8">
-            {examples.map((example, index) => (
-              <ExampleCard key={example.title} example={example} index={index} />
+            {examples.map((example) => (
+              <ExampleCard key={example.title} example={example} />
             ))}
           </div>
         ) : null}
