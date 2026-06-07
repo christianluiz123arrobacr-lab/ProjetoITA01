@@ -154,6 +154,7 @@ import OpticaHome from "./pages/OpticaHome";
 import OpticaTopicConceitos from "./pages/OpticaTopicConceitos";
 import OpticaTopicLentes from "./pages/OpticaTopicLentes";
 import OpticaTopicFisica from "./pages/OpticaTopicFisica";
+import OpticaTopicFenomenos from "./pages/OpticaTopicFenomenos";
 import OpticaSimulator from "./pages/OpticaSimulator";
 import OpticaGraphs from "./pages/OpticaGraphs";
 import OpticaQuiz from "./pages/OpticaQuiz";
@@ -442,7 +443,8 @@ function PrivateRouter() {
         <Route path="/optica" component={OpticaHome} />
         <Route path="/optica/topic/conceitos" component={OpticaTopicConceitos} />
         <Route path="/optica/topic/lentes" component={OpticaTopicLentes} />
-        <Route path="/optica/topic/fenomenos" component={OpticaTopicFisica} />
+        <Route path="/optica/topic/fenomenos" component={OpticaTopicFenomenos} />
+        <Route path="/optica/topic/fisica" component={OpticaTopicFisica} />
         <Route path="/optica/simulator" component={OpticaSimulator} />
         <Route path="/optica/graphs" component={OpticaGraphs} />
         <Route path="/optica/quiz" component={OpticaQuiz} />
