@@ -197,6 +197,31 @@ export default function OpticaHome() {
             <Link href="/optica/topic/fenomenos">
               <Card className="p-8 hover:shadow-lg transition-all border-l-4 border-orange-500 cursor-pointer hover:border-orange-700">
                 <div className="flex items-start gap-4">
+                  <div className="text-4xl">🔍</div>
+                  <div className="flex-1">
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Fenômenos Ópticos</h4>
+                    <p className="text-slate-600 mb-4">Reflexão, refração, dispersão, prismas, arco-íris e miragens.</p>
+                    <ul className="space-y-2 text-sm text-slate-700">
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-orange-600 rounded-full"></span>
+                        Lei de Snell-Descartes
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-orange-600 rounded-full"></span>
+                        Reflexão Total e Fibras Ópticas
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-orange-600 rounded-full"></span>
+                        Prismas e Dispersão
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+            <Link href="/optica/topic/fisica">
+              <Card className="p-8 hover:shadow-lg transition-all border-l-4 border-orange-500 cursor-pointer hover:border-orange-700">
+                <div className="flex items-start gap-4">
                   <div className="text-4xl">🌈</div>
                   <div className="flex-1">
                     <h4 className="text-xl font-bold text-slate-900 mb-2">Óptica Física</h4>
