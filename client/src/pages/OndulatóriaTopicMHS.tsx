@@ -411,7 +411,39 @@ const theorySections: TheorySection[] = [
       "A força associada à energia potencial é F = -dU/dx. Se, perto do equilíbrio, a energia se comporta como U(x) ≈ U(0) + Cx²/2, então a força fica F = -Cx. Essa é exatamente a forma de uma força restauradora linear.",
       "Essa ideia explica por que moléculas, estruturas mecânicas, sistemas elétricos, pêndulos de pequena amplitude e vários sistemas físicos reais podem ser tratados como MHS quando estudados perto do equilíbrio. O modelo não é apenas um caso de mola; ele é uma aproximação universal para pequenas oscilações estáveis.",
     ],
-    formulas: [formulas[14], formulas[15]],
+    formulas: [
+      {
+        title: "Potencial perto do equilíbrio",
+        formula: String.raw`U(x)\approx U(0)+\frac{1}{2}Cx^2`,
+        description:
+          "Aproximação da energia potencial perto de um equilíbrio estável. O gráfico localmente se comporta como uma parábola.",
+        terms: [
+          "U(x): energia potencial em função da posição.",
+          "U(0): energia potencial no equilíbrio escolhido como origem.",
+          "C: curvatura efetiva da energia potencial perto do mínimo.",
+          "x: pequeno deslocamento em relação ao equilíbrio.",
+        ],
+        interpretation: [
+          "Perto de um mínimo de energia, muitos sistemas se comportam como osciladores harmônicos.",
+          "Essa é uma das razões pelas quais o MHS aparece em tantos contextos físicos.",
+        ],
+      },
+      {
+        title: "Força a partir da energia potencial",
+        formula: String.raw`F=-\frac{dU}{dx}`,
+        description:
+          "A força conservativa é o negativo da derivada da energia potencial. Se U é aproximadamente quadrática, a força é restauradora linear.",
+        terms: [
+          "F: força associada à energia potencial.",
+          "dU/dx: taxa de variação da energia potencial com a posição.",
+          "sinal negativo: a força aponta no sentido de diminuir a energia potencial.",
+        ],
+        interpretation: [
+          "Se U(x) ≈ U(0) + Cx²/2, então F = -Cx.",
+          "Isso liga equilíbrio estável, energia mínima e Movimento Harmônico Simples.",
+        ],
+      },
+    ],
     diagram: {
       kind: "potentialWell",
       title: "mínimo de energia potencial",
@@ -575,7 +607,26 @@ const theorySections: TheorySection[] = [
       "Em uma posição intermediária, como x = A/2, a energia potencial é apenas um quarto da energia total, pois depende de x². O restante, três quartos da energia total, está na forma cinética. Essa leitura é muito útil em questões conceituais e numéricas.",
       "Esse caso mostra uma armadilha recorrente: metade da amplitude não significa metade da energia potencial. Como a energia elástica depende do quadrado da posição, a distribuição de energia não é linear com x.",
     ],
-    formulas: [formulas[10], formulas[11], formulas[16]],
+    formulas: [
+      formulas[10],
+      formulas[11],
+      {
+        title: "Energia em x = A/2",
+        formula: String.raw`x=\frac{A}{2}\quad\Rightarrow\quad E_p=\frac{E}{4}\ \text{ e }\ E_c=\frac{3E}{4}`,
+        description:
+          "Resultado clássico para mostrar que a energia potencial elástica cresce com o quadrado da posição.",
+        terms: [
+          "A: amplitude do MHS.",
+          "E_p: energia potencial elástica.",
+          "E_c: energia cinética.",
+          "E: energia mecânica total.",
+        ],
+        interpretation: [
+          "Metade da amplitude não significa metade da energia potencial.",
+          "Como E_p depende de x², em x = A/2 ela vale apenas um quarto da energia total.",
+        ],
+      },
+    ],
     diagram: {
       kind: "energy",
       title: "troca de energia",
@@ -1466,7 +1517,7 @@ function TheorySectionCard({ section }: { section: TheorySection }) {
 
         {section.formulas ? (
           <div className="grid gap-5 lg:grid-cols-2">
-            {section.formulas.map((formula) => (
+            {section.formulas.filter(Boolean).map((formula) => (
               <FormulaCard key={formula.title} item={formula} />
             ))}
           </div>
@@ -1715,7 +1766,7 @@ export default function OndulatoriaTopicMHS() {
               </div>
 
               <div className="grid gap-5 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">
-                {formulas.map((formula) => (
+                {formulas.filter(Boolean).map((formula) => (
                   <FormulaCard key={formula.title} item={formula} />
                 ))}
               </div>
