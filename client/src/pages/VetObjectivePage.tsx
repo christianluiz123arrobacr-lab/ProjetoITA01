@@ -36,6 +36,7 @@ const EXAM_OPTIONS = [
   { value: "UNICAMP", label: "UNICAMP" },
   { value: "ENEM", label: "ENEM" },
   { value: "EFOMM", label: "EFOMM" },
+  { value: "EPCAR", label: "EPCAR" },
   { value: "EsPCEx", label: "EsPCEx" },
   { value: "Escola Naval", label: "Escola Naval" },
   { value: "Colégio Naval", label: "Colégio Naval" },
