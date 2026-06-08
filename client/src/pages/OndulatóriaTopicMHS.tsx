@@ -8,7 +8,6 @@ import {
   Brain,
   Calculator,
   CheckCircle2,
-  Clock3,
   Gauge,
   GitBranch,
   LineChart,
@@ -36,7 +35,8 @@ type DiagramKind =
   | "energy"
   | "pendulum"
   | "verticalSpring"
-  | "springAssociation";
+  | "springAssociation"
+  | "potentialWell";
 
 type FormulaSummary = {
   title: string;
@@ -283,7 +283,56 @@ const formulas: FormulaSummary[] = [
       "A frequência angular diminui.",
       "O período aumenta.",
     ],
+  },,
+
+  {
+    title: "Potencial perto do equilíbrio",
+    formula: String.raw`U(x)\approx U(0)+\frac{1}{2}Cx^2`,
+    description:
+      "Aproximação da energia potencial perto de um equilíbrio estável. O gráfico localmente se comporta como uma parábola.",
+    terms: [
+      "U(x): energia potencial em função da posição.",
+      "U(0): energia potencial no equilíbrio escolhido como origem.",
+      "C: curvatura efetiva da energia potencial perto do mínimo.",
+      "x: pequeno deslocamento em relação ao equilíbrio.",
+    ],
+    interpretation: [
+      "Perto de um mínimo de energia, muitos sistemas se comportam como osciladores harmônicos.",
+      "Essa é uma das razões pelas quais o MHS aparece em tantos contextos físicos.",
+    ],
   },
+  {
+    title: "Força a partir da energia potencial",
+    formula: String.raw`F=-\frac{dU}{dx}`,
+    description:
+      "A força conservativa é o negativo da derivada da energia potencial. Se U é aproximadamente quadrática, a força é restauradora linear.",
+    terms: [
+      "F: força associada à energia potencial.",
+      "dU/dx: taxa de variação da energia potencial com a posição.",
+      "sinal negativo: a força aponta no sentido de diminuir a energia potencial.",
+    ],
+    interpretation: [
+      "Se U(x) ≈ U(0) + Cx²/2, então F = -Cx.",
+      "Isso liga equilíbrio estável, energia mínima e Movimento Harmônico Simples.",
+    ],
+  },
+  {
+    title: "Energia em x = A/2",
+    formula: String.raw`x=\frac{A}{2}\quad\Rightarrow\quad E_p=\frac{E}{4}\ \text{ e }\ E_c=\frac{3E}{4}`,
+    description:
+      "Resultado clássico para mostrar que a energia potencial elástica cresce com o quadrado da posição.",
+    terms: [
+      "A: amplitude do MHS.",
+      "E_p: energia potencial elástica.",
+      "E_c: energia cinética.",
+      "E: energia mecânica total.",
+    ],
+    interpretation: [
+      "Metade da amplitude não significa metade da energia potencial.",
+      "Como E_p depende de x², em x = A/2 ela vale apenas um quarto da energia total.",
+    ],
+  },
+
 ];
 
 const theorySections: TheorySection[] = [
@@ -353,6 +402,31 @@ const theorySections: TheorySection[] = [
     ],
   },
   {
+    icon: Brain,
+    title: "MHS como aproximação perto de um mínimo de energia",
+    accent: "bg-emerald-700",
+    paragraphs: [
+      "Uma das razões mais profundas para o MHS aparecer tanto é que muitos sistemas físicos têm uma posição de equilíbrio estável associada a um mínimo de energia potencial.",
+      "Perto desse mínimo, mesmo que a energia potencial real tenha uma forma complicada, a curva pode ser aproximada por uma parábola. Essa aproximação local transforma o sistema em um oscilador harmônico para pequenos deslocamentos.",
+      "A força associada à energia potencial é F = -dU/dx. Se, perto do equilíbrio, a energia se comporta como U(x) ≈ U(0) + Cx²/2, então a força fica F = -Cx. Essa é exatamente a forma de uma força restauradora linear.",
+      "Essa ideia explica por que moléculas, estruturas mecânicas, sistemas elétricos, pêndulos de pequena amplitude e vários sistemas físicos reais podem ser tratados como MHS quando estudados perto do equilíbrio. O modelo não é apenas um caso de mola; ele é uma aproximação universal para pequenas oscilações estáveis.",
+    ],
+    formulas: [formulas[14], formulas[15]],
+    diagram: {
+      kind: "potentialWell",
+      title: "mínimo de energia potencial",
+      caption:
+        "Perto de um equilíbrio estável, a energia potencial pode ser aproximada por uma parábola, gerando força restauradora linear.",
+    },
+    notes: [
+      {
+        title: "Nível alto",
+        type: "success",
+        body: "Para ITA/IME, essa ideia é valiosa: se a energia tem mínimo e pode ser aproximada por uma parábola, pequenas oscilações tendem a ser harmônicas.",
+      },
+    ],
+  },
+  {
     icon: Activity,
     title: "Sistema massa-mola horizontal",
     accent: "bg-cyan-700",
@@ -376,9 +450,10 @@ const theorySections: TheorySection[] = [
     title: "Molas associadas e constante equivalente",
     accent: "bg-indigo-800",
     paragraphs: [
-      "Em problemas mais elaborados, a massa pode estar presa a mais de uma mola. Nesses casos, o primeiro passo é encontrar a constante elástica equivalente do sistema. Depois disso, o movimento volta a ser tratado como um massa-mola comum.",
-      "Quando molas atuam em paralelo, a massa sofre a soma das forças restauradoras para o mesmo deslocamento. A rigidez equivalente aumenta. Quando molas estão em série, a deformação total se distribui entre elas, e a rigidez equivalente diminui.",
-      "A lógica para MHS é sempre a mesma: depois de encontrar a constante restauradora efetiva, use ω = √(k_eq/m). A dificuldade da questão costuma estar em montar k_eq, não em aplicar a fórmula final.",
+      "Em problemas mais elaborados, a massa pode estar presa a mais de uma mola. Nesses casos, o primeiro passo não é aplicar período imediatamente, mas descobrir qual é a constante restauradora efetiva do conjunto.",
+      "Quando molas atuam em paralelo, elas sofrem o mesmo deslocamento e suas forças restauradoras se somam. O sistema fica mais rígido, a frequência angular aumenta e o período diminui.",
+      "Quando molas estão em série, a força é a mesma em cada mola, mas a deformação total se reparte entre elas. O sistema fica mais flexível, a frequência angular diminui e o período aumenta.",
+      "Depois de encontrar k_eq, o problema volta a ser um massa-mola comum: ω = √(k_eq/m) e T = 2π√(m/k_eq). A dificuldade real costuma estar em reconhecer a associação correta.",
     ],
     formulas: [formulas[12], formulas[13]],
     diagram: {
@@ -449,17 +524,24 @@ const theorySections: TheorySection[] = [
     title: "Equação horária, fase inicial e escolha entre seno e cosseno",
     accent: "bg-red-700",
     paragraphs: [
-      "A posição no MHS pode ser escrita por uma função senoidal ou cossenoidal. A forma mais comum é x(t) = A cos(ωt + φ₀), mas usar seno também é correto quando a fase inicial é ajustada.",
-      "A amplitude A é o afastamento máximo em relação ao equilíbrio. A frequência angular ω mede a rapidez com que a fase evolui. A fase inicial φ₀ define o estado do sistema no instante t = 0.",
-      "Se o corpo começa em uma extremidade positiva com velocidade nula, a forma x(t) = A cos(ωt) costuma ser natural. Se começa no equilíbrio indo para o sentido positivo, x(t) = A sen(ωt) costuma ser mais conveniente.",
-      "Em problemas mais difíceis, a fase inicial não é zero nem um valor óbvio. Nesses casos, use as condições iniciais de posição e velocidade para determinar φ₀. A posição inicial sozinha pode não bastar, porque o corpo pode estar indo ou voltando.",
+      "A posição no MHS pode ser escrita por uma função senoidal ou cossenoidal. A forma x(t) = A cos(ωt + φ₀) é muito usada, mas x(t) = A sen(ωt + φ₀) descreve o mesmo tipo de movimento quando a fase inicial é escolhida corretamente.",
+      "A amplitude A é o afastamento máximo em relação ao equilíbrio. A frequência angular ω mede a rapidez com que a fase evolui. A fase inicial φ₀ indica em que ponto do ciclo o corpo estava no instante escolhido como t = 0.",
+      "Se o corpo começa na extremidade positiva com velocidade nula, o cosseno sem fase inicial costuma ser a escolha mais simples. Se começa no equilíbrio indo para o sentido positivo, o seno sem fase inicial costuma ser mais direto.",
+      "Quando a fase inicial não é evidente, o procedimento deve ser cuidadoso: use a posição inicial para encontrar os possíveis valores de φ₀ e use o sinal da velocidade inicial para escolher o quadrante correto.",
     ],
     formulas: [formulas[3]],
+    bullets: [
+      "Use x(0) = A cosφ₀ para obter cosφ₀ = x(0)/A.",
+      "Lembre que v(0) = -Aω senφ₀.",
+      "Se v(0) < 0, então senφ₀ > 0.",
+      "Se v(0) > 0, então senφ₀ < 0.",
+      "A posição inicial pode dar dois ângulos possíveis; a velocidade inicial escolhe o correto.",
+    ],
     notes: [
       {
         title: "Cuidado",
         type: "warning",
-        body: "Saber x(0) não determina sozinho o movimento completo. O sentido inicial da velocidade também importa.",
+        body: "A posição inicial sozinha não determina completamente o movimento. Em uma mesma posição, o corpo pode estar indo ou voltando.",
       },
     ],
   },
@@ -490,9 +572,10 @@ const theorySections: TheorySection[] = [
       "A análise energética do MHS é uma das ferramentas mais importantes para resolver questões sem precisar encontrar o instante do movimento. Em um sistema massa-mola ideal, a energia mecânica total se conserva.",
       "Nas extremidades, a velocidade é zero e a energia está na forma potencial elástica. No equilíbrio, a elongação é zero e a energia está na forma cinética. Entre esses pontos, a energia se divide continuamente entre cinética e potencial.",
       "A energia total depende da amplitude ao quadrado. Isso significa que dobrar a amplitude quadruplica a energia mecânica do oscilador.",
-      "Em uma posição intermediária, como x = A/2, a energia potencial é apenas um quarto da energia total, pois depende de x². O restante está na forma cinética. Essa leitura é muito útil em questões conceituais e numéricas.",
+      "Em uma posição intermediária, como x = A/2, a energia potencial é apenas um quarto da energia total, pois depende de x². O restante, três quartos da energia total, está na forma cinética. Essa leitura é muito útil em questões conceituais e numéricas.",
+      "Esse caso mostra uma armadilha recorrente: metade da amplitude não significa metade da energia potencial. Como a energia elástica depende do quadrado da posição, a distribuição de energia não é linear com x.",
     ],
-    formulas: [formulas[10], formulas[11]],
+    formulas: [formulas[10], formulas[11], formulas[16]],
     diagram: {
       kind: "energy",
       title: "troca de energia",
@@ -540,6 +623,7 @@ const theorySections: TheorySection[] = [
       "No equilíbrio estático, a força elástica equilibra o peso. Assim, kx₀ = mg, de onde x₀ = mg/k. Essa deformação indica quanto a mola alonga até sustentar a massa em repouso.",
       "Depois que usamos a nova posição de equilíbrio como referência, o movimento em torno dela é descrito pela mesma relação do massa-mola horizontal: T = 2π√(m/k).",
       "A armadilha é medir a elongação dinâmica a partir do comprimento natural da mola. Para o MHS vertical, a origem correta é a posição de equilíbrio, não a posição natural.",
+      "Existem duas grandezas diferentes: a deformação estática x₀ = mg/k, que localiza o novo equilíbrio, e a elongação dinâmica x, que mede o deslocamento em relação a esse equilíbrio. Misturar essas duas quantidades é o erro clássico do massa-mola vertical.",
     ],
     diagram: {
       kind: "verticalSpring",
@@ -582,13 +666,23 @@ const theorySections: TheorySection[] = [
   },
   {
     icon: Target,
-    title: "Como reconhecer MHS em questões",
+    title: "Como resolver uma questão de MHS",
     accent: "bg-blue-700",
     paragraphs: [
-      "O método mais seguro é procurar uma posição de equilíbrio e analisar a força resultante para pequenos deslocamentos. Se essa força puder ser escrita como F = -Cx, com C positivo, o sistema realiza MHS.",
-      "A constante C não precisa ser uma constante elástica simples. Ela pode ser uma constante equivalente, uma combinação de molas, uma aproximação gravitacional, uma força restauradora efetiva ou uma constante que surge da geometria do problema.",
-      "Depois de encontrar C, a frequência angular é ω = √(C/m). A partir disso, período, frequência, velocidade máxima, aceleração máxima e energia seguem das fórmulas principais.",
-      "Esse tipo de reconhecimento é muito importante para ITA/IME, porque a questão frequentemente esconde o MHS em uma situação que não parece, de início, um oscilador padrão.",
+      "O método mais seguro é começar pela física do sistema, não pela fórmula. Primeiro identifique a posição de equilíbrio. Depois escolha a origem nessa posição e escreva o deslocamento x a partir dela.",
+      "Em seguida, analise a força resultante para um pequeno deslocamento. Se a força puder ser escrita como F = -Cx, com C positivo, o sistema realiza MHS. A constante C pode ser uma constante elástica, uma constante equivalente de molas, uma aproximação gravitacional ou uma constante efetiva criada pela geometria do problema.",
+      "Depois de encontrar C, use ω = √(C/m). A partir de ω, vêm o período, a frequência, a velocidade máxima, a aceleração máxima e as equações horárias.",
+      "Se a questão não pede o instante, energia costuma ser o caminho mais limpo. Se envolve gráfico, extraia primeiro A e T. Se envolve fase inicial, use x(0) e v(0), pois a posição sozinha não define o movimento completo.",
+    ],
+    bullets: [
+      "Identifique a posição de equilíbrio.",
+      "Meça x a partir do equilíbrio, não de uma posição qualquer.",
+      "Escreva a força resultante para um pequeno deslocamento.",
+      "Procure a forma F = -Cx.",
+      "Use ω = √(C/m).",
+      "Se não precisar do tempo, tente energia.",
+      "Se houver gráfico, extraia A e T antes de fazer contas.",
+      "Se houver fase inicial, use posição e velocidade iniciais.",
     ],
     formulas: [
       {
@@ -610,7 +704,7 @@ const theorySections: TheorySection[] = [
       {
         title: "Roteiro de prova",
         type: "success",
-        body: "Ache o equilíbrio, escreva a força resultante para um deslocamento x, procure a forma F = -Cx e só depois aplique as fórmulas.",
+        body: "O erro comum é aplicar fórmula antes de definir o equilíbrio. Em MHS, a origem correta quase sempre decide o problema.",
       },
     ],
   },
@@ -859,6 +953,8 @@ const traps = [
   "Usar k de uma mola individual quando o sistema tem molas associadas.",
   "Esquecer que posição não determina sozinha o sentido da velocidade.",
   "Confundir energia potencial máxima com energia cinética máxima.",
+  "Esquecer que, em x = A/2, a energia potencial é E/4, não E/2.",
+  "Determinar fase inicial usando só posição e ignorando o sentido da velocidade.",
 ];
 
 const checklist = [
@@ -877,6 +973,8 @@ const checklist = [
   "Sei usar energia para encontrar velocidade em posição intermediária?",
   "Sei interpretar gráficos de x(t), v(t) e a(t)?",
   "Sei reconhecer MHS escondido em uma força efetiva?",
+  "Sei explicar por que pequenos deslocamentos perto de um mínimo de energia podem gerar MHS?",
+  "Sei montar um roteiro de resolução antes de escolher fórmula?",
 ];
 
 function decimalComma(value: number, digits = 2) {
@@ -1008,9 +1106,50 @@ function MhsDiagram({ diagram }: { diagram: NonNullable<TheorySection["diagram"]
           {diagram.kind === "pendulum" && <PendulumDiagram />}
           {diagram.kind === "verticalSpring" && <VerticalSpringDiagram />}
           {diagram.kind === "springAssociation" && <SpringAssociationDiagram />}
+          {diagram.kind === "potentialWell" && <PotentialWellDiagram />}
         </div>
       </div>
     </div>
+  );
+}
+
+
+function PotentialWellDiagram() {
+  return (
+    <svg viewBox="0 0 820 330" className="h-auto w-full">
+      <defs>
+        <marker id="potentialArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#dc2626" />
+        </marker>
+      </defs>
+
+      <line x1="80" y1="260" x2="760" y2="260" stroke="#0f172a" strokeWidth="4" />
+      <line x1="120" y1="285" x2="120" y2="40" stroke="#0f172a" strokeWidth="4" />
+      <text x="745" y="288" className="fill-slate-700 text-[16px] font-black">x</text>
+      <text x="88" y="35" className="fill-slate-700 text-[16px] font-black">U</text>
+
+      <path
+        d="M155 80 C250 260, 520 260, 705 80"
+        fill="none"
+        stroke="#2563eb"
+        strokeWidth="6"
+        strokeLinecap="round"
+      />
+      <line x1="430" y1="72" x2="430" y2="268" stroke="#64748b" strokeWidth="3" strokeDasharray="8 8" />
+      <circle cx="430" cy="238" r="10" fill="#16a34a" />
+      <text x="384" y="305" className="fill-emerald-700 text-[16px] font-black">equilíbrio estável</text>
+
+      <circle cx="545" cy="178" r="9" fill="#dc2626" />
+      <line x1="545" y1="178" x2="495" y2="205" stroke="#dc2626" strokeWidth="5" markerEnd="url(#potentialArrow)" />
+      <text x="558" y="170" className="fill-red-700 text-[16px] font-black">F aponta para o mínimo</text>
+
+      <text x="195" y="52" className="fill-slate-950 text-[20px] font-black">
+        perto do mínimo, a curva parece uma parábola
+      </text>
+      <text x="230" y="112" className="fill-blue-700 text-[17px] font-black">
+        U(x) ≈ U(0) + Cx²/2
+      </text>
+    </svg>
   );
 }
 
@@ -1417,7 +1556,9 @@ function SummaryMapPanel() {
     ["Pêndulo", "T = 2π√(ℓ/g): válido para pequenas oscilações."],
     ["Energia", "E = (1/2)kA²: energia total depende de A²."],
     ["Gráficos", "x, v e a têm o mesmo período, mas fases diferentes."],
-    ["Vertical", "A gravidade desloca o equilíbrio, mas não muda o período."],
+    ["Vertical", "A gravidade desloca o equilíbrio; a elongação dinâmica é medida a partir dele."],
+    ["Mínimo de energia", "Perto de um equilíbrio estável, U pode ser aproximada por uma parábola."],
+    ["Modo prova", "Defina o equilíbrio, procure F = -Cx e só depois escolha a ferramenta."],
     ["ITA/IME", "O foco é reconhecer MHS escondido pela força efetiva."],
   ];
 
@@ -1511,7 +1652,7 @@ export default function OndulatoriaTopicMHS() {
               {[
                 { value: String(theorySections.length), label: "Seções" },
                 { value: String(formulas.length), label: "Fórmulas" },
-                { value: "7", label: "Diagramas" },
+                { value: "8", label: "Diagramas" },
                 { value: "ITA", label: "Foco" },
               ].map((item) => (
                 <div key={item.label} className="rounded-3xl border border-white/10 bg-white/10 p-6 backdrop-blur">
