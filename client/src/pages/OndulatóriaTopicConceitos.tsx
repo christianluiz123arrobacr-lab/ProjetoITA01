@@ -1013,7 +1013,7 @@ function WavefrontDiagram() {
 
 function ParticleVsWaveAnimation() {
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+    <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
       <style>{`
         @keyframes wave-slide {
           from { transform: translateX(0px); }
@@ -1042,7 +1042,7 @@ function ParticleVsWaveAnimation() {
         }
       `}</style>
 
-      <div className="bg-blue-700 px-7 py-6 text-white md:px-9">
+      <div className="bg-blue-700 px-7 py-5 text-white md:px-9">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
             <Activity className="h-6 w-6" />
@@ -1117,8 +1117,8 @@ function WaveRelationSimulator() {
   const k = useMemo(() => (2 * Math.PI) / lambda, [lambda]);
 
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-      <div className="bg-slate-950 px-7 py-6 text-white md:px-9">
+    <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
+      <div className="bg-slate-950 px-7 py-5 text-white md:px-9">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20"><SlidersHorizontal className="h-6 w-6" /></div>
           <div>
@@ -1163,8 +1163,8 @@ function WaveRelationSimulator() {
 function TheorySectionCard({ section }: { section: TheorySection }) {
   const Icon = section.icon;
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-      <div className={`${section.accent} px-7 py-6 text-white md:px-9`}>
+    <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
+      <div className={`${section.accent} px-7 py-5 text-white md:px-9`}>
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20"><Icon className="h-6 w-6" /></div>
           <h2 className="text-2xl font-black tracking-tight md:text-3xl">{section.title}</h2>
@@ -1196,37 +1196,73 @@ function TheorySectionCard({ section }: { section: TheorySection }) {
 }
 
 function ExampleCard({ example, index }: { example: ExampleItem; index: number }) {
+  const [isOpen, setIsOpen] = useState(index === 0);
+
   return (
-    <article className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
-      <div className="bg-blue-700 px-6 py-5 text-white">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-100">Exemplo {index + 1} · {example.level}</p>
-            <h3 className="mt-1 text-2xl font-black">{example.title}</h3>
-          </div>
-          <div className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-black">resolvido</div>
-        </div>
-      </div>
-      <div className="space-y-5 px-6 py-6 md:px-8 md:py-8">
+    <article className="overflow-hidden rounded-[1.7rem] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)]">
+      <button
+        type="button"
+        onClick={() => setIsOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-5 px-6 py-6 text-left md:px-7"
+      >
         <div>
-          <h4 className="text-base font-black text-slate-950">Enunciado</h4>
-          <p className="mt-2 rounded-2xl bg-slate-50 p-4 text-justify text-[1.02rem] leading-8 text-slate-700">{example.statement}</p>
+          <h3 className="text-xl font-black tracking-tight text-slate-950 md:text-2xl">
+            Exemplo {index + 1} — {example.title}
+          </h3>
+          <p className="mt-3 max-w-4xl text-[1.02rem] leading-7 text-slate-700">
+            {example.statement}
+          </p>
         </div>
-        <NoteCard title="Ideia antes da conta" type="info" body={example.idea} />
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h4 className="mb-4 text-base font-black text-slate-950">Desenvolvimento</h4>
-          <div className="space-y-4">
-            {example.steps.map((step, stepIndex) => (
-              <div key={step} className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">{stepIndex + 1}</div>
-                <p className="pt-0.5 text-[1.02rem] leading-8 text-slate-700">{step}</p>
+
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xl font-black text-white transition-transform ${isOpen ? "rotate-180" : ""}`}>
+          ˅
+        </div>
+      </button>
+
+      {isOpen ? (
+        <div className="border-t border-slate-100 bg-slate-50 px-6 py-6 md:px-7 md:py-7">
+          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-blue-100 bg-white p-5">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+                  Ideia antes da conta
+                </p>
+                <p className="mt-3 text-[1.02rem] leading-8 text-slate-700">{example.idea}</p>
               </div>
-            ))}
+
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                  Conclusão
+                </p>
+                <p className="mt-3 text-[1.04rem] font-bold leading-8 text-emerald-950">{example.answer}</p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
+                  O que a questão queria testar
+                </p>
+                <p className="mt-3 text-[1.02rem] leading-8 text-slate-700">{example.test}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                Desenvolvimento
+              </p>
+              <div className="mt-5 space-y-4">
+                {example.steps.map((step, stepIndex) => (
+                  <div key={step} className="flex gap-4">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
+                      {stepIndex + 1}
+                    </div>
+                    <p className="pt-0.5 text-[1.02rem] leading-8 text-slate-700">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 font-bold leading-8 text-emerald-950">{example.answer}</div>
-        <NoteCard title="O que a questão queria testar" type="warning" body={example.test} />
-      </div>
+      ) : null}
     </article>
   );
 }
@@ -1242,18 +1278,61 @@ function SummaryMapPanel() {
     ["Mudança de meio", "Fonte define f; meio define v; λ se ajusta."],
     ["Gráficos", "y × x fornece λ; y × t fornece T."],
   ];
+
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-      <div className="bg-blue-700 px-7 py-6 text-white md:px-9">
-        <div className="flex items-center gap-4"><Atom className="h-7 w-7" /><h2 className="text-2xl font-black tracking-tight md:text-3xl">Mapa mental dos conceitos fundamentais</h2></div>
+    <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
+      <div className="bg-slate-950 px-7 py-5 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <Atom className="h-7 w-7 text-blue-300" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Resumo que realmente importa
+          </h2>
+        </div>
       </div>
+
       <div className="grid gap-4 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">
         {items.map(([title, description]) => (
-          <div key={title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="text-lg font-black text-slate-950">{title}</h3>
             <p className="mt-2 text-[1.02rem] leading-8 text-slate-700">{description}</p>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function SurvivalPanel() {
+  const rules = [
+    "Se o eixo horizontal está em metros, pense em gráfico espacial e procure λ.",
+    "Se o eixo horizontal está em segundos, pense em gráfico temporal e procure T.",
+    "Se a questão dá período, use f = 1/T antes de usar v = λf.",
+    "Se a onda muda de meio em uma fronteira parada, mantenha f e ajuste λ.",
+    "Se a distância é λ, os pontos estão em fase; se é λ/2, estão em oposição de fase.",
+    "Se é som no vácuo, não propaga; se é luz no vácuo, propaga com velocidade c.",
+    "Se a partícula marcada parece acompanhar a onda, desconfie: em geral ela oscila localmente.",
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
+      <div className="bg-slate-950 px-7 py-5 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <Target className="h-7 w-7 text-amber-300" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Quadro de sobrevivência para prova
+          </h2>
+        </div>
+      </div>
+
+      <div className="px-7 py-7 md:px-9 md:py-9">
+        <ul className="space-y-4">
+          {rules.map((rule) => (
+            <li key={rule} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-[1.02rem] leading-8 text-slate-700">
+              <span className="mt-3 h-2 w-2 shrink-0 rounded-full bg-blue-700" />
+              <span>{rule}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
@@ -1264,7 +1343,7 @@ export default function OndulatoriaTopicConceitos() {
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-5">
             <Link href="/ondulatoria" className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 text-slate-600 transition-colors hover:text-blue-700"><ArrowLeft className="h-6 w-6" /></Link>
             <div>
@@ -1279,12 +1358,12 @@ export default function OndulatoriaTopicConceitos() {
           </nav>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 md:py-12 lg:px-8">
-        <section className="overflow-hidden rounded-[2.2rem] bg-slate-950 px-8 py-10 text-white shadow-[0_28px_80px_rgba(15,23,42,0.24)] md:px-10 md:py-12">
+      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 md:py-12 lg:px-8">
+        <section className="overflow-hidden rounded-[2rem] bg-slate-950 px-7 py-8 text-white shadow-[0_24px_70px_rgba(15,23,42,0.22)] md:px-9 md:py-10">
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-cyan-300"><Sparkles className="h-4 w-4" />base para militares</div>
-              <h2 className="mt-7 max-w-4xl text-4xl font-black leading-[1.08] tracking-tight md:text-6xl">Ondas são perturbações que carregam energia. O resto é aprender a medir essa repetição.</h2>
+              <h2 className="mt-7 max-w-4xl text-4xl font-black leading-[1.08] tracking-tight md:text-5xl">Ondas são perturbações que carregam energia. O resto é aprender a medir essa repetição.</h2>
               <p className="mt-6 max-w-3xl text-lg leading-9 text-slate-300">Uma página completa sobre natureza das ondas, classificação, amplitude, período, frequência, comprimento de onda, fase, número de onda, gráficos e mudança de meio.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -1317,18 +1396,26 @@ export default function OndulatoriaTopicConceitos() {
         {activeTab === "resumo" ? (
           <div className="mt-10 space-y-8">
             <SummaryMapPanel />
-            <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-              <div className="bg-slate-950 px-7 py-6 text-white md:px-9"><div className="flex items-center gap-4"><Sigma className="h-7 w-7" /><h2 className="text-2xl font-black tracking-tight md:text-3xl">Fórmulas principais</h2></div></div>
+            <SurvivalPanel />
+            <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
+              <div className="bg-gradient-to-r from-violet-700 to-fuchsia-700 px-7 py-5 text-white md:px-9"><div className="flex items-center gap-4"><Sigma className="h-7 w-7" /><h2 className="text-2xl font-black tracking-tight md:text-3xl">Fórmulas essenciais</h2></div></div>
               <div className="grid gap-5 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">{formulas.filter(Boolean).map((formula) => <FormulaCard key={formula.title} item={formula} />)}</div>
             </section>
-            <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-              <div className="bg-red-700 px-7 py-6 text-white md:px-9"><div className="flex items-center gap-4"><AlertTriangle className="h-7 w-7" /><h2 className="text-2xl font-black tracking-tight md:text-3xl">Armadilhas clássicas</h2></div></div>
+            <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
+              <div className="bg-red-700 px-7 py-5 text-white md:px-9"><div className="flex items-center gap-4"><AlertTriangle className="h-7 w-7" /><h2 className="text-2xl font-black tracking-tight md:text-3xl">Armadilhas clássicas</h2></div></div>
               <div className="grid gap-4 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">{traps.map((trap) => <div key={trap} className="flex gap-3 rounded-2xl border border-red-100 bg-red-50 p-4"><AlertTriangle className="mt-1 h-5 w-5 shrink-0 text-red-700" /><p className="text-[1.01rem] leading-7 text-slate-700">{trap}</p></div>)}</div>
             </section>
-            <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-              <div className="bg-emerald-700 px-7 py-6 text-white md:px-9"><div className="flex items-center gap-4"><ShieldCheck className="h-7 w-7" /><h2 className="text-2xl font-black tracking-tight md:text-3xl">Checklist de domínio</h2></div></div>
+            <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)]">
+              <div className="bg-emerald-700 px-7 py-5 text-white md:px-9"><div className="flex items-center gap-4"><ShieldCheck className="h-7 w-7" /><h2 className="text-2xl font-black tracking-tight md:text-3xl">Checklist de domínio</h2></div></div>
               <div className="grid gap-4 px-7 py-7 md:grid-cols-2 md:px-9 md:py-9">{checklist.map((item) => <div key={item} className="flex gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-emerald-700" /><p className="text-[1.01rem] leading-7 text-slate-700">{item}</p></div>)}</div>
             </section>
+
+            <div className="rounded-3xl bg-slate-950 px-7 py-7 text-white shadow-[0_18px_45px_rgba(15,23,42,0.22)] md:px-9">
+              <h2 className="text-xl font-black">Ideia final</h2>
+              <p className="mt-3 text-[1.05rem] leading-8 text-slate-200">
+                Ondas não são só desenhos senoidais bonitos. São a linguagem física de uma perturbação que se repete no espaço, evolui no tempo e transporta energia sem carregar matéria de forma líquida junto com ela.
+              </p>
+            </div>
           </div>
         ) : null}
       </main>
