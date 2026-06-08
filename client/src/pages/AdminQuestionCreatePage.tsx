@@ -164,6 +164,10 @@ function valorLimpo(texto: string) {
   return valor.length > 0 ? valor : null;
 }
 
+function valorAlternativa(texto: string) {
+  return texto.trim();
+}
+
 function normalizarLista(valores: string[]) {
   return Array.from(
     new Set(
@@ -979,11 +983,11 @@ export default function AdminQuestionCreatePage() {
         formula: valorLimpo(form.formula),
         url_imagem: valorLimpo(form.url_imagem),
 
-        A: valorLimpo(form.alternativa_a),
-        B: valorLimpo(form.alternativa_b),
-        C: valorLimpo(form.alternativa_c),
-        D: valorLimpo(form.alternativa_d),
-        E: valorLimpo(form.alternativa_e),
+        A: valorAlternativa(form.alternativa_a),
+        B: valorAlternativa(form.alternativa_b),
+        C: valorAlternativa(form.alternativa_c),
+        D: valorAlternativa(form.alternativa_d),
+        E: valorAlternativa(form.alternativa_e),
 
         a_url_imagem: valorLimpo(form.alternativa_a_imagem),
         b_url_imagem: valorLimpo(form.alternativa_b_imagem),
