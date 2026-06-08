@@ -10,8 +10,6 @@ import {
   Eye,
   Gauge,
   GitBranch,
-  Layers3,
-  LineChart,
   MoveRight,
   Route,
   ShieldCheck,
@@ -167,7 +165,7 @@ const formulas: FormulaSummary[] = [
     ],
     warning:
       "Use E∝A² como ideia típica de modelos lineares, não como licença para sair aplicando sem verificar o contexto. A Física já é cheia de armadilhas; não precisa fabricar mais uma.",
-  },,
+  },
   {
     title: "Seno e cosseno como escolhas de fase",
     formula: String.raw`A\sin(\alpha)=A\cos\left(\alpha-\frac{\pi}{2}\right)`,
@@ -186,6 +184,38 @@ const formulas: FormulaSummary[] = [
       "A expressão F(x−vt) representa uma forma que se propaga para +x. À medida que t aumenta, é preciso aumentar x para manter o mesmo argumento da função.",
       "A expressão G(x+vt) representa uma forma que se propaga para −x. À medida que t aumenta, é preciso diminuir x para manter o mesmo argumento.",
       "Essa leitura é muito forte para ITA/IME porque mostra que a ideia de propagação não depende de a onda ser senoide. O essencial é a forma viajar como um padrão.",
+    ],
+  },
+  {
+    title: "Velocidade de um ponto do meio",
+    formula: String.raw`v_y(x,t)=\frac{\partial y}{\partial t}`,
+    explanation: [
+      "Essa não é a velocidade de propagação da onda. É a velocidade instantânea com que um ponto específico do meio sobe ou desce enquanto a onda passa.",
+      "Para y(x,t)=Acos(kx−ωt+φ₀), derivamos em relação ao tempo mantendo x fixo: vy=Aωsen(kx−ωt+φ₀). O ponto do meio executa uma oscilação local.",
+      "A velocidade máxima desse ponto é vy,max=Aω, pois o seno pode valer 1 em módulo. Isso pode ser muito diferente da velocidade da onda v=ω/k.",
+      "Use essa derivada quando o enunciado perguntar velocidade transversal, velocidade vertical, velocidade de oscilação ou velocidade de um ponto da corda.",
+    ],
+    warning:
+      "v=ω/k é velocidade da onda. vy=∂y/∂t é velocidade de um ponto do meio. As duas têm unidade m/s, mas descrevem coisas diferentes. Sim, a Física reutiliza letras porque aparentemente o alfabeto acabou.",
+  },
+  {
+    title: "Aceleração de um ponto do meio",
+    formula: String.raw`a_y(x,t)=\frac{\partial^2 y}{\partial t^2}=-\omega^2y(x,t)`,
+    explanation: [
+      "A aceleração de um ponto do meio é a derivada temporal da velocidade local. Ela indica como a velocidade de oscilação daquele ponto muda com o tempo.",
+      "Para y=Acos(kx−ωt+φ₀), a segunda derivada em relação ao tempo é ay=−ω²Acos(kx−ωt+φ₀). Como y=Acos(kx−ωt+φ₀), obtemos ay=−ω²y.",
+      "Isso mostra que cada ponto do meio, em uma onda senoidal ideal, realiza localmente um MHS: a aceleração é proporcional ao deslocamento e tem sentido restaurador.",
+      "Use quando a questão pedir aceleração transversal de um ponto ou quiser relacionar a onda com MHS local.",
+    ],
+  },
+  {
+    title: "Cristas, vales e equilíbrio pela fase",
+    formula: String.raw`\theta=kx-\omega t+\varphi_0`,
+    explanation: [
+      "A fase θ diz o estado da oscilação. Para uma onda em cosseno, cristas, vales e passagens pelo equilíbrio são identificados por valores específicos de θ.",
+      "Cristas ocorrem quando cosθ=1, isto é, θ=2πn. Vales ocorrem quando cosθ=−1, isto é, θ=(2n+1)π. Equilíbrio ocorre quando cosθ=0, isto é, θ=π/2+nπ.",
+      "Para encontrar posições de cristas em um instante, fixe t e resolva a equação para x. Para encontrar instantes de crista em um ponto, fixe x e resolva para t.",
+      "Essa leitura é muito útil em questões com fase, gráficos ou pedidos do tipo 'onde estão as cristas no instante t=0?'.",
     ],
   }
 ];
@@ -338,6 +368,26 @@ const theorySections: TheorySection[] = [
       "A unidade confirma: ω tem unidade rad/s, k tem unidade rad/m, e a razão entre eles dá m/s. Em prova, isso também serve para detectar inversões absurdas, como k/ω.",
     ],
     formulas: [formulas[3], formulas[4]],
+  },
+  {
+    icon: Gauge,
+    title: "Velocidade da onda versus velocidade de um ponto do meio",
+    accent: "bg-red-700",
+    paragraphs: [
+      "Aqui mora uma diferença que separa aluno que entende ondas de aluno que apenas reconhece uma senoide bonita. A velocidade v=ω/k é a velocidade de propagação da onda, isto é, a velocidade com que o padrão, como uma crista, se desloca pelo meio.",
+      "Já um ponto específico do meio não viaja junto com a onda. Em uma corda, por exemplo, a onda pode avançar para a direita, mas um ponto marcado da corda sobe e desce. Para estudar esse movimento local, fixamos x e derivamos y(x,t) em relação ao tempo.",
+      "Se y(x,t)=Acos(kx−ωt+φ₀), então a velocidade local do ponto do meio é vy=∂y/∂t=Aωsen(kx−ωt+φ₀). O maior valor possível do módulo dessa velocidade é Aω.",
+      "Derivando novamente, obtemos ay=∂²y/∂t²=−ω²y. Isso mostra que cada ponto do meio, em uma onda senoidal ideal, executa localmente um MHS. A onda é a propagação desse padrão de oscilação, não uma partícula escapando pelo eixo x.",
+      "Em prova, se o enunciado perguntar velocidade da onda, use v=ω/k. Se perguntar velocidade de um ponto da corda, velocidade transversal ou velocidade vertical, use ∂y/∂t. Mesma unidade, ideias diferentes. Porque claro, seria simples demais usar símbolos completamente distintos.",
+    ],
+    formulas: [formulas[10], formulas[11]],
+    notes: [
+      {
+        title: "Frase para guardar",
+        type: "warning",
+        body: "Velocidade da onda é a velocidade do padrão. Velocidade do ponto do meio é a velocidade da oscilação local.",
+      },
+    ],
   },
   {
     icon: ShieldCheck,
@@ -581,6 +631,63 @@ const examples: ExampleItem[] = [
       "A questão queria testar fase espacial sem desenho. O desenho ajuda, mas a fórmula resolve.",
   },
   {
+    title: "Calculando o deslocamento de um ponto específico",
+    level: "uso direto de y(x,t)",
+    statement:
+      "A onda y(x,t)=0,04cos(5πx−20πt) está no SI. Calcule o deslocamento do ponto x=0,10 m no instante t=0,02 s.",
+    idea:
+      "Agora não queremos só extrair A, k e ω. Queremos usar a função para descobrir o estado real de um ponto do meio em um instante específico.",
+    steps: [
+      "Substitua x=0,10 e t=0,02 na fase: 5π(0,10)−20π(0,02).",
+      "Isso dá 0,5π−0,4π=0,1π=π/10.",
+      "Logo, y=0,04cos(π/10).",
+      "Como cos(π/10)≈0,951, temos y≈0,04·0,951≈0,038 m.",
+      "O ponto está com deslocamento positivo, próximo da crista.",
+    ],
+    answer:
+      "y≈0,038 m, ou aproximadamente 3,8 cm acima da posição de equilíbrio.",
+    test:
+      "A questão queria testar se você entende que y(x,t) calcula o deslocamento de um ponto do meio, não apenas serve para retirar coeficientes como quem depena uma fórmula.",
+  },
+  {
+    title: "Velocidade e aceleração de um ponto da corda",
+    level: "derivada temporal",
+    statement:
+      "Para a onda y(x,t)=0,04cos(5πx−20πt), determine a velocidade e a aceleração vertical de um ponto genérico da corda.",
+    idea:
+      "A velocidade da onda é v=ω/k. Mas a velocidade vertical de um ponto da corda é derivada temporal de y, mantendo x fixo.",
+    steps: [
+      "A função é y=0,04cos(5πx−20πt).",
+      "A velocidade vertical é vy=∂y/∂t.",
+      "Derivando: vy=0,04·20π·sen(5πx−20πt).",
+      "Logo, vy=0,8π sen(5πx−20πt) m/s.",
+      "A aceleração vertical é ay=∂²y/∂t²=−(20π)²·0,04cos(5πx−20πt).",
+      "Como y=0,04cos(5πx−20πt), podemos escrever ay=−(20π)²y.",
+    ],
+    answer:
+      "vy=0,8π sen(5πx−20πt) m/s e ay=−400π²y m/s².",
+    test:
+      "A questão queria testar a diferença entre velocidade da onda e velocidade local do ponto do meio. É aqui que muita gente troca o movimento do padrão pelo movimento da partícula.",
+  },
+  {
+    title: "Encontrando cristas, vales e equilíbrio pela fase",
+    level: "fase aplicada",
+    statement:
+      "Para a onda y(x,t)=0,04cos(5πx−20πt), determine, no instante t=0, as posições das cristas, dos vales e dos pontos de equilíbrio.",
+    idea:
+      "No instante t=0, a fase vira θ=5πx. Para cosseno, crista ocorre em θ=2πn, vale em θ=(2n+1)π e equilíbrio em θ=π/2+nπ.",
+    steps: [
+      "Em t=0, temos y(x,0)=0,04cos(5πx).",
+      "Cristas: 5πx=2πn. Cancelando π, 5x=2n, então x=2n/5=0,40n.",
+      "Vales: 5πx=(2n+1)π. Cancelando π, 5x=2n+1, então x=(2n+1)/5.",
+      "Equilíbrio: 5πx=π/2+nπ. Cancelando π, 5x=1/2+n, então x=0,10+0,20n.",
+    ],
+    answer:
+      "Cristas: x=0,40n. Vales: x=(2n+1)/5. Equilíbrio: x=0,10+0,20n, com n inteiro.",
+    test:
+      "A questão queria testar se você sabe usar fase como ferramenta física. A fase localiza a onda; ela não está ali só para ocupar espaço dentro do cosseno.",
+  },
+  {
     title: "Verificação na equação da onda",
     level: "demonstração",
     statement:
@@ -676,6 +783,8 @@ const traps = [
   "Achar que toda onda progressiva precisa ser senoidal.",
   "Ignorar a fase inicial φ₀.",
   "Achar que mudança de meio sempre muda a frequência.",
+  "Confundir velocidade da onda v=ω/k com velocidade local vy=∂y/∂t.",
+  "Achar que crista, vale e equilíbrio não podem ser encontrados pela fase.",
   "Esquecer que extremidade fixa inverte o pulso.",
   "Esquecer que extremidade livre não inverte o pulso.",
   "Tratar E∝A² como lei universal fora de modelos lineares.",
@@ -688,6 +797,8 @@ const checklist = [
   "Sei calcular λ=2π/k?",
   "Sei calcular T=2π/ω e f=ω/(2π)?",
   "Sei calcular v=ω/k?",
+  "Sei diferenciar velocidade da onda e velocidade de um ponto do meio?",
+  "Sei calcular vy=∂y/∂t e ay=∂²y/∂t² em uma onda senoidal?",
   "Sei determinar sentido de propagação por fase constante?",
   "Sei reconhecer que kx−ωt vai para +x e kx+ωt vai para −x?",
   "Sei lidar com formas equivalentes como cos(ωt−kx)?",
@@ -696,6 +807,8 @@ const checklist = [
   "Sei fixar t para obter gráfico espacial?",
   "Sei fixar x para obter gráfico temporal?",
   "Sei calcular diferença de fase espacial?",
+  "Sei localizar cristas, vales e equilíbrio usando a fase?",
+  "Sei calcular y(x,t) para um ponto e instante específicos?",
   "Sei explicar a equação diferencial da onda?",
   "Sei verificar y=Acos(kx−ωt) na equação da onda?",
   "Sei explicar reflexão em extremidade fixa e livre?",
@@ -1118,7 +1231,8 @@ function SummaryMapPanel() {
     ["Fase inicial", "φ₀ desloca a onda, mas não altera A, λ, f ou v."],
     ["Forma geral", "F(x−vt) vai para +x; G(x+vt) vai para −x."],
     ["Frequência angular", "ω=2πf=2π/T controla a variação temporal da fase."],
-    ["Velocidade", "v=ω/k=λf conecta fase, espaço e tempo."],
+    ["Velocidade da onda", "v=ω/k=λf é a velocidade do padrão se propagando."],
+    ["Velocidade do ponto", "vy=∂y/∂t é a velocidade local de oscilação de um ponto do meio."],
     ["Sentido", "kx−ωt vai para +x; kx+ωt vai para −x, pela fase constante."],
     ["Gráficos", "Fixe t para y×x; fixe x para y×t."],
     ["Mudança de meio", "f e ω permanecem se a fonte não muda; v, λ e k podem mudar."],
@@ -1156,6 +1270,10 @@ function SurvivalPanel() {
     ["T = 2π/ω", "repetição temporal"],
     ["f = ω/(2π)", "ciclos por segundo"],
     ["v = ω/k", "velocidade da onda"],
+    ["vy = ∂y/∂t", "velocidade local do ponto"],
+    ["ay = ∂²y/∂t²", "aceleração local do ponto"],
+    ["quer y num ponto", "substitua x e t"],
+    ["quer crista/vale", "imponha valores de fase"],
     ["mudou de meio", "f fica; v, λ e k mudam"],
     ["extremidade fixa", "pulso reflete invertido"],
     ["extremidade livre", "pulso reflete sem inversão"],
