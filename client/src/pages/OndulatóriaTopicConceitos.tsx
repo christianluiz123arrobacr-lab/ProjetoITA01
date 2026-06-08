@@ -1,5 +1,6 @@
 import { useMemo, useState, type ElementType } from "react";
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
   Atom,
@@ -16,6 +17,7 @@ import {
   Sigma,
   SlidersHorizontal,
   Sparkles,
+  Target,
   Waves,
   Zap,
 } from "lucide-react";
@@ -176,6 +178,7 @@ const theorySections: TheorySection[] = [
       "O ponto mais importante é que a onda transporta energia, mas não transporta matéria de forma líquida ao longo da propagação. Isso não significa que as partículas do meio ficam paradas. Elas se movem, mas geralmente oscilam em torno de posições de equilíbrio.",
       "Imagine uma rolha flutuando na água. Quando uma onda passa, a rolha sobe e desce. Ela não acompanha a onda por longas distâncias como se fosse carregada até a margem. A energia passa; a matéria oscila localmente.",
       "Em uma corda, ocorre algo parecido. A perturbação pode se propagar para a direita enquanto os pontos da corda sobem e descem. Por isso, é essencial diferenciar a velocidade da onda da velocidade das partículas do meio.",
+      "Essa ideia conecta Ondulatória com MHS: cada ponto do meio pode executar uma oscilação local, enquanto o padrão dessa oscilação se propaga. Em MHS, estudamos uma oscilação localizada. Em ondas, estudamos uma oscilação que se transmite pelo espaço.",
     ],
     diagram: {
       kind: "pulse",
@@ -404,6 +407,34 @@ const theorySections: TheorySection[] = [
     formulas: [formulas[6]],
   },
   {
+    icon: Target,
+    title: "Como atacar uma questão de ondas",
+    accent: "bg-slate-950",
+    paragraphs: [
+      "Em questões de ondas, o primeiro passo não é sair aplicando fórmula. O primeiro passo é descobrir que tipo de informação o enunciado entregou: espaço, tempo, meio, frequência, comprimento de onda, fase ou classificação.",
+      "Se o enunciado traz um gráfico y × x, o eixo horizontal é posição. Nesse caso, procure comprimento de onda. Se traz um gráfico y × t, o eixo horizontal é tempo. Nesse caso, procure período.",
+      "Depois disso, conecte as grandezas. Se você tem T, calcule f = 1/T. Se você tem λ e f, use v = λf. Se a onda mudou de meio, lembre que a frequência geralmente continua determinada pela fonte, enquanto velocidade e comprimento de onda se ajustam.",
+      "Esse roteiro evita o erro mais comum: olhar uma senoide bonita e medir a grandeza errada. A curva pode ser idêntica visualmente, mas o eixo horizontal decide tudo.",
+    ],
+    bullets: [
+      "Veja se o gráfico é y × x ou y × t.",
+      "Se for y × x, extraia λ.",
+      "Se for y × t, extraia T.",
+      "Use f = 1/T quando o período aparecer.",
+      "Use v = λf ou v = λ/T conforme os dados.",
+      "Se mudou de meio, mantenha f e ajuste λ junto com v.",
+      "Classifique a onda por definição, não por aparência.",
+      "Nunca confunda velocidade da onda com velocidade das partículas do meio.",
+    ],
+    notes: [
+      {
+        title: "Modo militar",
+        type: "success",
+        body: "Prova militar gosta de questão curta com leitura traiçoeira: gráfico espacial, gráfico temporal, unidade misturada e alternativa parecida. O método evita cair nessa pescaria barata.",
+      },
+    ],
+  },
+  {
     icon: ShieldCheck,
     title: "Como identificar o tipo de onda em prova",
     accent: "bg-blue-700",
@@ -522,6 +553,7 @@ const examples: ExampleItem[] = [
 const traps = [
   "Achar que a onda transporta matéria junto com ela.",
   "Confundir velocidade da onda com velocidade das partículas do meio.",
+  "Achar que a partícula marcada acompanha a onda ao longo da propagação.",
   "Confundir amplitude com distância crista-vale.",
   "Confundir período com frequência.",
   "Esquecer que f = 1/T.",
@@ -543,6 +575,7 @@ const checklist = [
   "Sei definir onda como perturbação que se propaga transportando energia?",
   "Sei explicar por que não há transporte líquido de matéria?",
   "Sei diferenciar pulso, trem de ondas e onda periódica?",
+  "Sei explicar a diferença entre a onda se propagando e a partícula do meio oscilando?",
   "Sei diferenciar onda mecânica e eletromagnética?",
   "Sei explicar por que som não se propaga no vácuo?",
   "Sei explicar por que luz se propaga no vácuo?",
@@ -733,27 +766,49 @@ function ClassificationDiagram() {
 
 function SpatialTemporalDiagram() {
   const wavePath = (x0: number, y0: number, color: string) => {
-    const points = Array.from({ length: 140 }, (_, i) => {
-      const x = x0 + i * 2.2;
-      const y = y0 - Math.sin(i / 12) * 35;
+    const points = Array.from({ length: 150 }, (_, i) => {
+      const x = x0 + i * 2.05;
+      const y = y0 - Math.sin(i / 12) * 34;
       return `${i === 0 ? "M" : "L"}${x} ${y}`;
     }).join(" ");
     return <path d={points} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" />;
   };
+
   return (
-    <svg viewBox="0 0 820 340" className="h-auto w-full">
-      <text x="90" y="35" className="fill-slate-950 text-[20px] font-black">gráfico espacial: y × x</text>
-      <line x1="80" y1="140" x2="390" y2="140" stroke="#cbd5e1" strokeWidth="3" />
-      {wavePath(80, 140, "#2563eb")}
-      <line x1="116" y1="210" x2="268" y2="210" stroke="#dc2626" strokeWidth="5" />
-      <text x="175" y="235" className="fill-red-700 text-[17px] font-black">λ</text>
-      <text x="120" y="285" className="fill-slate-700 text-[15px] font-bold">eixo horizontal: posição</text>
-      <text x="500" y="35" className="fill-slate-950 text-[20px] font-black">gráfico temporal: y × t</text>
-      <line x1="490" y1="140" x2="800" y2="140" stroke="#cbd5e1" strokeWidth="3" />
-      {wavePath(490, 140, "#16a34a")}
-      <line x1="526" y1="210" x2="678" y2="210" stroke="#dc2626" strokeWidth="5" />
-      <text x="585" y="235" className="fill-red-700 text-[17px] font-black">T</text>
-      <text x="530" y="285" className="fill-slate-700 text-[15px] font-bold">eixo horizontal: tempo</text>
+    <svg viewBox="0 0 820 390" className="h-auto w-full">
+      <defs>
+        <marker id="graphArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#0f172a" />
+        </marker>
+      </defs>
+
+      <text x="78" y="35" className="fill-slate-950 text-[20px] font-black">gráfico espacial: y × x</text>
+      <line x1="75" y1="155" x2="390" y2="155" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
+      <line x1="75" y1="235" x2="75" y2="70" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
+      <text x="380" y="180" className="fill-slate-700 text-[15px] font-black">x</text>
+      <text x="54" y="82" className="fill-slate-700 text-[15px] font-black">y</text>
+      {wavePath(80, 155, "#2563eb")}
+      <line x1="118" y1="250" x2="270" y2="250" stroke="#dc2626" strokeWidth="5" />
+      <text x="177" y="276" className="fill-red-700 text-[17px] font-black">λ</text>
+      <line x1="118" y1="155" x2="118" y2="121" stroke="#16a34a" strokeWidth="5" />
+      <text x="130" y="142" className="fill-emerald-700 text-[17px] font-black">A</text>
+      <rect x="84" y="302" width="278" height="52" rx="16" fill="#eff6ff" stroke="#bfdbfe" />
+      <text x="103" y="326" className="fill-blue-900 text-[14px] font-black">eixo horizontal em metros</text>
+      <text x="103" y="346" className="fill-blue-900 text-[14px] font-bold">mede comprimento de onda λ</text>
+
+      <text x="498" y="35" className="fill-slate-950 text-[20px] font-black">gráfico temporal: y × t</text>
+      <line x1="490" y1="155" x2="805" y2="155" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
+      <line x1="490" y1="235" x2="490" y2="70" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
+      <text x="794" y="180" className="fill-slate-700 text-[15px] font-black">t</text>
+      <text x="469" y="82" className="fill-slate-700 text-[15px] font-black">y</text>
+      {wavePath(495, 155, "#16a34a")}
+      <line x1="533" y1="250" x2="685" y2="250" stroke="#dc2626" strokeWidth="5" />
+      <text x="594" y="276" className="fill-red-700 text-[17px] font-black">T</text>
+      <line x1="533" y1="155" x2="533" y2="121" stroke="#16a34a" strokeWidth="5" />
+      <text x="545" y="142" className="fill-emerald-700 text-[17px] font-black">A</text>
+      <rect x="505" y="302" width="278" height="52" rx="16" fill="#ecfdf5" stroke="#bbf7d0" />
+      <text x="524" y="326" className="fill-emerald-900 text-[14px] font-black">eixo horizontal em segundos</text>
+      <text x="524" y="346" className="fill-emerald-900 text-[14px] font-bold">mede período T</text>
     </svg>
   );
 }
@@ -805,6 +860,102 @@ function WavefrontDiagram() {
       <line x1="590" y1="165" x2="720" y2="110" stroke="#dc2626" strokeWidth="5" markerEnd="url(#rayArrow)" />
       <text x="505" y="300" className="fill-emerald-700 text-[16px] font-black">frentes circulares</text>
     </svg>
+  );
+}
+
+function ParticleVsWaveAnimation() {
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <style>{`
+        @keyframes wave-slide {
+          from { transform: translateX(0px); }
+          to { transform: translateX(150px); }
+        }
+        @keyframes particle-oscillate {
+          0%, 100% { transform: translateY(0px); }
+          25% { transform: translateY(-42px); }
+          75% { transform: translateY(42px); }
+        }
+        .wave-pattern-slide {
+          animation: wave-slide 4s linear infinite;
+          transform-box: fill-box;
+          transform-origin: center;
+        }
+        .particle-local-oscillation {
+          animation: particle-oscillate 2s ease-in-out infinite;
+          transform-box: fill-box;
+          transform-origin: center;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .wave-pattern-slide,
+          .particle-local-oscillation {
+            animation: none;
+          }
+        }
+      `}</style>
+
+      <div className="bg-blue-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+            <Activity className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+              Animação: partícula do meio versus onda
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-blue-100">
+              A perturbação avança; um ponto do meio apenas oscila localmente.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-7 px-7 py-7 md:px-9 md:py-9 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <svg viewBox="0 0 820 330" className="min-w-[720px]">
+            <defs>
+              <marker id="movingWaveArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+              </marker>
+            </defs>
+            <rect x="30" y="35" width="760" height="250" rx="28" fill="#ffffff" stroke="#e2e8f0" />
+            <line x1="70" y1="170" x2="750" y2="170" stroke="#cbd5e1" strokeWidth="3" />
+            <g className="wave-pattern-slide">
+              <path
+                d="M-80 170 C-35 105, 10 105, 55 170 C100 235, 145 235, 190 170 C235 105, 280 105, 325 170 C370 235, 415 235, 460 170 C505 105, 550 105, 595 170 C640 235, 685 235, 730 170 C775 105, 820 105, 865 170"
+                fill="none"
+                stroke="#0f172a"
+                strokeWidth="7"
+                strokeLinecap="round"
+              />
+            </g>
+            <line x1="505" y1="78" x2="690" y2="78" stroke="#2563eb" strokeWidth="6" markerEnd="url(#movingWaveArrow)" />
+            <text x="525" y="58" className="fill-blue-700 text-[18px] font-black">onda se propaga</text>
+
+            <line x1="315" y1="85" x2="315" y2="255" stroke="#94a3b8" strokeWidth="3" strokeDasharray="8 8" />
+            <g className="particle-local-oscillation">
+              <circle cx="315" cy="170" r="13" fill="#dc2626" />
+            </g>
+            <text x="95" y="305" className="fill-red-700 text-[17px] font-black">partícula marcada: sobe e desce, mas não viaja junto com a onda</text>
+          </svg>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-lg font-black text-slate-950">O que está se movendo?</h3>
+            <p className="mt-2 text-justify text-[1.02rem] leading-8 text-slate-700">
+              O desenho separa duas coisas: o padrão da onda se desloca horizontalmente, enquanto a partícula marcada oscila perto da própria posição de equilíbrio.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+            <h3 className="text-lg font-black text-emerald-950">Leitura física</h3>
+            <p className="mt-2 text-justify text-[1.02rem] leading-8 text-slate-700">
+              A onda transporta energia. O meio transmite a perturbação por oscilações locais. É por isso que velocidade da onda e velocidade da partícula do meio não são a mesma grandeza.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -989,7 +1140,7 @@ export default function OndulatoriaTopicConceitos() {
               <p className="mt-6 max-w-3xl text-lg leading-9 text-slate-300">Uma página completa sobre natureza das ondas, classificação, amplitude, período, frequência, comprimento de onda, fase, número de onda, gráficos e mudança de meio.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {[{ value: String(theorySections.length), label: "Seções" }, { value: String(formulas.length), label: "Fórmulas" }, { value: "7", label: "Diagramas" }, { value: "MIL", label: "Foco" }].map((item) => (
+              {[{ value: String(theorySections.length), label: "Seções" }, { value: String(formulas.length), label: "Fórmulas" }, { value: "8", label: "Visuais" }, { value: "MIL", label: "Foco" }].map((item) => (
                 <div key={item.label} className="rounded-3xl border border-white/10 bg-white/10 p-6 backdrop-blur">
                   <p className="text-4xl font-black text-white">{item.value}</p>
                   <p className="mt-1 text-sm font-black uppercase tracking-[0.18em] text-slate-300">{item.label}</p>
@@ -1008,6 +1159,7 @@ export default function OndulatoriaTopicConceitos() {
             {theorySections.map((section) => (
               <div key={section.title} className="space-y-8">
                 <TheorySectionCard section={section} />
+                {section.title === "O que é uma onda" ? <ParticleVsWaveAnimation /> : null}
                 {section.title === "Período, frequência e velocidade de propagação" ? <WaveRelationSimulator /> : null}
               </div>
             ))}
