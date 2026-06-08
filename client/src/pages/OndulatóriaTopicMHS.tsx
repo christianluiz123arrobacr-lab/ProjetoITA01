@@ -44,6 +44,7 @@ type FormulaSummary = {
   description: string;
   terms: string[];
   interpretation: string[];
+  derivation?: string[];
   warning?: string;
 };
 
@@ -99,6 +100,12 @@ const formulas: FormulaSummary[] = [
       "Nas extremidades, |x| é máximo e |a| também é máximo.",
       "Essa relação é a forma mais direta de reconhecer MHS.",
     ],
+    derivation: [
+      "A ideia começa pela forma geral de uma oscilação senoidal, como x(t) = A cos(ωt + φ₀).",
+      "Derivando duas vezes em relação ao tempo, obtemos a(t) = -Aω² cos(ωt + φ₀).",
+      "Como A cos(ωt + φ₀) é justamente x(t), então a(t) = -ω²x(t).",
+      "Em prova militar, essa é a assinatura: se a aceleração puder ser escrita proporcional a -x, o movimento é MHS.",
+    ],
   },
   {
     title: "Força restauradora linear",
@@ -115,6 +122,12 @@ const formulas: FormulaSummary[] = [
       "Para uma mola ideal, C = k.",
       "Em questões difíceis, C pode vir de uma combinação de molas, gravidade, geometria ou aproximações.",
     ],
+    derivation: [
+      "Pela Segunda Lei de Newton, a força resultante é F = ma.",
+      "Se o movimento é MHS, então a = -ω²x.",
+      "Logo F = m(-ω²x) = -mω²x.",
+      "Chamando mω² de C, obtemos F = -Cx. Para uma mola ideal, essa constante C é o próprio k.",
+    ],
   },
   {
     title: "Frequência angular efetiva",
@@ -129,6 +142,12 @@ const formulas: FormulaSummary[] = [
     interpretation: [
       "Maior C deixa a oscilação mais rápida.",
       "Maior massa aumenta a inércia e deixa a oscilação mais lenta.",
+    ],
+    derivation: [
+      "Partimos da força restauradora efetiva F = -Cx.",
+      "Aplicando F = ma, temos ma = -Cx, portanto a = -(C/m)x.",
+      "Comparando com a forma do MHS, a = -ω²x, concluímos que ω² = C/m.",
+      "Assim, ω = √(C/m). Essa fórmula é essencial para sistemas que não são uma mola simples.",
     ],
   },
   {
@@ -147,6 +166,12 @@ const formulas: FormulaSummary[] = [
       "A fase inicial é definida pelas condições iniciais.",
       "Seno e cosseno representam o mesmo tipo de movimento com escolhas diferentes de fase.",
     ],
+    derivation: [
+      "A equação diferencial do MHS é d²x/dt² + ω²x = 0.",
+      "As funções seno e cosseno têm uma propriedade especial: ao derivá-las duas vezes, elas voltam a si mesmas com sinal negativo.",
+      "Por isso a solução natural é senoidal ou cossenoidal.",
+      "A fase inicial φ₀ entra para ajustar a posição e o sentido da velocidade no instante inicial.",
+    ],
   },
   {
     title: "Velocidade no MHS",
@@ -162,6 +187,12 @@ const formulas: FormulaSummary[] = [
       "A velocidade é máxima no equilíbrio.",
       "A velocidade é nula nas extremidades.",
     ],
+    derivation: [
+      "A velocidade é a derivada da posição: v = dx/dt.",
+      "Derivando x(t) = A cos(ωt + φ₀), usamos a regra da cadeia.",
+      "A derivada de cos(ωt + φ₀) é -ω sen(ωt + φ₀).",
+      "Portanto, v(t) = -Aω sen(ωt + φ₀).",
+    ],
   },
   {
     title: "Velocidade máxima",
@@ -172,6 +203,11 @@ const formulas: FormulaSummary[] = [
     interpretation: [
       "No equilíbrio, a energia cinética é máxima.",
       "Nas extremidades, a velocidade é zero.",
+    ],
+    derivation: [
+      "Da expressão v(t) = -Aω sen(ωt + φ₀), o maior valor possível do módulo do seno é 1.",
+      "Logo, o maior módulo da velocidade é Aω.",
+      "Fisicamente, isso ocorre no equilíbrio, onde toda a energia mecânica está na forma cinética.",
     ],
   },
   {
@@ -190,6 +226,12 @@ const formulas: FormulaSummary[] = [
       "Em x = ±A, a velocidade é zero.",
       "O sinal da velocidade depende do sentido do movimento.",
     ],
+    derivation: [
+      "Pela energia no massa-mola, E = Ec + Ep.",
+      "Temos (1/2)kA² = (1/2)mv² + (1/2)kx².",
+      "Multiplicando por 2 e usando k/m = ω², obtemos v² = ω²(A² - x²).",
+      "Essa relação é ótima quando a questão fornece posição e não pede o instante.",
+    ],
   },
   {
     title: "Aceleração máxima",
@@ -200,6 +242,12 @@ const formulas: FormulaSummary[] = [
     interpretation: [
       "A aceleração é nula no equilíbrio.",
       "A aceleração é máxima em módulo quando o afastamento é máximo.",
+    ],
+    derivation: [
+      "No MHS, a = -ω²x.",
+      "O maior valor de |x| é a amplitude A.",
+      "Portanto, o maior módulo da aceleração é a_max = ω²A.",
+      "Ela ocorre nas extremidades, não no equilíbrio.",
     ],
   },
   {
@@ -212,6 +260,12 @@ const formulas: FormulaSummary[] = [
       "Aumentar a massa aumenta o período.",
       "Aumentar a rigidez da mola diminui o período.",
       "No modelo ideal, não depende da amplitude.",
+    ],
+    derivation: [
+      "Para a mola ideal, F = -kx.",
+      "Pela Segunda Lei, ma = -kx, então a = -(k/m)x.",
+      "Comparando com a = -ω²x, obtemos ω = √(k/m).",
+      "Como T = 2π/ω, resulta T = 2π√(m/k).",
     ],
   },
   {
@@ -229,6 +283,13 @@ const formulas: FormulaSummary[] = [
       "Para pequenas oscilações, não depende da amplitude.",
       "A fórmula usa a aproximação senθ ≈ θ em radianos.",
     ],
+    derivation: [
+      "A força tangencial restauradora é aproximadamente F_t = -mg senθ.",
+      "Para pequenos ângulos em radianos, senθ ≈ θ.",
+      "Como o deslocamento ao longo do arco é x ≈ ℓθ, então θ ≈ x/ℓ.",
+      "Assim, F_t ≈ -mg(x/ℓ). Pela Segunda Lei, a = -(g/ℓ)x.",
+      "Comparando com a = -ω²x, obtemos ω = √(g/ℓ) e T = 2π√(ℓ/g).",
+    ],
     warning:
       "Para ângulos grandes, o movimento continua periódico, mas não é exatamente MHS.",
   },
@@ -242,6 +303,12 @@ const formulas: FormulaSummary[] = [
       "Nas extremidades, a energia é potencial elástica.",
       "No equilíbrio, a energia é cinética.",
     ],
+    derivation: [
+      "Nas extremidades, x = ±A e v = 0.",
+      "Nesse ponto, toda a energia mecânica está na forma potencial elástica.",
+      "Como Ep = (1/2)kx², substituindo x = A temos E = (1/2)kA².",
+      "É por isso que a energia total depende do quadrado da amplitude.",
+    ],
   },
   {
     title: "Energia usando frequência angular",
@@ -252,6 +319,12 @@ const formulas: FormulaSummary[] = [
     interpretation: [
       "Útil quando a questão fornece m, ω e A, mas não fornece k.",
       "Reforça a ligação entre energia e frequência angular.",
+    ],
+    derivation: [
+      "No massa-mola, ω² = k/m.",
+      "Logo, k = mω².",
+      "Substituindo em E = (1/2)kA², obtemos E = (1/2)mω²A².",
+      "Essa forma é útil quando a questão trabalha diretamente com frequência angular.",
     ],
   },
   {
@@ -466,6 +539,7 @@ const theorySections: TheorySection[] = [
       "O sistema massa-mola horizontal ideal é o exemplo mais limpo de Movimento Harmônico Simples. A mola obedece à Lei de Hooke e a superfície não oferece atrito. Assim, a única força horizontal relevante é a força elástica.",
       "A força elástica é proporcional à deformação da mola e contrária ao deslocamento. Aplicando a Segunda Lei de Newton, chegamos à relação a = -(k/m)x, que tem exatamente a forma de um MHS.",
       "A frequência angular depende da rigidez da mola e da massa. Uma mola mais rígida responde com força maior para o mesmo deslocamento, aumentando a frequência. Uma massa maior possui maior inércia, tornando a oscilação mais lenta.",
+      "A demonstração é curta e importante: da Lei de Hooke, F = -kx. Pela Segunda Lei, ma = -kx. Então a = -(k/m)x. Comparando com a assinatura a = -ω²x, aparece ω² = k/m. A partir daí, como T = 2π/ω, surge o período T = 2π√(m/k).",
       "No modelo ideal, o período não depende da amplitude. Isso vale enquanto a mola obedece à Lei de Hooke e enquanto dissipações puderem ser desprezadas.",
     ],
     formulas: [formulas[8], formulas[2]],
@@ -510,6 +584,7 @@ const theorySections: TheorySection[] = [
       "O pêndulo simples é formado por uma pequena massa presa a um fio leve e inextensível, oscilando sob ação da gravidade. Para pequenas oscilações, ele realiza aproximadamente MHS.",
       "A força responsável por restaurar o movimento é a componente tangencial do peso. Essa componente vale -mg senθ. Para ângulos pequenos, em radianos, usamos senθ ≈ θ. Como o deslocamento ao longo do arco é aproximadamente x = ℓθ, a força passa a ser proporcional a -x.",
       "Essa aproximação leva à relação a = -(g/ℓ)x. Comparando com a = -ω²x, obtemos ω = √(g/ℓ) e o período T = 2π√(ℓ/g).",
+      "A demonstração também explica por que a massa não aparece no período. A força restauradora tangencial é proporcional a m, mas a inércia também é proporcional a m. Na equação ma = F, a massa cancela. O que sobra é a razão entre gravidade e comprimento.",
       "O período do pêndulo simples, para pequenas oscilações, não depende da massa. Também não depende da amplitude enquanto a aproximação de pequenos ângulos continuar válida.",
     ],
     formulas: [formulas[9]],
@@ -1128,6 +1203,21 @@ function FormulaCard({ item }: { item: FormulaSummary }) {
           </div>
         </div>
 
+        {item.derivation ? (
+          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+            <h4 className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-blue-950">
+              Demonstração e leitura de prova
+            </h4>
+            <div className="space-y-3">
+              {item.derivation.map((line) => (
+                <p key={line} className="text-sm leading-7 text-slate-700">
+                  {line}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {item.warning ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-7 text-amber-900">
             {item.warning}
@@ -1641,7 +1731,7 @@ export default function OndulatoriaTopicMHS() {
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-md">
-        <div className="container flex items-center justify-between gap-4 py-5">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-5">
             <Link
               href="/ondulatoria"
@@ -1679,23 +1769,23 @@ export default function OndulatoriaTopicMHS() {
         </div>
       </header>
 
-      <main className="container py-10 md:py-12">
+      <main className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 md:py-12 lg:px-8">
         <section className="overflow-hidden rounded-[2.2rem] bg-slate-950 px-8 py-10 text-white shadow-[0_28px_80px_rgba(15,23,42,0.24)] md:px-10 md:py-12">
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-amber-300">
                 <Sparkles className="h-4 w-4" />
-                teoria completa
+                foco ITA · IME · militares
               </div>
 
               <h2 className="mt-7 max-w-4xl text-4xl font-black leading-[1.08] tracking-tight md:text-6xl">
-                Oscilar não é só ir e voltar. MHS tem lei, fase, energia e força restauradora.
+                MHS: força restauradora, energia, fase e gráficos sem decorar no escuro.
               </h2>
 
               <p className="mt-6 max-w-3xl text-lg leading-9 text-slate-300">
-                Uma página completa sobre MHS: massa-mola, pêndulo simples, fase,
-                gráficos, energia, molas associadas, MHS vertical e reconhecimento
-                de força restauradora efetiva.
+                Uma página completa sobre MHS para provas militares e vestibulares fortes:
+                massa-mola, pêndulo simples, fase, gráficos, energia, molas associadas,
+                MHS vertical e reconhecimento de força restauradora efetiva.
               </p>
             </div>
 
@@ -1704,7 +1794,7 @@ export default function OndulatoriaTopicMHS() {
                 { value: String(theorySections.length), label: "Seções" },
                 { value: String(formulas.length), label: "Fórmulas" },
                 { value: "8", label: "Diagramas" },
-                { value: "ITA", label: "Foco" },
+                { value: "MIL", label: "Foco" },
               ].map((item) => (
                 <div key={item.label} className="rounded-3xl border border-white/10 bg-white/10 p-6 backdrop-blur">
                   <p className="text-4xl font-black text-white">{item.value}</p>
