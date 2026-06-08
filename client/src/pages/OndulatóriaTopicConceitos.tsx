@@ -85,58 +85,154 @@ const formulas: FormulaSummary[] = [
   {
     title: "Frequência e período",
     formula: String.raw`f=\frac{1}{T}`,
-    description: "A frequência é o inverso do período: ela mede quantas oscilações completas ocorrem por segundo.",
-    terms: ["f: frequência, em hertz.", "T: período, em segundos.", "1 Hz = 1 s^{-1}."],
-    interpretation: ["Período grande significa frequência pequena.", "Período pequeno significa frequência grande.", "Use quando a questão relacionar tempo de oscilação e número de oscilações."],
-    derivation: ["Se uma oscilação completa dura T segundos, em 1 segundo ocorre 1/T oscilação.", "Por isso, f = 1/T. A forma inversa é T = 1/f."],
+    description:
+      "Essa relação diz que frequência e período medem a mesma repetição, mas por pontos de vista opostos. O período olha para o tempo gasto em uma oscilação completa; a frequência olha para quantas oscilações cabem em um segundo.",
+    terms: [
+      "f é a frequência, medida em hertz. Ela conta oscilações por segundo.",
+      "T é o período, medido em segundos. Ele mede o tempo de uma oscilação completa.",
+      "1 Hz significa 1 oscilação por segundo, isto é, 1 s^{-1}.",
+    ],
+    interpretation: [
+      "Use essa fórmula quando o enunciado der o tempo de uma oscilação e pedir quantas oscilações acontecem por segundo, ou quando der a frequência e pedir o tempo de uma oscilação.",
+      "Se T aumenta, f diminui. Se T diminui, f aumenta. Essa oposição é o que muita gente esquece quando tenta tratar período e frequência como se fossem a mesma coisa.",
+      "Em gráfico temporal y × t, o intervalo entre duas cristas consecutivas é T. Depois disso, a frequência vem de f = 1/T.",
+    ],
+    derivation: [
+      "A ideia é direta: se uma oscilação dura T segundos, em 1 segundo cabem 1/T oscilações.",
+      "Por exemplo, se T = 0,25 s, cabem quatro oscilações em um segundo; então f = 4 Hz.",
+      "A forma inversa, T = 1/f, aparece quando a questão fornece a frequência e quer saber quanto tempo dura um ciclo completo.",
+    ],
   },
   {
     title: "Relação fundamental das ondas",
     formula: String.raw`v=\lambda f`,
-    description: "Relaciona velocidade de propagação, comprimento de onda e frequência em uma onda periódica.",
-    terms: ["v: velocidade de propagação da onda.", "λ: comprimento de onda.", "f: frequência."],
-    interpretation: ["Em um mesmo meio, se v permanece constante, frequência maior implica comprimento de onda menor.", "Na mudança de meio, se f permanece constante, λ muda junto com v."],
-    derivation: ["Durante um período T, a onda avança um comprimento de onda λ.", "Como velocidade é distância dividida por tempo, v = λ/T.", "Como f = 1/T, então v = λf."],
+    description:
+      "Essa é a fórmula central da página. Ela conecta a repetição no espaço, medida por λ, com a repetição no tempo, medida por f, produzindo a velocidade com que o padrão ondulatório se propaga.",
+    terms: [
+      "v é a velocidade de propagação da onda, isto é, a velocidade da perturbação.",
+      "λ é o comprimento de onda, a distância entre dois pontos consecutivos em mesma fase.",
+      "f é a frequência, o número de oscilações por segundo imposto pela fonte.",
+    ],
+    interpretation: [
+      "Use quando a questão misturar distância entre cristas, frequência e velocidade. É a fórmula mais comum em questões diretas de Ondulatória.",
+      "Em um mesmo meio, a velocidade costuma ser determinada pelas propriedades do meio. Se a fonte aumenta f, o comprimento de onda λ diminui para manter v constante.",
+      "Em mudança de meio, a frequência geralmente permanece determinada pela fonte; a velocidade muda com o meio e o comprimento de onda se ajusta.",
+    ],
+    derivation: [
+      "Durante um período T, a onda avança uma distância igual a um comprimento de onda λ.",
+      "Pela definição de velocidade, v = distância/tempo. Então, nesse intervalo, v = λ/T.",
+      "Como f = 1/T, substituímos 1/T por f e obtemos v = λf.",
+      "A leitura física é melhor que a decoreba: em cada segundo passam f ciclos, e cada ciclo ocupa um comprimento λ; por isso a onda avança λf metros por segundo.",
+    ],
   },
   {
     title: "Velocidade usando período",
     formula: String.raw`v=\frac{\lambda}{T}`,
-    description: "Forma útil quando o problema fornece o período em vez da frequência.",
-    terms: ["v: velocidade de propagação.", "λ: comprimento de onda.", "T: período."],
-    interpretation: ["Use diretamente quando o gráfico temporal fornece T.", "Evita colocar T no lugar de f em v = λf."],
-    derivation: ["Em um período, a onda percorre um comprimento de onda.", "Logo, v = λ/T."],
+    description:
+      "Essa forma é a mesma relação fundamental escrita para quando o problema fornece período em vez de frequência. Ela costuma ser mais segura em questões com gráfico temporal.",
+    terms: [
+      "v é a velocidade de propagação da perturbação.",
+      "λ é a distância que a onda avança em uma repetição espacial completa.",
+      "T é o tempo de uma repetição temporal completa.",
+    ],
+    interpretation: [
+      "Use quando o enunciado diz o tempo entre duas cristas passando por um ponto, ou quando o gráfico y × t permite medir T.",
+      "Essa fórmula evita o erro clássico de colocar T no lugar de f dentro de v = λf.",
+      "A unidade confirma a ideia: metro dividido por segundo dá metro por segundo.",
+    ],
+    derivation: [
+      "A onda avança exatamente um comprimento de onda λ durante um período T.",
+      "Como velocidade é deslocamento dividido por tempo, a velocidade de propagação é λ/T.",
+      "Depois, se quiser, você pode usar f = 1/T e voltar para v = λf.",
+    ],
   },
   {
     title: "Frequência angular",
     formula: String.raw`\omega=2\pi f=\frac{2\pi}{T}`,
-    description: "Mede a rapidez com que a fase evolui no tempo.",
-    terms: ["ω: frequência angular.", "f: frequência.", "T: período.", "2π rad: fase de uma oscilação completa."],
-    interpretation: ["f mede ciclos por segundo.", "ω mede radianos por segundo.", "Elas diferem por um fator 2π."],
-    derivation: ["Uma oscilação completa corresponde a 2π rad.", "Se ocorrem f oscilações por segundo, a fase percorre 2πf rad/s.", "Assim, ω = 2πf = 2π/T."],
+    description:
+      "A frequência angular mede a rapidez com que a fase evolui no tempo. Ela aparece quando a oscilação é descrita por seno ou cosseno, porque uma volta completa corresponde a 2π radianos.",
+    terms: [
+      "ω é a frequência angular, medida em rad/s.",
+      "f é a frequência comum, medida em ciclos por segundo.",
+      "T é o período, o tempo de uma oscilação completa.",
+      "2π rad corresponde a uma volta completa no ciclo senoidal.",
+    ],
+    interpretation: [
+      "Use quando a questão trabalhar com fase, equações senoidais, MHS ou equação da onda.",
+      "Não confunda f com ω. A frequência f conta ciclos por segundo; ω conta radianos de fase por segundo.",
+      "Se uma onda realiza muitas oscilações por segundo, sua fase também gira rapidamente; por isso ω cresce com f.",
+    ],
+    derivation: [
+      "Cada oscilação completa equivale a uma variação de fase de 2π radianos.",
+      "Se ocorrem f oscilações por segundo, a fase percorre 2πf radianos por segundo.",
+      "Daí vem ω = 2πf. Como f = 1/T, também vem ω = 2π/T.",
+    ],
   },
   {
     title: "Número de onda",
     formula: String.raw`k=\frac{2\pi}{\lambda}`,
-    description: "Mede a rapidez com que a fase varia no espaço.",
-    terms: ["k: número de onda.", "λ: comprimento de onda.", "2π rad: repetição espacial completa."],
-    interpretation: ["ω mede variação de fase no tempo.", "k mede variação de fase no espaço.", "Prepara a equação da onda, onde aparecem kx e ωt."],
-    derivation: ["Ao longo de uma distância λ, a onda completa uma repetição espacial.", "Uma repetição completa corresponde a 2π rad.", "Logo, k = 2π/λ."],
+    description:
+      "O número de onda mede a rapidez com que a fase varia no espaço. Ele faz para a posição o que a frequência angular faz para o tempo.",
+    terms: [
+      "k é o número de onda, medido em rad/m ou m^{-1}.",
+      "λ é o comprimento de onda, a distância de uma repetição espacial completa.",
+      "2π rad é a variação de fase correspondente a uma repetição completa.",
+    ],
+    interpretation: [
+      "Use quando a questão envolver fase espacial, equação da onda ou expressões como kx − ωt.",
+      "Um λ pequeno significa que a onda se repete rapidamente no espaço; por isso k fica grande.",
+      "Um λ grande significa repetição espacial mais lenta; por isso k fica pequeno.",
+    ],
+    derivation: [
+      "Ao caminhar uma distância λ ao longo da onda, você sai de uma crista e chega à crista seguinte, isto é, completa uma repetição espacial.",
+      "Uma repetição completa equivale a 2π radianos de fase.",
+      "Logo, a variação de fase por metro é 2π/λ, que chamamos de k.",
+    ],
   },
   {
     title: "Diferença de fase espacial",
     formula: String.raw`\Delta\varphi=\frac{2\pi}{\lambda}\Delta x=k\Delta x`,
-    description: "Relaciona a separação espacial entre dois pontos da onda com a diferença de fase entre eles.",
-    terms: ["Δφ: diferença de fase.", "Δx: separação espacial.", "λ: comprimento de onda.", "k: número de onda."],
-    interpretation: ["Se Δx = λ, então Δφ = 2π e os pontos estão em fase.", "Se Δx = λ/2, então Δφ = π e os pontos estão em oposição de fase."],
-    derivation: ["Uma distância λ corresponde a 2π rad.", "Por proporção, Δx corresponde a (2π/λ)Δx.", "Como k = 2π/λ, também vale Δφ = kΔx."],
+    description:
+      "Essa relação compara o estado de oscilação de dois pontos separados por uma distância Δx na mesma onda. Ela diz se esses pontos estão em fase, em oposição ou em uma defasagem intermediária.",
+    terms: [
+      "Δφ é a diferença de fase entre os pontos.",
+      "Δx é a separação espacial entre eles.",
+      "λ é o comprimento de onda.",
+      "k é o número de onda, igual a 2π/λ.",
+    ],
+    interpretation: [
+      "Use quando a questão disser que dois pontos estão separados por λ, λ/2, λ/4 ou alguma distância específica e pedir comparação de fase.",
+      "Se Δx = λ, então Δφ = 2π: os pontos estão em fase, fazendo a mesma coisa no mesmo instante.",
+      "Se Δx = λ/2, então Δφ = π: os pontos estão em oposição de fase, como crista e vale.",
+    ],
+    derivation: [
+      "Uma distância λ corresponde a uma variação de fase de 2π radianos.",
+      "Por proporção, uma distância Δx corresponde a (2π/λ)Δx.",
+      "Como k = 2π/λ, a mesma relação fica Δφ = kΔx.",
+    ],
   },
   {
     title: "Energia e amplitude",
     formula: String.raw`E\propto A^2`,
-    description: "Em muitos modelos ondulatórios lineares, a energia ou a intensidade associada à onda cresce com o quadrado da amplitude.",
-    terms: ["E: energia associada à onda.", "A: amplitude.", "∝: proporcional a."],
-    interpretation: ["Maior amplitude costuma significar maior energia transportada.", "Dobrar a amplitude pode quadruplicar a energia associada, dependendo do modelo.", "A forma exata depende do tipo de onda e da grandeza analisada."],
-    warning: "Use como ideia geral para modelos lineares. Intensidade, potência média e energia específica dependem do tipo de onda.",
+    description:
+      "Em muitos modelos ondulatórios lineares, a energia transportada ou a intensidade associada à onda cresce com o quadrado da amplitude. A frase precisa ser usada com cuidado, mas a intuição é fundamental.",
+    terms: [
+      "E representa a energia associada ao fenômeno ondulatório no modelo considerado.",
+      "A é a amplitude, o afastamento máximo em relação ao equilíbrio.",
+      "O símbolo ∝ indica proporcionalidade, não igualdade absoluta universal.",
+    ],
+    interpretation: [
+      "Use essa ideia para comparar ondas semelhantes: maior amplitude geralmente significa maior energia transportada.",
+      "Se a amplitude dobra, a energia associada pode ficar quatro vezes maior, pois (2A)^2 = 4A^2.",
+      "A forma exata depende do tipo de onda: corda, som, luz, intensidade, potência média e energia específica não são sempre descritas pela mesma expressão completa.",
+    ],
+    derivation: [
+      "A origem intuitiva vem do fato de que muitos sistemas oscilatórios têm energia associada ao quadrado do deslocamento máximo.",
+      "No MHS, por exemplo, a energia elástica máxima é proporcional a A². Muitas ondas podem ser vistas como oscilações se propagando pelo meio.",
+      "Por isso, em modelos lineares, a dependência quadrática da amplitude aparece com frequência.",
+    ],
+    warning:
+      "Não use essa relação como fórmula universal para qualquer situação. Ela é uma ideia geral poderosa, mas a expressão exata depende do fenômeno.",
   },
 ];
 
@@ -634,45 +730,38 @@ function FormulaCard({ item }: { item: FormulaSummary }) {
       <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
         <h3 className="text-lg font-black text-slate-950">{item.title}</h3>
       </div>
-      <div className="p-6">
+
+      <div className="px-6 py-6">
         <FormulaBlock formula={item.formula} />
-        <p className="text-justify text-[1.02rem] leading-8 text-slate-700">{item.description}</p>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h4 className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-slate-950">Termo a termo</h4>
-            <ul className="space-y-2">
+
+        <div className="space-y-4 text-justify text-[1.03rem] leading-8 text-slate-700">
+          <p>{item.description}</p>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="font-bold text-slate-950">Para ler a fórmula corretamente:</p>
+            <ul className="mt-3 space-y-2">
               {item.terms.map((term) => (
-                <li key={term} className="flex gap-2 text-sm leading-6 text-slate-700">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+                <li key={term} className="flex gap-3 text-[0.98rem] leading-7 text-slate-700">
+                  <span className="mt-3 h-2 w-2 shrink-0 rounded-full bg-blue-700" />
                   <span>{term}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h4 className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-slate-950">Interpretação</h4>
-            <ul className="space-y-2">
-              {item.interpretation.map((line) => (
-                <li key={line} className="flex gap-2 text-sm leading-6 text-slate-700">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600" />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+
+          {item.interpretation.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+
+          {item.derivation?.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
         </div>
-        {item.derivation ? (
-          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-5">
-            <h4 className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-blue-950">Demonstração e leitura de prova</h4>
-            <div className="space-y-3">
-              {item.derivation.map((line) => (
-                <p key={line} className="text-sm leading-7 text-slate-700">{line}</p>
-              ))}
-            </div>
-          </div>
-        ) : null}
+
         {item.warning ? (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-7 text-amber-900">{item.warning}</div>
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-[1rem] font-bold leading-8 text-amber-950">
+            {item.warning}
+          </div>
         ) : null}
       </div>
     </article>
@@ -686,8 +775,8 @@ function WaveDiagram({ diagram }: { diagram: NonNullable<TheorySection["diagram"
         <h3 className="text-lg font-black text-white">Diagrama visual: {diagram.title}</h3>
         <p className="mt-1 text-sm leading-6 text-slate-300">{diagram.caption}</p>
       </div>
-      <div className="overflow-x-auto p-5 md:p-7">
-        <div className="min-w-[720px] rounded-2xl bg-white p-5">
+      <div className="p-4 sm:p-6">
+        <div className="mx-auto w-full max-w-5xl rounded-2xl bg-white p-3 sm:p-5">
           {diagram.kind === "pulse" && <PulseDiagram />}
           {diagram.kind === "transverseLongitudinal" && <TransverseLongitudinalDiagram />}
           {diagram.kind === "classification" && <ClassificationDiagram />}
@@ -703,259 +792,222 @@ function WaveDiagram({ diagram }: { diagram: NonNullable<TheorySection["diagram"
 
 function PulseDiagram() {
   return (
-    <svg viewBox="0 0 820 300" className="h-auto w-full">
-      <defs><marker id="pulseArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#2563eb" /></marker></defs>
-      <line x1="70" y1="185" x2="750" y2="185" stroke="#cbd5e1" strokeWidth="4" />
-      <path d="M80 185 C170 185, 190 185, 230 120 C260 72, 310 72, 340 120 C380 185, 410 185, 740 185" fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
-      <line x1="430" y1="95" x2="610" y2="95" stroke="#2563eb" strokeWidth="6" markerEnd="url(#pulseArrow)" />
-      <text x="445" y="75" className="fill-blue-700 text-[18px] font-black">propagação da perturbação</text>
-      <line x1="285" y1="185" x2="285" y2="120" stroke="#dc2626" strokeWidth="5" />
-      <text x="300" y="158" className="fill-red-700 text-[16px] font-black">ponto do meio oscila</text>
-      <text x="110" y="250" className="fill-slate-700 text-[16px] font-black">a onda avança; a matéria oscila localmente</text>
+    <svg viewBox="0 0 900 360" className="block h-auto w-full" role="img" aria-label="Partícula do meio oscilando enquanto a onda se propaga">
+      <defs>
+        <marker id="pulseArrow2" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+        </marker>
+      </defs>
+
+      <rect x="18" y="18" width="864" height="324" rx="28" fill="#f8fafc" />
+      <line x1="80" y1="220" x2="820" y2="220" stroke="#cbd5e1" strokeWidth="4" />
+
+      <g opacity="0.28">
+        <path d="M80 220 C170 220, 200 220, 250 145 C290 85, 365 85, 405 145 C455 220, 500 220, 820 220" fill="none" stroke="#2563eb" strokeWidth="8" strokeLinecap="round">
+          <animateTransform attributeName="transform" type="translate" values="-55 0; 55 0; -55 0" dur="4s" repeatCount="indefinite" />
+        </path>
+      </g>
+
+      <path d="M80 220 C170 220, 200 220, 250 145 C290 85, 365 85, 405 145 C455 220, 500 220, 820 220" fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
+
+      <line x1="565" y1="110" x2="735" y2="110" stroke="#2563eb" strokeWidth="6" markerEnd="url(#pulseArrow2)" />
+      <text x="565" y="88" className="fill-blue-700 text-[18px] font-black">onda se propaga</text>
+
+      <line x1="325" y1="250" x2="325" y2="90" stroke="#fecaca" strokeWidth="4" strokeDasharray="8 8" />
+      <circle cx="325" cy="145" r="13" fill="#dc2626">
+        <animate attributeName="cy" values="145;105;145;220;145" dur="3s" repeatCount="indefinite" />
+      </circle>
+      <text x="350" y="155" className="fill-red-700 text-[16px] font-black">partícula oscila localmente</text>
+
+      <text x="125" y="302" className="fill-slate-800 text-[17px] font-black">o padrão avança; cada ponto do meio apenas vibra em torno do equilíbrio</text>
     </svg>
   );
 }
 
 function TransverseLongitudinalDiagram() {
   return (
-    <svg viewBox="0 0 820 340" className="h-auto w-full">
+    <svg viewBox="0 0 900 360" className="block h-auto w-full" role="img" aria-label="Comparação entre onda transversal e longitudinal">
       <defs>
-        <marker id="propArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#2563eb" /></marker>
-        <marker id="vibArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#dc2626" /></marker>
+        <marker id="propArrowTL2" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+        </marker>
+        <marker id="vibArrowTL2" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#dc2626" />
+        </marker>
       </defs>
-      <text x="70" y="35" className="fill-slate-950 text-[20px] font-black">onda transversal</text>
-      <path d="M70 115 C115 55, 160 55, 205 115 C250 175, 295 175, 340 115 C385 55, 430 55, 475 115" fill="none" stroke="#0f172a" strokeWidth="6" />
-      <line x1="95" y1="215" x2="260" y2="215" stroke="#2563eb" strokeWidth="5" markerEnd="url(#propArrow)" />
-      <text x="105" y="245" className="fill-blue-700 text-[15px] font-black">propagação</text>
-      <line x1="370" y1="170" x2="370" y2="80" stroke="#dc2626" strokeWidth="5" markerEnd="url(#vibArrow)" />
-      <text x="390" y="130" className="fill-red-700 text-[15px] font-black">vibração</text>
-      <text x="500" y="35" className="fill-slate-950 text-[20px] font-black">onda longitudinal</text>
-      {Array.from({ length: 18 }, (_, i) => {
-        const dense = (i > 3 && i < 8) || (i > 11 && i < 15);
-        return <circle key={i} cx={520 + i * (dense ? 11 : 16)} cy={125} r={6} fill={dense ? "#2563eb" : "#94a3b8"} />;
+
+      <rect x="18" y="20" width="410" height="305" rx="26" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="3" />
+      <rect x="472" y="20" width="410" height="305" rx="26" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="3" />
+
+      <text x="70" y="58" className="fill-slate-950 text-[20px] font-black">onda transversal</text>
+      <path d="M65 160 C105 95, 155 95, 195 160 C235 225, 285 225, 325 160 C355 112, 390 105, 415 132" fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
+      <line x1="105" y1="265" x2="250" y2="265" stroke="#2563eb" strokeWidth="6" markerEnd="url(#propArrowTL2)" />
+      <text x="115" y="295" className="fill-blue-700 text-[15px] font-black">propagação</text>
+      <line x1="345" y1="220" x2="345" y2="120" stroke="#dc2626" strokeWidth="6" markerEnd="url(#vibArrowTL2)" />
+      <text x="360" y="174" className="fill-red-700 text-[15px] font-black">vibração</text>
+      <text x="72" y="90" className="fill-slate-600 text-[13px] font-bold">vibração perpendicular à propagação</text>
+
+      <text x="525" y="58" className="fill-slate-950 text-[20px] font-black">onda longitudinal</text>
+      <text x="530" y="92" className="fill-slate-600 text-[13px] font-bold">compressões e rarefações</text>
+      {Array.from({ length: 24 }, (_, i) => {
+        const inCompression = (i >= 5 && i <= 10) || (i >= 17 && i <= 21);
+        const gap = inCompression ? 10 : 17;
+        const cx = 525 + i * 13 + (i > 10 ? 22 : 0);
+        return <circle key={i} cx={cx} cy="165" r="7" fill={inCompression ? "#2563eb" : "#94a3b8"} />;
       })}
-      <line x1="520" y1="215" x2="700" y2="215" stroke="#2563eb" strokeWidth="5" markerEnd="url(#propArrow)" />
-      <text x="545" y="245" className="fill-blue-700 text-[15px] font-black">propagação</text>
-      <line x1="610" y1="165" x2="690" y2="165" stroke="#dc2626" strokeWidth="5" markerEnd="url(#vibArrow)" />
-      <text x="595" y="192" className="fill-red-700 text-[15px] font-black">vibração paralela</text>
-      <text x="540" y="88" className="fill-slate-700 text-[14px] font-black">compressões e rarefações</text>
+      <line x1="540" y1="265" x2="690" y2="265" stroke="#2563eb" strokeWidth="6" markerEnd="url(#propArrowTL2)" />
+      <text x="555" y="295" className="fill-blue-700 text-[15px] font-black">propagação</text>
+      <line x1="620" y1="215" x2="745" y2="215" stroke="#dc2626" strokeWidth="6" markerEnd="url(#vibArrowTL2)" />
+      <text x="632" y="245" className="fill-red-700 text-[15px] font-black">vibração paralela</text>
     </svg>
   );
 }
 
 function ClassificationDiagram() {
-  const boxes = [["Natureza", "mecânica", "eletromagnética"], ["Vibração", "transversal", "longitudinal"], ["Dimensão", "1D", "2D", "3D"]];
+  const boxes = [
+    ["Natureza", "mecânica", "eletromagnética"],
+    ["Vibração", "transversal", "longitudinal"],
+    ["Dimensão", "1D", "2D", "3D"],
+  ];
   return (
-    <svg viewBox="0 0 820 300" className="h-auto w-full">
+    <svg viewBox="0 0 900 320" className="block h-auto w-full" role="img" aria-label="Classificação das ondas">
+      <rect x="20" y="20" width="860" height="280" rx="28" fill="#f8fafc" />
       {boxes.map((box, i) => (
-        <g key={box[0]} transform={`translate(${75 + i * 245},55)`}>
-          <rect width="200" height="160" rx="22" fill="#f8fafc" stroke="#0f172a" strokeWidth="4" />
-          <text x="24" y="40" className="fill-slate-950 text-[20px] font-black">{box[0]}</text>
+        <g key={box[0]} transform={`translate(${70 + i * 275},62)`}>
+          <rect width="230" height="165" rx="22" fill="#ffffff" stroke="#cbd5e1" strokeWidth="3" />
+          <text x="24" y="42" className="fill-slate-950 text-[19px] font-black">{box[0]}</text>
           {box.slice(1).map((item, j) => (
             <g key={item}>
-              <circle cx="28" cy={78 + j * 34} r="6" fill="#2563eb" />
-              <text x="45" y={84 + j * 34} className="fill-slate-700 text-[16px] font-bold">{item}</text>
+              <circle cx="30" cy={82 + j * 33} r="6" fill="#2563eb" />
+              <text x="48" y={88 + j * 33} className="fill-slate-700 text-[15px] font-bold">{item}</text>
             </g>
           ))}
         </g>
       ))}
-      <text x="180" y="260" className="fill-slate-700 text-[16px] font-black">classifique por definição, não por aparência</text>
+      <text x="250" y="274" className="fill-slate-700 text-[16px] font-black">classifique pela definição, não pela aparência do desenho</text>
     </svg>
   );
 }
 
 function SpatialTemporalDiagram() {
-  const wavePath = (x0: number, y0: number, color: string) => {
-    const points = Array.from({ length: 150 }, (_, i) => {
-      const x = x0 + i * 2.05;
-      const y = y0 - Math.sin(i / 12) * 34;
-      return `${i === 0 ? "M" : "L"}${x} ${y}`;
+  const sine = (x0: number, y0: number, width: number, amp: number, color: string) => {
+    const points = Array.from({ length: 130 }, (_, i) => {
+      const x = x0 + (i / 129) * width;
+      const y = y0 - Math.sin((i / 129) * Math.PI * 4) * amp;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
     }).join(" ");
-    return <path d={points} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" />;
+    return <path d={points} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" />;
   };
 
   return (
-    <svg viewBox="0 0 820 390" className="h-auto w-full">
+    <svg viewBox="0 0 900 410" className="block h-auto w-full" role="img" aria-label="Comparação entre gráfico espacial e gráfico temporal">
       <defs>
-        <marker id="graphArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-          <path d="M0,0 L0,6 L9,3 z" fill="#0f172a" />
+        <marker id="graphArrow2" markerWidth="11" markerHeight="11" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L8,3 z" fill="#0f172a" />
         </marker>
       </defs>
 
-      <text x="78" y="35" className="fill-slate-950 text-[20px] font-black">gráfico espacial: y × x</text>
-      <line x1="75" y1="155" x2="390" y2="155" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
-      <line x1="75" y1="235" x2="75" y2="70" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
-      <text x="380" y="180" className="fill-slate-700 text-[15px] font-black">x</text>
-      <text x="54" y="82" className="fill-slate-700 text-[15px] font-black">y</text>
-      {wavePath(80, 155, "#2563eb")}
-      <line x1="118" y1="250" x2="270" y2="250" stroke="#dc2626" strokeWidth="5" />
-      <text x="177" y="276" className="fill-red-700 text-[17px] font-black">λ</text>
-      <line x1="118" y1="155" x2="118" y2="121" stroke="#16a34a" strokeWidth="5" />
-      <text x="130" y="142" className="fill-emerald-700 text-[17px] font-black">A</text>
-      <rect x="84" y="302" width="278" height="52" rx="16" fill="#eff6ff" stroke="#bfdbfe" />
-      <text x="103" y="326" className="fill-blue-900 text-[14px] font-black">eixo horizontal em metros</text>
-      <text x="103" y="346" className="fill-blue-900 text-[14px] font-bold">mede comprimento de onda λ</text>
+      <rect x="18" y="22" width="410" height="350" rx="26" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="3" />
+      <rect x="472" y="22" width="410" height="350" rx="26" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="3" />
 
-      <text x="498" y="35" className="fill-slate-950 text-[20px] font-black">gráfico temporal: y × t</text>
-      <line x1="490" y1="155" x2="805" y2="155" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
-      <line x1="490" y1="235" x2="490" y2="70" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow)" />
-      <text x="794" y="180" className="fill-slate-700 text-[15px] font-black">t</text>
-      <text x="469" y="82" className="fill-slate-700 text-[15px] font-black">y</text>
-      {wavePath(495, 155, "#16a34a")}
-      <line x1="533" y1="250" x2="685" y2="250" stroke="#dc2626" strokeWidth="5" />
-      <text x="594" y="276" className="fill-red-700 text-[17px] font-black">T</text>
-      <line x1="533" y1="155" x2="533" y2="121" stroke="#16a34a" strokeWidth="5" />
-      <text x="545" y="142" className="fill-emerald-700 text-[17px] font-black">A</text>
-      <rect x="505" y="302" width="278" height="52" rx="16" fill="#ecfdf5" stroke="#bbf7d0" />
-      <text x="524" y="326" className="fill-emerald-900 text-[14px] font-black">eixo horizontal em segundos</text>
-      <text x="524" y="346" className="fill-emerald-900 text-[14px] font-bold">mede período T</text>
+      <text x="70" y="60" className="fill-slate-950 text-[19px] font-black">gráfico espacial: y × x</text>
+      <text x="70" y="86" className="fill-slate-600 text-[13px] font-bold">fotografia da onda em um instante</text>
+      <line x1="70" y1="205" x2="380" y2="205" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow2)" />
+      <line x1="70" y1="305" x2="70" y2="105" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow2)" />
+      <text x="372" y="229" className="fill-slate-700 text-[14px] font-black">x (m)</text>
+      <text x="46" y="114" className="fill-slate-700 text-[14px] font-black">y</text>
+      {sine(75, 205, 285, 55, "#2563eb")}
+      <line x1="111" y1="292" x2="253" y2="292" stroke="#dc2626" strokeWidth="5" />
+      <text x="174" y="322" className="fill-red-700 text-[16px] font-black">λ</text>
+      <line x1="111" y1="205" x2="111" y2="151" stroke="#16a34a" strokeWidth="5" />
+      <text x="122" y="176" className="fill-emerald-700 text-[15px] font-black">A</text>
+      <text x="96" y="350" className="fill-blue-700 text-[14px] font-black">mede comprimento de onda</text>
+
+      <text x="524" y="60" className="fill-slate-950 text-[19px] font-black">gráfico temporal: y × t</text>
+      <text x="524" y="86" className="fill-slate-600 text-[13px] font-bold">movimento de um ponto do meio</text>
+      <line x1="524" y1="205" x2="834" y2="205" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow2)" />
+      <line x1="524" y1="305" x2="524" y2="105" stroke="#0f172a" strokeWidth="3" markerEnd="url(#graphArrow2)" />
+      <text x="826" y="229" className="fill-slate-700 text-[14px] font-black">t (s)</text>
+      <text x="500" y="114" className="fill-slate-700 text-[14px] font-black">y</text>
+      {sine(529, 205, 285, 55, "#16a34a")}
+      <line x1="565" y1="292" x2="707" y2="292" stroke="#dc2626" strokeWidth="5" />
+      <text x="628" y="322" className="fill-red-700 text-[16px] font-black">T</text>
+      <line x1="565" y1="205" x2="565" y2="151" stroke="#16a34a" strokeWidth="5" />
+      <text x="576" y="176" className="fill-emerald-700 text-[15px] font-black">A</text>
+      <text x="554" y="350" className="fill-emerald-700 text-[14px] font-black">mede período</text>
     </svg>
   );
 }
 
 function MediumChangeDiagram() {
   return (
-    <svg viewBox="0 0 820 330" className="h-auto w-full">
-      <defs><marker id="mediumArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#0f172a" /></marker></defs>
-      <rect x="60" y="50" width="330" height="210" rx="22" fill="#eff6ff" stroke="#2563eb" strokeWidth="4" />
-      <rect x="430" y="50" width="330" height="210" rx="22" fill="#ecfdf5" stroke="#16a34a" strokeWidth="4" />
-      <text x="175" y="88" className="fill-blue-700 text-[20px] font-black">meio 1</text>
-      <text x="545" y="88" className="fill-emerald-700 text-[20px] font-black">meio 2</text>
-      <path d="M85 160 C125 110, 165 110, 205 160 C245 210, 285 210, 325 160" fill="none" stroke="#2563eb" strokeWidth="6" />
-      <path d="M455 160 C485 125, 515 125, 545 160 C575 195, 605 195, 635 160 C665 125, 695 125, 725 160" fill="none" stroke="#16a34a" strokeWidth="6" />
-      <line x1="392" y1="160" x2="428" y2="160" stroke="#0f172a" strokeWidth="5" markerEnd="url(#mediumArrow)" />
-      <text x="120" y="245" className="fill-slate-700 text-[15px] font-black">v₁ maior → λ₁ maior</text>
-      <text x="488" y="245" className="fill-slate-700 text-[15px] font-black">v₂ menor → λ₂ menor</text>
-      <text x="285" y="300" className="fill-red-700 text-[17px] font-black">frequência permanece determinada pela fonte</text>
+    <svg viewBox="0 0 900 360" className="block h-auto w-full" role="img" aria-label="Mudança de meio em ondas">
+      <defs>
+        <marker id="mediumArrow2" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#0f172a" />
+        </marker>
+      </defs>
+      <rect x="34" y="50" width="380" height="230" rx="25" fill="#eff6ff" stroke="#2563eb" strokeWidth="4" />
+      <rect x="486" y="50" width="380" height="230" rx="25" fill="#ecfdf5" stroke="#16a34a" strokeWidth="4" />
+      <text x="178" y="88" className="fill-blue-700 text-[20px] font-black">meio 1</text>
+      <text x="630" y="88" className="fill-emerald-700 text-[20px] font-black">meio 2</text>
+      <path d="M75 175 C125 120, 175 120, 225 175 C275 230, 325 230, 375 175" fill="none" stroke="#2563eb" strokeWidth="7" strokeLinecap="round" />
+      <path d="M525 175 C555 140, 585 140, 615 175 C645 210, 675 210, 705 175 C735 140, 765 140, 795 175" fill="none" stroke="#16a34a" strokeWidth="7" strokeLinecap="round" />
+      <line x1="418" y1="175" x2="482" y2="175" stroke="#0f172a" strokeWidth="5" markerEnd="url(#mediumArrow2)" />
+      <text x="95" y="255" className="fill-slate-700 text-[15px] font-black">v₁ maior → λ₁ maior</text>
+      <text x="545" y="255" className="fill-slate-700 text-[15px] font-black">v₂ menor → λ₂ menor</text>
+      <text x="258" y="322" className="fill-red-700 text-[17px] font-black">f permanece determinada pela fonte quando a fronteira está parada</text>
     </svg>
   );
 }
 
 function PhaseDiagram() {
   return (
-    <svg viewBox="0 0 820 330" className="h-auto w-full">
-      <path d="M70 160 C115 95, 160 95, 205 160 C250 225, 295 225, 340 160 C385 95, 430 95, 475 160 C520 225, 565 225, 610 160 C655 95, 700 95, 745 160" fill="none" stroke="#0f172a" strokeWidth="6" />
-      <line x1="115" y1="255" x2="385" y2="255" stroke="#2563eb" strokeWidth="5" />
-      <text x="235" y="282" className="fill-blue-700 text-[17px] font-black">λ: mesma fase</text>
-      <line x1="115" y1="70" x2="250" y2="70" stroke="#dc2626" strokeWidth="5" />
-      <text x="155" y="55" className="fill-red-700 text-[17px] font-black">λ/2: oposição</text>
-      <circle cx="115" cy="95" r="9" fill="#2563eb" />
-      <circle cx="385" cy="95" r="9" fill="#2563eb" />
-      <circle cx="250" cy="225" r="9" fill="#dc2626" />
-      <text x="88" y="42" className="fill-slate-950 text-[20px] font-black">fase compara estados de oscilação</text>
+    <svg viewBox="0 0 900 360" className="block h-auto w-full" role="img" aria-label="Fase e oposição de fase em uma onda">
+      <rect x="18" y="20" width="864" height="315" rx="28" fill="#f8fafc" />
+      <path d="M90 180 C140 110, 190 110, 240 180 C290 250, 340 250, 390 180 C440 110, 490 110, 540 180 C590 250, 640 250, 690 180 C740 110, 790 110, 840 180" fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
+
+      <circle cx="165" cy="111" r="12" fill="#2563eb" />
+      <circle cx="465" cy="111" r="12" fill="#2563eb" />
+      <circle cx="315" cy="250" r="12" fill="#dc2626" />
+
+      <line x1="165" y1="292" x2="465" y2="292" stroke="#2563eb" strokeWidth="5" />
+      <text x="270" y="322" className="fill-blue-700 text-[16px] font-black">λ: mesma fase</text>
+
+      <line x1="165" y1="72" x2="315" y2="72" stroke="#dc2626" strokeWidth="5" />
+      <text x="203" y="58" className="fill-red-700 text-[16px] font-black">λ/2: oposição</text>
+
+      <text x="295" y="42" className="fill-slate-950 text-[18px] font-black">fase compara o estado de oscilação dos pontos</text>
     </svg>
   );
 }
 
 function WavefrontDiagram() {
   return (
-    <svg viewBox="0 0 820 330" className="h-auto w-full">
-      <defs><marker id="rayArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#dc2626" /></marker></defs>
-      {[70, 130, 190, 250].map((x) => <line key={x} x1={x} y1="60" x2={x} y2="260" stroke="#2563eb" strokeWidth="5" />)}
-      {[95, 155, 215].map((x) => <line key={x} x1={x} y1="160" x2={x + 115} y2="160" stroke="#dc2626" strokeWidth="5" markerEnd="url(#rayArrow)" />)}
-      <text x="72" y="300" className="fill-blue-700 text-[16px] font-black">frentes de onda planas</text>
-      <text x="142" y="145" className="fill-red-700 text-[16px] font-black">raios perpendiculares</text>
-      <circle cx="590" cy="165" r="20" fill="#0f172a" />
-      {[45, 80, 115].map((r) => <circle key={r} cx="590" cy="165" r={r} fill="none" stroke="#16a34a" strokeWidth="4" />)}
-      <line x1="590" y1="165" x2="720" y2="110" stroke="#dc2626" strokeWidth="5" markerEnd="url(#rayArrow)" />
-      <text x="505" y="300" className="fill-emerald-700 text-[16px] font-black">frentes circulares</text>
+    <svg viewBox="0 0 900 360" className="block h-auto w-full" role="img" aria-label="Frentes de onda e raios de onda">
+      <defs>
+        <marker id="rayArrow2" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#dc2626" />
+        </marker>
+      </defs>
+      <rect x="18" y="20" width="864" height="315" rx="28" fill="#f8fafc" />
+
+      {[80, 145, 210, 275].map((x) => (
+        <line key={x} x1={x} y1="70" x2={x} y2="260" stroke="#2563eb" strokeWidth="5" />
+      ))}
+      {[112, 178, 242].map((x) => (
+        <line key={x} x1={x} y1="165" x2={x + 110} y2="165" stroke="#dc2626" strokeWidth="5" markerEnd="url(#rayArrow2)" />
+      ))}
+      <text x="78" y="300" className="fill-blue-700 text-[15px] font-black">frentes planas</text>
+      <text x="120" y="145" className="fill-red-700 text-[15px] font-black">raios perpendiculares</text>
+
+      <circle cx="635" cy="170" r="18" fill="#0f172a" />
+      {[45, 82, 119].map((r) => (
+        <circle key={r} cx="635" cy="170" r={r} fill="none" stroke="#16a34a" strokeWidth="4" />
+      ))}
+      <line x1="635" y1="170" x2="765" y2="112" stroke="#dc2626" strokeWidth="5" markerEnd="url(#rayArrow2)" />
+      <text x="548" y="300" className="fill-emerald-700 text-[15px] font-black">frentes circulares</text>
     </svg>
-  );
-}
-
-function ParticleVsWaveAnimation() {
-  return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-      <style>{`
-        @keyframes wave-slide {
-          from { transform: translateX(0px); }
-          to { transform: translateX(150px); }
-        }
-        @keyframes particle-oscillate {
-          0%, 100% { transform: translateY(0px); }
-          25% { transform: translateY(-42px); }
-          75% { transform: translateY(42px); }
-        }
-        .wave-pattern-slide {
-          animation: wave-slide 4s linear infinite;
-          transform-box: fill-box;
-          transform-origin: center;
-        }
-        .particle-local-oscillation {
-          animation: particle-oscillate 2s ease-in-out infinite;
-          transform-box: fill-box;
-          transform-origin: center;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .wave-pattern-slide,
-          .particle-local-oscillation {
-            animation: none;
-          }
-        }
-      `}</style>
-
-      <div className="bg-blue-700 px-7 py-6 text-white md:px-9">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
-            <Activity className="h-6 w-6" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
-              Animação: partícula do meio versus onda
-            </h2>
-            <p className="mt-1 text-sm font-semibold text-blue-100">
-              A perturbação avança; um ponto do meio apenas oscila localmente.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-7 px-7 py-7 md:px-9 md:py-9 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50 p-5">
-          <svg viewBox="0 0 820 330" className="min-w-[720px]">
-            <defs>
-              <marker id="movingWaveArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
-              </marker>
-            </defs>
-            <rect x="30" y="35" width="760" height="250" rx="28" fill="#ffffff" stroke="#e2e8f0" />
-            <line x1="70" y1="170" x2="750" y2="170" stroke="#cbd5e1" strokeWidth="3" />
-            <g className="wave-pattern-slide">
-              <path
-                d="M-80 170 C-35 105, 10 105, 55 170 C100 235, 145 235, 190 170 C235 105, 280 105, 325 170 C370 235, 415 235, 460 170 C505 105, 550 105, 595 170 C640 235, 685 235, 730 170 C775 105, 820 105, 865 170"
-                fill="none"
-                stroke="#0f172a"
-                strokeWidth="7"
-                strokeLinecap="round"
-              />
-            </g>
-            <line x1="505" y1="78" x2="690" y2="78" stroke="#2563eb" strokeWidth="6" markerEnd="url(#movingWaveArrow)" />
-            <text x="525" y="58" className="fill-blue-700 text-[18px] font-black">onda se propaga</text>
-
-            <line x1="315" y1="85" x2="315" y2="255" stroke="#94a3b8" strokeWidth="3" strokeDasharray="8 8" />
-            <g className="particle-local-oscillation">
-              <circle cx="315" cy="170" r="13" fill="#dc2626" />
-            </g>
-            <text x="95" y="305" className="fill-red-700 text-[17px] font-black">partícula marcada: sobe e desce, mas não viaja junto com a onda</text>
-          </svg>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-            <h3 className="text-lg font-black text-slate-950">O que está se movendo?</h3>
-            <p className="mt-2 text-justify text-[1.02rem] leading-8 text-slate-700">
-              O desenho separa duas coisas: o padrão da onda se desloca horizontalmente, enquanto a partícula marcada oscila perto da própria posição de equilíbrio.
-            </p>
-          </div>
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
-            <h3 className="text-lg font-black text-emerald-950">Leitura física</h3>
-            <p className="mt-2 text-justify text-[1.02rem] leading-8 text-slate-700">
-              A onda transporta energia. O meio transmite a perturbação por oscilações locais. É por isso que velocidade da onda e velocidade da partícula do meio não são a mesma grandeza.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 
