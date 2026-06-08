@@ -9,6 +9,7 @@ import {
   Compass,
   Eye,
   Gauge,
+  GitBranch,
   Layers3,
   LineChart,
   MoveRight,
@@ -32,7 +33,9 @@ type DiagramKind =
   | "differential"
   | "reflection"
   | "mediumChange"
-  | "readFunction";
+  | "readFunction"
+  | "phaseShift"
+  | "generalShape";
 
 type FormulaSummary = {
   title: string;
@@ -164,7 +167,27 @@ const formulas: FormulaSummary[] = [
     ],
     warning:
       "Use E∝A² como ideia típica de modelos lineares, não como licença para sair aplicando sem verificar o contexto. A Física já é cheia de armadilhas; não precisa fabricar mais uma.",
+  },,
+  {
+    title: "Seno e cosseno como escolhas de fase",
+    formula: String.raw`A\sin(\alpha)=A\cos\left(\alpha-\frac{\pi}{2}\right)`,
+    explanation: [
+      "Seno e cosseno não representam tipos diferentes de onda. Eles representam a mesma oscilação escrita com referências de fase diferentes.",
+      "Quando uma questão usa seno, você lê A, k e ω do mesmo jeito. A diferença é que a fase inicial equivalente muda.",
+      "Essa ideia evita um erro comum: achar que trocar seno por cosseno muda velocidade, frequência ou comprimento de onda. Não muda. Muda apenas a fase escolhida como referência.",
+      "Use essa equivalência quando quiser comparar duas ondas ou reescrever uma função em uma forma mais familiar.",
+    ],
   },
+  {
+    title: "Forma geral de uma onda progressiva",
+    formula: String.raw`y(x,t)=F(x-vt)\quad\text{ou}\quad y(x,t)=G(x+vt)`,
+    explanation: [
+      "A onda senoidal é apenas um caso particular. Uma onda progressiva pode ter uma forma qualquer que se desloca sem deformar.",
+      "A expressão F(x−vt) representa uma forma que se propaga para +x. À medida que t aumenta, é preciso aumentar x para manter o mesmo argumento da função.",
+      "A expressão G(x+vt) representa uma forma que se propaga para −x. À medida que t aumenta, é preciso diminuir x para manter o mesmo argumento.",
+      "Essa leitura é muito forte para ITA/IME porque mostra que a ideia de propagação não depende de a onda ser senoide. O essencial é a forma viajar como um padrão.",
+    ],
+  }
 ];
 
 const theorySections: TheorySection[] = [
@@ -221,6 +244,30 @@ const theorySections: TheorySection[] = [
     formulas: [formulas[0]],
   },
   {
+    icon: Sparkles,
+    title: "Fase inicial, seno e cosseno",
+    accent: "bg-indigo-700",
+    paragraphs: [
+      "A fase inicial φ₀ não muda o tipo de onda. Ela apenas informa como a onda está posicionada em relação à origem escolhida para espaço e tempo.",
+      "Duas ondas podem ter a mesma amplitude, o mesmo comprimento de onda, a mesma frequência e a mesma velocidade, mas aparecerem deslocadas uma em relação à outra por causa da fase inicial.",
+      "Por isso, seno e cosseno não são ondas fisicamente diferentes. Eles são duas maneiras de escrever a mesma oscilação com referências de fase diferentes.",
+      "Em prova, isso importa muito: se a função vier em seno, você não precisa entrar em pânico como se a trigonometria tivesse mudado de país. Leia A, k, ω e φ₀ normalmente.",
+    ],
+    formulas: [formulas[8]],
+    diagram: {
+      kind: "phaseShift",
+      title: "fase inicial desloca a onda",
+      caption: "Duas ondas iguais podem estar deslocadas apenas por diferença de fase.",
+    },
+    notes: [
+      {
+        title: "O que a fase inicial não faz",
+        type: "info",
+        body: "A fase inicial não altera amplitude, frequência, período, comprimento de onda nem velocidade. Ela altera o estado da onda no ponto e no instante escolhidos como referência.",
+      },
+    ],
+  },
+  {
     icon: Sigma,
     title: "Amplitude, número de onda e frequência angular",
     accent: "bg-cyan-700",
@@ -256,6 +303,30 @@ const theorySections: TheorySection[] = [
       title: "fase constante e sentido de propagação",
       caption: "O sinal entre kx e ωt indica para onde a fase constante se desloca.",
     },
+  },
+  {
+    icon: GitBranch,
+    title: "Forma geral da onda progressiva",
+    accent: "bg-purple-700",
+    paragraphs: [
+      "A forma senoidal é extremamente importante, mas ela não é a única forma possível de uma onda progressiva.",
+      "Uma função do tipo F(x−vt) representa uma forma qualquer se deslocando para o sentido positivo de x. Pode ser um pulso, uma deformação localizada ou uma forma não senoidal.",
+      "Uma função do tipo G(x+vt) representa uma forma qualquer se deslocando para o sentido negativo de x.",
+      "Essa ideia mostra que a equação da onda é mais ampla do que seno e cosseno. A senoide é o caso mais organizado para cálculo, mas a propagação é uma ideia mais geral: o padrão se desloca mantendo sua forma.",
+    ],
+    formulas: [formulas[9]],
+    diagram: {
+      kind: "generalShape",
+      title: "forma qualquer se propagando",
+      caption: "A onda não precisa ser senoidal: qualquer forma F(x−vt) pode se deslocar para +x sem deformar.",
+    },
+    notes: [
+      {
+        title: "Ponto forte para ITA/IME",
+        type: "success",
+        body: "Quando você entende F(x−vt), para de tratar onda como senoide obrigatória. A senoide é uma ferramenta poderosa, mas a ideia de propagação é mais ampla.",
+      },
+    ],
   },
   {
     icon: Gauge,
@@ -602,6 +673,7 @@ const traps = [
   "Trocar o sentido de propagação por ler o sinal sem pensar.",
   "Não reescrever fases equivalentes antes de decidir o sentido.",
   "Achar que seno e cosseno são ondas fisicamente diferentes.",
+  "Achar que toda onda progressiva precisa ser senoidal.",
   "Ignorar a fase inicial φ₀.",
   "Achar que mudança de meio sempre muda a frequência.",
   "Esquecer que extremidade fixa inverte o pulso.",
@@ -619,6 +691,8 @@ const checklist = [
   "Sei determinar sentido de propagação por fase constante?",
   "Sei reconhecer que kx−ωt vai para +x e kx+ωt vai para −x?",
   "Sei lidar com formas equivalentes como cos(ωt−kx)?",
+  "Sei explicar por que seno e cosseno diferem apenas por fase?",
+  "Sei interpretar F(x−vt) e G(x+vt)?",
   "Sei fixar t para obter gráfico espacial?",
   "Sei fixar x para obter gráfico temporal?",
   "Sei calcular diferença de fase espacial?",
@@ -706,6 +780,8 @@ function WaveDiagram({ diagram }: { diagram: NonNullable<TheorySection["diagram"
           {diagram.kind === "reflection" && <ReflectionDiagram />}
           {diagram.kind === "mediumChange" && <MediumChangeDiagram />}
           {diagram.kind === "readFunction" && <ReadFunctionDiagram />}
+          {diagram.kind === "phaseShift" && <PhaseShiftDiagram />}
+          {diagram.kind === "generalShape" && <GeneralShapeDiagram />}
         </div>
       </div>
     </div>
@@ -778,6 +854,40 @@ function PhaseSignDiagram() {
       <line x1="755" y1="170" x2="560" y2="170" stroke="#dc2626" strokeWidth="7" markerEnd="url(#leftArrowEq)" />
       <text x="580" y="220" className="fill-slate-950 text-[18px] font-black">propaga para −x</text>
       <text x="215" y="325" className="fill-slate-700 text-[17px] font-bold">a regra nasce da fase constante, não de superstição algébrica</text>
+    </svg>
+  );
+}
+
+function PhaseShiftDiagram() {
+  return (
+    <svg viewBox="0 0 900 360" className="h-auto w-full">
+      <line x1="85" y1="180" x2="825" y2="180" stroke="#cbd5e1" strokeWidth="3" />
+      <path d="M90 180 C145 85, 205 85, 260 180 C315 275, 375 275, 430 180 C485 85, 545 85, 600 180 C655 275, 715 275, 770 180" fill="none" stroke="#2563eb" strokeWidth="6" strokeLinecap="round" />
+      <path d="M150 180 C205 85, 265 85, 320 180 C375 275, 435 275, 490 180 C545 85, 605 85, 660 180 C715 275, 775 275, 830 180" fill="none" stroke="#dc2626" strokeWidth="6" strokeLinecap="round" strokeDasharray="14 12" />
+      <text x="110" y="55" className="fill-blue-700 text-[20px] font-black">φ₀ = 0</text>
+      <text x="640" y="55" className="fill-red-700 text-[20px] font-black">φ₀ ≠ 0</text>
+      <line x1="260" y1="310" x2="320" y2="310" stroke="#0f172a" strokeWidth="5" />
+      <text x="220" y="340" className="fill-slate-950 text-[17px] font-black">mesma onda, fase deslocada</text>
+      <text x="235" y="25" className="fill-slate-950 text-[24px] font-black">fase inicial muda a posição da onda, não sua natureza</text>
+    </svg>
+  );
+}
+
+function GeneralShapeDiagram() {
+  return (
+    <svg viewBox="0 0 900 360" className="h-auto w-full">
+      <defs>
+        <marker id="generalArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+        </marker>
+      </defs>
+      <line x1="70" y1="230" x2="830" y2="230" stroke="#cbd5e1" strokeWidth="4" />
+      <path d="M90 230 C150 230, 160 230, 190 190 C220 145, 255 150, 275 210 C295 270, 330 275, 360 215 C390 155, 435 165, 455 225 C480 230, 540 230, 815 230" fill="none" stroke="#0f172a" strokeWidth="7" strokeLinecap="round" />
+      <path d="M195 230 C255 230, 265 230, 295 190 C325 145, 360 150, 380 210 C400 270, 435 275, 465 215 C495 155, 540 165, 560 225 C585 230, 645 230, 815 230" fill="none" stroke="#16a34a" strokeWidth="7" strokeLinecap="round" opacity="0.55" />
+      <line x1="565" y1="95" x2="720" y2="95" stroke="#2563eb" strokeWidth="6" markerEnd="url(#generalArrow)" />
+      <text x="580" y="75" className="fill-blue-700 text-[18px] font-black">F(x−vt): anda para +x</text>
+      <text x="120" y="55" className="fill-slate-950 text-[24px] font-black">a forma pode ser qualquer, não apenas senoide</text>
+      <text x="190" y="315" className="fill-slate-700 text-[17px] font-black">o padrão inteiro se desloca mantendo a forma</text>
     </svg>
   );
 }
@@ -1005,6 +1115,8 @@ function SummaryMapPanel() {
     ["Função de onda", "y(x,t) descreve o deslocamento de cada ponto x no instante t."],
     ["Dois sentidos de equação", "Função de onda descreve uma onda específica; equação diferencial descreve a condição geral de propagação."],
     ["Número de onda", "k=2π/λ controla a variação espacial da fase."],
+    ["Fase inicial", "φ₀ desloca a onda, mas não altera A, λ, f ou v."],
+    ["Forma geral", "F(x−vt) vai para +x; G(x+vt) vai para −x."],
     ["Frequência angular", "ω=2πf=2π/T controla a variação temporal da fase."],
     ["Velocidade", "v=ω/k=λf conecta fase, espaço e tempo."],
     ["Sentido", "kx−ωt vai para +x; kx+ωt vai para −x, pela fase constante."],
@@ -1025,6 +1137,43 @@ function SummaryMapPanel() {
           <div key={title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <h3 className="text-lg font-black text-slate-950">{title}</h3>
             <p className="mt-2 text-[1.02rem] leading-8 text-slate-700">{description}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SurvivalPanel() {
+  const rules = [
+    ["coeficiente fora", "amplitude A"],
+    ["coeficiente de x", "número de onda k"],
+    ["coeficiente de t", "frequência angular ω"],
+    ["termo constante", "fase inicial φ₀"],
+    ["kx − ωt", "propagação para +x"],
+    ["kx + ωt", "propagação para −x"],
+    ["λ = 2π/k", "repetição espacial"],
+    ["T = 2π/ω", "repetição temporal"],
+    ["f = ω/(2π)", "ciclos por segundo"],
+    ["v = ω/k", "velocidade da onda"],
+    ["mudou de meio", "f fica; v, λ e k mudam"],
+    ["extremidade fixa", "pulso reflete invertido"],
+    ["extremidade livre", "pulso reflete sem inversão"],
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="bg-slate-950 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <ShieldCheck className="h-7 w-7" />
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">Quadro de sobrevivência em prova</h2>
+        </div>
+      </div>
+      <div className="grid gap-4 px-7 py-7 md:grid-cols-2 lg:grid-cols-3 md:px-9 md:py-9">
+        {rules.map(([trigger, meaning]) => (
+          <div key={trigger} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">{trigger}</p>
+            <p className="mt-2 text-lg font-black leading-7 text-slate-950">{meaning}</p>
           </div>
         ))}
       </div>
@@ -1120,6 +1269,7 @@ export default function OndulatoriaTopicEquacao() {
         {activeTab === "resumo" ? (
           <div className="mt-10 space-y-8">
             <SummaryMapPanel />
+            <SurvivalPanel />
 
             <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
               <div className="bg-slate-950 px-7 py-6 text-white md:px-9">
