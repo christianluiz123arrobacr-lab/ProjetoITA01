@@ -172,14 +172,15 @@ const formulas: FormulaSummary[] = [
     title: "Número de onda",
     formula: String.raw`k=\frac{2\pi}{\lambda}`,
     description:
-      "O número de onda mede a rapidez com que a fase varia no espaço. Ele faz para a posição o que a frequência angular faz para o tempo.",
+      "O número de onda mede a rapidez com que a fase varia no espaço. Ele faz para a posição o que a frequência angular faz para o tempo e é a ponte direta para a equação da onda.",
     terms: [
       "k é o número de onda, medido em rad/m ou m^{-1}.",
       "λ é o comprimento de onda, a distância de uma repetição espacial completa.",
       "2π rad é a variação de fase correspondente a uma repetição completa.",
     ],
     interpretation: [
-      "Use quando a questão envolver fase espacial, equação da onda ou expressões como kx − ωt.",
+      "Use quando a questão envolver fase espacial, comparação entre pontos ou preparação para a equação da onda.",
+      "Na equação de uma onda progressiva, termos como kx e ωt aparecem juntos: k controla a repetição espacial, enquanto ω controla a repetição temporal.",
       "Um λ pequeno significa que a onda se repete rapidamente no espaço; por isso k fica grande.",
       "Um λ grande significa repetição espacial mais lenta; por isso k fica pequeno.",
     ],
@@ -187,6 +188,7 @@ const formulas: FormulaSummary[] = [
       "Ao caminhar uma distância λ ao longo da onda, você sai de uma crista e chega à crista seguinte, isto é, completa uma repetição espacial.",
       "Uma repetição completa equivale a 2π radianos de fase.",
       "Logo, a variação de fase por metro é 2π/λ, que chamamos de k.",
+      "É por isso que, na próxima página, uma onda pode aparecer escrita com algo como y(x,t) = A cos(kx − ωt + φ₀): o termo kx diz como a fase muda quando andamos no espaço.",
     ],
   },
   {
@@ -222,14 +224,16 @@ const formulas: FormulaSummary[] = [
       "O símbolo ∝ indica proporcionalidade, não igualdade absoluta universal.",
     ],
     interpretation: [
-      "Use essa ideia para comparar ondas semelhantes: maior amplitude geralmente significa maior energia transportada.",
+      "Use essa ideia para comparar ondas semelhantes dentro do mesmo modelo físico.",
       "Se a amplitude dobra, a energia associada pode ficar quatro vezes maior, pois (2A)^2 = 4A^2.",
-      "A forma exata depende do tipo de onda: corda, som, luz, intensidade, potência média e energia específica não são sempre descritas pela mesma expressão completa.",
+      "Não use como lei universal para qualquer fenômeno. A forma exata depende do tipo de onda: corda, som, luz, intensidade, potência média e energia específica não são sempre descritas pela mesma expressão completa.",
+      "Em prova, a leitura segura é: para ondas de mesma natureza e no mesmo modelo, maior amplitude indica maior energia, frequentemente com dependência quadrática.",
     ],
     derivation: [
       "A origem intuitiva vem do fato de que muitos sistemas oscilatórios têm energia associada ao quadrado do deslocamento máximo.",
       "No MHS, por exemplo, a energia elástica máxima é proporcional a A². Muitas ondas podem ser vistas como oscilações se propagando pelo meio.",
       "Por isso, em modelos lineares, a dependência quadrática da amplitude aparece com frequência.",
+      "A palavra modelos é importante: fora das hipóteses lineares, essa proporcionalidade pode deixar de ser a melhor descrição.",
     ],
     warning:
       "Não use essa relação como fórmula universal para qualquer situação. Ela é uma ideia geral poderosa, mas a expressão exata depende do fenômeno.",
@@ -446,6 +450,7 @@ const theorySections: TheorySection[] = [
       "A frequência angular mede a rapidez com que a fase evolui no tempo. Uma oscilação completa corresponde a 2π radianos.",
       "O número de onda mede a rapidez com que a fase varia no espaço. Ele é a grandeza espacial análoga à frequência angular.",
       "Essa comparação é importante: ω mede variação de fase no tempo; k mede variação de fase no espaço.",
+      "Essa é exatamente a preparação para a equação da onda. Quando estudarmos expressões do tipo y(x,t) = A cos(kx − ωt + φ₀), o termo kx carregará a informação espacial da onda, enquanto ωt carregará a informação temporal.",
       "Dois pontos estão em fase quando realizam a mesma etapa da oscilação ao mesmo tempo. Dois pontos estão em oposição de fase quando estão em etapas opostas da oscilação.",
     ],
     formulas: [formulas[3], formulas[4], formulas[5]],
@@ -498,7 +503,8 @@ const theorySections: TheorySection[] = [
     paragraphs: [
       "Ondas transportam energia. Em uma onda na corda, há energia cinética associada ao movimento dos pontos da corda e energia potencial associada à deformação. Em uma onda sonora, há energia associada às variações de pressão e ao movimento das partículas do meio. Em uma onda eletromagnética, há energia nos campos elétrico e magnético.",
       "Em muitos modelos ondulatórios lineares, a energia transportada ou a intensidade associada à onda cresce com o quadrado da amplitude.",
-      "Essa ideia precisa ser usada com cuidado. A forma exata depende do tipo de onda e da grandeza analisada. Mas, como regra qualitativa, maior amplitude costuma significar maior energia transportada.",
+      "Essa ideia precisa ser usada com cuidado. Ela não é uma lei universal escrita para qualquer onda em qualquer situação. É uma relação típica de modelos lineares, nos quais dobrar a amplitude costuma quadruplicar a energia ou a intensidade associada.",
+      "A forma exata depende do tipo de onda e da grandeza analisada. Corda, som, luz, intensidade, potência média e energia por unidade de comprimento não usam sempre a mesma expressão completa. Mas, como regra qualitativa de prova, maior amplitude costuma significar maior energia transportada.",
     ],
     formulas: [formulas[6]],
   },
@@ -636,6 +642,50 @@ const examples: ExampleItem[] = [
     test: "A questão queria testar a leitura correta dos dois tipos de gráfico. É exatamente o tipo de pegadinha limpa que prova militar gosta.",
   },
   {
+    title: "Gráfico espacial descrito com escala real",
+    level: "leitura de gráfico militar",
+    statement: "Em um gráfico y × x de uma onda transversal, o eixo horizontal está em metros. A curva possui cristas em x = 2 m e x = 8 m. A maior ordenada é +0,15 m e a menor ordenada é −0,15 m. Determine o comprimento de onda, a amplitude e a distância crista-vale.",
+    idea: "Como o gráfico é y × x, o eixo horizontal permite medir distância espacial. A distância entre cristas consecutivas fornece λ. A amplitude é medida do equilíbrio até a crista, não da crista até o vale.",
+    steps: [
+      "As cristas estão em x = 2 m e x = 8 m.",
+      "A distância entre cristas consecutivas é λ = 8 − 2 = 6 m.",
+      "A maior ordenada é +0,15 m e a menor é −0,15 m. Logo, a amplitude é A = 0,15 m.",
+      "A distância crista-vale é 2A = 0,30 m.",
+    ],
+    answer: "λ = 6 m, A = 0,15 m e distância crista-vale = 0,30 m.",
+    test: "A questão queria testar se você sabe extrair λ do eixo espacial e amplitude do eixo vertical. É o tipo de leitura simples que derruba quem trata todo gráfico como enfeite.",
+  },
+  {
+    title: "Gráfico temporal descrito com escala real",
+    level: "leitura de gráfico temporal",
+    statement: "Um gráfico y × t representa a oscilação de um ponto fixo de uma corda. O eixo horizontal está em segundos. Duas cristas consecutivas ocorrem em t = 0,10 s e t = 0,50 s. A amplitude indicada no eixo vertical é 4 cm. Determine o período, a frequência e explique se é possível obter λ apenas desse gráfico.",
+    idea: "Como o gráfico é y × t, o eixo horizontal mede tempo. A distância horizontal entre cristas consecutivas é T. O comprimento de onda é espacial, então não aparece diretamente nesse gráfico.",
+    steps: [
+      "As cristas consecutivas ocorrem em t = 0,10 s e t = 0,50 s.",
+      "O período é T = 0,50 − 0,10 = 0,40 s.",
+      "A frequência é f = 1/T = 1/0,40 = 2,5 Hz.",
+      "A amplitude é A = 4 cm = 0,04 m.",
+      "Não é possível obter λ apenas desse gráfico, pois o eixo horizontal não mostra posição.",
+    ],
+    answer: "T = 0,40 s, f = 2,5 Hz e A = 4 cm. Não é possível obter λ apenas do gráfico temporal.",
+    test: "A questão queria testar a diferença entre gráfico espacial e temporal. No y × t, você mede tempo, não distância.",
+  },
+  {
+    title: "Mudança de meio com gráfico espacial e gráfico temporal",
+    level: "estilo prova militar",
+    statement: "Uma fonte produz ondas periódicas que passam do meio 1 para o meio 2. Um gráfico y × t, feito em um ponto fixo, mostra cristas consecutivas separadas por 0,05 s. No meio 1, um gráfico y × x mostra distância entre cristas consecutivas de 0,80 m. No meio 2, outro gráfico y × x mostra distância entre cristas consecutivas de 0,50 m. Determine a frequência, a velocidade no meio 1, a velocidade no meio 2 e diga o que mudou na passagem de meio.",
+    idea: "O gráfico temporal fornece T, então achamos f. Os gráficos espaciais fornecem λ₁ e λ₂. Como a fonte é a mesma, a frequência permanece a mesma; as velocidades mudam porque os comprimentos de onda mudaram.",
+    steps: [
+      "Do gráfico temporal, T = 0,05 s.",
+      "Logo, f = 1/T = 1/0,05 = 20 Hz.",
+      "No meio 1, λ₁ = 0,80 m. Então v₁ = λ₁f = 0,80 · 20 = 16 m/s.",
+      "No meio 2, λ₂ = 0,50 m. Então v₂ = λ₂f = 0,50 · 20 = 10 m/s.",
+      "A frequência permaneceu a mesma, pois é determinada pela fonte. A velocidade diminuiu, e o comprimento de onda também diminuiu.",
+    ],
+    answer: "f = 20 Hz, v₁ = 16 m/s e v₂ = 10 m/s. Ao passar para o meio 2, a onda ficou mais lenta e o comprimento de onda diminuiu.",
+    test: "A questão mistura leitura de gráfico temporal, leitura de gráfico espacial e mudança de meio. É prova militar em seu habitat natural: pouco texto, muita chance de trocar λ por T e entregar a alma para a alternativa errada.",
+  },
+  {
     title: "Questão mista de grandezas",
     level: "revisão geral",
     statement: "Uma onda periódica em uma corda tem amplitude 0,04 m, comprimento de onda 0,60 m e frequência 5 Hz. Determine velocidade, período e interprete cada grandeza.",
@@ -665,6 +715,7 @@ const traps = [
   "Confundir número de onda k com frequência.",
   "Achar que mudança de meio sempre muda a frequência.",
   "Esquecer unidades, especialmente cm, mm, μm e nm.",
+  "Tratar E ∝ A² como lei universal, em vez de ideia típica de modelos lineares.",
 ];
 
 const checklist = [
@@ -686,6 +737,7 @@ const checklist = [
   "Sei interpretar gráfico y × x?",
   "Sei interpretar gráfico y × t?",
   "Sei usar k = 2π/λ?",
+  "Sei explicar que k prepara a equação da onda por controlar a variação espacial da fase?",
   "Sei reconhecer pontos em fase e oposição de fase?",
   "Sei converter unidades corretamente?",
 ];
@@ -1274,6 +1326,7 @@ function SummaryMapPanel() {
     ["Natureza", "Mecânicas precisam de meio; eletromagnéticas não."],
     ["Vibração", "Transversal: perpendicular. Longitudinal: paralela."],
     ["Grandezas", "A, λ, T, f, v, ω e k descrevem a onda periódica."],
+    ["Número de onda", "k = 2π/λ prepara a equação da onda, pois controla a fase no espaço."],
     ["Relação central", "v = λf conecta repetição espacial e temporal."],
     ["Mudança de meio", "Fonte define f; meio define v; λ se ajusta."],
     ["Gráficos", "y × x fornece λ; y × t fornece T."],
