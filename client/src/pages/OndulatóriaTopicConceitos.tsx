@@ -1011,6 +1011,102 @@ function WavefrontDiagram() {
   );
 }
 
+function ParticleVsWaveAnimation() {
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <style>{`
+        @keyframes wave-slide {
+          from { transform: translateX(0px); }
+          to { transform: translateX(150px); }
+        }
+        @keyframes particle-oscillate {
+          0%, 100% { transform: translateY(0px); }
+          25% { transform: translateY(-42px); }
+          75% { transform: translateY(42px); }
+        }
+        .wave-pattern-slide {
+          animation: wave-slide 4s linear infinite;
+          transform-box: fill-box;
+          transform-origin: center;
+        }
+        .particle-local-oscillation {
+          animation: particle-oscillate 2s ease-in-out infinite;
+          transform-box: fill-box;
+          transform-origin: center;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .wave-pattern-slide,
+          .particle-local-oscillation {
+            animation: none;
+          }
+        }
+      `}</style>
+
+      <div className="bg-blue-700 px-7 py-6 text-white md:px-9">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+            <Activity className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+              Animação: partícula do meio versus onda
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-blue-100">
+              A perturbação avança; um ponto do meio apenas oscila localmente.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-7 px-7 py-7 md:px-9 md:py-9 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <svg viewBox="0 0 820 330" className="min-w-[720px]">
+            <defs>
+              <marker id="movingWaveArrow" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+              </marker>
+            </defs>
+            <rect x="30" y="35" width="760" height="250" rx="28" fill="#ffffff" stroke="#e2e8f0" />
+            <line x1="70" y1="170" x2="750" y2="170" stroke="#cbd5e1" strokeWidth="3" />
+            <g className="wave-pattern-slide">
+              <path
+                d="M-80 170 C-35 105, 10 105, 55 170 C100 235, 145 235, 190 170 C235 105, 280 105, 325 170 C370 235, 415 235, 460 170 C505 105, 550 105, 595 170 C640 235, 685 235, 730 170 C775 105, 820 105, 865 170"
+                fill="none"
+                stroke="#0f172a"
+                strokeWidth="7"
+                strokeLinecap="round"
+              />
+            </g>
+            <line x1="505" y1="78" x2="690" y2="78" stroke="#2563eb" strokeWidth="6" markerEnd="url(#movingWaveArrow)" />
+            <text x="525" y="58" className="fill-blue-700 text-[18px] font-black">onda se propaga</text>
+
+            <line x1="315" y1="85" x2="315" y2="255" stroke="#94a3b8" strokeWidth="3" strokeDasharray="8 8" />
+            <g className="particle-local-oscillation">
+              <circle cx="315" cy="170" r="13" fill="#dc2626" />
+            </g>
+            <text x="95" y="305" className="fill-red-700 text-[17px] font-black">partícula marcada: sobe e desce, mas não viaja junto com a onda</text>
+          </svg>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-lg font-black text-slate-950">O que está se movendo?</h3>
+            <p className="mt-2 text-justify text-[1.02rem] leading-8 text-slate-700">
+              O desenho separa duas coisas: o padrão da onda se desloca horizontalmente, enquanto a partícula marcada oscila perto da própria posição de equilíbrio.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+            <h3 className="text-lg font-black text-emerald-950">Leitura física</h3>
+            <p className="mt-2 text-justify text-[1.02rem] leading-8 text-slate-700">
+              A onda transporta energia. O meio transmite a perturbação por oscilações locais. É por isso que velocidade da onda e velocidade da partícula do meio não são a mesma grandeza.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function WaveRelationSimulator() {
   const [lambda, setLambda] = useState(0.8);
   const [frequency, setFrequency] = useState(5);
