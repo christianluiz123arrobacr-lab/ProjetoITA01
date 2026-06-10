@@ -492,6 +492,60 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
   );
 }
 
+function CompareBar({
+  label,
+  before,
+  after,
+  unit,
+}: {
+  label: string;
+  before: number;
+  after: number;
+  unit: string;
+}) {
+  const maxValue = Math.max(Math.abs(before), Math.abs(after), 1);
+  const beforeWidth = Math.max(8, (Math.abs(before) / maxValue) * 100);
+  const afterWidth = Math.max(8, (Math.abs(after) / maxValue) * 100);
+  const difference = Math.abs(after - before);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black text-slate-950">{label}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            Compare antes e depois sem confiar só no número, porque aparentemente olhos também precisam estudar Física.
+          </p>
+        </div>
+        <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+          Δ = {formatNumber(difference)} {unit}
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <div className="mb-1 flex justify-between text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+            <span>Antes</span>
+            <span>{formatNumber(before)} {unit}</span>
+          </div>
+          <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-violet-600" style={{ width: `${beforeWidth}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 flex justify-between text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+            <span>Depois</span>
+            <span>{formatNumber(after)} {unit}</span>
+          </div>
+          <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-emerald-600" style={{ width: `${afterWidth}%` }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CollisionSimulator() {
   const [m1, setM1] = useState(2);
   const [m2, setM2] = useState(4);
@@ -520,16 +574,16 @@ function CollisionSimulator() {
   const body2X = 445 + Math.max(0, Math.min(1, (v2f + 10) / 20)) * 220;
 
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-violet-200 bg-white shadow-[0_18px_55px_rgba(124,58,237,0.12)]">
-      <div className="bg-violet-700 px-7 py-5 text-white">
+    <section className="overflow-hidden rounded-[2rem] border border-violet-200 bg-white shadow-[0_22px_70px_rgba(124,58,237,0.16)]">
+      <div className="bg-slate-950 px-7 py-5 text-white">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl border border-white/20 bg-white/15 p-2">
             <Calculator className="h-6 w-6" />
           </div>
           <div>
             <h2 className="text-xl font-black tracking-tight md:text-2xl">Simulador de colisões em uma dimensão</h2>
-            <p className="mt-1 text-sm leading-6 text-violet-100">
-              Ajuste massas, velocidades iniciais e coeficiente de restituição para ver o que acontece com momentum e energia.
+            <p className="mt-1 text-sm leading-6 text-slate-300">
+              Use logo depois da teoria de restituição: mexa em massas, velocidades e e para enxergar momentum conservado e energia cinética mudando.
             </p>
           </div>
         </div>
@@ -549,7 +603,7 @@ function CollisionSimulator() {
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 leading-7 text-amber-950">
             <p className="mb-2 font-black">Como ler o simulador</p>
             <p>
-              O momentum total deve bater antes e depois, porque estamos simulando um sistema isolado. A energia cinética só permanece igual quando e = 1. Se e fica menor, parte da energia cinética vira deformação, som, calor e energia interna. Aparentemente, nem a energia quis continuar organizada.
+              O simulador assume uma colisão unidimensional em sistema isolado. Por isso o momentum total deve permanecer igual antes e depois. O coeficiente e controla a velocidade relativa de afastamento: quando e = 1, a colisão é elástica; quando e = 0, os corpos não se afastam; entre esses valores, parte da energia cinética vira deformação, som, calor e energia interna.
             </p>
           </div>
         </div>
@@ -593,6 +647,11 @@ function CollisionSimulator() {
             <MetricCard label="Velocidades finais" value={`v1f = ${formatNumber(v1f)} | v2f = ${formatNumber(v2f)}`} detail="valores com sinal, em m/s" />
             <MetricCard label="Momentum total" value={`${formatNumber(pBefore)} → ${formatNumber(pAfter)}`} detail="kg·m/s antes e depois" />
             <MetricCard label="Energia cinética" value={`${formatNumber(kBefore)} J → ${formatNumber(kAfter)} J`} detail={`dissipada: ${formatNumber(Math.max(0, dissipated))} J`} />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <CompareBar label="Momentum total" before={pBefore} after={pAfter} unit="kg·m/s" />
+            <CompareBar label="Energia cinética" before={kBefore} after={kAfter} unit="J" />
           </div>
         </div>
       </div>
@@ -1346,22 +1405,31 @@ function Hero({ activeTab, setActiveTab }: { activeTab: Tab; setActiveTab: (tab:
 }
 
 function IntroPanel() {
+  const stats = [
+    ["18", "seções"],
+    ["22", "fórmulas"],
+    ["9", "diagramas"],
+    ["SIM", "simulador"],
+  ];
+
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 text-white shadow-[0_22px_70px_rgba(15,23,42,0.25)]">
-      <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-6 p-7 md:p-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-4 py-2 text-sm font-black text-violet-100">
-            <Zap className="h-4 w-4" />
-            Colisões, impulso e conservação
+    <section className="overflow-hidden rounded-[2.5rem] border border-slate-900 bg-slate-950 text-white shadow-[0_28px_80px_rgba(15,23,42,0.28)]">
+      <div className="grid gap-8 p-7 md:p-10 lg:grid-cols-[1.08fr_0.92fr] lg:p-12">
+        <div className="space-y-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/25 bg-white/10 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-violet-100">
+            <Sparkles className="h-4 w-4 text-yellow-300" />
+            Foco ITA · IME · Militares
           </div>
+
           <div>
-            <h2 className="text-3xl font-black tracking-tight md:text-5xl">
-              O segredo é escolher o sistema certo.
+            <h2 className="max-w-4xl text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">
+              Momentum: escolha o sistema certo antes de sair conservando tudo.
             </h2>
-            <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
-              Momentum não é só mais uma fórmula da lista. É a linguagem física para entender interações rápidas, forças internas intensas e situações em que a energia cinética pode sumir da forma macroscópica, enquanto a quantidade de movimento continua firme.
+            <p className="mt-7 max-w-3xl text-lg leading-9 text-slate-300">
+              Uma página completa sobre quantidade de movimento, impulso, gráficos força-tempo, colisões, explosões, recuo, restituição, pêndulo balístico e conservação vetorial. O objetivo é simples: fazer o aluno parar de tratar sinal como decoração e sistema isolado como fé religiosa.
             </p>
           </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               ["Impulso", "área em F × t"],
@@ -1375,18 +1443,49 @@ function IntroPanel() {
             ))}
           </div>
         </div>
-        <div className="border-t border-slate-800 bg-slate-900/70 p-6 lg:border-l lg:border-t-0">
-          <div className="rounded-3xl border border-slate-700 bg-slate-950 p-5">
-            <p className="mb-4 text-sm font-black uppercase tracking-[0.2em] text-violet-300">
-              Fórmula-mãe
-            </p>
-            <FormulaBlock formula={String.raw`\vec{p}=m\vec{v}`} />
-            <div className="space-y-3 text-sm leading-6 text-slate-300">
-              <p><strong className="text-white">m</strong> carrega a inércia do corpo.</p>
-              <p><strong className="text-white">v</strong> carrega direção, sentido e rapidez.</p>
-              <p><strong className="text-white">p</strong> junta tudo em uma grandeza vetorial.</p>
+
+        <div className="grid content-center gap-5 sm:grid-cols-2">
+          {stats.map(([value, label]) => (
+            <div key={label} className="rounded-3xl border border-white/10 bg-white/10 p-7 shadow-[0_18px_45px_rgba(0,0,0,0.16)]">
+              <p className="text-4xl font-black tracking-tight text-white md:text-5xl">{value}</p>
+              <p className="mt-3 text-sm font-black uppercase tracking-[0.22em] text-slate-300">{label}</p>
             </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SimulatorStudyBlock() {
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-violet-200 bg-violet-50 shadow-[0_18px_55px_rgba(124,58,237,0.10)]">
+      <div className="grid gap-6 p-6 md:p-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <div>
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-violet-700 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white">
+            <Calculator className="h-4 w-4" />
+            Laboratório da restituição
           </div>
+          <h2 className="text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
+            Agora mexa no simulador exatamente onde a teoria faz sentido.
+          </h2>
+          <p className="mt-4 leading-8 text-slate-700">
+            Depois de estudar conservação de momentum e coeficiente de restituição, o simulador deixa de ser brinquedo e vira experimento controlado. Mude o valor de e, observe as velocidades finais e compare momentum com energia. É aqui que a diferença entre conservar quantidade de movimento e conservar energia cinética fica visual.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[
+            ["e = 1", "colisão elástica: momentum e energia cinética se conservam"],
+            ["0 < e < 1", "colisão parcialmente inelástica: energia cinética diminui"],
+            ["e = 0", "caso limite: sem afastamento relativo depois da colisão"],
+            ["sinais", "velocidades negativas indicam sentido oposto ao eixo escolhido"],
+          ].map(([title, desc]) => (
+            <div key={title} className="rounded-2xl border border-violet-200 bg-white p-4">
+              <p className="font-black text-violet-900">{title}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{desc}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -1397,53 +1496,63 @@ function TheoryView() {
   return (
     <div className="space-y-8">
       <IntroPanel />
-      <CollisionSimulator />
       {theorySections.map((section) => {
         const Icon = section.icon;
+        const showSimulatorAfterSection = section.title === "Coeficiente de restituição e colisão com parede";
+
         return (
-          <section key={section.title} className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
-            <div className={`${section.accent} px-7 py-5 text-white`}>
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl border border-white/20 bg-white/15 p-2">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <h2 className="text-xl font-black tracking-tight md:text-2xl">{section.title}</h2>
-              </div>
-            </div>
-
-            <div className="grid gap-6 p-5 md:p-7 lg:grid-cols-[1.05fr_0.95fr]">
-              <div className="space-y-5 leading-8 text-slate-700">
-                {section.paragraphs.map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
-                ))}
-
-                {section.bullets && (
-                  <div className="rounded-3xl border border-violet-100 bg-violet-50 p-5">
-                    <p className="mb-3 font-black text-violet-950">Leitura de prova</p>
-                    <ul className="space-y-2 text-sm leading-6 text-violet-950">
-                      {section.bullets.map((bullet) => (
-                        <li key={bullet} className="flex gap-2">
-                          <span className="mt-2 h-2 w-2 flex-none rounded-full bg-violet-600" />
-                          <span>{bullet}</span>
-                        </li>
-                      ))}
-                    </ul>
+          <div key={section.title} className="space-y-8">
+            <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
+              <div className={`${section.accent} px-7 py-5 text-white`}>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl border border-white/20 bg-white/15 p-2">
+                    <Icon className="h-6 w-6" />
                   </div>
-                )}
-
-                {section.notes?.map((note) => (
-                  <NoteBox key={note.title} title={note.title} body={note.body} type={note.type} />
-                ))}
+                  <h2 className="text-xl font-black tracking-tight md:text-2xl">{section.title}</h2>
+                </div>
               </div>
 
-              <div className="space-y-5">
-                {section.diagram && <Diagram {...section.diagram} />}
-                {section.formulas?.map((formula) => (
-                  <FormulaCard key={formula.title} formula={formula} />
-                ))}
+              <div className="grid gap-6 p-5 md:p-7 lg:grid-cols-[1.05fr_0.95fr]">
+                <div className="space-y-5 leading-8 text-slate-700">
+                  {section.paragraphs.map((paragraph) => (
+                    <p key={paragraph}>{paragraph}</p>
+                  ))}
+
+                  {section.bullets && (
+                    <div className="rounded-3xl border border-violet-100 bg-violet-50 p-5">
+                      <p className="mb-3 font-black text-violet-950">Leitura de prova</p>
+                      <ul className="space-y-2 text-sm leading-6 text-violet-950">
+                        {section.bullets.map((bullet) => (
+                          <li key={bullet} className="flex gap-2">
+                            <span className="mt-2 h-2 w-2 flex-none rounded-full bg-violet-600" />
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {section.notes?.map((note) => (
+                    <NoteBox key={note.title} title={note.title} body={note.body} type={note.type} />
+                  ))}
+                </div>
+
+                <div className="space-y-5">
+                  {section.diagram && <Diagram {...section.diagram} />}
+                  {section.formulas?.map((formula) => (
+                    <FormulaCard key={formula.title} formula={formula} />
+                  ))}
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+
+            {showSimulatorAfterSection && (
+              <>
+                <SimulatorStudyBlock />
+                <CollisionSimulator />
+              </>
+            )}
+          </div>
         );
       })}
     </div>
