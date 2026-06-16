@@ -714,7 +714,7 @@ export default function VetQuestionsPage() {
               </div>
             </Card>
 
-            <section className="grid md:grid-cols-3 gap-4">
+            <section className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
               <QuestionStatCard
                 title="Ataque"
                 value={`${attackQuestions.length}`}
@@ -741,7 +741,58 @@ export default function VetQuestionsPage() {
                 className="border-emerald-200 bg-white"
                 iconClassName="bg-emerald-100 text-emerald-700"
               />
+
+              <QuestionStatCard
+                title="Revisão de erro"
+                value={`${engine?.reviewContents.length ?? 0}`}
+                subtitle="conteúdo(s) com erro recente ou recorrente"
+                icon={History}
+                className="border-violet-200 bg-white"
+                iconClassName="bg-violet-100 text-violet-700"
+              />
             </section>
+
+            {engine?.reviewContents.length ? (
+              <Card className="p-6 bg-violet-50 border-violet-200 rounded-3xl">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center">
+                      <History className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">
+                        Revisão de erros antes de questão nova
+                      </h2>
+                      <p className="text-sm text-slate-600">
+                        O VET separou conteúdos com erro recente, erro repetido ou questões nunca acertadas. Aí está a parte menos divertida e mais útil do estudo, naturalmente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {engine.reviewContents.slice(0, 4).map((content) => (
+                    <div
+                      key={`${content.subject}-${content.conteudo}-review`}
+                      className="rounded-2xl border border-violet-200 bg-white p-4"
+                    >
+                      <p className="text-sm font-black text-slate-900 mb-1">
+                        {prettifyVetText(content.conteudo)}
+                      </p>
+                      <p className="text-xs text-slate-500 mb-3">
+                        {content.personal.recentWrong30Days} erro(s) em 30 dias • {content.personal.neverCorrectQuestions} nunca acertada(s)
+                      </p>
+                      <Link href={buildBankUrl(profile, content.block, [content])}>
+                        <Button size="sm" className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white w-full">
+                          Revisar agora
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
 
             <Card className="p-6 bg-white border-slate-200 rounded-3xl">
               <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-6">
