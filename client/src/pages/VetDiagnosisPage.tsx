@@ -1,91 +1,3 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
-import {
-  ArrowLeft,
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  BarChart3,
-  BrainCircuit,
-  CheckCircle2,
-  Clock3,
-  Flame,
-  Gauge,
-  History,
-  Layers3,
-  LineChart,
-  ShieldCheck,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  Users,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { supabase } from "@/lib/supabase";
-import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { getQuestions } from "@/services/questions.service";
-import {
-  buildVetEngineResult,
-  formatVetPercent,
-  formatVetTime,
-  prettifyVetText,
-  type VetAttempt,
-  type VetCollectiveContentStat,
-  type VetEngineResult,
-  type VetProfile,
-  type VetStrategicContent,
-  type VetTrainingBlock,
-  type VetWeight,
-} from "@/lib/vetEngine";
-
-type VetProfileRow = VetProfile & {
-  id: string;
-  user_id: string;
-};
-
-function getRiskMeta(engine: VetEngineResult | null) {
-  if (!engine || engine.totalAttempts < 5) {
-    return {
-      label: "dados insuficientes",
-      title: "Dados insuficientes",
-      description:
-        "Responda mais questões para o VET medir seu risco com mais precisão.",
-      className: "border-slate-200 bg-slate-50 text-slate-700",
-      iconClassName: "bg-slate-100 text-slate-700",
-      icon: Activity,
-    };
-  }
-
-  const topScore = engine.topPriority?.priorityScore ?? 0;
-
-  if (topScore >= 65) {
-    return {
-      label: "alto",
-      title: "Risco alto",
-      description:
-        "Existe conteúdo importante, recorrente ou recente em que seu desempenho está perigoso.",
-      className: "border-red-200 bg-red-50 text-red-700",
-      iconClassName: "bg-red-100 text-red-700",
-      icon: AlertTriangle,
-    };
-  }
-
-  if (topScore >= 40) {
-    return {
-      label: "moderado",
-      title: "Risco moderado",
-      description:
-        "Você tem pontos frágeis relevantes, mas ainda dá para estabilizar com treino direcionado.",
-      className: "border-amber-200 bg-amber-50 text-amber-700",
-      iconClassName: "bg-amber-100 text-amber-700",
-      icon: Gauge,
-    };
-  }
-
-  return {
-    label: "controlado",
-    title: "Risco controlado",
     description:
       "O cenário geral está aceitável, mas ainda exige manutenção e revisão constante.",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -267,7 +179,7 @@ function StrategicContentCard({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-5 gap-3 mb-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-7 gap-3 mb-4">
         <div className="rounded-2xl bg-white border border-slate-200 p-3">
           <p className="text-xs text-slate-500 mb-1">Peso</p>
           <p className="font-bold text-slate-900">{content.weight}</p>
@@ -304,6 +216,20 @@ function StrategicContentCard({
           <p className="text-xs text-slate-500 mb-1">Tendência</p>
           <p className="font-bold text-slate-900">
             {getTrendLabel(content.historical?.trendScore)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white border border-slate-200 p-3">
+          <p className="text-xs text-slate-500 mb-1">Erro recente</p>
+          <p className="font-bold text-slate-900">
+            {content.personal.recentWrong30Days}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white border border-slate-200 p-3">
+          <p className="text-xs text-slate-500 mb-1">Nunca acertei</p>
+          <p className="font-bold text-slate-900">
+            {content.personal.neverCorrectQuestions}
           </p>
         </div>
       </div>
@@ -668,6 +594,24 @@ export default function VetDiagnosisPage() {
                 icon={RiskIcon}
                 className={`border ${riskMeta.className}`}
                 iconClassName={riskMeta.iconClassName}
+              />
+
+              <StatCard
+                title="Erros recentes"
+                value={`${engine?.recentWrongAttempts ?? 0}`}
+                subtitle="tentativa(s) erradas nos últimos 30 dias"
+                icon={AlertTriangle}
+                className="border-orange-200 bg-white text-slate-900"
+                iconClassName="bg-orange-100 text-orange-600"
+              />
+
+              <StatCard
+                title="Revisão urgente"
+                value={`${engine?.neverCorrectQuestionCount ?? 0}`}
+                subtitle="questão(ões) que você ainda não acertou nenhuma vez"
+                icon={History}
+                className="border-violet-200 bg-white text-slate-900"
+                iconClassName="bg-violet-100 text-violet-600"
               />
             </section>
 
