@@ -1,3 +1,91 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import {
+  ArrowLeft,
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  BrainCircuit,
+  CheckCircle2,
+  Clock3,
+  Flame,
+  Gauge,
+  History,
+  Layers3,
+  LineChart,
+  ShieldCheck,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { supabase } from "@/lib/supabase";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { getQuestions } from "@/services/questions.service";
+import {
+  buildVetEngineResult,
+  formatVetPercent,
+  formatVetTime,
+  prettifyVetText,
+  type VetAttempt,
+  type VetCollectiveContentStat,
+  type VetEngineResult,
+  type VetProfile,
+  type VetStrategicContent,
+  type VetTrainingBlock,
+  type VetWeight,
+} from "@/lib/vetEngine";
+
+type VetProfileRow = VetProfile & {
+  id: string;
+  user_id: string;
+};
+
+function getRiskMeta(engine: VetEngineResult | null) {
+  if (!engine || engine.totalAttempts < 5) {
+    return {
+      label: "dados insuficientes",
+      title: "Dados insuficientes",
+      description:
+        "Responda mais questões para o VET medir seu risco com mais precisão.",
+      className: "border-slate-200 bg-slate-50 text-slate-700",
+      iconClassName: "bg-slate-100 text-slate-700",
+      icon: Activity,
+    };
+  }
+
+  const topScore = engine.topPriority?.priorityScore ?? 0;
+
+  if (topScore >= 65) {
+    return {
+      label: "alto",
+      title: "Risco alto",
+      description:
+        "Existe conteúdo importante, recorrente ou recente em que seu desempenho está perigoso.",
+      className: "border-red-200 bg-red-50 text-red-700",
+      iconClassName: "bg-red-100 text-red-700",
+      icon: AlertTriangle,
+    };
+  }
+
+  if (topScore >= 40) {
+    return {
+      label: "moderado",
+      title: "Risco moderado",
+      description:
+        "Você tem pontos frágeis relevantes, mas ainda dá para estabilizar com treino direcionado.",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+      iconClassName: "bg-amber-100 text-amber-700",
+      icon: Gauge,
+    };
+  }
+
+  return {
+    label: "controlado",
+    title: "Risco controlado",
     description:
       "O cenário geral está aceitável, mas ainda exige manutenção e revisão constante.",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
