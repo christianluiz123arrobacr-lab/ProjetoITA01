@@ -79,6 +79,16 @@ export type VetPersonalMetric = {
   accuracy: number;
   avgTimeSeconds: number;
   hasData: boolean;
+  recentTotal: number;
+  recentCorrect: number;
+  recentWrong: number;
+  recentAccuracy: number;
+  recentWrong7Days: number;
+  recentWrong30Days: number;
+  repeatedWrongQuestions: number;
+  neverCorrectQuestions: number;
+  lastAttemptAt?: string | null;
+  lastWrongAt?: string | null;
 };
 
 export type VetStrategicContent = {
@@ -99,6 +109,8 @@ export type VetStrategicContent = {
   urgencyTimeScore: number;
   collectiveGapScore: number;
   historicalImportanceScore: number;
+  recentErrorScore: number;
+  recurringErrorScore: number;
   noAttemptPenalty: number;
 
   explanation: string[];
@@ -124,6 +136,11 @@ export type VetEngineResult = {
   topPriority: VetStrategicContent | null;
   strongestSubject: VetSubjectStat | null;
   weakestSubject: VetSubjectStat | null;
+
+  recentWrongAttempts: number;
+  repeatedWrongQuestionCount: number;
+  neverCorrectQuestionCount: number;
+  reviewContents: VetStrategicContent[];
 };
 
 export function normalizeVetText(value?: string | number | null) {
@@ -165,6 +182,21 @@ export function formatVetTime(seconds: number) {
   if (minutes <= 0) return `${rest}s`;
 
   return `${minutes}m ${rest}s`;
+}
+
+const VET_DAY_MS = 1000 * 60 * 60 * 24;
+
+function getDaysSince(dateValue?: string | null) {
+  if (!dateValue) return Number.POSITIVE_INFINITY;
+
+  const time = new Date(dateValue).getTime();
+  if (Number.isNaN(time)) return Number.POSITIVE_INFINITY;
+
+  return (Date.now() - time) / VET_DAY_MS;
+}
+
+function isAttemptWithin(attempt: VetAttempt, days: number) {
+  return getDaysSince(attempt.answered_at) <= days;
 }
 
 export function getQuestionTopicsForVet(question: Question) {
@@ -258,6 +290,21 @@ function getWrongVolumeScore(wrong: number) {
   return 0;
 }
 
+function getRecentErrorScore(recentWrong7Days: number, recentWrong30Days: number) {
+  if (recentWrong7Days >= 4) return 10;
+  if (recentWrong7Days >= 2) return 8;
+  if (recentWrong7Days >= 1) return 6;
+  if (recentWrong30Days >= 5) return 6;
+  if (recentWrong30Days >= 3) return 4;
+  if (recentWrong30Days >= 1) return 2;
+  return 0;
+}
+
+function getRecurringErrorScore(repeatedWrongQuestions: number, neverCorrectQuestions: number) {
+  const score = repeatedWrongQuestions * 3 + neverCorrectQuestions * 2;
+  return Math.min(score, 10);
+}
+
 function getNoAttemptPenalty(total: number, weight: number, historicalScore: number) {
   if (total > 0) return 0;
 
@@ -336,6 +383,22 @@ function buildPersonalMetrics(
       wrong: number;
       totalTime: number;
       timedCount: number;
+      recentTotal: number;
+      recentCorrect: number;
+      recentWrong: number;
+      recentWrong7Days: number;
+      recentWrong30Days: number;
+      lastAttemptAt?: string | null;
+      lastWrongAt?: string | null;
+      questionMap: Map<
+        string,
+        {
+          total: number;
+          correct: number;
+          wrong: number;
+          lastAttemptAt?: string | null;
+        }
+      >;
     }
   >();
 
@@ -358,6 +421,14 @@ function buildPersonalMetrics(
         wrong: 0,
         totalTime: 0,
         timedCount: 0,
+        recentTotal: 0,
+        recentCorrect: 0,
+        recentWrong: 0,
+        recentWrong7Days: 0,
+        recentWrong30Days: 0,
+        lastAttemptAt: null,
+        lastWrongAt: null,
+        questionMap: new Map(),
       };
 
     current.total += 1;
@@ -368,24 +439,111 @@ function buildPersonalMetrics(
       current.wrong += 1;
     }
 
+    if (isAttemptWithin(attempt, 30)) {
+      current.recentTotal += 1;
+
+      if (attempt.is_correct) {
+        current.recentCorrect += 1;
+      } else {
+        current.recentWrong += 1;
+      }
+    }
+
+    if (!attempt.is_correct && isAttemptWithin(attempt, 7)) {
+      current.recentWrong7Days += 1;
+    }
+
+    if (!attempt.is_correct && isAttemptWithin(attempt, 30)) {
+      current.recentWrong30Days += 1;
+    }
+
     if (typeof attempt.time_spent_seconds === "number") {
       current.totalTime += attempt.time_spent_seconds;
       current.timedCount += 1;
     }
 
+    if (
+      attempt.answered_at &&
+      (!current.lastAttemptAt ||
+        new Date(attempt.answered_at).getTime() >
+          new Date(current.lastAttemptAt).getTime())
+    ) {
+      current.lastAttemptAt = attempt.answered_at;
+    }
+
+    if (
+      !attempt.is_correct &&
+      attempt.answered_at &&
+      (!current.lastWrongAt ||
+        new Date(attempt.answered_at).getTime() >
+          new Date(current.lastWrongAt).getTime())
+    ) {
+      current.lastWrongAt = attempt.answered_at;
+    }
+
+    const questionKey = attempt.question_id || attempt.id;
+    const questionStats =
+      current.questionMap.get(questionKey) ??
+      {
+        total: 0,
+        correct: 0,
+        wrong: 0,
+        lastAttemptAt: null,
+      };
+
+    questionStats.total += 1;
+
+    if (attempt.is_correct) {
+      questionStats.correct += 1;
+    } else {
+      questionStats.wrong += 1;
+    }
+
+    if (
+      attempt.answered_at &&
+      (!questionStats.lastAttemptAt ||
+        new Date(attempt.answered_at).getTime() >
+          new Date(questionStats.lastAttemptAt).getTime())
+    ) {
+      questionStats.lastAttemptAt = attempt.answered_at;
+    }
+
+    current.questionMap.set(questionKey, questionStats);
     map.set(key, current);
   }
 
-  return Array.from(map.values()).map((item) => ({
-    subject: item.subject,
-    conteudo: item.conteudo,
-    total: item.total,
-    correct: item.correct,
-    wrong: item.wrong,
-    accuracy: item.total ? (item.correct / item.total) * 100 : 0,
-    avgTimeSeconds: item.timedCount ? item.totalTime / item.timedCount : 0,
-    hasData: item.total > 0,
-  }));
+  return Array.from(map.values()).map((item) => {
+    const questionStats = Array.from(item.questionMap.values());
+    const repeatedWrongQuestions = questionStats.filter(
+      (question) => question.wrong >= 2
+    ).length;
+    const neverCorrectQuestions = questionStats.filter(
+      (question) => question.wrong > 0 && question.correct === 0
+    ).length;
+
+    return {
+      subject: item.subject,
+      conteudo: item.conteudo,
+      total: item.total,
+      correct: item.correct,
+      wrong: item.wrong,
+      accuracy: item.total ? (item.correct / item.total) * 100 : 0,
+      avgTimeSeconds: item.timedCount ? item.totalTime / item.timedCount : 0,
+      hasData: item.total > 0,
+      recentTotal: item.recentTotal,
+      recentCorrect: item.recentCorrect,
+      recentWrong: item.recentWrong,
+      recentAccuracy: item.recentTotal
+        ? (item.recentCorrect / item.recentTotal) * 100
+        : 0,
+      recentWrong7Days: item.recentWrong7Days,
+      recentWrong30Days: item.recentWrong30Days,
+      repeatedWrongQuestions,
+      neverCorrectQuestions,
+      lastAttemptAt: item.lastAttemptAt,
+      lastWrongAt: item.lastWrongAt,
+    };
+  });
 }
 
 export function buildHistoricalMetrics(params: {
@@ -595,6 +753,24 @@ function createStrategicExplanation(content: VetStrategicContent) {
         content.personal.total
       } tentativa(s).`
     );
+
+    if (content.personal.recentWrong30Days > 0) {
+      explanations.push(
+        `Nos últimos 30 dias, você errou ${content.personal.recentWrong30Days} tentativa(s) nesse conteúdo. Erro recente pesa mais porque mostra uma ferida aberta no estudo, essa delicadeza acadêmica.`
+      );
+    }
+
+    if (content.personal.repeatedWrongQuestions > 0) {
+      explanations.push(
+        `${content.personal.repeatedWrongQuestions} questão(ões) desse conteúdo já foram erradas mais de uma vez. Isso indica erro recorrente, não apenas azar estatístico.`
+      );
+    }
+
+    if (content.personal.neverCorrectQuestions > 0) {
+      explanations.push(
+        `${content.personal.neverCorrectQuestions} questão(ões) desse conteúdo ainda não foram acertadas nenhuma vez.`
+      );
+    }
   } else {
     explanations.push(
       "Você ainda não tem tentativas suficientes nesse conteúdo, então o VET aplica penalidade de ausência de treino."
@@ -740,6 +916,16 @@ export function buildVetEngineResult(params: {
           accuracy: 0,
           avgTimeSeconds: 0,
           hasData: false,
+          recentTotal: 0,
+          recentCorrect: 0,
+          recentWrong: 0,
+          recentAccuracy: 0,
+          recentWrong7Days: 0,
+          recentWrong30Days: 0,
+          repeatedWrongQuestions: 0,
+          neverCorrectQuestions: 0,
+          lastAttemptAt: null,
+          lastWrongAt: null,
         };
 
       const historical = findHistoricalMetric(historicalMetrics, subject, conteudo);
@@ -761,6 +947,15 @@ export function buildVetEngineResult(params: {
         collective
       );
 
+      const recentErrorScore = getRecentErrorScore(
+        personal.recentWrong7Days,
+        personal.recentWrong30Days
+      );
+      const recurringErrorScore = getRecurringErrorScore(
+        personal.repeatedWrongQuestions,
+        personal.neverCorrectQuestions
+      );
+
       const noAttemptPenalty = getNoAttemptPenalty(
         personal.total,
         weight,
@@ -772,6 +967,8 @@ export function buildVetEngineResult(params: {
         historicalImportanceScore * 2.2 +
         weaknessScore * 2.0 +
         wrongVolumeScore * 1.3 +
+        recentErrorScore * 1.6 +
+        recurringErrorScore * 1.8 +
         urgencyTimeScore * 1.2 +
         collectiveGapScore * 1.4 +
         noAttemptPenalty;
@@ -792,6 +989,8 @@ export function buildVetEngineResult(params: {
         urgencyTimeScore,
         collectiveGapScore,
         historicalImportanceScore,
+        recentErrorScore,
+        recurringErrorScore,
         noAttemptPenalty,
         explanation: [],
       };
@@ -801,6 +1000,34 @@ export function buildVetEngineResult(params: {
       return content;
     })
     .sort((a, b) => b.priorityScore - a.priorityScore);
+
+  const recentWrongAttempts = filteredAttempts.filter(
+    (attempt) => !attempt.is_correct && isAttemptWithin(attempt, 30)
+  ).length;
+
+  const repeatedWrongQuestionCount = strategicContents.reduce(
+    (sum, content) => sum + content.personal.repeatedWrongQuestions,
+    0
+  );
+
+  const neverCorrectQuestionCount = strategicContents.reduce(
+    (sum, content) => sum + content.personal.neverCorrectQuestions,
+    0
+  );
+
+  const reviewContents = strategicContents
+    .filter(
+      (content) =>
+        content.personal.recentWrong30Days > 0 ||
+        content.personal.repeatedWrongQuestions > 0 ||
+        content.personal.neverCorrectQuestions > 0
+    )
+    .sort(
+      (a, b) =>
+        b.recurringErrorScore - a.recurringErrorScore ||
+        b.recentErrorScore - a.recentErrorScore ||
+        b.priorityScore - a.priorityScore
+    );
 
   return {
     profile,
@@ -826,5 +1053,10 @@ export function buildVetEngineResult(params: {
     topPriority: strategicContents[0] ?? null,
     strongestSubject,
     weakestSubject,
+
+    recentWrongAttempts,
+    repeatedWrongQuestionCount,
+    neverCorrectQuestionCount,
+    reviewContents,
   };
 }
