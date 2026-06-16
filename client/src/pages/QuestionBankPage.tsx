@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
 import { getQuestions } from "@/services/questions.service";
+import { supabase } from "@/lib/supabase";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
 import {
   ArrowLeft,
@@ -179,6 +181,62 @@ function sortDifficulties(values: string[]) {
       (order[normalizeText(a)] ?? 99) - (order[normalizeText(b)] ?? 99) ||
       a.localeCompare(b, "pt-BR")
   );
+}
+
+type PracticeStatusFilter =
+  | "all"
+  | "unanswered"
+  | "answered"
+  | "correct"
+  | "wrong";
+
+type UserQuestionAttemptStatus = {
+  attempted: boolean;
+  latestIsCorrect: boolean | null;
+  attempts: number;
+  lastAnsweredAt?: string | null;
+};
+
+type UserAttemptSummaryRow = {
+  question_id: string | null;
+  is_correct: boolean | null;
+  answered_at?: string | null;
+};
+
+const PRACTICE_STATUS_OPTIONS: { value: PracticeStatusFilter; label: string }[] = [
+  { value: "all", label: "Todas" },
+  { value: "unanswered", label: "Não feitas" },
+  { value: "answered", label: "Já feitas" },
+  { value: "correct", label: "Acertei por último" },
+  { value: "wrong", label: "Errei por último" },
+];
+
+function formatPracticeStatusLabel(value: PracticeStatusFilter) {
+  return (
+    PRACTICE_STATUS_OPTIONS.find((option) => option.value === value)?.label ??
+    "Todas"
+  );
+}
+
+function matchesPracticeStatus(
+  questionId: string,
+  status: PracticeStatusFilter,
+  statusByQuestionId: Record<string, UserQuestionAttemptStatus>,
+  hasUser: boolean
+) {
+  if (status === "all") return true;
+
+  if (!hasUser) return false;
+
+  const item = statusByQuestionId[questionId];
+  const attempted = !!item?.attempted;
+
+  if (status === "unanswered") return !attempted;
+  if (status === "answered") return attempted;
+  if (status === "correct") return attempted && item.latestIsCorrect === true;
+  if (status === "wrong") return attempted && item.latestIsCorrect === false;
+
+  return true;
 }
 
 function areNormalizedListsEqual(a: string[], b: string[]) {
@@ -356,6 +414,7 @@ function ActiveFilterChip({ label, onRemove }: ActiveFilterChipProps) {
 }
 
 export default function QuestionBankPage() {
+  const { user, loading: authLoading } = useSupabaseAuth();
   const initialVetFilters = useMemo(() => parseVetFiltersFromUrl(), []);
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -375,6 +434,12 @@ export default function QuestionBankPage() {
   );
   const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([]);
+  const [selectedPracticeStatus, setSelectedPracticeStatus] =
+    useState<PracticeStatusFilter>("all");
+  const [userQuestionStatus, setUserQuestionStatus] = useState<
+    Record<string, UserQuestionAttemptStatus>
+  >({});
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
 
   const [vetTopics, setVetTopics] = useState<string[]>(initialVetFilters.topics);
   const [vetBlock, setVetBlock] = useState<string>(initialVetFilters.block);
@@ -574,6 +639,26 @@ export default function QuestionBankPage() {
     [questions]
   );
 
+  const practiceStats = useMemo(() => {
+    const total = questions.length;
+    const answered = questions.filter((q) => userQuestionStatus[q.id]?.attempted)
+      .length;
+    const correct = questions.filter(
+      (q) => userQuestionStatus[q.id]?.latestIsCorrect === true
+    ).length;
+    const wrong = questions.filter(
+      (q) => userQuestionStatus[q.id]?.latestIsCorrect === false
+    ).length;
+
+    return {
+      total,
+      answered,
+      unanswered: Math.max(0, total - answered),
+      correct,
+      wrong,
+    };
+  }, [questions, userQuestionStatus]);
+
   const subjectStats = useMemo(() => {
     const labels: Record<string, string> = {
       fisica: "Física",
@@ -735,6 +820,14 @@ export default function QuestionBankPage() {
       });
     });
 
+    if (selectedPracticeStatus !== "all") {
+      chips.push({
+        key: "practice-status",
+        label: `Status: ${formatPracticeStatusLabel(selectedPracticeStatus)}`,
+        onRemove: () => setSelectedPracticeStatus("all"),
+      });
+    }
+
     return chips;
   }, [
     searchTerm,
@@ -744,6 +837,7 @@ export default function QuestionBankPage() {
     selectedTopics,
     selectedSubtopics,
     selectedDifficulties,
+    selectedPracticeStatus,
   ]);
 
   useEffect(() => {
@@ -755,6 +849,58 @@ export default function QuestionBankPage() {
 
     loadQuestions();
   }, []);
+
+  useEffect(() => {
+    async function loadUserAttempts() {
+      if (authLoading) return;
+
+      if (!user?.id) {
+        setUserQuestionStatus({});
+        setAttemptsLoading(false);
+        return;
+      }
+
+      setAttemptsLoading(true);
+
+      const { data, error } = await supabase
+        .from("user_question_attempts")
+        .select("question_id, is_correct, answered_at")
+        .eq("user_id", user.id)
+        .order("answered_at", { ascending: false });
+
+      if (error) {
+        console.error("Erro ao carregar tentativas do usuário:", error);
+        setUserQuestionStatus({});
+        setAttemptsLoading(false);
+        return;
+      }
+
+      const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
+
+      ((data as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
+        if (!attempt.question_id) return;
+
+        const current = nextStatus[attempt.question_id];
+
+        if (!current) {
+          nextStatus[attempt.question_id] = {
+            attempted: true,
+            latestIsCorrect: attempt.is_correct ?? false,
+            attempts: 1,
+            lastAnsweredAt: attempt.answered_at ?? null,
+          };
+          return;
+        }
+
+        current.attempts += 1;
+      });
+
+      setUserQuestionStatus(nextStatus);
+      setAttemptsLoading(false);
+    }
+
+    loadUserAttempts();
+  }, [authLoading, user?.id]);
 
   useEffect(() => {
     let filtered = questions;
@@ -790,6 +936,15 @@ export default function QuestionBankPage() {
       matchesMulti(q.difficulty, selectedDifficulties)
     );
 
+    filtered = filtered.filter((q) =>
+      matchesPracticeStatus(
+        q.id,
+        selectedPracticeStatus,
+        userQuestionStatus,
+        !!user?.id
+      )
+    );
+
     setFilteredQuestions(filtered);
   }, [
     questions,
@@ -800,6 +955,9 @@ export default function QuestionBankPage() {
     effectiveTopics,
     selectedSubtopics,
     selectedDifficulties,
+    selectedPracticeStatus,
+    userQuestionStatus,
+    user?.id,
   ]);
 
   function clearAllFilters() {
@@ -810,6 +968,7 @@ export default function QuestionBankPage() {
     setSelectedTopics([]);
     setSelectedSubtopics([]);
     setSelectedDifficulties([]);
+    setSelectedPracticeStatus("all");
     setVetTopics([]);
     setVetBlock("");
   }
@@ -817,6 +976,18 @@ export default function QuestionBankPage() {
   function clearVetFilterOnly() {
     setVetTopics([]);
     setVetBlock("");
+  }
+
+  function handleQuestionAnswered(questionId: string, isCorrect: boolean) {
+    setUserQuestionStatus((prev) => ({
+      ...prev,
+      [questionId]: {
+        attempted: true,
+        latestIsCorrect: isCorrect,
+        attempts: (prev[questionId]?.attempts ?? 0) + 1,
+        lastAnsweredAt: new Date().toISOString(),
+      },
+    }));
   }
 
   return (
@@ -1194,6 +1365,45 @@ export default function QuestionBankPage() {
                   formatter={formatDifficultyLabel}
                   icon={Gauge}
                 />
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    <span className="inline-flex items-center gap-2">
+                      <ListFilter className="w-4 h-4 text-slate-500" />
+                      7. Status da questão
+                    </span>
+                  </label>
+
+                  <select
+                    value={selectedPracticeStatus}
+                    onChange={(event) =>
+                      setSelectedPracticeStatus(
+                        event.target.value as PracticeStatusFilter
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  >
+                    {PRACTICE_STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {!user?.id ? (
+                    <p className="mt-1.5 text-[11px] font-medium text-amber-600">
+                      Entre na conta para filtrar questões feitas.
+                    </p>
+                  ) : attemptsLoading ? (
+                    <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+                      Carregando seu histórico...
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+                      {practiceStats.answered} feitas • {practiceStats.unanswered} não feitas
+                    </p>
+                  )}
+                </div>
               </div>
 
               {activeFilterChips.length > 0 ? (
@@ -1297,6 +1507,14 @@ export default function QuestionBankPage() {
                     : "Todas"}
                 </span>
               </div>
+
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-500">Status</span>
+
+                <span className="font-semibold text-right">
+                  {formatPracticeStatusLabel(selectedPracticeStatus)}
+                </span>
+              </div>
             </div>
 
             <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 mb-5">
@@ -1307,6 +1525,45 @@ export default function QuestionBankPage() {
               <p className="text-3xl font-bold text-slate-900">
                 {filteredQuestions.length}
               </p>
+            </div>
+
+            <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4 mb-5">
+              <p className="text-sm font-bold text-slate-900 mb-3">
+                Seu histórico
+              </p>
+
+              {user?.id ? (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-slate-500">Já feitas</p>
+                    <p className="text-xl font-bold text-violet-700">
+                      {practiceStats.answered}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Não feitas</p>
+                    <p className="text-xl font-bold text-slate-900">
+                      {practiceStats.unanswered}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Última certa</p>
+                    <p className="text-xl font-bold text-emerald-700">
+                      {practiceStats.correct}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Última errada</p>
+                    <p className="text-xl font-bold text-rose-700">
+                      {practiceStats.wrong}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600">
+                  Entre na conta para ver questões feitas, acertos e erros.
+                </p>
+              )}
             </div>
 
             <div>
@@ -1366,9 +1623,11 @@ export default function QuestionBankPage() {
                 selectedTopics.join("|"),
                 selectedSubtopics.join("|"),
                 selectedDifficulties.join("|"),
+                selectedPracticeStatus,
                 vetTopics.join("|"),
               ].join("::")}
               questions={filteredQuestions}
+              onQuestionAnswered={handleQuestionAnswered}
             />
           ) : (
             <Card className="p-12 text-center bg-white border-slate-200">
