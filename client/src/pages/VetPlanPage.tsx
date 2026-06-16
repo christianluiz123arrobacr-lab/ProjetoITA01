@@ -226,7 +226,7 @@ function ContentPlanCard({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-3 mb-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-6 gap-3 mb-4">
         <div className="rounded-2xl bg-white/80 border border-white p-3">
           <p className="text-xs text-slate-500 mb-1">Seu acerto</p>
           <p className="font-bold text-slate-900">
@@ -258,6 +258,20 @@ function ContentPlanCard({
           <p className="text-xs text-slate-500 mb-1">Tendência</p>
           <p className="font-bold text-slate-900">
             {getTrendLabel(content.historical?.trendScore)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white/80 border border-white p-3">
+          <p className="text-xs text-slate-500 mb-1">Erros recentes</p>
+          <p className="font-bold text-slate-900">
+            {content.personal.recentWrong30Days}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white/80 border border-white p-3">
+          <p className="text-xs text-slate-500 mb-1">Nunca acertei</p>
+          <p className="font-bold text-slate-900">
+            {content.personal.neverCorrectQuestions}
           </p>
         </div>
       </div>
