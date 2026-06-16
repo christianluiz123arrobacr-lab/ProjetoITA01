@@ -39,11 +39,23 @@ export type QuizCompletionData = {
 type InteractiveQuizProps = {
   questions: Question[];
   onComplete?: (data: QuizCompletionData) => void;
+  onQuestionAnswered?: (questionId: string, isCorrect: boolean) => void;
 };
 
 type ResolutionMetaRow = {
   questao_id: string;
   autor_nome?: string | null;
+};
+
+type AnswerStatsRow = {
+  selected_option?: string | null;
+  total?: number | string | null;
+};
+
+type AnswerStats = {
+  total: number;
+  counts: Record<string, number>;
+  percentages: Record<string, number>;
 };
 
 const REPORT_TYPES = [
@@ -94,6 +106,52 @@ function formatDifficultyLabel(value?: string | null) {
   if (normalized === "dificil") return "Difícil";
 
   return value || "Dificuldade";
+}
+
+function normalizeOptionId(value?: string | null) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function buildAnswerStatsFromRows(rows: AnswerStatsRow[]): AnswerStats {
+  const counts: Record<string, number> = {};
+
+  rows.forEach((row) => {
+    const optionId = normalizeOptionId(row.selected_option);
+    if (!optionId) return;
+
+    const total = Number(row.total ?? 0);
+    counts[optionId] = (counts[optionId] ?? 0) + (Number.isFinite(total) ? total : 0);
+  });
+
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  const percentages: Record<string, number> = {};
+
+  Object.entries(counts).forEach(([optionId, count]) => {
+    percentages[optionId] = total > 0 ? Math.round((count / total) * 100) : 0;
+  });
+
+  return { total, counts, percentages };
+}
+
+function buildAnswerStatsFromAttempts(
+  rows: { selected_option?: string | null }[]
+): AnswerStats {
+  const counts: Record<string, number> = {};
+
+  rows.forEach((row) => {
+    const optionId = normalizeOptionId(row.selected_option);
+    if (!optionId) return;
+    counts[optionId] = (counts[optionId] ?? 0) + 1;
+  });
+
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  const percentages: Record<string, number> = {};
+
+  Object.entries(counts).forEach(([optionId, count]) => {
+    percentages[optionId] = total > 0 ? Math.round((count / total) * 100) : 0;
+  });
+
+  return { total, counts, percentages };
 }
 
 function getDifficultyClasses(value?: string | null) {
@@ -178,7 +236,11 @@ function MarkdownContent({
   );
 }
 
-export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps) {
+export function InteractiveQuiz({
+  questions,
+  onComplete,
+  onQuestionAnswered,
+}: InteractiveQuizProps) {
   const { user } = useSupabaseAuth();
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -189,6 +251,11 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
   const [hasSentCompletion, setHasSentCompletion] = useState(false);
   const [resolutionAuthorsByQuestionId, setResolutionAuthorsByQuestionId] =
     useState<Record<string, string>>({});
+  const [answerStatsByQuestionId, setAnswerStatsByQuestionId] = useState<
+    Record<string, AnswerStats>
+  >({});
+  const [answerStatsLoadingQuestionId, setAnswerStatsLoadingQuestionId] =
+    useState<string | null>(null);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportType, setReportType] = useState("enunciado");
@@ -206,6 +273,11 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
   const resolutionAuthor = question
     ? resolutionAuthorsByQuestionId[question.id] ?? ""
     : "";
+  const currentAnswerStats = question
+    ? answerStatsByQuestionId[question.id] ?? null
+    : null;
+  const answerStatsLoading =
+    !!question && answerStatsLoadingQuestionId === question.id;
 
   const questionTopics = getQuestionTopics(question);
   const questionSubtopics = getQuestionSubtopics(question);
@@ -348,6 +420,63 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
     }
   }, [completionData, hasSentCompletion, isQuizComplete, onComplete]);
 
+  useEffect(() => {
+    if (!question?.id || !answered) return;
+    if (answerStatsByQuestionId[question.id]) return;
+
+    loadAnswerStats(question.id);
+  }, [answered, answerStatsByQuestionId, question?.id]);
+
+  const loadAnswerStats = async (questionId: string) => {
+    if (!questionId) return;
+
+    setAnswerStatsLoadingQuestionId(questionId);
+
+    try {
+      const rpcResponse = await supabase.rpc("get_question_option_stats", {
+        p_question_id: questionId,
+      });
+
+      if (!rpcResponse.error && Array.isArray(rpcResponse.data)) {
+        setAnswerStatsByQuestionId((prev) => ({
+          ...prev,
+          [questionId]: buildAnswerStatsFromRows(
+            rpcResponse.data as AnswerStatsRow[]
+          ),
+        }));
+        return;
+      }
+
+      if (rpcResponse.error) {
+        console.warn(
+          "RPC get_question_option_stats indisponível. Usando fallback direto.",
+          rpcResponse.error
+        );
+      }
+
+      const { data, error } = await supabase
+        .from("user_question_attempts")
+        .select("selected_option")
+        .eq("question_id", questionId);
+
+      if (error) {
+        console.error("Erro ao carregar estatísticas da questão:", error);
+        return;
+      }
+
+      setAnswerStatsByQuestionId((prev) => ({
+        ...prev,
+        [questionId]: buildAnswerStatsFromAttempts(data || []),
+      }));
+    } catch (error) {
+      console.error("Erro inesperado ao carregar estatísticas:", error);
+    } finally {
+      setAnswerStatsLoadingQuestionId((current) =>
+        current === questionId ? null : current
+      );
+    }
+  };
+
   const saveAttempt = async (optionId: string) => {
     if (!user?.id || !question) return;
 
@@ -409,7 +538,11 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
       [currentQuestion]: true,
     }));
 
+    const correct = optionId === question.correctOptionId;
+
     await saveAttempt(optionId);
+    await loadAnswerStats(question.id);
+    onQuestionAnswered?.(question.id, correct);
   };
 
   const handleSubmitReport = async () => {
@@ -640,6 +773,9 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
           {question.options.map((option) => {
             const isSelected = selectedAnswer === option.id;
             const isCorrectOption = option.id === question.correctOptionId;
+            const optionCount = currentAnswerStats?.counts[option.id] ?? 0;
+            const optionPercentage =
+              currentAnswerStats?.percentages[option.id] ?? 0;
 
             const optionClass = !answered
               ? "border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50 cursor-pointer"
@@ -682,6 +818,48 @@ export function InteractiveQuiz({ questions, onComplete }: InteractiveQuizProps)
                         alt={`Alternativa ${option.label}`}
                         className="mt-3 max-h-48 max-w-full object-contain rounded-xl border border-slate-200 bg-white"
                       />
+                    ) : null}
+
+                    {answered ? (
+                      <div className="mt-4 rounded-2xl border border-white/70 bg-white/75 p-3">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <span className="text-xs font-bold text-slate-600">
+                            Respostas nessa alternativa
+                          </span>
+
+                          <span className="text-xs font-extrabold text-slate-800">
+                            {answerStatsLoading
+                              ? "carregando..."
+                              : currentAnswerStats && currentAnswerStats.total > 0
+                                ? `${optionPercentage}%`
+                                : "sem dados"}
+                          </span>
+                        </div>
+
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isCorrectOption
+                                ? "bg-emerald-500"
+                                : isSelected
+                                  ? "bg-rose-500"
+                                  : "bg-violet-400"
+                            }`}
+                            style={{
+                              width:
+                                currentAnswerStats && currentAnswerStats.total > 0
+                                  ? `${optionPercentage}%`
+                                  : "0%",
+                            }}
+                          />
+                        </div>
+
+                        <p className="mt-2 text-[11px] font-medium text-slate-500">
+                          {currentAnswerStats && currentAnswerStats.total > 0
+                            ? `${optionCount} de ${currentAnswerStats.total} respostas registradas`
+                            : "A estatística aparece quando houver respostas registradas."}
+                        </p>
+                      </div>
                     ) : null}
                   </div>
 
