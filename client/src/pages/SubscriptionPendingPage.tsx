@@ -142,8 +142,8 @@ export default function SubscriptionPendingPage() {
                   <div>
                     <p className="font-black text-white">Finalize o pagamento</p>
                     <p className="mt-1 text-sm leading-6 text-slate-400">
-                      Nesta fase, a assinatura pode ser aprovada manualmente.
-                      Depois entraremos com Asaas e webhook automático.
+                      Nesta fase inicial, a solicitação pode passar por
+                      conferência manual antes da liberação do acesso.
                     </p>
                   </div>
                 </div>
@@ -176,9 +176,8 @@ export default function SubscriptionPendingPage() {
                   </p>
 
                   <p className="mt-2 text-sm leading-6 text-amber-50/80">
-                    Como essa etapa ainda pode ser manual, pode existir um
-                    intervalo entre o pagamento e a liberação. Sim, pagamentos
-                    também gostam de criar suspense desnecessário.
+                    Como essa etapa pode envolver conferência manual, pode existir
+                    um intervalo entre o pagamento e a liberação do acesso.
                   </p>
                 </div>
               </div>
@@ -216,9 +215,8 @@ export default function SubscriptionPendingPage() {
               </h2>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Isso evita que uma conta recém-criada entre direto em todo o
-                conteúdo sem plano ativo. Incrível como “não liberar antes de
-                pagar” ainda precisa ser explicado em sistemas, mas aqui estamos.
+                O acesso aos conteúdos pagos é liberado somente após a ativação
+                da assinatura vinculada à conta.
               </p>
             </div>
 
