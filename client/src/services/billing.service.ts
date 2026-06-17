@@ -38,7 +38,7 @@ export const BILLING_PLANS: BillingPlan[] = [
       "beta_selecionado",
     ],
     name: "Beta selecionado",
-    amountCents: 500,
+    amountCents: 600,
     currency: "BRL",
     description:
       "Plano especial para pessoas selecionadas que vão ajudar no começo do projeto.",
@@ -53,7 +53,7 @@ export const BILLING_PLANS: BillingPlan[] = [
       "beta_fundador",
     ],
     name: "Beta fundador",
-    amountCents: 800,
+    amountCents: 900,
     currency: "BRL",
     description:
       "Plano inicial para os primeiros alunos que entrarem durante a fase beta.",
@@ -69,7 +69,7 @@ export const BILLING_PLANS: BillingPlan[] = [
       "plano_mensal",
     ],
     name: "Plano mensal",
-    amountCents: 1099,
+    amountCents: 1199,
     currency: "BRL",
     description: "Plano padrão mensal para acesso à plataforma.",
     isBeta: false,
