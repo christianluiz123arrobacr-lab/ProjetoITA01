@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { supabase } from "@/lib/supabase";
@@ -9,9 +9,13 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+  Edit3,
   Gift,
   Loader2,
   RefreshCw,
+  RotateCcw,
+  Save,
+  Settings2,
   Trash2,
   UserPlus,
   XCircle,
@@ -59,15 +63,40 @@ type InviteRow = {
   created_at: string;
 };
 
-type BillingPlanOption = {
+type AdminBillingPlanRow = {
   id: string;
   slug: string;
   name: string;
+  description: string | null;
   price_cents: number;
+  currency: string | null;
+  billing_cycle: string | null;
+  is_active: boolean;
+  max_active_subscriptions: number | null;
+  active_subscriptions_count: number;
+  manual_review_count: number;
+  used_slots: number;
+  remaining_slots: number | null;
+  has_available_slots: boolean;
 };
 
-type StatusFilter = "all" | "manual_review" | "active" | "canceled" | "overdue";
-type AdminBillingTab = "subscriptions" | "invites";
+type PlanFormState = {
+  name: string;
+  description: string;
+  price: string;
+  maxActiveSubscriptions: string;
+  isActive: boolean;
+};
+
+type StatusFilter =
+  | "all"
+  | "manual_review"
+  | "active"
+  | "overdue"
+  | "expired"
+  | "canceled"
+  | "failed";
+type AdminBillingTab = "subscriptions" | "plans" | "invites";
 
 function formatDate(date?: string | null) {
   if (!date) return "Sem data";
@@ -93,6 +122,8 @@ function getStatusBadge(status: string) {
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "overdue":
       return "bg-orange-50 text-orange-700 border-orange-200";
+    case "expired":
+      return "bg-red-50 text-red-700 border-red-200";
     case "canceled":
       return "bg-slate-100 text-slate-600 border-slate-200";
     case "failed":
@@ -100,6 +131,34 @@ function getStatusBadge(status: string) {
     default:
       return "bg-blue-50 text-blue-700 border-blue-200";
   }
+}
+
+function centsToPriceInput(cents: number) {
+  return (cents / 100).toFixed(2).replace(".", ",");
+}
+
+function priceInputToCents(value: string) {
+  const normalized = value.replace(/\./g, "").replace(",", ".").trim();
+  const parsed = Number.parseFloat(normalized);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+
+  return Math.round(parsed * 100);
+}
+
+function buildPlanForm(plan: AdminBillingPlanRow): PlanFormState {
+  return {
+    name: plan.name ?? "",
+    description: plan.description ?? "",
+    price: centsToPriceInput(plan.price_cents ?? 0),
+    maxActiveSubscriptions:
+      plan.max_active_subscriptions == null
+        ? ""
+        : String(plan.max_active_subscriptions),
+    isActive: Boolean(plan.is_active),
+  };
 }
 
 export default function AdminBillingPage() {
@@ -110,9 +169,10 @@ export default function AdminBillingPage() {
   >([]);
 
   const [invites, setInvites] = useState<InviteRow[]>([]);
-  const [plans, setPlans] = useState<BillingPlanOption[]>([]);
+  const [plans, setPlans] = useState<AdminBillingPlanRow[]>([]);
+  const [planForms, setPlanForms] = useState<Record<string, PlanFormState>>({});
 
-  const [selectedPlanSlug, setSelectedPlanSlug] = useState("selecionados_5");
+  const [selectedPlanSlug, setSelectedPlanSlug] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -120,6 +180,7 @@ export default function AdminBillingPage() {
   const [creatingInvite, setCreatingInvite] = useState(false);
 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
   const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -140,6 +201,7 @@ export default function AdminBillingPage() {
       manualReview: subscriptions.filter((item) => item.status === "manual_review")
         .length,
       active: subscriptions.filter((item) => item.status === "active").length,
+      expired: subscriptions.filter((item) => item.status === "expired").length,
       canceled: subscriptions.filter((item) => item.status === "canceled").length,
     };
   }, [subscriptions]);
@@ -151,6 +213,14 @@ export default function AdminBillingPage() {
       used: invites.filter((invite) => Boolean(invite.used_at)).length,
     };
   }, [invites]);
+
+  const planStats = useMemo(() => {
+    return {
+      total: plans.length,
+      active: plans.filter((plan) => plan.is_active).length,
+      limited: plans.filter((plan) => plan.max_active_subscriptions != null).length,
+    };
+  }, [plans]);
 
   async function loadSubscriptionsData() {
     const { data, error: rpcError } = await supabase.rpc(
@@ -165,32 +235,71 @@ export default function AdminBillingPage() {
     setSubscriptions((data ?? []) as AdminBillingSubscriptionRow[]);
   }
 
-  async function loadInvitesData() {
-    const [invitesResponse, plansResponse] = await Promise.all([
-      supabase.rpc("admin_list_billing_plan_invites"),
-      supabase
+  async function loadPlansData() {
+    const { data, error: rpcError } = await supabase.rpc(
+      "admin_list_billing_plans"
+    );
+
+    if (rpcError) {
+      console.warn("RPC admin_list_billing_plans falhou. Usando fallback:", rpcError);
+
+      const { data: fallbackData, error: fallbackError } = await supabase
         .from("billing_plans")
-        .select("id, slug, name, price_cents")
-        .eq("is_active", true)
-        .order("price_cents", { ascending: true }),
-    ]);
+        .select(
+          "id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions"
+        )
+        .order("price_cents", { ascending: true });
 
-    if (invitesResponse.error) {
-      console.error("Erro ao carregar convites:", invitesResponse.error);
+      if (fallbackError) {
+        throw new Error(fallbackError.message || "Não foi possível carregar os planos.");
+      }
+
+      const mapped = (fallbackData ?? []).map((plan: any) => ({
+        id: String(plan.id),
+        slug: plan.slug,
+        name: plan.name,
+        description: plan.description,
+        price_cents: plan.price_cents,
+        currency: plan.currency,
+        billing_cycle: plan.billing_cycle,
+        is_active: plan.is_active,
+        max_active_subscriptions: plan.max_active_subscriptions ?? null,
+        active_subscriptions_count: 0,
+        manual_review_count: 0,
+        used_slots: 0,
+        remaining_slots: plan.max_active_subscriptions ?? null,
+        has_available_slots: true,
+      })) as AdminBillingPlanRow[];
+
+      setPlans(mapped);
+      setPlanForms(
+        Object.fromEntries(mapped.map((plan) => [plan.id, buildPlanForm(plan)]))
+      );
+      setSelectedPlanSlug((current) => current || mapped[0]?.slug || "");
+      return;
+    }
+
+    const mapped = (data ?? []) as AdminBillingPlanRow[];
+    setPlans(mapped);
+    setPlanForms(
+      Object.fromEntries(mapped.map((plan) => [plan.id, buildPlanForm(plan)]))
+    );
+    setSelectedPlanSlug((current) => current || mapped[0]?.slug || "");
+  }
+
+  async function loadInvitesData() {
+    const { data, error: rpcError } = await supabase.rpc(
+      "admin_list_billing_plan_invites"
+    );
+
+    if (rpcError) {
+      console.error("Erro ao carregar convites:", rpcError);
       throw new Error(
-        invitesResponse.error.message || "Não foi possível carregar os convites."
+        rpcError.message || "Não foi possível carregar os convites."
       );
     }
 
-    if (plansResponse.error) {
-      console.error("Erro ao carregar planos:", plansResponse.error);
-      throw new Error(
-        plansResponse.error.message || "Não foi possível carregar os planos."
-      );
-    }
-
-    setInvites((invitesResponse.data ?? []) as InviteRow[]);
-    setPlans((plansResponse.data ?? []) as BillingPlanOption[]);
+    setInvites((data ?? []) as InviteRow[]);
   }
 
   async function loadAllData() {
@@ -198,7 +307,11 @@ export default function AdminBillingPage() {
       setLoading(true);
       setError("");
 
-      await Promise.all([loadSubscriptionsData(), loadInvitesData()]);
+      await Promise.all([
+        loadSubscriptionsData(),
+        loadPlansData(),
+        loadInvitesData(),
+      ]);
     } catch (err) {
       console.error("Erro ao carregar dados de assinaturas:", err);
 
@@ -219,8 +332,10 @@ export default function AdminBillingPage() {
 
       if (activeTab === "subscriptions") {
         await loadSubscriptionsData();
+      } else if (activeTab === "plans") {
+        await loadPlansData();
       } else {
-        await loadInvitesData();
+        await Promise.all([loadInvitesData(), loadPlansData()]);
       }
     } catch (err) {
       console.error("Erro ao atualizar dados:", err);
@@ -239,9 +354,11 @@ export default function AdminBillingPage() {
     loadAllData();
   }, []);
 
-  async function approveSubscription(subscriptionId: string) {
+  async function renewSubscription(subscriptionId: string, label = "renovar") {
     const confirmed = window.confirm(
-      "Aprovar esta assinatura e liberar 1 mês de acesso?"
+      label === "aprovar"
+        ? "Aprovar esta assinatura e liberar 1 mês de acesso?"
+        : "Renovar esta assinatura por mais 1 mês?"
     );
 
     if (!confirmed) return;
@@ -252,7 +369,7 @@ export default function AdminBillingPage() {
       setSuccess("");
 
       const { error: rpcError } = await supabase.rpc(
-        "admin_approve_manual_subscription",
+        "admin_renew_billing_subscription",
         {
           target_subscription_id: subscriptionId,
           access_months: 1,
@@ -260,16 +377,20 @@ export default function AdminBillingPage() {
       );
 
       if (rpcError) {
-        console.error("Erro ao aprovar assinatura:", rpcError);
-        setError(rpcError.message || "Não foi possível aprovar a assinatura.");
+        console.error("Erro ao renovar assinatura:", rpcError);
+        setError(rpcError.message || "Não foi possível renovar a assinatura.");
         return;
       }
 
-      setSuccess("Assinatura aprovada com sucesso.");
+      setSuccess(
+        label === "aprovar"
+          ? "Assinatura aprovada com sucesso."
+          : "Assinatura renovada com sucesso."
+      );
       await loadSubscriptionsData();
     } catch (err) {
-      console.error("Erro inesperado ao aprovar assinatura:", err);
-      setError("Ocorreu um erro inesperado ao aprovar a assinatura.");
+      console.error("Erro inesperado ao renovar assinatura:", err);
+      setError("Ocorreu um erro inesperado ao renovar a assinatura.");
     } finally {
       setActionLoadingId(null);
     }
@@ -308,13 +429,85 @@ export default function AdminBillingPage() {
     }
   }
 
-  async function createInvite(event: React.FormEvent<HTMLFormElement>) {
+  function updatePlanForm(planId: string, patch: Partial<PlanFormState>) {
+    setPlanForms((current) => ({
+      ...current,
+      [planId]: {
+        ...current[planId],
+        ...patch,
+      },
+    }));
+  }
+
+  async function savePlan(plan: AdminBillingPlanRow) {
+    const form = planForms[plan.id];
+
+    if (!form) return;
+
+    const priceCents = priceInputToCents(form.price);
+
+    if (priceCents == null) {
+      setError("Informe um valor válido para o plano.");
+      return;
+    }
+
+    const maxActiveSubscriptions = form.maxActiveSubscriptions.trim()
+      ? Number.parseInt(form.maxActiveSubscriptions.trim(), 10)
+      : null;
+
+    if (
+      maxActiveSubscriptions !== null &&
+      (!Number.isFinite(maxActiveSubscriptions) || maxActiveSubscriptions < 0)
+    ) {
+      setError("Informe um limite válido ou deixe em branco para sem limite.");
+      return;
+    }
+
+    try {
+      setSavingPlanId(plan.id);
+      setError("");
+      setSuccess("");
+
+      const { error: rpcError } = await supabase.rpc(
+        "admin_update_billing_plan",
+        {
+          target_plan_id: plan.id,
+          new_name: form.name.trim() || plan.name,
+          new_description: form.description.trim() || null,
+          new_price_cents: priceCents,
+          new_max_active_subscriptions: maxActiveSubscriptions,
+          new_is_active: form.isActive,
+        }
+      );
+
+      if (rpcError) {
+        console.error("Erro ao salvar plano:", rpcError);
+        setError(rpcError.message || "Não foi possível salvar o plano.");
+        return;
+      }
+
+      setSuccess("Plano atualizado com sucesso.");
+      await loadPlansData();
+    } catch (err) {
+      console.error("Erro inesperado ao salvar plano:", err);
+      setError("Ocorreu um erro inesperado ao salvar o plano.");
+    } finally {
+      setSavingPlanId(null);
+    }
+  }
+
+  async function createInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const normalizedEmail = inviteEmail.trim().toLowerCase();
 
     if (!normalizedEmail) {
       setError("Informe um e-mail.");
+      return;
+    }
+
+    if (!selectedPlanSlug) {
+      setError("Selecione um plano.");
       return;
     }
 
@@ -386,9 +579,9 @@ export default function AdminBillingPage() {
     <AdminGuard allowedRoles={["admin"]}>
       <AdminLayout
         title="Assinaturas"
-        subtitle="Aprove solicitações, acompanhe planos, gerencie acessos manuais e libere convites."
+        subtitle="Gerencie planos, preços, limites de vagas, renovações manuais e solicitações de acesso."
       >
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card className="border-slate-200 p-5">
             <p className="text-sm text-slate-500">Solicitações</p>
             <p className="mt-2 text-3xl font-black text-slate-900">
@@ -410,10 +603,17 @@ export default function AdminBillingPage() {
             </p>
           </Card>
 
+          <Card className="border-red-200 bg-red-50 p-5">
+            <p className="text-sm text-red-700">Expiradas</p>
+            <p className="mt-2 text-3xl font-black text-red-900">
+              {subscriptionStats.expired}
+            </p>
+          </Card>
+
           <Card className="border-cyan-200 bg-cyan-50 p-5">
-            <p className="text-sm text-cyan-700">Convites disponíveis</p>
+            <p className="text-sm text-cyan-700">Planos ativos</p>
             <p className="mt-2 text-3xl font-black text-cyan-900">
-              {inviteStats.available}
+              {planStats.active}
             </p>
           </Card>
         </div>
@@ -422,10 +622,10 @@ export default function AdminBillingPage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">
-                Controle financeiro inicial
+                Controle financeiro manual
               </h2>
               <p className="text-sm text-slate-500">
-                Use essa tela enquanto o gateway automático ainda não está conectado.
+                Use esta tela para alterar preços, limites, aprovar pagamentos e renovar acessos enquanto a cobrança automática não estiver ativa.
               </p>
             </div>
 
@@ -456,7 +656,21 @@ export default function AdminBillingPage() {
               ].join(" ")}
             >
               <CreditCard className="h-4 w-4" />
-              Solicitações de assinatura
+              Assinaturas
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("plans")}
+              className={[
+                "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
+                activeTab === "plans"
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+              ].join(" ")}
+            >
+              <Settings2 className="h-4 w-4" />
+              Planos e preços
             </button>
 
             <button
@@ -470,57 +684,54 @@ export default function AdminBillingPage() {
               ].join(" ")}
             >
               <Gift className="h-4 w-4" />
-              Convites de planos
+              Convites
             </button>
           </div>
-
-          {activeTab === "subscriptions" && (
-            <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
-              {[
-                { value: "all", label: "Todas" },
-                { value: "manual_review", label: "Análise manual" },
-                { value: "active", label: "Ativas" },
-                { value: "overdue", label: "Atrasadas" },
-                { value: "canceled", label: "Canceladas" },
-              ].map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => setStatusFilter(item.value as StatusFilter)}
-                  className={[
-                    "rounded-full border px-4 py-2 text-sm font-semibold transition",
-                    statusFilter === item.value
-                      ? "border-blue-600 bg-blue-600 text-white"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
         </Card>
 
         {error && (
-          <Card className="border-red-200 bg-red-50 p-5">
-            <div className="flex gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 text-red-600" />
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </Card>
+          <div className="flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            {error}
+          </div>
         )}
 
         {success && (
-          <Card className="border-emerald-200 bg-emerald-50 p-5">
-            <div className="flex gap-3">
-              <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
-              <p className="text-sm text-emerald-700">{success}</p>
-            </div>
-          </Card>
+          <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            <CheckCircle2 className="h-5 w-5 shrink-0" />
+            {success}
+          </div>
         )}
 
         {activeTab === "subscriptions" && (
           <>
+            <Card className="border-slate-200 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  ["all", "Todas"],
+                  ["manual_review", "Em análise"],
+                  ["active", "Ativas"],
+                  ["overdue", "Em atraso"],
+                  ["expired", "Expiradas"],
+                  ["canceled", "Canceladas"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setStatusFilter(value as StatusFilter)}
+                    className={[
+                      "rounded-full border px-3 py-1.5 text-xs font-bold transition",
+                      statusFilter === value
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Card>
+
             {loading ? (
               <Card className="flex items-center justify-center gap-3 p-10">
                 <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
@@ -545,6 +756,7 @@ export default function AdminBillingPage() {
                 {filteredSubscriptions.map((subscription) => {
                   const isActionLoading =
                     actionLoadingId === subscription.subscription_id;
+                  const isManualReview = subscription.status === "manual_review";
 
                   return (
                     <Card
@@ -571,11 +783,11 @@ export default function AdminBillingPage() {
                           </div>
 
                           <h3 className="mt-3 text-lg font-black text-slate-900">
-                            {subscription.user_name}
+                            {subscription.user_name || "Aluno sem nome"}
                           </h3>
 
                           <p className="text-sm text-slate-500">
-                            {subscription.user_email}
+                            {subscription.user_email || "Sem e-mail"}
                           </p>
 
                           <p className="mt-2 text-xs text-slate-400">
@@ -601,17 +813,17 @@ export default function AdminBillingPage() {
 
                           <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                             <Clock3 className="h-4 w-4" />
-                            Vence em:{" "}
-                            {formatDate(subscription.current_period_end)}
+                            Vence em: {formatDate(subscription.current_period_end)}
                           </div>
                         </div>
 
-                        <div className="flex flex-col gap-2 lg:w-48">
-                          {subscription.status === "manual_review" && (
+                        <div className="flex flex-col gap-2 lg:w-52">
+                          {isManualReview ? (
                             <Button
                               onClick={() =>
-                                approveSubscription(
-                                  subscription.subscription_id
+                                renewSubscription(
+                                  subscription.subscription_id,
+                                  "aprovar"
                                 )
                               }
                               disabled={isActionLoading}
@@ -622,7 +834,22 @@ export default function AdminBillingPage() {
                               ) : (
                                 <CheckCircle2 className="h-4 w-4" />
                               )}
-                              Aprovar
+                              Aprovar 1 mês
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() =>
+                                renewSubscription(subscription.subscription_id)
+                              }
+                              disabled={isActionLoading}
+                              className="gap-2"
+                            >
+                              {isActionLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-4 w-4" />
+                              )}
+                              Renovar +1 mês
                             </Button>
                           )}
 
@@ -630,9 +857,7 @@ export default function AdminBillingPage() {
                             <Button
                               variant="outline"
                               onClick={() =>
-                                cancelSubscription(
-                                  subscription.subscription_id
-                                )
+                                cancelSubscription(subscription.subscription_id)
                               }
                               disabled={isActionLoading}
                               className="gap-2 border-red-200 text-red-700 hover:bg-red-50"
@@ -655,6 +880,206 @@ export default function AdminBillingPage() {
           </>
         )}
 
+        {activeTab === "plans" && (
+          <>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card className="border-slate-200 p-5">
+                <p className="text-sm text-slate-500">Total de planos</p>
+                <p className="mt-2 text-3xl font-black text-slate-900">
+                  {planStats.total}
+                </p>
+              </Card>
+
+              <Card className="border-emerald-200 bg-emerald-50 p-5">
+                <p className="text-sm text-emerald-700">Ativos</p>
+                <p className="mt-2 text-3xl font-black text-emerald-900">
+                  {planStats.active}
+                </p>
+              </Card>
+
+              <Card className="border-cyan-200 bg-cyan-50 p-5">
+                <p className="text-sm text-cyan-700">Com limite de vagas</p>
+                <p className="mt-2 text-3xl font-black text-cyan-900">
+                  {planStats.limited}
+                </p>
+              </Card>
+            </div>
+
+            <Card className="border-slate-200 p-5">
+              <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                <p>
+                  Alterações de preço e limite entram na tela pública de planos
+                  assim que o banco atualizar. O limite conta assinaturas ativas
+                  e solicitações em análise, para evitar vender mais vagas do que
+                  você quer liberar.
+                </p>
+              </div>
+            </Card>
+
+            {loading ? (
+              <Card className="flex items-center justify-center gap-3 p-10">
+                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+                <p className="text-slate-600">Carregando planos...</p>
+              </Card>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {plans.map((plan) => {
+                  const form = planForms[plan.id] ?? buildPlanForm(plan);
+                  const isSaving = savingPlanId === plan.id;
+                  const max = plan.max_active_subscriptions;
+                  const used = plan.used_slots ?? 0;
+                  const percent = max
+                    ? Math.min(100, Math.round((used / max) * 100))
+                    : 0;
+
+                  return (
+                    <Card key={plan.id} className="border-slate-200 p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                            <Edit3 className="h-4 w-4" />
+                            {plan.slug}
+                          </div>
+                          <h3 className="mt-2 text-xl font-black text-slate-900">
+                            {plan.name}
+                          </h3>
+                        </div>
+
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                            plan.is_active
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {plan.is_active ? "Ativo" : "Inativo"}
+                        </span>
+                      </div>
+
+                      <div className="mt-5 space-y-3">
+                        <label className="block">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Nome
+                          </span>
+                          <input
+                            value={form.name}
+                            onChange={(event) =>
+                              updatePlanForm(plan.id, { name: event.target.value })
+                            }
+                            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Valor mensal
+                          </span>
+                          <div className="mt-1 flex items-center rounded-2xl border border-slate-200 bg-white px-4 focus-within:border-slate-900">
+                            <span className="text-sm font-black text-slate-500">R$</span>
+                            <input
+                              value={form.price}
+                              onChange={(event) =>
+                                updatePlanForm(plan.id, { price: event.target.value })
+                              }
+                              placeholder="9,00"
+                              className="w-full bg-transparent px-3 py-3 text-sm text-slate-700 outline-none"
+                            />
+                          </div>
+                        </label>
+
+                        <label className="block">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Limite de assinaturas
+                          </span>
+                          <input
+                            value={form.maxActiveSubscriptions}
+                            onChange={(event) =>
+                              updatePlanForm(plan.id, {
+                                maxActiveSubscriptions: event.target.value,
+                              })
+                            }
+                            placeholder="Sem limite"
+                            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                          />
+                          <p className="mt-1 text-xs text-slate-400">
+                            Deixe em branco para plano sem limite.
+                          </p>
+                        </label>
+
+                        <label className="block">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Descrição pública
+                          </span>
+                          <textarea
+                            value={form.description}
+                            onChange={(event) =>
+                              updatePlanForm(plan.id, {
+                                description: event.target.value,
+                              })
+                            }
+                            rows={3}
+                            className="mt-1 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                          />
+                        </label>
+
+                        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={form.isActive}
+                            onChange={(event) =>
+                              updatePlanForm(plan.id, {
+                                isActive: event.target.checked,
+                              })
+                            }
+                          />
+                          Mostrar plano na tela pública
+                        </label>
+                      </div>
+
+                      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex justify-between text-xs font-bold text-slate-500">
+                          <span>Uso atual</span>
+                          <span>
+                            {used}
+                            {max ? `/${max}` : ""} vagas
+                          </span>
+                        </div>
+                        {max && (
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                            <div
+                              className="h-full rounded-full bg-cyan-400"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        )}
+                        <p className="mt-2 text-xs text-slate-500">
+                          {max
+                            ? `${plan.remaining_slots ?? 0} vagas restantes.`
+                            : "Plano sem limite definido."}
+                        </p>
+                      </div>
+
+                      <Button
+                        onClick={() => savePlan(plan)}
+                        disabled={isSaving}
+                        className="mt-5 w-full gap-2"
+                      >
+                        {isSaving ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                        Salvar alterações
+                      </Button>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
         {activeTab === "invites" && (
           <>
             <Card className="border-slate-200 p-5">
@@ -664,8 +1089,7 @@ export default function AdminBillingPage() {
                 </h2>
 
                 <p className="text-sm text-slate-500">
-                  Use isso para liberar o plano de R$ 6 ou outro plano especial
-                  para um e-mail específico.
+                  Use isso para liberar um plano especial para um e-mail específico.
                 </p>
               </div>
 
@@ -678,11 +1102,13 @@ export default function AdminBillingPage() {
                   onChange={(event) => setSelectedPlanSlug(event.target.value)}
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
                 >
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.slug}>
-                      {plan.name} - {formatPriceFromCents(plan.price_cents)}
-                    </option>
-                  ))}
+                  {plans
+                    .filter((plan) => plan.is_active)
+                    .map((plan) => (
+                      <option key={plan.id} value={plan.slug}>
+                        {plan.name} - {formatPriceFromCents(plan.price_cents)}
+                      </option>
+                    ))}
                 </select>
 
                 <input
