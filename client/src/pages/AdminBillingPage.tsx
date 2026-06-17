@@ -664,7 +664,7 @@ export default function AdminBillingPage() {
                 </h2>
 
                 <p className="text-sm text-slate-500">
-                  Use isso para liberar o plano de R$ 5 ou outro plano especial
+                  Use isso para liberar o plano de R$ 6 ou outro plano especial
                   para um e-mail específico.
                 </p>
               </div>
