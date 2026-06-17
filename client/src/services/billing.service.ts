@@ -1,11 +1,9 @@
 import { supabase } from "@/lib/supabase";
 
-export type BillingPlanSlug =
-  | "beta-selecionado-5"
-  | "beta-fundador-8"
-  | "mensal-1099";
+export type BillingPlanSlug = string;
 
 export type BillingPlan = {
+  id?: string;
   slug: BillingPlanSlug;
   dbSlugCandidates: string[];
   name: string;
@@ -13,6 +11,27 @@ export type BillingPlan = {
   currency: "BRL";
   description: string;
   isBeta: boolean;
+  maxActiveSubscriptions?: number | null;
+  usedSlots?: number;
+  remainingSlots?: number | null;
+  hasAvailableSlots?: boolean;
+};
+
+export type PublicBillingPlanRow = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  currency: string | null;
+  billing_cycle: string | null;
+  is_active: boolean;
+  max_active_subscriptions: number | null;
+  active_subscriptions_count: number;
+  manual_review_count: number;
+  used_slots: number;
+  remaining_slots: number | null;
+  has_available_slots: boolean;
 };
 
 export type ManualSubscriptionRequestResult = {
@@ -25,6 +44,13 @@ export type ManualSubscriptionRequestResult = {
   payment_url?: string | null;
   created_at?: string;
   table_used?: string;
+};
+
+export const PIX_PAYMENT_INFO = {
+  key: "66997227099",
+  displayKey: "(66) 99722-7099",
+  whatsapp: "5566997227099",
+  receiverLabel: "Rumo ao ITA",
 };
 
 export const BILLING_PLANS: BillingPlan[] = [
@@ -43,6 +69,10 @@ export const BILLING_PLANS: BillingPlan[] = [
     description:
       "Plano especial para pessoas selecionadas que vão ajudar no começo do projeto.",
     isBeta: true,
+    maxActiveSubscriptions: null,
+    usedSlots: 0,
+    remainingSlots: null,
+    hasAvailableSlots: true,
   },
   {
     slug: "beta-fundador-8",
@@ -58,6 +88,10 @@ export const BILLING_PLANS: BillingPlan[] = [
     description:
       "Plano inicial para os primeiros alunos que entrarem durante a fase beta.",
     isBeta: true,
+    maxActiveSubscriptions: 15,
+    usedSlots: 6,
+    remainingSlots: 9,
+    hasAvailableSlots: true,
   },
   {
     slug: "mensal-1099",
@@ -73,6 +107,10 @@ export const BILLING_PLANS: BillingPlan[] = [
     currency: "BRL",
     description: "Plano padrão mensal para acesso à plataforma.",
     isBeta: false,
+    maxActiveSubscriptions: null,
+    usedSlots: 0,
+    remainingSlots: null,
+    hasAvailableSlots: true,
   },
 ];
 
@@ -81,7 +119,90 @@ export function getBillingPlans() {
 }
 
 export function getBillingPlanBySlug(slug: string) {
-  return BILLING_PLANS.find((plan) => plan.slug === slug);
+  return BILLING_PLANS.find(
+    (plan) => plan.slug === slug || plan.dbSlugCandidates.includes(slug)
+  );
+}
+
+export function formatPlanPrice(cents: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(cents / 100);
+}
+
+function isBetaPlan(slug: string) {
+  const normalized = slug.toLowerCase();
+  return normalized.includes("beta") || normalized.includes("fundador") || normalized.includes("selecion");
+}
+
+function mapPublicRowToPlan(row: PublicBillingPlanRow): BillingPlan {
+  const fallback = getBillingPlanBySlug(row.slug);
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    dbSlugCandidates: fallback?.dbSlugCandidates ?? [row.slug],
+    name: row.name,
+    amountCents: row.price_cents,
+    currency: "BRL",
+    description: row.description ?? fallback?.description ?? "Plano de acesso à plataforma.",
+    isBeta: fallback?.isBeta ?? isBetaPlan(row.slug),
+    maxActiveSubscriptions: row.max_active_subscriptions,
+    usedSlots: row.used_slots ?? 0,
+    remainingSlots: row.remaining_slots,
+    hasAvailableSlots: row.has_available_slots,
+  };
+}
+
+export async function loadPublicBillingPlans(): Promise<BillingPlan[]> {
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "get_public_billing_plans"
+  );
+
+  if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+    return (rpcData as PublicBillingPlanRow[]).map(mapPublicRowToPlan);
+  }
+
+  if (rpcError) {
+    console.warn("Não foi possível carregar planos públicos via RPC:", rpcError);
+  }
+
+  const { data, error } = await supabase
+    .from("billing_plans")
+    .select(
+      "id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions"
+    )
+    .eq("is_active", true)
+    .order("price_cents", { ascending: true });
+
+  if (error) {
+    console.warn("Não foi possível carregar billing_plans. Usando fallback local:", error);
+    return BILLING_PLANS;
+  }
+
+  if (!data || data.length === 0) {
+    return BILLING_PLANS;
+  }
+
+  return data.map((row: any) =>
+    mapPublicRowToPlan({
+      id: String(row.id),
+      slug: row.slug,
+      name: row.name,
+      description: row.description,
+      price_cents: row.price_cents,
+      currency: row.currency,
+      billing_cycle: row.billing_cycle,
+      is_active: row.is_active,
+      max_active_subscriptions: row.max_active_subscriptions ?? null,
+      active_subscriptions_count: 0,
+      manual_review_count: 0,
+      used_slots: 0,
+      remaining_slots: row.max_active_subscriptions ?? null,
+      has_available_slots: true,
+    })
+  );
 }
 
 async function getCurrentUserOrThrow() {
@@ -116,11 +237,20 @@ async function getUserProfile(userId: string) {
   return data;
 }
 
-async function findBillingPlan(plan: BillingPlan) {
+async function findBillingPlan(planSlug: string) {
+  const localPlan = getBillingPlanBySlug(planSlug);
+  const candidates = localPlan?.dbSlugCandidates ?? [planSlug];
+
+  if (!candidates.includes(planSlug)) {
+    candidates.unshift(planSlug);
+  }
+
   const { data, error } = await supabase
     .from("billing_plans")
-    .select("id, slug, name, price_cents, currency, billing_cycle, is_active")
-    .in("slug", plan.dbSlugCandidates)
+    .select(
+      "id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions"
+    )
+    .in("slug", candidates)
     .eq("is_active", true)
     .limit(1)
     .maybeSingle();
@@ -130,73 +260,65 @@ async function findBillingPlan(plan: BillingPlan) {
     return null;
   }
 
-  if (data?.id) {
-    return data;
-  }
-
-  const { data: fallbackData, error: fallbackError } = await supabase
-    .from("billing_plans")
-    .select("id, slug, name, price_cents, currency, billing_cycle, is_active")
-    .eq("price_cents", plan.amountCents)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-
-  if (fallbackError) {
-    console.warn(
-      "Não foi possível buscar billing_plans pelo preço:",
-      fallbackError
-    );
-    return null;
-  }
-
-  return fallbackData;
+  return data;
 }
 
-async function findLatestUserSubscription(userId: string) {
+async function findLatestUserBlockingSubscription(userId: string) {
+  const now = Date.now();
+
   const { data, error } = await supabase
     .from("billing_subscriptions")
     .select("*")
     .eq("user_id", userId)
     .in("status", ["manual_review", "active", "trialing"])
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
 
   if (error) {
     console.warn("Não foi possível buscar assinatura existente:", error);
     return null;
   }
 
-  return data;
+  return (data ?? []).find((subscription: any) => {
+    if (subscription.status === "manual_review") return true;
+
+    if (!subscription.current_period_end) return true;
+
+    const end = new Date(subscription.current_period_end).getTime();
+    return Number.isFinite(end) && end >= now;
+  });
+}
+
+async function assertPlanHasAvailableSlots(planSlug: string) {
+  const publicPlans = await loadPublicBillingPlans().catch(() => []);
+  const publicPlan = publicPlans.find(
+    (plan) => plan.slug === planSlug || plan.dbSlugCandidates.includes(planSlug)
+  );
+
+  if (publicPlan && publicPlan.hasAvailableSlots === false) {
+    throw new Error("Este plano atingiu o limite de vagas disponível no momento.");
+  }
 }
 
 export async function requestManualSubscription(
   planSlug: string
 ): Promise<ManualSubscriptionRequestResult> {
-  const localPlan = getBillingPlanBySlug(planSlug);
-
-  if (!localPlan) {
-    throw new Error("Plano inválido.");
-  }
-
   const user = await getCurrentUserOrThrow();
   const profile = await getUserProfile(user.id);
-  const billingPlan = await findBillingPlan(localPlan);
+
+  await assertPlanHasAvailableSlots(planSlug);
+
+  const billingPlan = await findBillingPlan(planSlug);
 
   if (!billingPlan?.id) {
     throw new Error(
-      `Plano não encontrado no banco. Slug enviado: ${localPlan.slug}. Verifique os slugs em billing_plans.`
+      `Plano não encontrado no banco. Slug enviado: ${planSlug}. Verifique os slugs em billing_plans.`
     );
   }
 
-  const existingSubscription = await findLatestUserSubscription(user.id);
+  const existingSubscription = await findLatestUserBlockingSubscription(user.id);
 
-  if (
-    existingSubscription?.status === "active" ||
-    existingSubscription?.status === "trialing" ||
-    existingSubscription?.status === "manual_review"
-  ) {
+  if (existingSubscription) {
     return {
       ...(existingSubscription as ManualSubscriptionRequestResult),
       table_used: "billing_subscriptions",
@@ -214,17 +336,18 @@ export async function requestManualSubscription(
   const customerPhone = profile?.telefone || user.user_metadata?.telefone || null;
 
   const metadata = {
-    origin: "site_beta",
+    origin: "site_beta_manual_pix",
     requestedAt: new Date().toISOString(),
-    frontendPlanSlug: localPlan.slug,
+    frontendPlanSlug: planSlug,
     databasePlanSlug: billingPlan.slug,
+    paymentMethod: "pix_manual",
     plan: {
-      slug: localPlan.slug,
+      slug: planSlug,
       dbSlug: billingPlan.slug,
-      name: localPlan.name,
-      amountCents: localPlan.amountCents,
-      currency: localPlan.currency,
-      isBeta: localPlan.isBeta,
+      name: billingPlan.name,
+      amountCents: billingPlan.price_cents,
+      currency: billingPlan.currency ?? "BRL",
+      isBeta: isBetaPlan(billingPlan.slug),
     },
     customer: {
       name: customerName,
