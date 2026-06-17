@@ -1,12 +1,9 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Redirect } from "wouter";
 import { Loader2 } from "lucide-react";
 
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import {
-  checkPlatformAccess,
-  getCachedPlatformAccess,
-} from "@/services/access.service";
+import { checkPlatformAccess } from "@/services/access.service";
 
 type SubscriptionGuardProps = {
   children: ReactNode;
@@ -14,56 +11,74 @@ type SubscriptionGuardProps = {
 
 type AccessState = "checking" | "allowed" | "blocked" | "unauthenticated";
 
+const ACCESS_RECHECK_INTERVAL_MS = 60 * 1000;
+
 export default function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const { isAuthenticated, loading: authLoading, user } = useSupabaseAuth();
-
   const [accessState, setAccessState] = useState<AccessState>("checking");
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkAccess() {
+  const runAccessCheck = useCallback(
+    async (options: { silent?: boolean } = {}) => {
       if (authLoading) return;
 
       if (!isAuthenticated || !user) {
-        if (!cancelled) {
-          setAccessState("unauthenticated");
-        }
-
+        setAccessState("unauthenticated");
         return;
       }
 
-      const cached = getCachedPlatformAccess(user.id);
-
-      if (cached && !cancelled) {
-        setAccessState(cached.status);
-      } else if (!cancelled) {
+      if (!options.silent) {
         setAccessState("checking");
       }
 
       try {
-        const freshAccess = await checkPlatformAccess(user.id, {
+        const result = await checkPlatformAccess(user.id, {
           forceRefresh: true,
         });
 
-        if (!cancelled) {
-          setAccessState(freshAccess.status);
-        }
+        setAccessState(result.status);
       } catch (error) {
         console.error("Erro inesperado ao verificar assinatura:", error);
-
-        if (!cancelled && !cached) {
-          setAccessState("blocked");
-        }
+        setAccessState("blocked");
       }
+    },
+    [authLoading, isAuthenticated, user]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initialCheck() {
+      if (cancelled) return;
+      await runAccessCheck();
     }
 
-    checkAccess();
+    initialCheck();
 
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated, user]);
+  }, [runAccessCheck]);
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || !user) return;
+
+    const intervalId = window.setInterval(() => {
+      runAccessCheck({ silent: true });
+    }, ACCESS_RECHECK_INTERVAL_MS);
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        runAccessCheck({ silent: true });
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [authLoading, isAuthenticated, runAccessCheck, user]);
 
   if (authLoading || accessState === "checking") {
     return (
