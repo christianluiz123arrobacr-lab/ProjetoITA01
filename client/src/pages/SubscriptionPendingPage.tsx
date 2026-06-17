@@ -43,11 +43,9 @@ export default function SubscriptionPendingPage() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
-              Para acessar a plataforma completa, você precisa escolher um plano
-              e finalizar a assinatura. A conta já existe, então o pagamento
-              fica vinculado ao seu usuário, que é o mínimo de organização que
-              um sistema de pagamento deveria ter antes de sair cobrando gente
-              por aí.
+              Para acessar a plataforma completa, escolha um plano e finalize
+              a assinatura. A liberação acontece quando o pagamento é confirmado
+              e a assinatura fica vinculada à sua conta.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
