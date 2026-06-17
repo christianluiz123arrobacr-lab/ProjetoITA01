@@ -1,9 +1,9 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Redirect } from "wouter";
 import { Loader2 } from "lucide-react";
 
+import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { checkPlatformAccess } from "@/services/access.service";
 
 type SubscriptionGuardProps = {
   children: ReactNode;
@@ -11,74 +11,139 @@ type SubscriptionGuardProps = {
 
 type AccessState = "checking" | "allowed" | "blocked" | "unauthenticated";
 
-const ACCESS_RECHECK_INTERVAL_MS = 60 * 1000;
-
 export default function SubscriptionGuard({ children }: SubscriptionGuardProps) {
-  const { isAuthenticated, loading: authLoading, user } = useSupabaseAuth();
+  const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
+
   const [accessState, setAccessState] = useState<AccessState>("checking");
-
-  const runAccessCheck = useCallback(
-    async (options: { silent?: boolean } = {}) => {
-      if (authLoading) return;
-
-      if (!isAuthenticated || !user) {
-        setAccessState("unauthenticated");
-        return;
-      }
-
-      if (!options.silent) {
-        setAccessState("checking");
-      }
-
-      try {
-        const result = await checkPlatformAccess(user.id, {
-          forceRefresh: true,
-        });
-
-        setAccessState(result.status);
-      } catch (error) {
-        console.error("Erro inesperado ao verificar assinatura:", error);
-        setAccessState("blocked");
-      }
-    },
-    [authLoading, isAuthenticated, user]
-  );
 
   useEffect(() => {
     let cancelled = false;
+    let intervalId: number | undefined;
 
-    async function initialCheck() {
-      if (cancelled) return;
-      await runAccessCheck();
-    }
+    async function checkAccess(showLoading = false) {
+      if (authLoading) return;
 
-    initialCheck();
+      if (!isAuthenticated) {
+        if (!cancelled) {
+          setAccessState("unauthenticated");
+        }
+        return;
+      }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [runAccessCheck]);
+      try {
+        if (showLoading) {
+          setAccessState("checking");
+        }
 
-  useEffect(() => {
-    if (authLoading || !isAuthenticated || !user) return;
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-    const intervalId = window.setInterval(() => {
-      runAccessCheck({ silent: true });
-    }, ACCESS_RECHECK_INTERVAL_MS);
+        if (userError || !user) {
+          if (!cancelled) {
+            setAccessState("unauthenticated");
+          }
+          return;
+        }
 
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        runAccessCheck({ silent: true });
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role, ativo")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profileError) {
+          console.warn("Erro ao buscar perfil:", profileError);
+        }
+
+        if (profile?.role === "admin") {
+          if (!cancelled) {
+            setAccessState("allowed");
+          }
+          return;
+        }
+
+        if (profile?.ativo === false) {
+          if (!cancelled) {
+            setAccessState("blocked");
+          }
+          return;
+        }
+
+        const { data: hasActiveSubscription, error: rpcError } =
+          await supabase.rpc("user_has_active_subscription", {
+            target_user_id: user.id,
+          });
+
+        if (!rpcError && typeof hasActiveSubscription === "boolean") {
+          if (!cancelled) {
+            setAccessState(hasActiveSubscription ? "allowed" : "blocked");
+          }
+          return;
+        }
+
+        console.warn(
+          "RPC user_has_active_subscription falhou. Usando fallback em billing_subscriptions:",
+          rpcError
+        );
+
+        const now = new Date().toISOString();
+
+        const { data: subscription, error: subscriptionError } = await supabase
+          .from("billing_subscriptions")
+          .select("id, status, current_period_end, user_id")
+          .eq("user_id", user.id)
+          .in("status", ["active", "trialing"])
+          .or(`current_period_end.is.null,current_period_end.gte.${now}`)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (subscriptionError) {
+          console.error("Erro ao verificar assinatura:", subscriptionError);
+
+          if (!cancelled) {
+            setAccessState("blocked");
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setAccessState(subscription ? "allowed" : "blocked");
+        }
+      } catch (error) {
+        console.error("Erro inesperado ao verificar assinatura:", error);
+
+        if (!cancelled) {
+          setAccessState("blocked");
+        }
       }
     }
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        checkAccess(false);
+      }
+    }
+
+    checkAccess(true);
+
+    if (!authLoading && isAuthenticated) {
+      intervalId = window.setInterval(() => checkAccess(false), 60_000);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
 
     return () => {
-      window.clearInterval(intervalId);
+      cancelled = true;
+
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [authLoading, isAuthenticated, runAccessCheck, user]);
+  }, [authLoading, isAuthenticated]);
 
   if (authLoading || accessState === "checking") {
     return (
