@@ -43,9 +43,9 @@ export default function SubscriptionPendingPage() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
-              Para acessar a plataforma completa, escolha um plano e finalize
-              a assinatura. A liberação acontece quando o pagamento é confirmado
-              e a assinatura fica vinculada à sua conta.
+              Para acessar a plataforma completa, escolha um plano e finalize o
+              pagamento por Pix. A conta já existe, então a solicitação fica
+              vinculada ao seu usuário para liberação manual durante a fase beta.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
