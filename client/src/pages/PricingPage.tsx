@@ -43,7 +43,7 @@ const plans: Plan[] = [
   {
     slug: "beta-selecionado-5",
     name: "Beta selecionado",
-    price: "R$ 5,00",
+    price: "R$ 6,00",
     description:
       "Plano especial para pessoas selecionadas que vão ajudar no começo do projeto.",
     badge: "Acesso especial",
@@ -60,7 +60,7 @@ const plans: Plan[] = [
   {
     slug: "beta-fundador-8",
     name: "Beta fundador",
-    price: "R$ 8,00",
+    price: "R$ 9,00",
     description:
       "Plano inicial para os primeiros alunos que entrarem durante a fase beta.",
     badge: "Mais estratégico",
@@ -79,7 +79,7 @@ const plans: Plan[] = [
   {
     slug: "mensal-1099",
     name: "Plano mensal",
-    price: "R$ 10,99",
+    price: "R$ 11,99",
     description:
       "Plano padrão para acesso mensal à plataforma quando o beta estiver mais estável.",
     badge: "Plano normal",
@@ -445,14 +445,13 @@ export default function PricingPage() {
               </div>
 
               <h2 className="text-2xl font-black text-emerald-50">
-                Pagamento nesta fase beta
+                Pagamento e liberação do acesso
               </h2>
 
               <p className="mt-4 text-sm leading-7 text-emerald-50/80">
-                Nesta primeira etapa, a solicitação pode ser conferida
-                manualmente. Depois vamos ligar isso ao Asaas com cobrança e
-                webhook automático, porque eventualmente a humanidade precisa
-                parar de aprovar assinatura no braço.
+                Nesta fase inicial, a solicitação do plano pode passar por
+                conferência manual. Após a confirmação do pagamento, o acesso é
+                liberado diretamente na sua conta.
               </p>
 
               <div className="mt-6 rounded-3xl border border-emerald-200/20 bg-slate-950/30 p-5">
@@ -467,7 +466,7 @@ export default function PricingPage() {
                   </li>
                   <li className="flex gap-2">
                     <Check className="mt-1 h-4 w-4 shrink-0" />
-                    finalize o pagamento conforme a orientação do beta;
+                    finalize o pagamento conforme a orientação da plataforma;
                   </li>
                   <li className="flex gap-2">
                     <Check className="mt-1 h-4 w-4 shrink-0" />
