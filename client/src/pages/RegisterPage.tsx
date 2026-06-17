@@ -122,18 +122,16 @@ export default function RegisterPage() {
         <div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100">
             <CheckCircle2 className="h-4 w-4" />
-            Cadastro beta
+            Cadastro de acesso
           </div>
 
           <h1 className="text-4xl font-black tracking-tight md:text-6xl">
-            Crie sua conta antes de assinar.
+            Crie sua conta para acessar os planos.
           </h1>
 
           <p className="mt-5 max-w-xl text-base leading-8 text-slate-300 md:text-lg">
-            Primeiro criamos seu acesso. Depois você escolhe o plano e finaliza
-            o pagamento. Assim a assinatura fica vinculada ao seu usuário, em
-            vez daquele caos maravilhoso de alguém pagar e o sistema não saber
-            quem foi.
+            Cadastre seus dados para criar o usuário da plataforma. Em seguida,
+            você poderá escolher o plano e solicitar a liberação do acesso.
           </p>
 
           <div className="mt-8 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
@@ -141,7 +139,7 @@ export default function RegisterPage() {
               "Banco de questões",
               "Explicações didáticas",
               "Simuladores",
-              "Recursos em beta",
+              "Recursos em desenvolvimento",
             ].map((item) => (
               <div
                 key={item}
@@ -157,8 +155,8 @@ export default function RegisterPage() {
           <h2 className="text-2xl font-black">Criar conta</h2>
 
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Use um e-mail real, porque ele será usado para login e futura
-            assinatura.
+            Use um e-mail válido. Ele será utilizado para login, recuperação de
+            senha e informações sobre sua assinatura.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
