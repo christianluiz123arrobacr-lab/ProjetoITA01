@@ -29,8 +29,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-const WHATSAPP_NUMBER = "5566997227099";
-
 type AdminUserRow = {
   id: string;
   user_id: string;
@@ -228,11 +226,33 @@ function normalize(text?: string | null) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function normalizeWhatsappPhone(phone?: string | null) {
+  const digits = (phone || "").replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  if (digits.startsWith("55")) {
+    return digits;
+  }
+
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`;
+  }
+
+  return digits;
+}
+
 function makeWhatsappUrl(student: StudentBillingRow) {
+  const phone = normalizeWhatsappPhone(student.telefone);
+
+  if (!phone) {
+    return "";
+  }
+
   const name = student.nome || student.email || "aluno";
   const message = `Olá, ${name}! Estou entrando em contato sobre sua assinatura da plataforma Rumo ao ITA.`;
 
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
 export default function AdminUsersPage() {
@@ -1076,6 +1096,7 @@ export default function AdminUsersPage() {
                   const attempts = Number(student.attempts_count || 0);
                   const correct = Number(student.correct_count || 0);
                   const accuracy = attempts > 0 ? Math.round((correct / attempts) * 100) : null;
+                  const whatsappUrl = makeWhatsappUrl(student);
 
                   return (
                     <Card key={student.id} className="border-slate-200 bg-white p-6 shadow-sm">
@@ -1301,15 +1322,26 @@ export default function AdminUsersPage() {
                               </Button>
                             </div>
 
-                            <a
-                              href={makeWhatsappUrl(student)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
-                            >
-                              <MessageCircle className="h-4 w-4" />
-                              Chamar no WhatsApp
-                            </a>
+                            {whatsappUrl ? (
+                              <a
+                                href={whatsappUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                                Chamar no WhatsApp do aluno
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-black text-slate-400"
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                                Sem WhatsApp cadastrado
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
