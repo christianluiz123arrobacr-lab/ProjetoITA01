@@ -11,9 +11,13 @@ import {
   Eye,
   EyeOff,
   Layers,
+  ListTree,
+  Maximize2,
+  Minimize2,
   MousePointerClick,
   PauseCircle,
   PlayCircle,
+  Plus,
   Rotate3D,
   RotateCcw,
   Ruler,
@@ -136,6 +140,19 @@ type DragState = {
   moved: boolean;
 };
 
+type FloatingMenu =
+  | {
+      kind: "solid";
+      x: number;
+      y: number;
+      target: SelectedTarget;
+    }
+  | {
+      kind: "background";
+      x: number;
+      y: number;
+    };
+
 const VIEWBOX_WIDTH = 980;
 const VIEWBOX_HEIGHT = 720;
 const CENTER_X = VIEWBOX_WIDTH / 2;
@@ -212,6 +229,23 @@ const INSCRIBED_PRESETS = [
     inner: "cone" as SolidType,
     sides: 32,
   },
+];
+
+const QUICK_ADD_SOLIDS: SolidType[] = [
+  "cube",
+  "box",
+  "regularPrism",
+  "pyramid",
+  "cylinder",
+  "cone",
+  "sphere",
+];
+
+const VIEW_PRESETS = [
+  { label: "Isométrica", rotationX: 18, rotationY: -28 },
+  { label: "Frente", rotationX: 0, rotationY: 0 },
+  { label: "Topo", rotationX: 72, rotationY: 0 },
+  { label: "Lateral", rotationX: 0, rotationY: 90 },
 ];
 
 function formatNumber(value: number) {
@@ -477,6 +511,7 @@ function renderMesh({
   offset,
   theme,
   onGeometryClick,
+  onGeometryDoubleClick,
 }: {
   mesh: SolidMesh;
   angleX: number;
@@ -485,6 +520,7 @@ function renderMesh({
   offset: Vec3;
   theme: RenderTheme;
   onGeometryClick?: () => void;
+  onGeometryDoubleClick?: (event: React.MouseEvent) => void;
 }) {
   const transformedFaces = mesh.faces.map((face, index) => {
     const transformed = face.points.map((point) =>
@@ -560,6 +596,11 @@ function renderMesh({
                   event.stopPropagation();
                   onGeometryClick();
                 }}
+                onDoubleClick={(event) => {
+                  if (!onGeometryDoubleClick) return;
+                  event.stopPropagation();
+                  onGeometryDoubleClick(event);
+                }}
               />
             ) : null}
           </g>
@@ -575,6 +616,7 @@ function renderSphere({
   offset,
   theme,
   onGeometryClick,
+  onGeometryDoubleClick,
 }: {
   angleX: number;
   angleY: number;
@@ -582,6 +624,7 @@ function renderSphere({
   offset: Vec3;
   theme: RenderTheme;
   onGeometryClick?: () => void;
+  onGeometryDoubleClick?: (event: React.MouseEvent) => void;
 }) {
   const center = projectPoint(offset, angleX, angleY);
   const radius = 145 * scale * center.perspective;
@@ -592,6 +635,11 @@ function renderSphere({
         if (!onGeometryClick) return;
         event.stopPropagation();
         onGeometryClick();
+      }}
+      onDoubleClick={(event) => {
+        if (!onGeometryDoubleClick) return;
+        event.stopPropagation();
+        onGeometryDoubleClick(event);
       }}
       className={onGeometryClick ? "cursor-pointer" : undefined}
     >
@@ -1223,7 +1271,7 @@ function getInspectorForAction({
       return {
         title: "Volume do paralelepípedo",
         description:
-          "O volume é produto das três dimensões. Sem drama, sem raiz, sem misticismo.",
+          "O volume é o produto das três dimensões: comprimento, largura e altura.",
         actionId: action,
         formulas: [
           {
@@ -1774,7 +1822,7 @@ function getInscribedRelationship({
         radius * innerScale
       )}}{\sqrt{3}} = ${formatNumber(cubeSide)}`,
       text:
-        "A diagonal espacial do cubo é igual ao diâmetro da esfera. É essa relação que manda na conta.",
+        "A diagonal espacial do cubo é igual ao diâmetro da esfera. Essa é a relação central do problema.",
     };
   }
 
@@ -2166,6 +2214,7 @@ function renderMeasurementOverlay({
 export default function AdminSpatialGeometryPrototypePage() {
   const visualRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
 
   const [mode, setMode] = useState<SceneMode>("simple");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("rotate");
@@ -2195,6 +2244,8 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [showAxes, setShowAxes] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [showCenter, setShowCenter] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [floatingMenu, setFloatingMenu] = useState<FloatingMenu | null>(null);
 
   useEffect(() => {
     if (!autoRotate || interactionMode === "moveInner") return;
@@ -2208,6 +2259,14 @@ export default function AdminSpatialGeometryPrototypePage() {
 
     return () => window.clearInterval(intervalId);
   }, [autoRotate, interactionMode]);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
 
   const activeSolid = mode === "simple" ? selectedSolid : outerSolid;
   const inspectedSolid =
@@ -2284,6 +2343,31 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   const actions = getActionsForSolid(inspectedSolid);
 
+  const sceneObjects = [
+    {
+      id: "outer" as SelectedTarget,
+      label: mode === "simple" ? activeDefinition.label : `Externo: ${activeDefinition.label}`,
+      solid: activeSolid,
+      metrics: outerMetrics,
+      color: "Azul",
+      visible: true,
+    },
+    ...(mode === "inscribed"
+      ? [
+          {
+            id: "inner" as SelectedTarget,
+            label: `Interno: ${
+              SOLIDS.find((item) => item.type === innerSolid)?.label ?? "Sólido"
+            }`,
+            solid: innerSolid,
+            metrics: innerMetrics,
+            color: "Laranja",
+            visible: showInnerSolid,
+          },
+        ]
+      : []),
+  ];
+
   const inspector = selectedAction
     ? getInspectorForAction({
         type: inspectedSolid,
@@ -2325,6 +2409,13 @@ export default function AdminSpatialGeometryPrototypePage() {
     setAutoRotate(false);
   }
 
+  function applyViewPreset(rotation: { rotationX: number; rotationY: number }) {
+    setRotationX(rotation.rotationX);
+    setRotationY(rotation.rotationY);
+    setAutoRotate(false);
+    setFloatingMenu(null);
+  }
+
   function centralizeInner() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
@@ -2334,6 +2425,121 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   function clearSelection() {
     setSelectedAction(null);
+  }
+
+  function getMenuPosition(clientX: number, clientY: number) {
+    const rect = visualRef.current?.getBoundingClientRect();
+
+    if (!rect) {
+      return { x: 24, y: 24 };
+    }
+
+    return {
+      x: clamp(clientX - rect.left, 12, Math.max(rect.width - 292, 12)),
+      y: clamp(clientY - rect.top, 12, Math.max(rect.height - 360, 12)),
+    };
+  }
+
+  function openSolidMenu(target: SelectedTarget, event: React.MouseEvent) {
+    const position = getMenuPosition(event.clientX, event.clientY);
+
+    setSelectedTarget(target);
+    setFloatingMenu({ kind: "solid", target, ...position });
+  }
+
+  function openBackgroundMenu(clientX: number, clientY: number) {
+    const position = getMenuPosition(clientX, clientY);
+    setFloatingMenu({ kind: "background", ...position });
+  }
+
+  function cancelLongPress() {
+    if (!longPressTimerRef.current) return;
+
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  }
+
+  function addSolidToScene(type: SolidType) {
+    if (mode === "simple") {
+      setOuterSolid(selectedSolid);
+    }
+
+    setMode("inscribed");
+    setInnerSolid(type);
+    setShowInnerSolid(true);
+    setSelectedTarget("inner");
+    setInteractionMode("moveInner");
+    setInnerOffsetX(0);
+    setInnerOffsetY(0);
+    setInnerOffsetZ(0);
+    setInnerScale(0.72);
+    clearSelection();
+    setFloatingMenu(null);
+  }
+
+  function replaceSelectedSolid(type: SolidType) {
+    if (mode === "inscribed" && selectedTarget === "inner") {
+      setInnerSolid(type);
+    } else if (mode === "simple") {
+      setSelectedSolid(type);
+    } else {
+      setOuterSolid(type);
+    }
+
+    clearSelection();
+    setFloatingMenu(null);
+  }
+
+  function adjustSelectedSolid(action: "bigger" | "smaller" | "taller" | "radius" | "volume" | "area") {
+    const isInner = mode === "inscribed" && selectedTarget === "inner";
+
+    if (action === "volume") {
+      setSelectedAction("volume");
+      setFloatingMenu(null);
+      return;
+    }
+
+    if (action === "area") {
+      const areaAction =
+        actions.find((item) => item.id === "totalArea") ??
+        actions.find((item) => item.id === "baseArea") ??
+        actions.find((item) => item.id === "faceArea") ??
+        actions.find((item) => item.id === "lateralArea");
+
+      setSelectedAction(areaAction?.id ?? "volume");
+      setFloatingMenu(null);
+      return;
+    }
+
+    if (isInner) {
+      const delta = action === "smaller" ? -0.06 : 0.06;
+      setInnerScale((current) => clamp(current + delta, 0.2, 1.05));
+      setFloatingMenu(null);
+      return;
+    }
+
+    if (action === "bigger") {
+      setSide((current) => current + 1);
+      setWidth((current) => current + 1);
+      setDepth((current) => current + 1);
+    }
+
+    if (action === "smaller") {
+      setSide((current) => Math.max(current - 1, 1));
+      setWidth((current) => Math.max(current - 1, 1));
+      setDepth((current) => Math.max(current - 1, 1));
+    }
+
+    if (action === "taller") {
+      setHeight((current) => current + 1);
+    }
+
+    if (action === "radius") {
+      setRadius((current) => current + 1);
+    }
+
+    clearSelection();
+    setFloatingMenu(null);
   }
 
   function applyPreset(preset: (typeof INSCRIBED_PRESETS)[number]) {
@@ -2358,6 +2564,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     if (event.button !== 0) return;
 
     setAutoRotate(false);
+    setFloatingMenu(null);
 
     dragStateRef.current = {
       startX: event.clientX,
@@ -2381,6 +2588,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
       dragState.moved = true;
+      cancelLongPress();
     }
 
     if (interactionMode === "moveInner" && mode === "inscribed") {
@@ -2399,6 +2607,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
     dragStateRef.current = null;
+    cancelLongPress();
 
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -2427,9 +2636,52 @@ export default function AdminSpatialGeometryPrototypePage() {
   return (
     <AdminGuard allowedRoles={["admin"]}>
       <AdminLayout
-        title="Protótipo: Geometria espacial"
-        subtitle="Visualização 3D interna para sólidos, volumes, áreas, cortes e relações de inscrição."
+        title="Simulador de Geometria Espacial"
+        subtitle="Laboratório 3D para sólidos, volumes, áreas, cortes e relações de inscrição."
       >
+        <div
+          className={
+            isFullscreen
+              ? "fixed inset-0 z-50 overflow-y-auto bg-slate-100 p-3 lg:p-5"
+              : ""
+          }
+        >
+          {isFullscreen ? (
+            <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">
+                  Modo tela cheia
+                </p>
+                <h2 className="text-lg font-black text-slate-900">
+                  Laboratório de Geometria Espacial
+                </h2>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {VIEW_PRESETS.map((view) => (
+                  <Button
+                    key={view.label}
+                    type="button"
+                    variant="outline"
+                    onClick={() => applyViewPreset(view)}
+                    className="rounded-2xl"
+                  >
+                    {view.label}
+                  </Button>
+                ))}
+
+                <Button
+                  type="button"
+                  onClick={() => setIsFullscreen(false)}
+                  className="gap-2 rounded-2xl"
+                >
+                  <Minimize2 className="h-4 w-4" />
+                  Sair da tela cheia
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <Card className="overflow-hidden border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
@@ -2494,7 +2746,9 @@ export default function AdminSpatialGeometryPrototypePage() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`relative min-h-[740px] touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
+              className={`relative touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
+                isFullscreen ? "min-h-[calc(100vh-118px)]" : "min-h-[740px]"
+              } ${
                 interactionMode === "moveInner" && mode === "inscribed"
                   ? "cursor-move"
                   : "cursor-grab active:cursor-grabbing"
@@ -2543,8 +2797,40 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </radialGradient>
                 </defs>
 
-                <rect width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="transparent" />
-                <circle cx={CENTER_X} cy={CENTER_Y} r="330" fill="url(#spatialGlow)" />
+                <rect
+                  width={VIEWBOX_WIDTH}
+                  height={VIEWBOX_HEIGHT}
+                  fill="transparent"
+                  className="cursor-crosshair"
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    openBackgroundMenu(event.clientX, event.clientY);
+                  }}
+                  onPointerDown={(event) => {
+                    if (event.pointerType === "mouse") return;
+
+                    longPressTimerRef.current = window.setTimeout(() => {
+                      openBackgroundMenu(event.clientX, event.clientY);
+                    }, 560);
+                  }}
+                />
+                <circle
+                  cx={CENTER_X}
+                  cy={CENTER_Y}
+                  r="330"
+                  fill="url(#spatialGlow)"
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    openBackgroundMenu(event.clientX, event.clientY);
+                  }}
+                  onPointerDown={(event) => {
+                    if (event.pointerType === "mouse") return;
+
+                    longPressTimerRef.current = window.setTimeout(() => {
+                      openBackgroundMenu(event.clientX, event.clientY);
+                    }, 560);
+                  }}
+                />
 
                 {showGrid ? renderGrid() : null}
                 {showAxes ? renderAxes({ angleX: rotationX, angleY: rotationY }) : null}
@@ -2556,6 +2842,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       scale: 1,
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
+                      onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
@@ -2570,6 +2857,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       scale: 1,
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
+                      onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
@@ -2590,6 +2878,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           z: innerOffsetZ,
                         },
                         onGeometryClick: () => selectGeometry("inner"),
+                        onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
                         theme: {
                           face: "#f97316",
                           edge: selectedTarget === "inner" ? "#facc15" : "#fed7aa",
@@ -2609,6 +2898,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           z: innerOffsetZ,
                         },
                         onGeometryClick: () => selectGeometry("inner"),
+                        onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
                         theme: {
                           face: "#f97316",
                           edge: selectedTarget === "inner" ? "#facc15" : "#fed7aa",
@@ -2650,6 +2940,143 @@ export default function AdminSpatialGeometryPrototypePage() {
                   offset: overlayTarget.offset,
                 })}
               </svg>
+
+              {floatingMenu ? (
+                <div
+                  className="absolute z-30 w-[280px] rounded-2xl border border-white/15 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur"
+                  style={{ left: floatingMenu.x, top: floatingMenu.y }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {floatingMenu.kind === "solid" ? (
+                    <>
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-cyan-200">
+                            Editar sólido
+                          </p>
+                          <p className="mt-1 text-sm font-black">
+                            {floatingMenu.target === "inner" ? "Sólido interno" : "Sólido externo"}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setFloatingMenu(null)}
+                          className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-white/10"
+                        >
+                          fechar
+                        </button>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectedSolid("bigger")}
+                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                        >
+                          Aumentar aresta/base
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectedSolid("smaller")}
+                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                        >
+                          Diminuir aresta/base
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectedSolid("taller")}
+                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                        >
+                          Aumentar altura
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectedSolid("radius")}
+                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                        >
+                          Aumentar raio
+                        </button>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectedSolid("volume")}
+                          className="rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/20"
+                        >
+                          Volume
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectedSolid("area")}
+                          className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-100 hover:bg-amber-400/20"
+                        >
+                          Área total
+                        </button>
+                      </div>
+
+                      <div className="mt-3 border-t border-white/10 pt-3">
+                        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                          Trocar por
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {QUICK_ADD_SOLIDS.map((solidType) => (
+                            <button
+                              key={solidType}
+                              type="button"
+                              onClick={() => replaceSelectedSolid(solidType)}
+                              className="rounded-xl bg-white/10 px-2 py-2 text-xs font-bold hover:bg-white/15"
+                            >
+                              {SOLIDS.find((solid) => solid.type === solidType)?.shortLabel}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-orange-200">
+                            Adicionar forma
+                          </p>
+                          <p className="mt-1 text-sm font-black">
+                            Colocar sólido dentro da cena
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setFloatingMenu(null)}
+                          className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-white/10"
+                        >
+                          fechar
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {QUICK_ADD_SOLIDS.map((solidType) => (
+                          <button
+                            key={solidType}
+                            type="button"
+                            onClick={() => addSolidToScene(solidType)}
+                            className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                          >
+                            {SOLIDS.find((solid) => solid.type === solidType)?.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <p className="mt-3 text-xs leading-5 text-slate-300">
+                        O sólido adicionado entra como objeto interno. Depois use
+                        “Mover sólido interno” para arrastar e ajustar a inscrição.
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <div className="border-t border-slate-100 bg-slate-50 p-5">
@@ -2757,6 +3184,16 @@ export default function AdminSpatialGeometryPrototypePage() {
                   <RotateCcw className="h-4 w-4" />
                   Resetar visão
                 </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsFullscreen(true)}
+                  className="mt-6 gap-2 rounded-2xl"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                  Tela cheia
+                </Button>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -2807,6 +3244,20 @@ export default function AdminSpatialGeometryPrototypePage() {
                   Grade
                 </Button>
               </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {VIEW_PRESETS.map((view) => (
+                  <Button
+                    key={view.label}
+                    type="button"
+                    variant="outline"
+                    onClick={() => applyViewPreset(view)}
+                    className="rounded-2xl"
+                  >
+                    {view.label}
+                  </Button>
+                ))}
+              </div>
             </div>
 
             <div className="border-t border-slate-100 bg-slate-50/80 p-5">
@@ -2824,7 +3275,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   <p className="mt-2 text-sm leading-6 text-slate-600">
                     Agora o uso principal é arrastar e clicar no sólido. Esses
                     campos ficam como ajuste fino para a matemática não virar
-                    “aproximação no olho”, essa linda forma de errar com confiança.
+                    estimativa visual sem controle.
                   </p>
                 </div>
 
@@ -2934,6 +3385,103 @@ export default function AdminSpatialGeometryPrototypePage() {
           </Card>
 
           <div className="space-y-6">
+            <Card className="border-slate-200 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <ListTree className="h-4 w-4" />
+                Cena
+              </div>
+
+              <h2 className="mt-2 text-2xl font-black text-slate-900">
+                Objetos do laboratório
+              </h2>
+
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                Clique em um objeto para selecionar. Dê duplo clique no sólido
+                no desenho para editar medidas ou trocar a forma.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                {sceneObjects.map((object) => (
+                  <button
+                    key={object.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTarget(object.id);
+                      setSelectedAction(null);
+                    }}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                      selectedTarget === object.id
+                        ? "border-indigo-300 bg-indigo-50"
+                        : "border-slate-200 bg-slate-50 hover:border-indigo-200 hover:bg-indigo-50/60"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-slate-900">
+                          {object.label}
+                        </p>
+                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+                          {object.color} · {object.visible ? "visível" : "oculto"}
+                        </p>
+                      </div>
+
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                        {SOLIDS.find((solid) => solid.type === object.solid)?.shortLabel}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      <div className="rounded-xl bg-white p-2">
+                        <p className="font-bold uppercase tracking-wide text-slate-400">
+                          Volume
+                        </p>
+                        <p className="mt-1 font-black text-slate-900">
+                          {formatNumber(object.metrics.volume)} u³
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-white p-2">
+                        <p className="font-bold uppercase tracking-wide text-slate-400">
+                          Área total
+                        </p>
+                        <p className="mt-1 font-black text-slate-900">
+                          {formatNumber(object.metrics.totalArea)} u²
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const rect = visualRef.current?.getBoundingClientRect();
+                    openBackgroundMenu(
+                      (rect?.left ?? 0) + 40,
+                      (rect?.top ?? 0) + 120
+                    );
+                  }}
+                  className="gap-2 rounded-2xl"
+                >
+                  <Plus className="h-4 w-4" />
+                  Adicionar
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={centralizeInner}
+                  disabled={mode !== "inscribed"}
+                  className="rounded-2xl"
+                >
+                  Centralizar
+                </Button>
+              </div>
+            </Card>
+
             <Card className="border-slate-200 p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700">
                 <MousePointerClick className="h-4 w-4" />
@@ -3270,6 +3818,7 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
             </Card>
           </div>
+        </div>
         </div>
       </AdminLayout>
     </AdminGuard>
