@@ -153,6 +153,8 @@ type FloatingMenu =
       y: number;
     };
 
+type AdjustmentTarget = "base" | "height" | "radius";
+
 const VIEWBOX_WIDTH = 980;
 const VIEWBOX_HEIGHT = 720;
 const CENTER_X = VIEWBOX_WIDTH / 2;
@@ -512,6 +514,7 @@ function renderMesh({
   theme,
   onGeometryClick,
   onGeometryDoubleClick,
+  onGeometryPointerDown,
 }: {
   mesh: SolidMesh;
   angleX: number;
@@ -521,6 +524,7 @@ function renderMesh({
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
+  onGeometryPointerDown?: (event: React.PointerEvent) => void;
 }) {
   const transformedFaces = mesh.faces.map((face, index) => {
     const transformed = face.points.map((point) =>
@@ -601,6 +605,9 @@ function renderMesh({
                   event.stopPropagation();
                   onGeometryDoubleClick(event);
                 }}
+                onPointerDown={(event) => {
+                  onGeometryPointerDown?.(event);
+                }}
               />
             ) : null}
           </g>
@@ -617,6 +624,7 @@ function renderSphere({
   theme,
   onGeometryClick,
   onGeometryDoubleClick,
+  onGeometryPointerDown,
 }: {
   angleX: number;
   angleY: number;
@@ -625,6 +633,7 @@ function renderSphere({
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
+  onGeometryPointerDown?: (event: React.PointerEvent) => void;
 }) {
   const center = projectPoint(offset, angleX, angleY);
   const radius = 145 * scale * center.perspective;
@@ -640,6 +649,9 @@ function renderSphere({
         if (!onGeometryDoubleClick) return;
         event.stopPropagation();
         onGeometryDoubleClick(event);
+      }}
+      onPointerDown={(event) => {
+        onGeometryPointerDown?.(event);
       }}
       className={onGeometryClick ? "cursor-pointer" : undefined}
     >
@@ -2244,8 +2256,11 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [showAxes, setShowAxes] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [showCenter, setShowCenter] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true);
   const [floatingMenu, setFloatingMenu] = useState<FloatingMenu | null>(null);
+  const [activeAdjustment, setActiveAdjustment] = useState<AdjustmentTarget | null>(
+    null
+  );
 
   useEffect(() => {
     if (!autoRotate || interactionMode === "moveInner") return;
@@ -2427,6 +2442,70 @@ export default function AdminSpatialGeometryPrototypePage() {
     setSelectedAction(null);
   }
 
+  const isAdjustingInner =
+    mode === "inscribed" && selectedTarget === "inner";
+
+  const adjustmentDetails = activeAdjustment
+    ? {
+        base: {
+          label: isAdjustingInner ? "Escala da base interna" : "Aresta/base",
+          value: isAdjustingInner ? innerScale : side,
+          min: isAdjustingInner ? 0.2 : 1,
+          max: isAdjustingInner ? 1.05 : 20,
+          step: isAdjustingInner ? 0.01 : 0.5,
+          suffix: isAdjustingInner ? "%" : "u",
+        },
+        height: {
+          label: isAdjustingInner ? "Escala da altura interna" : "Altura",
+          value: isAdjustingInner ? innerScale : height,
+          min: isAdjustingInner ? 0.2 : 1,
+          max: isAdjustingInner ? 1.05 : 24,
+          step: isAdjustingInner ? 0.01 : 0.5,
+          suffix: isAdjustingInner ? "%" : "u",
+        },
+        radius: {
+          label: isAdjustingInner ? "Escala do raio interno" : "Raio",
+          value: isAdjustingInner ? innerScale : radius,
+          min: isAdjustingInner ? 0.2 : 1,
+          max: isAdjustingInner ? 1.05 : 16,
+          step: isAdjustingInner ? 0.01 : 0.5,
+          suffix: isAdjustingInner ? "%" : "u",
+        },
+      }[activeAdjustment]
+    : null;
+
+  function setAdjustmentValue(target: AdjustmentTarget, value: number) {
+    if (isAdjustingInner) {
+      setInnerScale(clamp(value, 0.2, 1.05));
+      return;
+    }
+
+    if (target === "base") {
+      const safeValue = clamp(value, 1, 20);
+      setSide(safeValue);
+      setWidth(safeValue);
+      setDepth(safeValue);
+      return;
+    }
+
+    if (target === "height") {
+      setHeight(clamp(value, 1, 24));
+      return;
+    }
+
+    setRadius(clamp(value, 1, 16));
+  }
+
+  function nudgeAdjustment(target: AdjustmentTarget, delta: number) {
+    const current =
+      target === "base" ? side : target === "height" ? height : radius;
+
+    setAdjustmentValue(
+      target,
+      isAdjustingInner ? innerScale + delta : current + delta
+    );
+  }
+
   function getMenuPosition(clientX: number, clientY: number) {
     const rect = visualRef.current?.getBoundingClientRect();
 
@@ -2444,11 +2523,28 @@ export default function AdminSpatialGeometryPrototypePage() {
     const position = getMenuPosition(event.clientX, event.clientY);
 
     setSelectedTarget(target);
+    setActiveAdjustment(null);
     setFloatingMenu({ kind: "solid", target, ...position });
+  }
+
+  function prepareSolidMenuOnTouch(
+    target: SelectedTarget,
+    event: React.PointerEvent
+  ) {
+    if (event.pointerType === "mouse") return;
+
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null;
+      const position = getMenuPosition(event.clientX, event.clientY);
+      setSelectedTarget(target);
+      setActiveAdjustment(null);
+      setFloatingMenu({ kind: "solid", target, ...position });
+    }, 560);
   }
 
   function openBackgroundMenu(clientX: number, clientY: number) {
     const position = getMenuPosition(clientX, clientY);
+    setActiveAdjustment(null);
     setFloatingMenu({ kind: "background", ...position });
   }
 
@@ -2473,6 +2569,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
     setInnerScale(0.72);
+    setActiveAdjustment(null);
     clearSelection();
     setFloatingMenu(null);
   }
@@ -2487,14 +2584,14 @@ export default function AdminSpatialGeometryPrototypePage() {
     }
 
     clearSelection();
+    setActiveAdjustment(null);
     setFloatingMenu(null);
   }
 
-  function adjustSelectedSolid(action: "bigger" | "smaller" | "taller" | "radius" | "volume" | "area") {
-    const isInner = mode === "inscribed" && selectedTarget === "inner";
-
+  function adjustSelectedSolid(action: "volume" | "area") {
     if (action === "volume") {
       setSelectedAction("volume");
+      setActiveAdjustment(null);
       setFloatingMenu(null);
       return;
     }
@@ -2507,39 +2604,10 @@ export default function AdminSpatialGeometryPrototypePage() {
         actions.find((item) => item.id === "lateralArea");
 
       setSelectedAction(areaAction?.id ?? "volume");
+      setActiveAdjustment(null);
       setFloatingMenu(null);
       return;
     }
-
-    if (isInner) {
-      const delta = action === "smaller" ? -0.06 : 0.06;
-      setInnerScale((current) => clamp(current + delta, 0.2, 1.05));
-      setFloatingMenu(null);
-      return;
-    }
-
-    if (action === "bigger") {
-      setSide((current) => current + 1);
-      setWidth((current) => current + 1);
-      setDepth((current) => current + 1);
-    }
-
-    if (action === "smaller") {
-      setSide((current) => Math.max(current - 1, 1));
-      setWidth((current) => Math.max(current - 1, 1));
-      setDepth((current) => Math.max(current - 1, 1));
-    }
-
-    if (action === "taller") {
-      setHeight((current) => current + 1);
-    }
-
-    if (action === "radius") {
-      setRadius((current) => current + 1);
-    }
-
-    clearSelection();
-    setFloatingMenu(null);
   }
 
   function applyPreset(preset: (typeof INSCRIBED_PRESETS)[number]) {
@@ -2612,7 +2680,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch {
-      // O navegador já liberou. Drama pequeno, vida que segue.
+      // O navegador pode liberar a captura antes do evento final.
     }
   }
 
@@ -2642,12 +2710,12 @@ export default function AdminSpatialGeometryPrototypePage() {
         <div
           className={
             isFullscreen
-              ? "fixed inset-0 z-50 overflow-y-auto bg-slate-100 p-3 lg:p-5"
+              ? "fixed inset-0 z-[9999] flex h-screen flex-col overflow-hidden bg-slate-100"
               : ""
           }
         >
           {isFullscreen ? (
-            <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-h-[72px] flex-col gap-3 border-b border-slate-200 bg-white px-3 py-3 shadow-sm lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">
                   Modo tela cheia
@@ -2676,14 +2744,24 @@ export default function AdminSpatialGeometryPrototypePage() {
                   className="gap-2 rounded-2xl"
                 >
                   <Minimize2 className="h-4 w-4" />
-                  Sair da tela cheia
+                  Modo compacto
                 </Button>
               </div>
             </div>
           ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-          <Card className="overflow-hidden border-slate-200 bg-white">
+        <div
+          className={
+            isFullscreen
+              ? "grid min-h-0 flex-1 gap-3 overflow-hidden p-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]"
+              : "grid gap-6 xl:grid-cols-[1.25fr_0.75fr]"
+          }
+        >
+          <Card
+            className={`overflow-hidden border-slate-200 bg-white ${
+              isFullscreen ? "flex h-full min-h-0 flex-col" : ""
+            }`}
+          >
             <div className="border-b border-slate-100 p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
@@ -2747,7 +2825,7 @@ export default function AdminSpatialGeometryPrototypePage() {
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
               className={`relative touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
-                isFullscreen ? "min-h-[calc(100vh-118px)]" : "min-h-[740px]"
+                isFullscreen ? "min-h-0 flex-1" : "min-h-[740px]"
               } ${
                 interactionMode === "moveInner" && mode === "inscribed"
                   ? "cursor-move"
@@ -2810,6 +2888,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                     if (event.pointerType === "mouse") return;
 
                     longPressTimerRef.current = window.setTimeout(() => {
+                      longPressTimerRef.current = null;
                       openBackgroundMenu(event.clientX, event.clientY);
                     }, 560);
                   }}
@@ -2827,6 +2906,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                     if (event.pointerType === "mouse") return;
 
                     longPressTimerRef.current = window.setTimeout(() => {
+                      longPressTimerRef.current = null;
                       openBackgroundMenu(event.clientX, event.clientY);
                     }, 560);
                   }}
@@ -2843,6 +2923,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
+                      onGeometryPointerDown: (event) =>
+                        prepareSolidMenuOnTouch("outer", event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
@@ -2858,6 +2940,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
+                      onGeometryPointerDown: (event) =>
+                        prepareSolidMenuOnTouch("outer", event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
@@ -2879,6 +2963,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                         },
                         onGeometryClick: () => selectGeometry("inner"),
                         onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
+                        onGeometryPointerDown: (event) =>
+                          prepareSolidMenuOnTouch("inner", event),
                         theme: {
                           face: "#f97316",
                           edge: selectedTarget === "inner" ? "#facc15" : "#fed7aa",
@@ -2899,6 +2985,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                         },
                         onGeometryClick: () => selectGeometry("inner"),
                         onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
+                        onGeometryPointerDown: (event) =>
+                          prepareSolidMenuOnTouch("inner", event),
                         theme: {
                           face: "#f97316",
                           edge: selectedTarget === "inner" ? "#facc15" : "#fed7aa",
@@ -2972,33 +3060,130 @@ export default function AdminSpatialGeometryPrototypePage() {
                       <div className="grid gap-2">
                         <button
                           type="button"
-                          onClick={() => adjustSelectedSolid("bigger")}
-                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                          onClick={() => setActiveAdjustment("base")}
+                          className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
+                            activeAdjustment === "base"
+                              ? "bg-cyan-400/20 text-cyan-100"
+                              : "bg-white/10"
+                          }`}
                         >
-                          Aumentar aresta/base
+                          Ajustar aresta/base
                         </button>
                         <button
                           type="button"
-                          onClick={() => adjustSelectedSolid("smaller")}
-                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                          onClick={() => setActiveAdjustment("base")}
+                          className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
+                            activeAdjustment === "base"
+                              ? "bg-cyan-400/20 text-cyan-100"
+                              : "bg-white/10"
+                          }`}
                         >
                           Diminuir aresta/base
                         </button>
                         <button
                           type="button"
-                          onClick={() => adjustSelectedSolid("taller")}
-                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                          onClick={() => setActiveAdjustment("height")}
+                          className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
+                            activeAdjustment === "height"
+                              ? "bg-cyan-400/20 text-cyan-100"
+                              : "bg-white/10"
+                          }`}
                         >
-                          Aumentar altura
+                          Ajustar altura
                         </button>
                         <button
                           type="button"
-                          onClick={() => adjustSelectedSolid("radius")}
-                          className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
+                          onClick={() => setActiveAdjustment("radius")}
+                          className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
+                            activeAdjustment === "radius"
+                              ? "bg-cyan-400/20 text-cyan-100"
+                              : "bg-white/10"
+                          }`}
                         >
-                          Aumentar raio
+                          Ajustar raio
                         </button>
                       </div>
+
+                      {activeAdjustment && adjustmentDetails ? (
+                        <div className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <p className="text-xs font-bold uppercase tracking-wide text-cyan-200">
+                              {adjustmentDetails.label}
+                            </p>
+                            <p className="text-sm font-black text-white">
+                              {adjustmentDetails.suffix === "%"
+                                ? `${formatNumber(adjustmentDetails.value * 100)}%`
+                                : `${formatNumber(adjustmentDetails.value)} ${adjustmentDetails.suffix}`}
+                            </p>
+                          </div>
+
+                          <input
+                            type="range"
+                            min={adjustmentDetails.min}
+                            max={adjustmentDetails.max}
+                            step={adjustmentDetails.step}
+                            value={adjustmentDetails.value}
+                            onChange={(event) =>
+                              setAdjustmentValue(
+                                activeAdjustment,
+                                Number(event.target.value)
+                              )
+                            }
+                            className="w-full accent-cyan-300"
+                          />
+
+                          <div className="mt-3 grid grid-cols-[44px_1fr_44px] gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                nudgeAdjustment(
+                                  activeAdjustment,
+                                  isAdjustingInner ? -0.03 : -0.5
+                                )
+                              }
+                              className="rounded-xl bg-white/10 px-3 py-2 text-lg font-black hover:bg-white/15"
+                            >
+                              -
+                            </button>
+
+                            <input
+                              type="number"
+                              min={adjustmentDetails.min}
+                              max={adjustmentDetails.max}
+                              step={adjustmentDetails.step}
+                              value={Number(adjustmentDetails.value.toFixed(2))}
+                              onChange={(event) =>
+                                setAdjustmentValue(
+                                  activeAdjustment,
+                                  Number(event.target.value)
+                                )
+                              }
+                              className="rounded-xl border border-white/10 bg-white px-3 py-2 text-center text-sm font-black text-slate-900 outline-none"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                nudgeAdjustment(
+                                  activeAdjustment,
+                                  isAdjustingInner ? 0.03 : 0.5
+                                )
+                              }
+                              className="rounded-xl bg-white/10 px-3 py-2 text-lg font-black hover:bg-white/15"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {isAdjustingInner ? (
+                            <p className="mt-2 text-xs leading-5 text-cyan-100/80">
+                              Nesta etapa, o sólido interno usa escala. Dimensões
+                              independentes por objeto entram na próxima camada
+                              do laboratório.
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
 
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
@@ -3079,7 +3264,11 @@ export default function AdminSpatialGeometryPrototypePage() {
               ) : null}
             </div>
 
-            <div className="border-t border-slate-100 bg-slate-50 p-5">
+            <div
+              className={`border-t border-slate-100 bg-slate-50 p-5 ${
+                isFullscreen ? "shrink-0" : ""
+              }`}
+            >
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
                   <Rotate3D className="h-4 w-4" />
@@ -3260,7 +3449,11 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
             </div>
 
-            <div className="border-t border-slate-100 bg-slate-50/80 p-5">
+            <div
+              className={`border-t border-slate-100 bg-slate-50/80 p-5 ${
+                isFullscreen ? "hidden" : ""
+              }`}
+            >
               <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
                 <div>
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -3384,7 +3577,11 @@ export default function AdminSpatialGeometryPrototypePage() {
             </div>
           </Card>
 
-          <div className="space-y-6">
+          <div
+            className={`space-y-6 ${
+              isFullscreen ? "min-h-0 overflow-y-auto pr-1" : ""
+            }`}
+          >
             <Card className="border-slate-200 p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <ListTree className="h-4 w-4" />
