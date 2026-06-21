@@ -155,6 +155,15 @@ type FloatingMenu =
 
 type AdjustmentTarget = "base" | "height" | "radius";
 
+type ClassicFitPreset = {
+  id: string;
+  label: string;
+  outer: SolidType;
+  inner: SolidType;
+  sides: number;
+  description: string;
+};
+
 const VIEWBOX_WIDTH = 980;
 const VIEWBOX_HEIGHT = 720;
 const CENTER_X = VIEWBOX_WIDTH / 2;
@@ -230,6 +239,41 @@ const INSCRIBED_PRESETS = [
     outer: "cylinder" as SolidType,
     inner: "cone" as SolidType,
     sides: 32,
+  },
+];
+
+const CLASSIC_FIT_PRESETS: ClassicFitPreset[] = [
+  {
+    id: "sphere-in-cube",
+    label: "Esfera no cubo",
+    outer: "cube",
+    inner: "sphere",
+    sides: 6,
+    description: "A esfera toca as seis faces: d = a.",
+  },
+  {
+    id: "cube-in-sphere",
+    label: "Cubo na esfera",
+    outer: "sphere",
+    inner: "cube",
+    sides: 4,
+    description: "A diagonal espacial do cubo é o diâmetro da esfera.",
+  },
+  {
+    id: "cone-in-cylinder",
+    label: "Cone no cilindro",
+    outer: "cylinder",
+    inner: "cone",
+    sides: 32,
+    description: "Cone e cilindro compartilham raio da base e altura.",
+  },
+  {
+    id: "prism-in-cylinder",
+    label: "Prisma no cilindro",
+    outer: "cylinder",
+    inner: "regularPrism",
+    sides: 6,
+    description: "A base do prisma fica inscrita na base circular.",
   },
 ];
 
@@ -1825,13 +1869,13 @@ function getInscribedRelationship({
   }
 
   if (outerSolid === "sphere" && innerSolid === "cube") {
-    const cubeSide = (2 * radius * innerScale) / Math.sqrt(3);
+    const cubeSide = (2 * radius) / Math.sqrt(3);
 
     return {
       title: "Cubo inscrito em esfera",
       formula: String.raw`d_{\text{cubo}} = a\sqrt{3} = 2R`,
       substitution: String.raw`a = \frac{2R}{\sqrt{3}} = \frac{2 \cdot ${formatNumber(
-        radius * innerScale
+        radius
       )}}{\sqrt{3}} = ${formatNumber(cubeSide)}`,
       text:
         "A diagonal espacial do cubo é igual ao diâmetro da esfera. Essa é a relação central do problema.",
@@ -2353,6 +2397,11 @@ export default function AdminSpatialGeometryPrototypePage() {
   const emptyVolume =
     mode === "inscribed" ? Math.max(outerMetrics.volume - innerMetrics.volume, 0) : 0;
 
+  const currentClassicFit =
+    CLASSIC_FIT_PRESETS.find(
+      (preset) => preset.outer === outerSolid && preset.inner === innerSolid
+    ) ?? null;
+
   const outerMesh = getMeshForSolid(activeSolid, polygonSides);
   const innerMesh = getMeshForSolid(innerSolid, polygonSides);
 
@@ -2435,7 +2484,91 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
-    setInnerScale(0.78);
+  }
+
+  function getClassicFitScale(outer: SolidType, inner: SolidType) {
+    if (outer === "cube" && inner === "sphere") {
+      return clamp(side / (2 * Math.max(radius, 0.1)), 0.2, 1.05);
+    }
+
+    if (outer === "sphere" && inner === "cube") {
+      return clamp((2 * radius) / (Math.max(side, 0.1) * Math.sqrt(3)), 0.2, 1.05);
+    }
+
+    if (outer === "cylinder" && inner === "cone") {
+      return 1;
+    }
+
+    if (outer === "cylinder" && inner === "regularPrism") {
+      return 1;
+    }
+
+    return 0.78;
+  }
+
+  function applyClassicFit(preset: ClassicFitPreset) {
+    setMode("inscribed");
+    setOuterSolid(preset.outer);
+    setInnerSolid(preset.inner);
+    setPolygonSides(preset.sides);
+    setInnerOffsetX(0);
+    setInnerOffsetY(0);
+    setInnerOffsetZ(0);
+    setInnerScale(getClassicFitScale(preset.outer, preset.inner));
+    setSelectedTarget("inner");
+    setInteractionMode("moveInner");
+    setShowInnerSolid(true);
+    setActiveAdjustment(null);
+    setSelectedAction(null);
+    setFloatingMenu(null);
+  }
+
+  function fitCurrentSolids() {
+    setMode("inscribed");
+    setInnerOffsetX(0);
+    setInnerOffsetY(0);
+    setInnerOffsetZ(0);
+    setInnerScale(getClassicFitScale(outerSolid, innerSolid));
+    setSelectedTarget("inner");
+    setInteractionMode("moveInner");
+    setShowInnerSolid(true);
+    setActiveAdjustment(null);
+    setSelectedAction(null);
+    setFloatingMenu(null);
+  }
+
+  function getSuggestedContainer(type: SolidType): SolidType {
+    if (type === "sphere") return "cube";
+    if (type === "cube" || type === "box") return "sphere";
+    if (type === "cone" || type === "regularPrism") return "cylinder";
+    if (type === "cylinder") return "box";
+    return "cube";
+  }
+
+  function placeSelectedInsideAnother() {
+    const solidToPlace =
+      mode === "inscribed" && selectedTarget === "inner"
+        ? innerSolid
+        : mode === "simple"
+          ? selectedSolid
+          : outerSolid;
+
+    const suggestedContainer = getSuggestedContainer(solidToPlace);
+
+    setMode("inscribed");
+    setOuterSolid(suggestedContainer);
+    setInnerSolid(solidToPlace);
+    setPolygonSides(solidToPlace === "regularPrism" ? 6 : polygonSides);
+    setInnerOffsetX(0);
+    setInnerOffsetY(0);
+    setInnerOffsetZ(0);
+    setInnerScale(getClassicFitScale(suggestedContainer, solidToPlace));
+    setSelectedTarget("inner");
+    setInteractionMode("moveInner");
+    setShowInnerSolid(true);
+    setActiveAdjustment(null);
+    setSelectedAction(null);
+    setFloatingMenu(null);
   }
 
   function clearSelection() {
@@ -2618,8 +2751,11 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
-    setInnerScale(0.78);
+    setInnerScale(getClassicFitScale(preset.outer, preset.inner));
     setSelectedTarget("inner");
+    setInteractionMode("moveInner");
+    setShowInnerSolid(true);
+    setActiveAdjustment(null);
     setSelectedAction(null);
   }
 
@@ -3204,6 +3340,31 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                       <div className="mt-3 border-t border-white/10 pt-3">
                         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                          Inscrição
+                        </p>
+
+                        <div className="grid gap-2">
+                          <button
+                            type="button"
+                            onClick={placeSelectedInsideAnother}
+                            className="rounded-xl border border-indigo-300/30 bg-indigo-400/10 px-3 py-2 text-left text-sm font-bold text-indigo-100 hover:bg-indigo-400/20"
+                          >
+                            Colocar este sólido dentro de outro
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={fitCurrentSolids}
+                            disabled={mode !== "inscribed"}
+                            className="rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-left text-sm font-bold text-emerald-100 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Centralizar e encaixar no externo
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 border-t border-white/10 pt-3">
+                        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
                           Trocar por
                         </p>
                         <div className="grid grid-cols-2 gap-2">
@@ -3677,6 +3838,130 @@ export default function AdminSpatialGeometryPrototypePage() {
                   Centralizar
                 </Button>
               </div>
+            </Card>
+
+            <Card className="border-slate-200 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                <Layers className="h-4 w-4" />
+                Encaixe e ocupação
+              </div>
+
+              <h2 className="mt-2 text-2xl font-black text-slate-900">
+                Colocar sólido dentro de outro
+              </h2>
+
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                Use os encaixes clássicos para montar relações de prova e ver
+                volume ocupado, volume vazio e porcentagem de ocupação.
+              </p>
+
+              <div className="mt-5 grid gap-2">
+                {CLASSIC_FIT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyClassicFit(preset)}
+                    className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      currentClassicFit?.id === preset.id
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
+                    }`}
+                  >
+                    <p className="text-sm font-black">{preset.label}</p>
+                    <p className="mt-1 text-xs leading-5 opacity-80">
+                      {preset.description}
+                    </p>
+                  </button>
+                ))}
+              </div>
+
+              {mode === "inscribed" ? (
+                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-emerald-950">
+                        {relationship.title}
+                      </p>
+                      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                        {isCentered ? "centros alinhados" : "centros deslocados"}
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={fitCurrentSolids}
+                      className="rounded-2xl"
+                    >
+                      Encaixar
+                    </Button>
+                  </div>
+
+                  <p className="mt-3 text-sm leading-7 text-emerald-900">
+                    {relationship.text}
+                  </p>
+
+                  <div className="mt-4">
+                    <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-emerald-700">
+                      <span>Ocupação</span>
+                      <span>{formatNumber(occupation)}%</span>
+                    </div>
+                    <div className="h-3 overflow-hidden rounded-full bg-white">
+                      <div
+                        className="h-full rounded-full bg-emerald-500"
+                        style={{ width: `${clamp(occupation, 0, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-emerald-950">
+                    <div className="rounded-xl bg-white p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                        Externo
+                      </p>
+                      <p className="mt-1 font-black">
+                        {formatNumber(outerMetrics.volume)} u³
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                        Interno
+                      </p>
+                      <p className="mt-1 font-black">
+                        {formatNumber(innerMetrics.volume)} u³
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                        Vazio
+                      </p>
+                      <p className="mt-1 font-black">
+                        {formatNumber(emptyVolume)} u³
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-white p-3">
+                    <MathFormula formula={relationship.formula} display={true} />
+                    <MathFormula
+                      formula={relationship.substitution}
+                      display={true}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-bold text-slate-900">
+                    Ainda não há sólido interno.
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    Escolha um encaixe clássico acima ou dê duplo clique/segure
+                    no fundo do laboratório para adicionar uma forma.
+                  </p>
+                </div>
+              )}
             </Card>
 
             <Card className="border-slate-200 p-6">
