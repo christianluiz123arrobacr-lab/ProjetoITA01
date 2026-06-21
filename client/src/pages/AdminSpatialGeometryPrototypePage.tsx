@@ -140,6 +140,13 @@ type DragState = {
   moved: boolean;
 };
 
+type MenuDragState = {
+  startX: number;
+  startY: number;
+  startMenuX: number;
+  startMenuY: number;
+};
+
 type FloatingMenu =
   | {
       kind: "solid";
@@ -162,6 +169,15 @@ type ClassicFitPreset = {
   inner: SolidType;
   sides: number;
   description: string;
+};
+
+type OverlapEstimate = {
+  intersectionVolume: number;
+  unionVolume: number;
+  outerOnlyVolume: number;
+  innerOnlyVolume: number;
+  occupiedPercent: number;
+  sampleResolution: number;
 };
 
 const VIEWBOX_WIDTH = 980;
@@ -541,6 +557,212 @@ function getMeshForSolid(type: SolidType, sides: number): SolidMesh {
   }
 }
 
+function pointInsideRegularPolygon(
+  x: number,
+  z: number,
+  sides: number,
+  radius: number
+) {
+  const vertices = createRegularPolygon(sides, radius, 0).map((point) => ({
+    x: point.x,
+    z: point.z,
+  }));
+
+  let inside = false;
+
+  for (let current = 0, previous = vertices.length - 1; current < vertices.length; previous = current, current += 1) {
+    const a = vertices[current];
+    const b = vertices[previous];
+    const intersects =
+      a.z > z !== b.z > z &&
+      x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z + Number.EPSILON) + a.x;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+function pointInsideSolid(type: SolidType, point: Vec3, sides: number) {
+  if (type === "cube") {
+    return (
+      Math.abs(point.x) <= 1.175 &&
+      Math.abs(point.y) <= 1.175 &&
+      Math.abs(point.z) <= 1.175
+    );
+  }
+
+  if (type === "box") {
+    return (
+      Math.abs(point.x) <= 1.525 &&
+      Math.abs(point.y) <= 1.075 &&
+      Math.abs(point.z) <= 0.925
+    );
+  }
+
+  if (type === "regularPrism") {
+    return (
+      Math.abs(point.y) <= 1.2 &&
+      pointInsideRegularPolygon(point.x, point.z, sides, 1.35)
+    );
+  }
+
+  if (type === "pyramid") {
+    const halfHeight = 1.325;
+
+    if (point.y < -halfHeight || point.y > halfHeight) {
+      return false;
+    }
+
+    const fraction = (halfHeight - point.y) / (2 * halfHeight);
+    return pointInsideRegularPolygon(point.x, point.z, sides, 1.45 * fraction);
+  }
+
+  if (type === "cylinder") {
+    return Math.abs(point.y) <= 1.225 && point.x ** 2 + point.z ** 2 <= 1.35 ** 2;
+  }
+
+  if (type === "cone") {
+    const halfHeight = 1.275;
+
+    if (point.y < -halfHeight || point.y > halfHeight) {
+      return false;
+    }
+
+    const fraction = (halfHeight - point.y) / (2 * halfHeight);
+    return point.x ** 2 + point.z ** 2 <= (1.35 * fraction) ** 2;
+  }
+
+  return point.x ** 2 + point.y ** 2 + point.z ** 2 <= 1.35 ** 2;
+}
+
+function getSolidBounds(type: SolidType, sides: number, scale: number, offset: Vec3) {
+  const points =
+    type === "sphere"
+      ? [
+          { x: -1.35, y: -1.35, z: -1.35 },
+          { x: 1.35, y: 1.35, z: 1.35 },
+        ]
+      : (() => {
+          const mesh = getMeshForSolid(type, sides);
+          return mesh.faces
+            .flatMap((face) => face.points)
+            .concat(mesh.edges.flat());
+        })();
+
+  const transformed = points.map((point) => transformPoint(point, scale, offset));
+
+  return transformed.reduce(
+    (bounds, point) => ({
+      minX: Math.min(bounds.minX, point.x),
+      maxX: Math.max(bounds.maxX, point.x),
+      minY: Math.min(bounds.minY, point.y),
+      maxY: Math.max(bounds.maxY, point.y),
+      minZ: Math.min(bounds.minZ, point.z),
+      maxZ: Math.max(bounds.maxZ, point.z),
+    }),
+    {
+      minX: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+      minZ: Number.POSITIVE_INFINITY,
+      maxZ: Number.NEGATIVE_INFINITY,
+    }
+  );
+}
+
+function estimateSolidOverlap({
+  outerSolid,
+  innerSolid,
+  sides,
+  innerScale,
+  innerOffset,
+  outerVolume,
+  innerVolume,
+}: {
+  outerSolid: SolidType;
+  innerSolid: SolidType;
+  sides: number;
+  innerScale: number;
+  innerOffset: Vec3;
+  outerVolume: number;
+  innerVolume: number;
+}): OverlapEstimate {
+  const sampleResolution = 20;
+  const outerBounds = getSolidBounds(outerSolid, sides, 1, { x: 0, y: 0, z: 0 });
+  const innerBounds = getSolidBounds(innerSolid, sides, innerScale, innerOffset);
+
+  const bounds = {
+    minX: Math.min(outerBounds.minX, innerBounds.minX),
+    maxX: Math.max(outerBounds.maxX, innerBounds.maxX),
+    minY: Math.min(outerBounds.minY, innerBounds.minY),
+    maxY: Math.max(outerBounds.maxY, innerBounds.maxY),
+    minZ: Math.min(outerBounds.minZ, innerBounds.minZ),
+    maxZ: Math.max(outerBounds.maxZ, innerBounds.maxZ),
+  };
+
+  let outerCount = 0;
+  let intersectionCount = 0;
+
+  for (let xIndex = 0; xIndex < sampleResolution; xIndex += 1) {
+    const x =
+      bounds.minX +
+      ((xIndex + 0.5) / sampleResolution) * (bounds.maxX - bounds.minX);
+
+    for (let yIndex = 0; yIndex < sampleResolution; yIndex += 1) {
+      const y =
+        bounds.minY +
+        ((yIndex + 0.5) / sampleResolution) * (bounds.maxY - bounds.minY);
+
+      for (let zIndex = 0; zIndex < sampleResolution; zIndex += 1) {
+        const z =
+          bounds.minZ +
+          ((zIndex + 0.5) / sampleResolution) * (bounds.maxZ - bounds.minZ);
+
+        const point = { x, y, z };
+        const inOuter = pointInsideSolid(outerSolid, point, sides);
+        const innerLocal = {
+          x: (point.x - innerOffset.x) / innerScale,
+          y: (point.y - innerOffset.y) / innerScale,
+          z: (point.z - innerOffset.z) / innerScale,
+        };
+        const inInner = pointInsideSolid(innerSolid, innerLocal, sides);
+
+        if (inOuter) {
+          outerCount += 1;
+        }
+
+        if (inOuter && inInner) {
+          intersectionCount += 1;
+        }
+      }
+    }
+  }
+
+  const rawIntersection =
+    outerCount > 0 ? (intersectionCount / outerCount) * outerVolume : 0;
+  const intersectionVolume = clamp(
+    rawIntersection,
+    0,
+    Math.min(outerVolume, innerVolume)
+  );
+  const unionVolume = outerVolume + innerVolume - intersectionVolume;
+  const occupiedPercent =
+    outerVolume > 0 ? (intersectionVolume / outerVolume) * 100 : 0;
+
+  return {
+    intersectionVolume,
+    unionVolume,
+    outerOnlyVolume: Math.max(outerVolume - intersectionVolume, 0),
+    innerOnlyVolume: Math.max(innerVolume - intersectionVolume, 0),
+    occupiedPercent,
+    sampleResolution,
+  };
+}
+
 function polygonPath(points: ProjectedPoint[]) {
   return (
     points
@@ -641,11 +863,13 @@ function renderMesh({
                 strokeLinecap="round"
                 className="cursor-pointer"
                 onClick={(event) => {
+                  event.preventDefault();
                   event.stopPropagation();
                   onGeometryClick();
                 }}
                 onDoubleClick={(event) => {
                   if (!onGeometryDoubleClick) return;
+                  event.preventDefault();
                   event.stopPropagation();
                   onGeometryDoubleClick(event);
                 }}
@@ -686,11 +910,13 @@ function renderSphere({
     <g
       onClick={(event) => {
         if (!onGeometryClick) return;
+        event.preventDefault();
         event.stopPropagation();
         onGeometryClick();
       }}
       onDoubleClick={(event) => {
         if (!onGeometryDoubleClick) return;
+        event.preventDefault();
         event.stopPropagation();
         onGeometryDoubleClick(event);
       }}
@@ -2270,6 +2496,7 @@ function renderMeasurementOverlay({
 export default function AdminSpatialGeometryPrototypePage() {
   const visualRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
+  const menuDragStateRef = useRef<MenuDragState | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
 
   const [mode, setMode] = useState<SceneMode>("simple");
@@ -2326,6 +2553,17 @@ export default function AdminSpatialGeometryPrototypePage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [isFullscreen]);
 
   const activeSolid = mode === "simple" ? selectedSolid : outerSolid;
   const inspectedSolid =
@@ -2391,11 +2629,62 @@ export default function AdminSpatialGeometryPrototypePage() {
     innerScale,
   });
 
+  const overlapEstimate = useMemo(
+    () =>
+      mode === "inscribed"
+        ? estimateSolidOverlap({
+            outerSolid,
+            innerSolid,
+            sides: polygonSides,
+            innerScale,
+            innerOffset: {
+              x: innerOffsetX,
+              y: innerOffsetY,
+              z: innerOffsetZ,
+            },
+            outerVolume: outerMetrics.volume,
+            innerVolume: innerMetrics.volume,
+          })
+        : null,
+    [
+      mode,
+      outerSolid,
+      innerSolid,
+      polygonSides,
+      innerScale,
+      innerOffsetX,
+      innerOffsetY,
+      innerOffsetZ,
+      outerMetrics.volume,
+      innerMetrics.volume,
+    ]
+  );
+
+  const occupiedVolume =
+    mode === "inscribed"
+      ? overlapEstimate?.intersectionVolume ?? innerMetrics.volume
+      : 0;
+
+  const unionVolume =
+    mode === "inscribed"
+      ? overlapEstimate?.unionVolume ?? outerMetrics.volume + innerMetrics.volume
+      : 0;
+
+  const innerOutsideVolume =
+    mode === "inscribed" ? overlapEstimate?.innerOnlyVolume ?? 0 : 0;
+
+  const outerOnlyVolume =
+    mode === "inscribed" ? overlapEstimate?.outerOnlyVolume ?? outerMetrics.volume : 0;
+
   const occupation =
-    outerMetrics.volume > 0 ? (innerMetrics.volume / outerMetrics.volume) * 100 : 0;
+    mode === "inscribed"
+      ? overlapEstimate?.occupiedPercent ?? 0
+      : outerMetrics.volume > 0
+        ? (innerMetrics.volume / outerMetrics.volume) * 100
+        : 0;
 
   const emptyVolume =
-    mode === "inscribed" ? Math.max(outerMetrics.volume - innerMetrics.volume, 0) : 0;
+    mode === "inscribed" ? outerOnlyVolume : 0;
 
   const currentClassicFit =
     CLASSIC_FIT_PRESETS.find(
@@ -2652,6 +2941,48 @@ export default function AdminSpatialGeometryPrototypePage() {
     };
   }
 
+  function startMenuDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!floatingMenu) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    menuDragStateRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startMenuX: floatingMenu.x,
+      startMenuY: floatingMenu.y,
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveFloatingMenu(event: React.PointerEvent<HTMLDivElement>) {
+    const dragState = menuDragStateRef.current;
+
+    if (!dragState || !floatingMenu) return;
+
+    const rect = visualRef.current?.getBoundingClientRect();
+    const maxX = Math.max((rect?.width ?? 420) - 340, 12);
+    const maxY = Math.max((rect?.height ?? 520) - 220, 12);
+
+    setFloatingMenu({
+      ...floatingMenu,
+      x: clamp(dragState.startMenuX + event.clientX - dragState.startX, 12, maxX),
+      y: clamp(dragState.startMenuY + event.clientY - dragState.startY, 12, maxY),
+    });
+  }
+
+  function stopMenuDrag(event: React.PointerEvent<HTMLDivElement>) {
+    menuDragStateRef.current = null;
+
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // A captura pode ter sido liberada pelo navegador.
+    }
+  }
+
   function openSolidMenu(target: SelectedTarget, event: React.MouseEvent) {
     const position = getMenuPosition(event.clientX, event.clientY);
 
@@ -2846,9 +3177,13 @@ export default function AdminSpatialGeometryPrototypePage() {
         <div
           className={
             isFullscreen
-              ? "fixed inset-0 z-[9999] h-screen overflow-hidden bg-slate-950"
+              ? "fixed inset-0 z-[9999] h-screen select-none overflow-hidden bg-slate-950"
               : ""
           }
+          onDoubleClick={(event) => {
+            if (!isFullscreen) return;
+            event.preventDefault();
+          }}
         >
           {isFullscreen ? (
             <div className="absolute left-3 right-3 top-3 z-40 flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/90 px-3 py-3 shadow-2xl backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-5">
@@ -3003,7 +3338,7 @@ export default function AdminSpatialGeometryPrototypePage() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className={`relative touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
+              className={`relative select-none touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
                 isFullscreen ? "h-screen min-h-screen" : "min-h-[860px]"
               } ${
                 interactionMode === "moveInner" && mode === "inscribed"
@@ -3034,10 +3369,13 @@ export default function AdminSpatialGeometryPrototypePage() {
               {mode === "inscribed" ? (
                 <div className="absolute bottom-6 left-6 z-20 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
                   <p className="text-xs font-semibold uppercase tracking-wide text-orange-200">
-                    Ocupação
+                    Interseção
                   </p>
                   <p className="mt-1 text-xl font-black">
-                    {formatNumber(occupation)}%
+                    {formatNumber(occupiedVolume)} u³
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-orange-100">
+                    {formatNumber(occupation)}% do sólido externo
                   </p>
                 </div>
               ) : null}
@@ -3060,6 +3398,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   fill="transparent"
                   className="cursor-crosshair"
                   onDoubleClick={(event) => {
+                    event.preventDefault();
                     event.stopPropagation();
                     openBackgroundMenu(event.clientX, event.clientY);
                   }}
@@ -3078,6 +3417,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   r="330"
                   fill="url(#spatialGlow)"
                   onDoubleClick={(event) => {
+                    event.preventDefault();
                     event.stopPropagation();
                     openBackgroundMenu(event.clientX, event.clientY);
                   }}
@@ -3210,20 +3550,29 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               {floatingMenu ? (
                 <div
-                  className="absolute z-30 w-[280px] rounded-2xl border border-white/15 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur"
+                  className="absolute z-30 max-h-[calc(100vh-132px)] w-[320px] overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur"
                   style={{ left: floatingMenu.x, top: floatingMenu.y }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
                 >
                   {floatingMenu.kind === "solid" ? (
                     <>
-                      <div className="mb-3 flex items-start justify-between gap-3">
+                      <div
+                        className="mb-3 flex touch-none cursor-move items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-2"
+                        onPointerDown={startMenuDrag}
+                        onPointerMove={moveFloatingMenu}
+                        onPointerUp={stopMenuDrag}
+                        onPointerCancel={stopMenuDrag}
+                      >
                         <div>
                           <p className="text-xs font-bold uppercase tracking-wide text-cyan-200">
                             Editar sólido
                           </p>
                           <p className="mt-1 text-sm font-black">
                             {floatingMenu.target === "inner" ? "Sólido interno" : "Sólido externo"}
+                          </p>
+                          <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                            Arraste esta barra para reposicionar o menu.
                           </p>
                         </div>
 
@@ -3426,13 +3775,22 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </>
                   ) : (
                     <>
-                      <div className="mb-3 flex items-start justify-between gap-3">
+                      <div
+                        className="mb-3 flex touch-none cursor-move items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-2"
+                        onPointerDown={startMenuDrag}
+                        onPointerMove={moveFloatingMenu}
+                        onPointerUp={stopMenuDrag}
+                        onPointerCancel={stopMenuDrag}
+                      >
                         <div>
                           <p className="text-xs font-bold uppercase tracking-wide text-orange-200">
                             Adicionar forma
                           </p>
                           <p className="mt-1 text-sm font-black">
                             Colocar sólido dentro da cena
+                          </p>
+                          <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                            Arraste esta barra para reposicionar o menu.
                           </p>
                         </div>
 
@@ -3948,7 +4306,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                   <div className="mt-4">
                     <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-emerald-700">
-                      <span>Ocupação</span>
+                      <span>Volume em comum</span>
                       <span>{formatNumber(occupation)}%</span>
                     </div>
                     <div className="h-3 overflow-hidden rounded-full bg-white">
@@ -3959,34 +4317,69 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-emerald-950">
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-emerald-950">
                     <div className="rounded-xl bg-white p-3">
                       <p className="font-bold uppercase tracking-wide text-emerald-600">
-                        Externo
+                        Interseção
+                      </p>
+                      <p className="mt-1 font-black">
+                        {formatNumber(occupiedVolume)} u³
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                        União
+                      </p>
+                      <p className="mt-1 font-black">
+                        {formatNumber(unionVolume)} u³
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                        Externo vazio
+                      </p>
+                      <p className="mt-1 font-black">
+                        {formatNumber(emptyVolume)} u³
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                        Interno fora
+                      </p>
+                      <p className="mt-1 font-black">
+                        {formatNumber(innerOutsideVolume)} u³
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-emerald-950">
+                    <div className="rounded-xl bg-white/80 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                        Volume externo
                       </p>
                       <p className="mt-1 font-black">
                         {formatNumber(outerMetrics.volume)} u³
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white p-3">
+                    <div className="rounded-xl bg-white/80 p-3">
                       <p className="font-bold uppercase tracking-wide text-emerald-600">
-                        Interno
+                        Volume interno
                       </p>
                       <p className="mt-1 font-black">
                         {formatNumber(innerMetrics.volume)} u³
                       </p>
                     </div>
-
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
-                        Vazio
-                      </p>
-                      <p className="mt-1 font-black">
-                        {formatNumber(emptyVolume)} u³
-                      </p>
-                    </div>
                   </div>
+
+                  <p className="mt-3 text-xs leading-5 text-emerald-800">
+                    Interseção e união são estimadas em tempo real por amostragem
+                    3D ({overlapEstimate?.sampleResolution ?? 0}³ pontos). Ao
+                    mover o sólido interno, os valores mudam automaticamente.
+                  </p>
 
                   <div className="mt-4 rounded-2xl bg-white p-3">
                     <MathFormula formula={relationship.formula} display={true} />
@@ -4289,22 +4682,34 @@ export default function AdminSpatialGeometryPrototypePage() {
                       <strong>{formatNumber(innerMetrics.volume)} u³</strong>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span>Volume vazio</span>
+                      <span>Volume em comum</span>
+                      <strong>{formatNumber(occupiedVolume)} u³</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>Volume da união</span>
+                      <strong>{formatNumber(unionVolume)} u³</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>Externo vazio</span>
                       <strong>{formatNumber(emptyVolume)} u³</strong>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span>Ocupação</span>
+                      <span>Interno fora</span>
+                      <strong>{formatNumber(innerOutsideVolume)} u³</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>Ocupação real</span>
                       <strong>{formatNumber(occupation)}%</strong>
                     </div>
                   </div>
 
                   <div className="mt-4">
                     <MathFormula
-                      formula={String.raw`V_{\text{vazio}} = V_{\text{externo}} - V_{\text{interno}}`}
+                      formula={String.raw`V_{\cap} \approx V_{\text{interseção}}`}
                       display={true}
                     />
                     <MathFormula
-                      formula={String.raw`\text{ocupação} = \frac{V_{\text{interno}}}{V_{\text{externo}}}\cdot 100\%`}
+                      formula={String.raw`V_{\cup} = V_{\text{externo}} + V_{\text{interno}} - V_{\cap}`}
                       display={true}
                     />
                   </div>
