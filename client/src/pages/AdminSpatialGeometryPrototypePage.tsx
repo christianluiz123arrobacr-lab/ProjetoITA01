@@ -151,6 +151,23 @@ type MenuDragState = {
   startMenuY: number;
 };
 
+type GeometryElementKind = "face" | "edge" | "vertex";
+
+type GeometryElement = {
+  kind: GeometryElementKind;
+  target: SelectedTarget;
+  index: number;
+  worldPoint: Vec3;
+  label: string;
+};
+
+type GeometryMeasurement = {
+  id: string;
+  from: GeometryElement;
+  to: GeometryElement;
+  distance: number;
+};
+
 type FloatingMenu =
   | {
       kind: "solid";
@@ -162,6 +179,12 @@ type FloatingMenu =
       kind: "background";
       x: number;
       y: number;
+    }
+  | {
+      kind: "element";
+      x: number;
+      y: number;
+      element: GeometryElement;
     };
 
 type AdjustmentTarget = "base" | "height" | "radius";
@@ -1102,6 +1125,47 @@ function polygonPath(points: ProjectedPoint[]) {
   );
 }
 
+function midpoint(points: Vec3[]): Vec3 {
+  return points.reduce(
+    (sum, point) => ({
+      x: sum.x + point.x / points.length,
+      y: sum.y + point.y / points.length,
+      z: sum.z + point.z / points.length,
+    }),
+    { x: 0, y: 0, z: 0 }
+  );
+}
+
+function distanceBetweenPoints(a: Vec3, b: Vec3) {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
+}
+
+function elementKindLabel(kind: GeometryElementKind) {
+  if (kind === "face") return "Face";
+  if (kind === "edge") return "Aresta";
+  return "Vértice";
+}
+
+function buildGeometryElement({
+  kind,
+  index,
+  target,
+  worldPoint,
+}: {
+  kind: GeometryElementKind;
+  index: number;
+  target: SelectedTarget;
+  worldPoint: Vec3;
+}): GeometryElement {
+  return {
+    kind,
+    index,
+    target,
+    worldPoint,
+    label: `${elementKindLabel(kind)} ${index + 1}`,
+  };
+}
+
 function renderMesh({
   mesh,
   angleX,
@@ -1113,6 +1177,9 @@ function renderMesh({
   onGeometryClick,
   onGeometryDoubleClick,
   onGeometryPointerDown,
+  onElementClick,
+  onElementDoubleClick,
+  onElementPointerDown,
 }: {
   mesh: SolidMesh;
   angleX: number;
@@ -1124,6 +1191,15 @@ function renderMesh({
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
   onGeometryPointerDown?: (event: React.PointerEvent) => void;
+  onElementClick?: (element: Omit<GeometryElement, "target">) => void;
+  onElementDoubleClick?: (
+    element: Omit<GeometryElement, "target">,
+    event: React.MouseEvent
+  ) => void;
+  onElementPointerDown?: (
+    element: Omit<GeometryElement, "target">,
+    event: React.PointerEvent
+  ) => void;
 }) {
   const transformedFaces = mesh.faces.map((face, index) => {
     const transformed = face.points.map((point) =>
@@ -1137,7 +1213,18 @@ function renderMesh({
     const avgZ =
       projected.reduce((sum, point) => sum + point.z, 0) / projected.length;
 
-    return { ...face, index, projected, avgZ };
+    return {
+      ...face,
+      index,
+      projected,
+      avgZ,
+      element: {
+        kind: "face" as GeometryElementKind,
+        index,
+        worldPoint: midpoint(transformed),
+        label: `Face ${index + 1}`,
+      },
+    };
   });
 
   const transformedEdges = mesh.edges.map((edge, index) => {
@@ -1152,8 +1239,60 @@ function renderMesh({
     const avgZ =
       projected.reduce((sum, point) => sum + point.z, 0) / projected.length;
 
-    return { index, projected, avgZ };
+    return {
+      index,
+      projected,
+      avgZ,
+      worldPoints: transformed,
+      element: {
+        kind: "edge" as GeometryElementKind,
+        index,
+        worldPoint: midpoint(transformed),
+        label: `Aresta ${index + 1}`,
+      },
+    };
   });
+  const vertexMap = new Map<string, {
+    index: number;
+    worldPoint: Vec3;
+    projected: ProjectedPoint;
+    avgZ: number;
+    element: Omit<GeometryElement, "target">;
+  }>();
+
+  transformedEdges.forEach((edge) => {
+    edge.worldPoints.forEach((worldPoint) => {
+      const key = `${worldPoint.x.toFixed(4)}:${worldPoint.y.toFixed(4)}:${worldPoint.z.toFixed(4)}`;
+
+      if (vertexMap.has(key)) return;
+
+      const projected = projectPoint(worldPoint, angleX, angleY);
+      const index = vertexMap.size;
+      vertexMap.set(key, {
+        index,
+        worldPoint,
+        projected,
+        avgZ: projected.z,
+        element: {
+          kind: "vertex",
+          index,
+          worldPoint,
+          label: `Vértice ${index + 1}`,
+        },
+      });
+    });
+  });
+  const transformedVertices = Array.from(vertexMap.values());
+
+  const handleElementClick = (
+    element: Omit<GeometryElement, "target">,
+    event: React.MouseEvent | React.PointerEvent
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onGeometryClick?.();
+    onElementClick?.(element);
+  };
 
   return (
     <g>
@@ -1166,6 +1305,28 @@ function renderMesh({
             fill={theme.face}
             opacity={face.opacity ?? theme.opacity}
             stroke="none"
+          />
+        ))}
+
+      {[...transformedFaces]
+        .sort((a, b) => a.avgZ - b.avgZ)
+        .map((face) => (
+          <path
+            key={`face-hit-${theme.label}-${face.index}`}
+            d={polygonPath(face.projected)}
+            fill="transparent"
+            pointerEvents="all"
+            className="cursor-pointer"
+            onClick={(event) => handleElementClick(face.element, event)}
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onElementDoubleClick?.(face.element, event);
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              onElementPointerDown?.(face.element, event);
+            }}
           />
         ))}
 
@@ -1194,24 +1355,48 @@ function renderMesh({
                 stroke="transparent"
                 strokeWidth="22"
                 strokeLinecap="round"
+                pointerEvents="all"
                 className="cursor-pointer"
                 onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onGeometryClick();
+                  handleElementClick(edge.element, event);
                 }}
                 onDoubleClick={(event) => {
-                  if (!onGeometryDoubleClick) return;
                   event.preventDefault();
                   event.stopPropagation();
-                  onGeometryDoubleClick(event);
+                  onElementDoubleClick?.(edge.element, event);
                 }}
                 onPointerDown={(event) => {
+                  event.stopPropagation();
                   onGeometryPointerDown?.(event);
+                  onElementPointerDown?.(edge.element, event);
                 }}
               />
             ) : null}
           </g>
+        ))}
+
+      {[...transformedVertices]
+        .sort((a, b) => a.avgZ - b.avgZ)
+        .map((vertex) => (
+          <circle
+            key={`vertex-hit-${theme.label}-${vertex.index}`}
+            cx={vertex.projected.x}
+            cy={vertex.projected.y}
+            r="13"
+            fill="transparent"
+            pointerEvents="all"
+            className="cursor-crosshair"
+            onClick={(event) => handleElementClick(vertex.element, event)}
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onElementDoubleClick?.(vertex.element, event);
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              onElementPointerDown?.(vertex.element, event);
+            }}
+          />
         ))}
     </g>
   );
@@ -2891,6 +3076,12 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [activeSmartCut, setActiveSmartCut] = useState<SmartCutId | null>("axial");
   const [showNet, setShowNet] = useState(false);
   const [netOpenAmount, setNetOpenAmount] = useState(0);
+  const [measurementStart, setMeasurementStart] = useState<GeometryElement | null>(
+    null
+  );
+  const [geometryMeasurements, setGeometryMeasurements] = useState<
+    GeometryMeasurement[]
+  >([]);
 
   useEffect(() => {
     if (!autoRotate || interactionMode !== "rotate") return;
@@ -3546,6 +3737,100 @@ export default function AdminSpatialGeometryPrototypePage() {
     setFloatingMenu({ kind: "solid", target, ...position });
   }
 
+  function handleElementClick(element: GeometryElement) {
+    setSelectedTarget(element.target);
+    setSelectedAction(null);
+
+    if (!measurementStart) return;
+
+    const sameElement =
+      measurementStart.target === element.target &&
+      measurementStart.kind === element.kind &&
+      measurementStart.index === element.index;
+
+    if (sameElement) return;
+
+    const distance = distanceBetweenPoints(
+      measurementStart.worldPoint,
+      element.worldPoint
+    );
+
+    setGeometryMeasurements((current) => [
+      ...current.slice(-4),
+      {
+        id: `${Date.now()}-${measurementStart.target}-${measurementStart.kind}-${element.target}-${element.kind}`,
+        from: measurementStart,
+        to: element,
+        distance,
+      },
+    ]);
+    setMeasurementStart(null);
+    closeFloatingMenu();
+  }
+
+  function openElementMenu(
+    target: SelectedTarget,
+    element: Omit<GeometryElement, "target">,
+    event: React.MouseEvent
+  ) {
+    const position = getMenuPosition(event.clientX, event.clientY);
+    const fullElement = buildGeometryElement({
+      ...element,
+      target,
+    });
+
+    setSelectedTarget(target);
+    setActiveAdjustment(null);
+    setFullscreenMenuSection(null);
+    setFloatingMenu({ kind: "element", element: fullElement, ...position });
+  }
+
+  function prepareElementMenuOnTouch(
+    target: SelectedTarget,
+    element: Omit<GeometryElement, "target">,
+    event: React.PointerEvent
+  ) {
+    if (event.pointerType === "mouse") return;
+
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null;
+      const position = getMenuPosition(event.clientX, event.clientY);
+      const fullElement = buildGeometryElement({
+        ...element,
+        target,
+      });
+      setSelectedTarget(target);
+      setActiveAdjustment(null);
+      setFullscreenMenuSection(null);
+      setFloatingMenu({ kind: "element", element: fullElement, ...position });
+    }, 560);
+  }
+
+  function startMeasurementFrom(element: GeometryElement) {
+    setMeasurementStart(element);
+    setFloatingMenu(null);
+    setFullscreenMenuSection(null);
+  }
+
+  function highlightElement(element: GeometryElement) {
+    setSelectedTarget(element.target);
+
+    if (element.kind === "face") {
+      setSelectedAction("faceArea");
+      closeFloatingMenu();
+      return;
+    }
+
+    if (element.kind === "edge") {
+      setSelectedAction("edge");
+      closeFloatingMenu();
+      return;
+    }
+
+    setShowCenter(true);
+    closeFloatingMenu();
+  }
+
   function prepareSolidMenuOnTouch(
     target: SelectedTarget,
     event: React.PointerEvent
@@ -4189,6 +4474,135 @@ export default function AdminSpatialGeometryPrototypePage() {
     );
   }
 
+  function renderElementMenu(element: GeometryElement) {
+    const targetLabel = element.target === "inner" ? "interno" : "externo";
+
+    return (
+      <>
+        {renderFullscreenMenuHeader(
+          `${element.label} do sólido ${targetLabel}`,
+          "Escolha uma ação geométrica para esta parte específica."
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          {fullscreenMenuButton({
+            label: "Medir até...",
+            description: "Toque em outra face, aresta ou vértice",
+            tone: "cyan",
+            onClick: () => startMeasurementFrom(element),
+          })}
+          {fullscreenMenuButton({
+            label: "Destacar",
+            description:
+              element.kind === "face"
+                ? "Mostrar área da face"
+                : element.kind === "edge"
+                  ? "Destacar aresta"
+                  : "Marcar vértice",
+            tone: "amber",
+            onClick: () => highlightElement(element),
+          })}
+          {fullscreenMenuButton({
+            label: "Corte daqui",
+            description: "Usar como referência de seção",
+            tone: "violet",
+            onClick: () => {
+              applySmartCut(element.kind === "face" ? "base" : "diagonal");
+              closeFloatingMenu();
+            },
+          })}
+          {fullscreenMenuButton({
+            label: "Limpar medidas",
+            description: "Remover linhas criadas",
+            tone: "slate",
+            onClick: () => {
+              setGeometryMeasurements([]);
+              setMeasurementStart(null);
+              closeFloatingMenu();
+            },
+          })}
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-white/10 bg-white/10 p-3">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-300">
+            Ponto de referência
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-300">
+            A medição usa o centro da face, o ponto médio da aresta ou o próprio
+            vértice. Depois podemos evoluir para distância mínima real entre
+            face/aresta.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  function renderGeometryMeasurement(measurement: GeometryMeasurement) {
+    const from = projectPoint(measurement.from.worldPoint, rotationX, rotationY);
+    const to = projectPoint(measurement.to.worldPoint, rotationX, rotationY);
+    const middle = {
+      x: (from.x + to.x) / 2,
+      y: (from.y + to.y) / 2,
+    };
+
+    return (
+      <g key={measurement.id} pointerEvents="none">
+        <line
+          x1={from.x}
+          y1={from.y}
+          x2={to.x}
+          y2={to.y}
+          stroke="#22d3ee"
+          strokeWidth="8"
+          strokeLinecap="round"
+          opacity="0.28"
+        />
+        <line
+          x1={from.x}
+          y1={from.y}
+          x2={to.x}
+          y2={to.y}
+          stroke="#facc15"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="10 8"
+        />
+        <circle cx={from.x} cy={from.y} r="8" fill="#22d3ee" />
+        <circle cx={to.x} cy={to.y} r="8" fill="#facc15" />
+        {measurementLabel({
+          x: middle.x,
+          y: middle.y - 20,
+          text: `d = ${formatNumber(measurement.distance)} u`,
+        })}
+      </g>
+    );
+  }
+
+  function renderMeasurementStartMarker() {
+    if (!measurementStart) return null;
+
+    const point = projectPoint(measurementStart.worldPoint, rotationX, rotationY);
+
+    return (
+      <g pointerEvents="none">
+        <circle
+          cx={point.x}
+          cy={point.y}
+          r="18"
+          fill="#22d3ee"
+          opacity="0.24"
+          stroke="#67e8f9"
+          strokeWidth="3"
+        />
+        {measurementLabel({
+          x: point.x,
+          y: point.y - 28,
+          text: "origem da medida",
+        })}
+      </g>
+    );
+  }
+
   return (
     <AdminGuard allowedRoles={["admin"]}>
       <AdminLayout
@@ -4419,6 +4833,18 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </div>
               ) : null}
 
+              {measurementStart ? (
+                <div className="absolute left-1/2 top-28 z-30 w-[min(520px,calc(100vw_-_32px))] -translate-x-1/2 rounded-2xl border border-cyan-300/30 bg-cyan-950/90 px-4 py-3 text-center text-white shadow-2xl backdrop-blur">
+                  <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+                    Medição ativa
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    Origem: {measurementStart.label}. Toque em outra face,
+                    aresta ou vértice para criar a linha de distância.
+                  </p>
+                </div>
+              ) : null}
+
               <svg
                 className="absolute inset-0 h-full w-full"
                 viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
@@ -4490,6 +4916,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
                       onGeometryPointerDown: (event) =>
                         prepareSolidMenuOnTouch("outer", event),
+                      onElementClick: (element) =>
+                        handleElementClick(buildGeometryElement({ ...element, target: "outer" })),
+                      onElementDoubleClick: (element, event) =>
+                        openElementMenu("outer", element, event),
+                      onElementPointerDown: (element, event) =>
+                        prepareElementMenuOnTouch("outer", element, event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
@@ -4553,6 +4985,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                         onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
                         onGeometryPointerDown: (event) =>
                           prepareSolidMenuOnTouch("inner", event),
+                        onElementClick: (element) =>
+                          handleElementClick(buildGeometryElement({ ...element, target: "inner" })),
+                        onElementDoubleClick: (element, event) =>
+                          openElementMenu("inner", element, event),
+                        onElementPointerDown: (element, event) =>
+                          prepareElementMenuOnTouch("inner", element, event),
                         theme: {
                           face: "#f97316",
                           edge: selectedTarget === "inner" ? "#facc15" : "#fed7aa",
@@ -4613,6 +5051,11 @@ export default function AdminSpatialGeometryPrototypePage() {
                   offset: overlayTarget.offset,
                   objectRotation: overlayTarget.objectRotation,
                 })}
+
+                {geometryMeasurements.map((measurement) =>
+                  renderGeometryMeasurement(measurement)
+                )}
+                {renderMeasurementStartMarker()}
               </svg>
 
               {floatingMenu ? (
@@ -4627,11 +5070,15 @@ export default function AdminSpatialGeometryPrototypePage() {
                   onClick={(event) => event.stopPropagation()}
                 >
                   {isFullscreen ? (
-                    floatingMenu.kind === "solid" ? (
+                    floatingMenu.kind === "element" ? (
+                      renderElementMenu(floatingMenu.element)
+                    ) : floatingMenu.kind === "solid" ? (
                       renderFullscreenSolidMenu(floatingMenu.target)
                     ) : (
                       renderFullscreenBackgroundMenu()
                     )
+                  ) : floatingMenu.kind === "element" ? (
+                    renderElementMenu(floatingMenu.element)
                   ) : floatingMenu.kind === "solid" ? (
                     <>
                       <div
