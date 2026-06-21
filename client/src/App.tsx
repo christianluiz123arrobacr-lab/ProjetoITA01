@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Redirect, Route, Switch } from "wouter";
+import { Redirect, Route, Switch, useLocation } from "wouter";
 
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +7,7 @@ import NotFound from "@/pages/NotFound";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import SubscriptionGuard from "./components/SubscriptionGuard";
+import StudentSidebar from "./components/layout/StudentSidebar";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
@@ -244,9 +245,29 @@ function RootGate() {
 }
 
 function PrivateRouter() {
+  const [location] = useLocation();
+  const isAdminRoute = location.startsWith("/admin");
+  const [studentMenuOpen, setStudentMenuOpen] = useState(false);
+
   return (
     <SubscriptionGuard>
-      <Switch>
+      {!isAdminRoute ? (
+        <StudentSidebar
+          expanded={studentMenuOpen}
+          onExpandedChange={setStudentMenuOpen}
+        />
+      ) : null}
+
+      <div
+        className={
+          isAdminRoute
+            ? ""
+            : studentMenuOpen
+              ? "min-h-screen transition-[padding] duration-200 md:pl-72"
+              : "min-h-screen transition-[padding] duration-200 md:pl-[76px]"
+        }
+      >
+        <Switch>
         {/* Admin */}
         <Route path="/admin" component={AdminDashboardPage} />
         <Route path="/admin/usuarios" component={AdminUsersPage} />
@@ -547,7 +568,8 @@ function PrivateRouter() {
 
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
-      </Switch>
+        </Switch>
+      </div>
     </SubscriptionGuard>
   );
 }
