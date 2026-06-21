@@ -1176,7 +1176,6 @@ function renderMesh({
   theme,
   onGeometryClick,
   onGeometryDoubleClick,
-  onGeometryPointerDown,
   onElementClick,
   onElementDoubleClick,
   onElementPointerDown,
@@ -1190,7 +1189,6 @@ function renderMesh({
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
-  onGeometryPointerDown?: (event: React.PointerEvent) => void;
   onElementClick?: (element: Omit<GeometryElement, "target">) => void;
   onElementDoubleClick?: (
     element: Omit<GeometryElement, "target">,
@@ -1294,6 +1292,16 @@ function renderMesh({
     onElementClick?.(element);
   };
 
+  const handleElementDoubleClick = (
+    element: Omit<GeometryElement, "target">,
+    event: React.MouseEvent
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onGeometryClick?.();
+    onElementDoubleClick?.(element, event);
+  };
+
   return (
     <g>
       {[...transformedFaces]
@@ -1318,13 +1326,8 @@ function renderMesh({
             pointerEvents="all"
             className="cursor-pointer"
             onClick={(event) => handleElementClick(face.element, event)}
-            onDoubleClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onElementDoubleClick?.(face.element, event);
-            }}
+            onDoubleClick={(event) => handleElementDoubleClick(face.element, event)}
             onPointerDown={(event) => {
-              event.stopPropagation();
               onElementPointerDown?.(face.element, event);
             }}
           />
@@ -1361,13 +1364,9 @@ function renderMesh({
                   handleElementClick(edge.element, event);
                 }}
                 onDoubleClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onElementDoubleClick?.(edge.element, event);
+                  handleElementDoubleClick(edge.element, event);
                 }}
                 onPointerDown={(event) => {
-                  event.stopPropagation();
-                  onGeometryPointerDown?.(event);
                   onElementPointerDown?.(edge.element, event);
                 }}
               />
@@ -1387,13 +1386,8 @@ function renderMesh({
             pointerEvents="all"
             className="cursor-crosshair"
             onClick={(event) => handleElementClick(vertex.element, event)}
-            onDoubleClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onElementDoubleClick?.(vertex.element, event);
-            }}
+            onDoubleClick={(event) => handleElementDoubleClick(vertex.element, event)}
             onPointerDown={(event) => {
-              event.stopPropagation();
               onElementPointerDown?.(vertex.element, event);
             }}
           />
@@ -3075,7 +3069,6 @@ export default function AdminSpatialGeometryPrototypePage() {
   );
   const [activeSmartCut, setActiveSmartCut] = useState<SmartCutId | null>("axial");
   const [showNet, setShowNet] = useState(false);
-  const [netOpenAmount, setNetOpenAmount] = useState(0);
   const [measurementStart, setMeasurementStart] = useState<GeometryElement | null>(
     null
   );
@@ -3114,14 +3107,6 @@ export default function AdminSpatialGeometryPrototypePage() {
       document.body.style.userSelect = previousUserSelect;
     };
   }, [isFullscreen]);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setNetOpenAmount(showNet ? 1 : 0);
-    }, 40);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [showNet]);
 
   const activeSolid = mode === "simple" ? selectedSolid : outerSolid;
   const inspectedSolid =
@@ -4914,8 +4899,6 @@ export default function AdminSpatialGeometryPrototypePage() {
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
-                      onGeometryPointerDown: (event) =>
-                        prepareSolidMenuOnTouch("outer", event),
                       onElementClick: (element) =>
                         handleElementClick(buildGeometryElement({ ...element, target: "outer" })),
                       onElementDoubleClick: (element, event) =>
@@ -4983,8 +4966,6 @@ export default function AdminSpatialGeometryPrototypePage() {
                         objectRotation: innerObjectRotation,
                         onGeometryClick: () => selectGeometry("inner"),
                         onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
-                        onGeometryPointerDown: (event) =>
-                          prepareSolidMenuOnTouch("inner", event),
                         onElementClick: (element) =>
                           handleElementClick(buildGeometryElement({ ...element, target: "inner" })),
                         onElementDoubleClick: (element, event) =>
@@ -6240,102 +6221,83 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               {showNet ? (
                 <div className="mt-5 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4">
-                  <div className="mb-4 rounded-2xl bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-fuchsia-700">
-                      <span>Abertura da planificação</span>
-                      <span>{formatNumber(netOpenAmount * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={netOpenAmount}
-                      onChange={(event) => setNetOpenAmount(Number(event.target.value))}
-                      className="w-full accent-fuchsia-600"
-                    />
-                  </div>
-
-                  <div className="grid min-h-[170px] place-items-center rounded-2xl bg-white p-4">
+                  <div className="grid min-h-[190px] place-items-center rounded-2xl bg-white p-4">
                     {inspectedSolid === "cylinder" ? (
-                      <div className="flex items-center justify-center gap-3">
-                        <div
-                          className="grid h-14 w-14 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900 transition duration-700 ease-out"
-                          style={{
-                            transform: `translateX(${-34 * netOpenAmount}px) rotate(${-28 * netOpenAmount}deg)`,
-                          }}
-                        >
+                      <div className="flex flex-wrap items-center justify-center gap-3">
+                        <div className="grid h-16 w-16 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
                           base
                         </div>
-                        <div
-                          className="grid h-24 w-32 place-items-center rounded-xl border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900 transition duration-700 ease-out"
-                          style={{
-                            transform: `scaleX(${0.78 + 0.22 * netOpenAmount})`,
-                          }}
-                        >
+                        <div className="grid h-24 w-36 place-items-center rounded-xl border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900">
                           lateral
                         </div>
-                        <div
-                          className="grid h-14 w-14 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900 transition duration-700 ease-out"
-                          style={{
-                            transform: `translateX(${34 * netOpenAmount}px) rotate(${28 * netOpenAmount}deg)`,
-                          }}
-                        >
+                        <div className="grid h-16 w-16 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
                           base
                         </div>
                       </div>
                     ) : inspectedSolid === "cone" ? (
-                      <div className="flex items-center justify-center gap-4">
-                        <div
-                          className="grid h-24 w-32 place-items-end rounded-t-full border-4 border-fuchsia-400 bg-fuchsia-100 pb-4 text-xs font-black text-fuchsia-900 transition duration-700 ease-out"
-                          style={{
-                            transform: `translateX(${-22 * netOpenAmount}px) rotate(${-10 * netOpenAmount}deg)`,
-                            clipPath: `polygon(50% 0%, ${100 - 14 * netOpenAmount}% 100%, ${14 * netOpenAmount}% 100%)`,
-                          }}
-                        >
-                          setor lateral
+                      <div className="flex flex-wrap items-center justify-center gap-5">
+                        <div className="relative h-28 w-36 overflow-hidden rounded-2xl border-4 border-fuchsia-400 bg-fuchsia-100">
+                          <div className="absolute inset-x-4 bottom-3 top-3 rounded-t-full border-4 border-fuchsia-300 bg-fuchsia-50" />
+                          <p className="absolute inset-x-0 bottom-4 text-center text-xs font-black text-fuchsia-900">
+                            setor lateral
+                          </p>
                         </div>
-                        <div
-                          className="grid h-16 w-16 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900 transition duration-700 ease-out"
-                          style={{
-                            transform: `translateX(${28 * netOpenAmount}px) rotate(${32 * netOpenAmount}deg)`,
-                          }}
-                        >
+                        <div className="grid h-16 w-16 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
                           base
                         </div>
                       </div>
                     ) : inspectedSolid === "sphere" ? (
                       <div className="text-center">
-                        <div
-                          className="mx-auto h-24 w-24 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 transition duration-700 ease-out"
-                          style={{
-                            transform: `scale(${0.84 + 0.16 * netOpenAmount}) rotate(${18 * netOpenAmount}deg)`,
-                          }}
-                        />
+                        <div className="mx-auto h-24 w-24 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
                         <p className="mt-3 text-xs font-bold text-fuchsia-800">
                           A esfera não possui planificação plana exata sem
                           distorção.
                         </p>
                       </div>
+                    ) : inspectedSolid === "pyramid" ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div />
+                        <div className="grid h-16 w-20 place-items-center rounded-t-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
+                          face
+                        </div>
+                        <div />
+                        <div className="grid h-16 w-20 place-items-center rounded-l-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
+                          face
+                        </div>
+                        <div className="grid h-20 w-20 place-items-center rounded-lg border-4 border-fuchsia-500 bg-fuchsia-100 text-xs font-black text-fuchsia-900">
+                          base
+                        </div>
+                        <div className="grid h-16 w-20 place-items-center rounded-r-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
+                          face
+                        </div>
+                        <div />
+                        <div className="grid h-16 w-20 place-items-center rounded-b-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
+                          face
+                        </div>
+                        <div />
+                      </div>
                     ) : (
                       <div className="grid grid-cols-4 gap-2">
-                        {Array.from({ length: inspectedSolid === "pyramid" ? 5 : 6 }).map(
-                          (_, index) => (
-                            <div
-                              key={index}
-                              className="grid h-16 w-16 place-items-center rounded-lg border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900 transition duration-700 ease-out"
-                              style={{
-                                transform:
-                                  index === 0
-                                    ? `scale(${0.92 + 0.08 * netOpenAmount})`
-                                    : `translate(${((index % 4) - 1.5) * 12 * netOpenAmount}px, ${Math.floor(index / 2) * 10 * netOpenAmount}px) rotate(${(index % 2 === 0 ? -1 : 1) * 18 * netOpenAmount}deg)`,
-                                transformOrigin: "center",
-                              }}
-                            >
-                              {index === 0 ? "base" : "face"}
-                            </div>
-                          )
-                        )}
+                        <div />
+                        <div className="grid h-16 w-16 place-items-center rounded-lg border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900">
+                          face
+                        </div>
+                        <div />
+                        <div />
+                        {["face", "base", "face", "face"].map((label, index) => (
+                          <div
+                            key={`${label}-${index}`}
+                            className="grid h-16 w-16 place-items-center rounded-lg border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900"
+                          >
+                            {label}
+                          </div>
+                        ))}
+                        <div />
+                        <div className="grid h-16 w-16 place-items-center rounded-lg border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900">
+                          face
+                        </div>
+                        <div />
+                        <div />
                       </div>
                     )}
                   </div>
