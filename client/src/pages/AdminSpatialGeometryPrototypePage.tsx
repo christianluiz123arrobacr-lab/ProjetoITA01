@@ -166,6 +166,16 @@ type FloatingMenu =
 
 type AdjustmentTarget = "base" | "height" | "radius";
 type OverlapQuality = "fast" | "precise";
+type FullscreenMenuSection =
+  | null
+  | "add"
+  | "scenes"
+  | "teach"
+  | "measure"
+  | "edit"
+  | "transform"
+  | "formula"
+  | "display";
 
 type SmartCutId = "axial" | "base" | "central" | "diagonal";
 
@@ -2873,6 +2883,8 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [showCenter, setShowCenter] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [floatingMenu, setFloatingMenu] = useState<FloatingMenu | null>(null);
+  const [fullscreenMenuSection, setFullscreenMenuSection] =
+    useState<FullscreenMenuSection>(null);
   const [activeAdjustment, setActiveAdjustment] = useState<AdjustmentTarget | null>(
     null
   );
@@ -3204,6 +3216,12 @@ export default function AdminSpatialGeometryPrototypePage() {
   const exceedsSuggestedScale =
     innerBaseScale > 1 || innerHeightScale > 1 || innerRadiusScale > 1;
 
+  function closeFloatingMenu() {
+    setFloatingMenu(null);
+    setFullscreenMenuSection(null);
+    setActiveAdjustment(null);
+  }
+
   function resetRotation() {
     setRotationX(18);
     setRotationY(-28);
@@ -3214,7 +3232,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setRotationX(rotation.rotationX);
     setRotationY(rotation.rotationY);
     setAutoRotate(false);
-    setFloatingMenu(null);
+    closeFloatingMenu();
   }
 
   function centralizeInner() {
@@ -3290,7 +3308,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setShowInnerSolid(true);
     setActiveAdjustment(null);
     setSelectedAction(null);
-    setFloatingMenu(null);
+    closeFloatingMenu();
   }
 
   function fitCurrentSolids() {
@@ -3305,7 +3323,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setShowInnerSolid(true);
     setActiveAdjustment(null);
     setSelectedAction(null);
-    setFloatingMenu(null);
+    closeFloatingMenu();
   }
 
   function getSuggestedContainer(type: SolidType): SolidType {
@@ -3340,7 +3358,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setShowInnerSolid(true);
     setActiveAdjustment(null);
     setSelectedAction(null);
-    setFloatingMenu(null);
+    closeFloatingMenu();
   }
 
   function clearSelection() {
@@ -3524,6 +3542,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
     setSelectedTarget(target);
     setActiveAdjustment(null);
+    setFullscreenMenuSection(null);
     setFloatingMenu({ kind: "solid", target, ...position });
   }
 
@@ -3538,6 +3557,7 @@ export default function AdminSpatialGeometryPrototypePage() {
       const position = getMenuPosition(event.clientX, event.clientY);
       setSelectedTarget(target);
       setActiveAdjustment(null);
+      setFullscreenMenuSection(null);
       setFloatingMenu({ kind: "solid", target, ...position });
     }, 560);
   }
@@ -3545,6 +3565,7 @@ export default function AdminSpatialGeometryPrototypePage() {
   function openBackgroundMenu(clientX: number, clientY: number) {
     const position = getMenuPosition(clientX, clientY);
     setActiveAdjustment(null);
+    setFullscreenMenuSection(null);
     setFloatingMenu({ kind: "background", ...position });
   }
 
@@ -3572,7 +3593,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setAllInnerScales(0.72);
     setActiveAdjustment(null);
     clearSelection();
-    setFloatingMenu(null);
+    closeFloatingMenu();
   }
 
   function replaceSelectedSolid(type: SolidType) {
@@ -3586,14 +3607,14 @@ export default function AdminSpatialGeometryPrototypePage() {
 
     clearSelection();
     setActiveAdjustment(null);
-    setFloatingMenu(null);
+    closeFloatingMenu();
   }
 
   function adjustSelectedSolid(action: "volume" | "area") {
     if (action === "volume") {
       setSelectedAction("volume");
       setActiveAdjustment(null);
-      setFloatingMenu(null);
+      closeFloatingMenu();
       return;
     }
 
@@ -3606,7 +3627,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
       setSelectedAction(areaAction?.id ?? "volume");
       setActiveAdjustment(null);
-      setFloatingMenu(null);
+      closeFloatingMenu();
       return;
     }
   }
@@ -3626,6 +3647,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setShowInnerSolid(true);
     setActiveAdjustment(null);
     setSelectedAction(null);
+    setFullscreenMenuSection(null);
   }
 
   function selectGeometry(target: SelectedTarget) {
@@ -3637,7 +3659,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     if (event.button !== 0) return;
 
     setAutoRotate(false);
-    setFloatingMenu(null);
+    closeFloatingMenu();
     setIsDraggingScene(true);
 
     dragStateRef.current = {
@@ -3717,6 +3739,455 @@ export default function AdminSpatialGeometryPrototypePage() {
           offset: { x: 0, y: 0, z: 0 },
           objectRotation: { x: 0, y: 0, z: 0 },
         };
+
+  function renderFullscreenMenuHeader(title: string, subtitle: string) {
+    return (
+      <div
+        className="mb-3 flex touch-none cursor-move items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/10 p-3"
+        onPointerDown={startMenuDrag}
+        onPointerMove={moveFloatingMenu}
+        onPointerUp={stopMenuDrag}
+        onPointerCancel={stopMenuDrag}
+      >
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wide text-cyan-200">
+            {title}
+          </p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">
+            {subtitle}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={closeFloatingMenu}
+          className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-white/10"
+        >
+          fechar
+        </button>
+      </div>
+    );
+  }
+
+  function fullscreenMenuButton({
+    label,
+    description,
+    tone = "slate",
+    onClick,
+  }: {
+    label: string;
+    description?: string;
+    tone?: "slate" | "cyan" | "emerald" | "violet" | "amber" | "orange";
+    onClick: () => void;
+  }) {
+    const toneClass = {
+      slate: "border-white/10 bg-white/10 text-white hover:bg-white/15",
+      cyan: "border-cyan-300/25 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25",
+      emerald:
+        "border-emerald-300/25 bg-emerald-400/15 text-emerald-50 hover:bg-emerald-400/25",
+      violet:
+        "border-violet-300/25 bg-violet-400/15 text-violet-50 hover:bg-violet-400/25",
+      amber:
+        "border-amber-300/25 bg-amber-400/15 text-amber-50 hover:bg-amber-400/25",
+      orange:
+        "border-orange-300/25 bg-orange-400/15 text-orange-50 hover:bg-orange-400/25",
+    }[tone];
+
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-2xl border px-3 py-3 text-left shadow-sm transition ${toneClass}`}
+      >
+        <p className="text-sm font-black">{label}</p>
+        {description ? (
+          <p className="mt-1 text-[11px] font-semibold leading-4 opacity-75">
+            {description}
+          </p>
+        ) : null}
+      </button>
+    );
+  }
+
+  function renderFullscreenBackButton() {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setFullscreenMenuSection(null);
+          setActiveAdjustment(null);
+        }}
+        className="mb-3 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-black text-slate-200 hover:bg-white/15"
+      >
+        voltar para categorias
+      </button>
+    );
+  }
+
+  function renderFullscreenBackgroundMenu() {
+    if (!fullscreenMenuSection) {
+      return (
+        <>
+          {renderFullscreenMenuHeader(
+            "Menu rápido",
+            "Escolha uma categoria. As opções detalhadas aparecem só depois."
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {fullscreenMenuButton({
+              label: "Adicionar",
+              description: "Colocar sólido interno",
+              tone: "cyan",
+              onClick: () => setFullscreenMenuSection("add"),
+            })}
+            {fullscreenMenuButton({
+              label: "Cenas",
+              description: "Encaixes clássicos",
+              tone: "emerald",
+              onClick: () => setFullscreenMenuSection("scenes"),
+            })}
+            {fullscreenMenuButton({
+              label: "Aula",
+              description: "Apresentação limpa",
+              tone: "violet",
+              onClick: () => setFullscreenMenuSection("teach"),
+            })}
+            {fullscreenMenuButton({
+              label: "Medidas",
+              description: "Interseção e planificação",
+              tone: "amber",
+              onClick: () => setFullscreenMenuSection("measure"),
+            })}
+          </div>
+        </>
+      );
+    }
+
+    if (fullscreenMenuSection === "add") {
+      return (
+        <>
+          {renderFullscreenMenuHeader("Adicionar sólido", "Escolha a forma que entra como sólido interno.")}
+          {renderFullscreenBackButton()}
+          <div className="grid grid-cols-2 gap-2">
+            {QUICK_ADD_SOLIDS.map((solidType) =>
+              fullscreenMenuButton({
+                label: SOLIDS.find((solid) => solid.type === solidType)?.shortLabel ?? solidType,
+                description: SOLIDS.find((solid) => solid.type === solidType)?.label,
+                tone: "cyan",
+                onClick: () => addSolidToScene(solidType),
+              })
+            )}
+          </div>
+        </>
+      );
+    }
+
+    if (fullscreenMenuSection === "scenes") {
+      return (
+        <>
+          {renderFullscreenMenuHeader("Cenas prontas", "Abra uma situação clássica para explicar em aula.")}
+          {renderFullscreenBackButton()}
+          <div className="grid gap-2">
+            {CLASSIC_FIT_PRESETS.map((preset) =>
+              fullscreenMenuButton({
+                label: preset.label,
+                description: preset.description,
+                tone: "emerald",
+                onClick: () => applyClassicFit(preset),
+              })
+            )}
+          </div>
+        </>
+      );
+    }
+
+    if (fullscreenMenuSection === "teach") {
+      return (
+        <>
+          {renderFullscreenMenuHeader("Ferramentas de aula", "Controle o que aparece durante a explicação.")}
+          {renderFullscreenBackButton()}
+          <div className="grid grid-cols-2 gap-2">
+            {fullscreenMenuButton({
+              label: showFaces ? "Ocultar faces" : "Mostrar faces",
+              tone: "violet",
+              onClick: () => setShowFaces((current) => !current),
+            })}
+            {fullscreenMenuButton({
+              label: showAxes ? "Ocultar eixos" : "Mostrar eixos",
+              tone: "violet",
+              onClick: () => setShowAxes((current) => !current),
+            })}
+            {fullscreenMenuButton({
+              label: showGrid ? "Ocultar grade" : "Mostrar grade",
+              tone: "violet",
+              onClick: () => setShowGrid((current) => !current),
+            })}
+            {fullscreenMenuButton({
+              label: showCenter ? "Ocultar centros" : "Mostrar centros",
+              tone: "violet",
+              onClick: () => setShowCenter((current) => !current),
+            })}
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {renderFullscreenMenuHeader("Medidas rápidas", "Ative recursos de explicação matemática.")}
+        {renderFullscreenBackButton()}
+        <div className="grid grid-cols-2 gap-2">
+          {fullscreenMenuButton({
+            label: showNet ? "Fechar planificação" : "Planificação",
+            description: "Abrir sólido em faces",
+            tone: "amber",
+            onClick: () => setShowNet((current) => !current),
+          })}
+          {fullscreenMenuButton({
+            label: overlapQuality === "precise" ? "Precisão rápida" : "Precisão alta",
+            description: `${overlapEstimate?.sampleResolution ?? overlapResolution}³ pontos`,
+            tone: "amber",
+            onClick: () =>
+              setOverlapQuality((current) =>
+                current === "precise" ? "fast" : "precise"
+              ),
+          })}
+          {fullscreenMenuButton({
+            label: "Corte axial",
+            tone: "amber",
+            onClick: () => applySmartCut("axial"),
+          })}
+          {fullscreenMenuButton({
+            label: "Corte central",
+            tone: "amber",
+            onClick: () => applySmartCut("central"),
+          })}
+        </div>
+      </>
+    );
+  }
+
+  function renderFullscreenSolidMenu(target: SelectedTarget) {
+    const targetLabel = target === "inner" ? "Sólido interno" : "Sólido externo";
+
+    if (!fullscreenMenuSection) {
+      return (
+        <>
+          {renderFullscreenMenuHeader(
+            targetLabel,
+            "Escolha o tipo de edição. Os controles detalhados aparecem depois."
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {fullscreenMenuButton({
+              label: "Editar",
+              description: "Aresta, altura, raio",
+              tone: "cyan",
+              onClick: () => setFullscreenMenuSection("edit"),
+            })}
+            {fullscreenMenuButton({
+              label: "Mover / girar",
+              description: target === "inner" ? "Posição e rotação" : "Girar cena",
+              tone: "violet",
+              onClick: () => setFullscreenMenuSection("transform"),
+            })}
+            {fullscreenMenuButton({
+              label: "Fórmulas",
+              description: "Volume, área e cortes",
+              tone: "amber",
+              onClick: () => setFullscreenMenuSection("formula"),
+            })}
+            {fullscreenMenuButton({
+              label: "Visual",
+              description: "Mostrar, ocultar, trocar",
+              tone: "emerald",
+              onClick: () => setFullscreenMenuSection("display"),
+            })}
+          </div>
+        </>
+      );
+    }
+
+    if (fullscreenMenuSection === "edit") {
+      return (
+        <>
+          {renderFullscreenMenuHeader("Editar medidas", "Ajuste uma dimensão por vez.")}
+          {renderFullscreenBackButton()}
+          <div className="grid grid-cols-3 gap-2">
+            {fullscreenMenuButton({
+              label: "Base",
+              tone: activeAdjustment === "base" ? "cyan" : "slate",
+              onClick: () => setActiveAdjustment("base"),
+            })}
+            {fullscreenMenuButton({
+              label: "Altura",
+              tone: activeAdjustment === "height" ? "cyan" : "slate",
+              onClick: () => setActiveAdjustment("height"),
+            })}
+            {fullscreenMenuButton({
+              label: "Raio",
+              tone: activeAdjustment === "radius" ? "cyan" : "slate",
+              onClick: () => setActiveAdjustment("radius"),
+            })}
+          </div>
+
+          {activeAdjustment && adjustmentDetails ? (
+            <div className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3">
+              <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-cyan-100">
+                <span>{adjustmentDetails.label}</span>
+                <span>
+                  {adjustmentDetails.suffix === "%"
+                    ? `${formatNumber(adjustmentDetails.value * 100)}%`
+                    : `${formatNumber(adjustmentDetails.value)} ${adjustmentDetails.suffix}`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={adjustmentDetails.min}
+                max={adjustmentDetails.max}
+                step={adjustmentDetails.step}
+                value={adjustmentDetails.value}
+                onChange={(event) =>
+                  setAdjustmentValue(activeAdjustment, Number(event.target.value))
+                }
+                className="w-full accent-cyan-300"
+              />
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {fullscreenMenuButton({
+                  label: "Diminuir",
+                  onClick: () =>
+                    nudgeAdjustment(activeAdjustment, isAdjustingInner ? -0.03 : -0.5),
+                })}
+                {fullscreenMenuButton({
+                  label: "Aumentar",
+                  onClick: () =>
+                    nudgeAdjustment(activeAdjustment, isAdjustingInner ? 0.03 : 0.5),
+                })}
+              </div>
+            </div>
+          ) : null}
+        </>
+      );
+    }
+
+    if (fullscreenMenuSection === "transform") {
+      return (
+        <>
+          {renderFullscreenMenuHeader("Mover / girar", "Controle a manipulação direta do objeto.")}
+          {renderFullscreenBackButton()}
+          <div className="grid grid-cols-2 gap-2">
+            {fullscreenMenuButton({
+              label: "Girar cena",
+              tone: interactionMode === "rotate" ? "violet" : "slate",
+              onClick: () => setInteractionMode("rotate"),
+            })}
+            {fullscreenMenuButton({
+              label: "Mover interno",
+              tone: interactionMode === "moveInner" ? "violet" : "slate",
+              onClick: () => {
+                setMode("inscribed");
+                setSelectedTarget("inner");
+                setInteractionMode("moveInner");
+              },
+            })}
+            {fullscreenMenuButton({
+              label: "Rotacionar interno",
+              tone: interactionMode === "rotateInner" ? "violet" : "slate",
+              onClick: () => {
+                setMode("inscribed");
+                setSelectedTarget("inner");
+                setInteractionMode("rotateInner");
+              },
+            })}
+            {fullscreenMenuButton({
+              label: "Centralizar",
+              onClick: centralizeInner,
+            })}
+          </div>
+
+          {target === "inner" ? (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {[90, 180, 360].map((degrees) =>
+                fullscreenMenuButton({
+                  label: `+${degrees}°`,
+                  tone: "violet",
+                  onClick: () => rotateInnerBy("y", degrees),
+                })
+              )}
+            </div>
+          ) : null}
+        </>
+      );
+    }
+
+    if (fullscreenMenuSection === "formula") {
+      return (
+        <>
+          {renderFullscreenMenuHeader("Fórmulas e medidas", "Escolha o que destacar no desenho.")}
+          {renderFullscreenBackButton()}
+          <div className="grid grid-cols-2 gap-2">
+            {fullscreenMenuButton({
+              label: "Volume",
+              tone: "amber",
+              onClick: () => adjustSelectedSolid("volume"),
+            })}
+            {fullscreenMenuButton({
+              label: "Área total",
+              tone: "amber",
+              onClick: () => adjustSelectedSolid("area"),
+            })}
+            {fullscreenMenuButton({
+              label: "Corte axial",
+              tone: "amber",
+              onClick: () => applySmartCut("axial"),
+            })}
+            {fullscreenMenuButton({
+              label: "Corte diagonal",
+              tone: "amber",
+              onClick: () => applySmartCut("diagonal"),
+            })}
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {renderFullscreenMenuHeader("Visual do sólido", "Mostrar, ocultar, trocar ou encaixar.")}
+        {renderFullscreenBackButton()}
+        <div className="grid grid-cols-2 gap-2">
+          {fullscreenMenuButton({
+            label: showFaces ? "Ocultar faces" : "Mostrar faces",
+            tone: "emerald",
+            onClick: () => setShowFaces((current) => !current),
+          })}
+          {fullscreenMenuButton({
+            label: showInnerSolid ? "Ocultar interno" : "Mostrar interno",
+            tone: "emerald",
+            onClick: () => setShowInnerSolid((current) => !current),
+          })}
+          {fullscreenMenuButton({
+            label: "Encaixar",
+            tone: "emerald",
+            onClick: fitCurrentSolids,
+          })}
+          {fullscreenMenuButton({
+            label: "Dentro de outro",
+            tone: "emerald",
+            onClick: placeSelectedInsideAnother,
+          })}
+        </div>
+
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {QUICK_ADD_SOLIDS.map((solidType) =>
+            fullscreenMenuButton({
+              label: SOLIDS.find((solid) => solid.type === solidType)?.shortLabel ?? solidType,
+              tone: "slate",
+              onClick: () => replaceSelectedSolid(solidType),
+            })
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <AdminGuard allowedRoles={["admin"]}>
@@ -4146,12 +4617,22 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               {floatingMenu ? (
                 <div
-                  className="absolute z-30 max-h-[calc(100vh-132px)] w-[320px] overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur"
+                  className={`absolute z-30 overflow-y-auto border border-white/15 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur ${
+                    isFullscreen
+                      ? "max-h-[min(520px,calc(100vh-120px))] w-[300px] rounded-3xl"
+                      : "max-h-[calc(100vh-132px)] w-[320px] rounded-2xl"
+                  }`}
                   style={{ left: floatingMenu.x, top: floatingMenu.y }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
                 >
-                  {floatingMenu.kind === "solid" ? (
+                  {isFullscreen ? (
+                    floatingMenu.kind === "solid" ? (
+                      renderFullscreenSolidMenu(floatingMenu.target)
+                    ) : (
+                      renderFullscreenBackgroundMenu()
+                    )
+                  ) : floatingMenu.kind === "solid" ? (
                     <>
                       <div
                         className="mb-3 flex touch-none cursor-move items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-2"
@@ -4174,7 +4655,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                         <button
                           type="button"
-                          onClick={() => setFloatingMenu(null)}
+                          onClick={closeFloatingMenu}
                           className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-white/10"
                         >
                           fechar
@@ -4479,7 +4960,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                         <button
                           type="button"
-                          onClick={() => setFloatingMenu(null)}
+                          onClick={closeFloatingMenu}
                           className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-white/10"
                         >
                           fechar
