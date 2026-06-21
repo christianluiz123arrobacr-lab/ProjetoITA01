@@ -2846,12 +2846,12 @@ export default function AdminSpatialGeometryPrototypePage() {
         <div
           className={
             isFullscreen
-              ? "fixed inset-0 z-[9999] flex h-screen flex-col overflow-hidden bg-slate-100"
+              ? "fixed inset-0 z-[9999] h-screen overflow-hidden bg-slate-950"
               : ""
           }
         >
           {isFullscreen ? (
-            <div className="flex min-h-[72px] flex-col gap-3 border-b border-slate-200 bg-white px-3 py-3 shadow-sm lg:flex-row lg:items-center lg:justify-between lg:px-5">
+            <div className="absolute left-3 right-3 top-3 z-40 flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/90 px-3 py-3 shadow-2xl backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">
                   Modo tela cheia
@@ -2862,6 +2862,43 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={interactionMode === "rotate" ? "default" : "outline"}
+                  onClick={() => setInteractionMode("rotate")}
+                  className="rounded-2xl"
+                >
+                  Girar
+                </Button>
+
+                <Button
+                  type="button"
+                  variant={interactionMode === "moveInner" ? "default" : "outline"}
+                  onClick={() => {
+                    setMode("inscribed");
+                    setInteractionMode("moveInner");
+                    setSelectedTarget("inner");
+                  }}
+                  className="rounded-2xl"
+                >
+                  Mover interno
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const rect = visualRef.current?.getBoundingClientRect();
+                    openBackgroundMenu(
+                      (rect?.left ?? 0) + 80,
+                      (rect?.top ?? 0) + 150
+                    );
+                  }}
+                  className="rounded-2xl"
+                >
+                  Adicionar
+                </Button>
+
                 {VIEW_PRESETS.map((view) => (
                   <Button
                     key={view.label}
@@ -2889,16 +2926,22 @@ export default function AdminSpatialGeometryPrototypePage() {
         <div
           className={
             isFullscreen
-              ? "grid min-h-0 flex-1 gap-3 overflow-hidden p-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]"
+              ? "relative h-screen overflow-hidden p-0"
               : "grid gap-6 xl:grid-cols-[1.25fr_0.75fr]"
           }
         >
           <Card
             className={`overflow-hidden border-slate-200 bg-white ${
-              isFullscreen ? "flex h-full min-h-0 flex-col" : ""
+              isFullscreen
+                ? "h-full min-h-0 rounded-none border-0 bg-transparent shadow-none"
+                : ""
             }`}
           >
-            <div className="border-b border-slate-100 p-5">
+            <div
+              className={`border-b border-slate-100 p-5 ${
+                isFullscreen ? "hidden" : ""
+              }`}
+            >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
@@ -2961,7 +3004,7 @@ export default function AdminSpatialGeometryPrototypePage() {
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
               className={`relative touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
-                isFullscreen ? "min-h-0 flex-1" : "min-h-[740px]"
+                isFullscreen ? "h-screen min-h-screen" : "min-h-[860px]"
               } ${
                 interactionMode === "moveInner" && mode === "inscribed"
                   ? "cursor-move"
@@ -3427,7 +3470,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
             <div
               className={`border-t border-slate-100 bg-slate-50 p-5 ${
-                isFullscreen ? "shrink-0" : ""
+                isFullscreen ? "hidden" : ""
               }`}
             >
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -3740,7 +3783,9 @@ export default function AdminSpatialGeometryPrototypePage() {
 
           <div
             className={`space-y-6 ${
-              isFullscreen ? "min-h-0 overflow-y-auto pr-1" : ""
+              isFullscreen
+                ? "absolute bottom-3 right-3 top-[92px] z-30 w-[420px] max-w-[calc(100vw-24px)] overflow-y-auto rounded-2xl"
+                : ""
             }`}
           >
             <Card className="border-slate-200 p-6">
