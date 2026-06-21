@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Button } from "@/components/ui/button";
-import StudentSidebar from "@/components/layout/StudentSidebar";
 import {
   Calculator,
   BookOpen,
@@ -45,9 +44,6 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {isAuthenticated ? <StudentSidebar /> : null}
-
-      <div className={isAuthenticated ? "lg:pl-24" : ""}>
       {/* Top Bar */}
       <div className="w-full px-6 pt-6">
         <div className="max-w-6xl mx-auto flex justify-end">
@@ -446,7 +442,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-      </div>
     </div>
   );
 }
