@@ -47,7 +47,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white">
       {isAuthenticated ? <StudentSidebar /> : null}
 
-      <div className={isAuthenticated ? "lg:pl-80" : ""}>
+      <div className={isAuthenticated ? "lg:pl-24" : ""}>
       {/* Top Bar */}
       <div className="w-full px-6 pt-6">
         <div className="max-w-6xl mx-auto flex justify-end">
