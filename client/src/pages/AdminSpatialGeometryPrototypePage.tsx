@@ -49,7 +49,7 @@ type SolidType =
   | "sphere";
 
 type SceneMode = "simple" | "inscribed";
-type InteractionMode = "rotate" | "moveInner";
+type InteractionMode = "rotate" | "moveInner" | "rotateInner";
 type SelectedTarget = "outer" | "inner";
 
 type GeometryActionId =
@@ -137,6 +137,8 @@ type DragState = {
   startY: number;
   startRotationX: number;
   startRotationY: number;
+  startInnerRotationX: number;
+  startInnerRotationY: number;
   startInnerOffsetX: number;
   startInnerOffsetY: number;
   moved: boolean;
@@ -163,6 +165,7 @@ type FloatingMenu =
     };
 
 type AdjustmentTarget = "base" | "height" | "radius";
+type OverlapQuality = "fast" | "precise";
 
 type SmartCutId = "axial" | "base" | "central" | "diagonal";
 
@@ -182,6 +185,8 @@ type OverlapEstimate = {
   innerOnlyVolume: number;
   occupiedPercent: number;
   sampleResolution: number;
+  estimatedErrorPercent: number;
+  state: "separado" | "tocando" | "interseção" | "contido";
 };
 
 const VIEWBOX_WIDTH = 980;
@@ -380,6 +385,56 @@ function rotatePoint(point: Vec3, angleX: number, angleY: number): Vec3 {
   };
 }
 
+function rotateAroundX(point: Vec3, angle: number): Vec3 {
+  const rad = degToRad(angle);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  return {
+    x: point.x,
+    y: point.y * cos - point.z * sin,
+    z: point.y * sin + point.z * cos,
+  };
+}
+
+function rotateAroundY(point: Vec3, angle: number): Vec3 {
+  const rad = degToRad(angle);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  return {
+    x: point.x * cos + point.z * sin,
+    y: point.y,
+    z: -point.x * sin + point.z * cos,
+  };
+}
+
+function rotateAroundZ(point: Vec3, angle: number): Vec3 {
+  const rad = degToRad(angle);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  return {
+    x: point.x * cos - point.y * sin,
+    y: point.x * sin + point.y * cos,
+    z: point.z,
+  };
+}
+
+function rotatePoint3D(point: Vec3, rotation: Vec3): Vec3 {
+  return rotateAroundZ(
+    rotateAroundY(rotateAroundX(point, rotation.x), rotation.y),
+    rotation.z
+  );
+}
+
+function inverseRotatePoint3D(point: Vec3, rotation: Vec3): Vec3 {
+  return rotateAroundX(
+    rotateAroundY(rotateAroundZ(point, -rotation.z), -rotation.y),
+    -rotation.x
+  );
+}
+
 function projectPoint(
   point: Vec3,
   angleX: number,
@@ -408,6 +463,27 @@ function transformPoint(point: Vec3, scale: ScaleInput, offset: Vec3): Vec3 {
     x: point.x * normalizedScale.x + offset.x,
     y: point.y * normalizedScale.y + offset.y,
     z: point.z * normalizedScale.z + offset.z,
+  };
+}
+
+function transformPointWithRotation(
+  point: Vec3,
+  scale: ScaleInput,
+  offset: Vec3,
+  objectRotation: Vec3 = { x: 0, y: 0, z: 0 }
+): Vec3 {
+  const normalizedScale = normalizeScale(scale);
+  const scaled = {
+    x: point.x * normalizedScale.x,
+    y: point.y * normalizedScale.y,
+    z: point.z * normalizedScale.z,
+  };
+  const rotated = rotatePoint3D(scaled, objectRotation);
+
+  return {
+    x: rotated.x + offset.x,
+    y: rotated.y + offset.y,
+    z: rotated.z + offset.z,
   };
 }
 
@@ -675,7 +751,13 @@ function pointInsideSolid(type: SolidType, point: Vec3, sides: number) {
   return point.x ** 2 + point.y ** 2 + point.z ** 2 <= 1.35 ** 2;
 }
 
-function getSolidBounds(type: SolidType, sides: number, scale: ScaleInput, offset: Vec3) {
+function getSolidBounds(
+  type: SolidType,
+  sides: number,
+  scale: ScaleInput,
+  offset: Vec3,
+  objectRotation: Vec3 = { x: 0, y: 0, z: 0 }
+) {
   const points =
     type === "sphere"
       ? [
@@ -689,7 +771,9 @@ function getSolidBounds(type: SolidType, sides: number, scale: ScaleInput, offse
             .concat(mesh.edges.flat());
         })();
 
-  const transformed = points.map((point) => transformPoint(point, scale, offset));
+  const transformed = points.map((point) =>
+    transformPointWithRotation(point, scale, offset, objectRotation)
+  );
 
   return transformed.reduce(
     (bounds, point) => ({
@@ -718,6 +802,8 @@ function estimateSolidOverlap({
   outerScale,
   innerScale,
   innerOffset,
+  innerRotation,
+  sampleResolution,
   outerVolume,
   innerVolume,
 }: {
@@ -727,14 +813,15 @@ function estimateSolidOverlap({
   outerScale: ScaleInput;
   innerScale: ScaleInput;
   innerOffset: Vec3;
+  innerRotation: Vec3;
+  sampleResolution: number;
   outerVolume: number;
   innerVolume: number;
 }): OverlapEstimate {
-  const sampleResolution = 20;
   const normalizedOuterScale = normalizeScale(outerScale);
   const normalizedInnerScale = normalizeScale(innerScale);
   const outerBounds = getSolidBounds(outerSolid, sides, normalizedOuterScale, { x: 0, y: 0, z: 0 });
-  const innerBounds = getSolidBounds(innerSolid, sides, innerScale, innerOffset);
+  const innerBounds = getSolidBounds(innerSolid, sides, innerScale, innerOffset, innerRotation);
 
   const bounds = {
     minX: Math.min(outerBounds.minX, innerBounds.minX),
@@ -746,7 +833,12 @@ function estimateSolidOverlap({
   };
 
   let outerCount = 0;
+  let innerCount = 0;
   let intersectionCount = 0;
+  const boundsVolume =
+    Math.max(bounds.maxX - bounds.minX, 0) *
+    Math.max(bounds.maxY - bounds.minY, 0) *
+    Math.max(bounds.maxZ - bounds.minZ, 0);
 
   for (let xIndex = 0; xIndex < sampleResolution; xIndex += 1) {
     const x =
@@ -770,15 +862,27 @@ function estimateSolidOverlap({
           z: point.z / normalizedOuterScale.z,
         };
         const inOuter = pointInsideSolid(outerSolid, outerLocal, sides);
+        const innerTranslated = inverseRotatePoint3D(
+          {
+            x: point.x - innerOffset.x,
+            y: point.y - innerOffset.y,
+            z: point.z - innerOffset.z,
+          },
+          innerRotation
+        );
         const innerLocal = {
-          x: (point.x - innerOffset.x) / normalizedInnerScale.x,
-          y: (point.y - innerOffset.y) / normalizedInnerScale.y,
-          z: (point.z - innerOffset.z) / normalizedInnerScale.z,
+          x: innerTranslated.x / normalizedInnerScale.x,
+          y: innerTranslated.y / normalizedInnerScale.y,
+          z: innerTranslated.z / normalizedInnerScale.z,
         };
         const inInner = pointInsideSolid(innerSolid, innerLocal, sides);
 
         if (inOuter) {
           outerCount += 1;
+        }
+
+        if (inInner) {
+          innerCount += 1;
         }
 
         if (inOuter && inInner) {
@@ -788,8 +892,16 @@ function estimateSolidOverlap({
     }
   }
 
-  const rawIntersection =
-    outerCount > 0 ? (intersectionCount / outerCount) * outerVolume : 0;
+  const cellVolume = boundsVolume / sampleResolution ** 3;
+  const sampledOuterVolume = outerCount * cellVolume;
+  const sampledInnerVolume = innerCount * cellVolume;
+  const sampledIntersection = intersectionCount * cellVolume;
+  const outerCorrection =
+    sampledOuterVolume > 0 ? outerVolume / sampledOuterVolume : 1;
+  const innerCorrection =
+    sampledInnerVolume > 0 ? innerVolume / sampledInnerVolume : 1;
+  const correction = Math.min(outerCorrection, innerCorrection);
+  const rawIntersection = sampledIntersection * correction;
   const intersectionVolume = clamp(
     rawIntersection,
     0,
@@ -798,6 +910,15 @@ function estimateSolidOverlap({
   const unionVolume = outerVolume + innerVolume - intersectionVolume;
   const occupiedPercent =
     outerVolume > 0 ? (intersectionVolume / outerVolume) * 100 : 0;
+  const estimatedErrorPercent = clamp((1 / sampleResolution) * 180, 1.6, 10);
+  const state =
+    intersectionVolume <= Math.max(outerVolume, innerVolume) * 0.002
+      ? "separado"
+      : innerVolume > 0 && intersectionVolume / innerVolume > 0.985
+        ? "contido"
+        : intersectionVolume <= Math.max(outerVolume, innerVolume) * 0.018
+          ? "tocando"
+          : "interseção";
 
   return {
     intersectionVolume,
@@ -806,7 +927,161 @@ function estimateSolidOverlap({
     innerOnlyVolume: Math.max(innerVolume - intersectionVolume, 0),
     occupiedPercent,
     sampleResolution,
+    estimatedErrorPercent,
+    state,
   };
+}
+
+function renderIntersectionCloud({
+  outerSolid,
+  innerSolid,
+  sides,
+  outerScale,
+  innerScale,
+  innerOffset,
+  innerRotation,
+  angleX,
+  angleY,
+}: {
+  outerSolid: SolidType;
+  innerSolid: SolidType;
+  sides: number;
+  outerScale: ScaleInput;
+  innerScale: ScaleInput;
+  innerOffset: Vec3;
+  innerRotation: Vec3;
+  angleX: number;
+  angleY: number;
+}) {
+  const sampleResolution = 14;
+  const normalizedOuterScale = normalizeScale(outerScale);
+  const normalizedInnerScale = normalizeScale(innerScale);
+  const outerBounds = getSolidBounds(
+    outerSolid,
+    sides,
+    normalizedOuterScale,
+    { x: 0, y: 0, z: 0 }
+  );
+  const innerBounds = getSolidBounds(
+    innerSolid,
+    sides,
+    normalizedInnerScale,
+    innerOffset,
+    innerRotation
+  );
+  const bounds = {
+    minX: Math.max(outerBounds.minX, innerBounds.minX),
+    maxX: Math.min(outerBounds.maxX, innerBounds.maxX),
+    minY: Math.max(outerBounds.minY, innerBounds.minY),
+    maxY: Math.min(outerBounds.maxY, innerBounds.maxY),
+    minZ: Math.max(outerBounds.minZ, innerBounds.minZ),
+    maxZ: Math.min(outerBounds.maxZ, innerBounds.maxZ),
+  };
+
+  if (
+    bounds.minX >= bounds.maxX ||
+    bounds.minY >= bounds.maxY ||
+    bounds.minZ >= bounds.maxZ
+  ) {
+    return null;
+  }
+
+  const points: ProjectedPoint[] = [];
+
+  for (let xIndex = 0; xIndex < sampleResolution; xIndex += 1) {
+    const x =
+      bounds.minX +
+      ((xIndex + 0.5) / sampleResolution) * (bounds.maxX - bounds.minX);
+
+    for (let yIndex = 0; yIndex < sampleResolution; yIndex += 1) {
+      const y =
+        bounds.minY +
+        ((yIndex + 0.5) / sampleResolution) * (bounds.maxY - bounds.minY);
+
+      for (let zIndex = 0; zIndex < sampleResolution; zIndex += 1) {
+        const z =
+          bounds.minZ +
+          ((zIndex + 0.5) / sampleResolution) * (bounds.maxZ - bounds.minZ);
+        const point = { x, y, z };
+        const outerLocal = {
+          x: point.x / normalizedOuterScale.x,
+          y: point.y / normalizedOuterScale.y,
+          z: point.z / normalizedOuterScale.z,
+        };
+        const innerTranslated = inverseRotatePoint3D(
+          {
+            x: point.x - innerOffset.x,
+            y: point.y - innerOffset.y,
+            z: point.z - innerOffset.z,
+          },
+          innerRotation
+        );
+        const innerLocal = {
+          x: innerTranslated.x / normalizedInnerScale.x,
+          y: innerTranslated.y / normalizedInnerScale.y,
+          z: innerTranslated.z / normalizedInnerScale.z,
+        };
+
+        if (
+          pointInsideSolid(outerSolid, outerLocal, sides) &&
+          pointInsideSolid(innerSolid, innerLocal, sides)
+        ) {
+          points.push(projectPoint(point, angleX, angleY));
+        }
+      }
+    }
+  }
+
+  if (points.length === 0) return null;
+
+  const maxVisiblePoints = 180;
+  const stride = Math.max(Math.ceil(points.length / maxVisiblePoints), 1);
+  const visiblePoints = points
+    .filter((_, index) => index % stride === 0)
+    .sort((a, b) => a.z - b.z);
+  const center = visiblePoints.reduce(
+    (sum, point) => ({
+      x: sum.x + point.x / visiblePoints.length,
+      y: sum.y + point.y / visiblePoints.length,
+      z: 0,
+      perspective: 1,
+    }),
+    { x: 0, y: 0, z: 0, perspective: 1 }
+  );
+
+  return (
+    <g pointerEvents="none">
+      <circle
+        cx={center.x}
+        cy={center.y}
+        r="86"
+        fill="#facc15"
+        opacity="0.1"
+        filter="url(#intersectionGlow)"
+      />
+      {visiblePoints.map((point, index) => (
+        <circle
+          key={`intersection-point-${index}`}
+          cx={point.x}
+          cy={point.y}
+          r={4.4 * point.perspective}
+          fill={index % 3 === 0 ? "#facc15" : "#22d3ee"}
+          opacity={0.24 + Math.min(point.perspective * 0.22, 0.32)}
+        />
+      ))}
+      <text
+        x={center.x}
+        y={center.y - 96}
+        textAnchor="middle"
+        className="fill-yellow-100 text-[22px] font-black"
+        stroke="#713f12"
+        strokeWidth="5"
+        paintOrder="stroke"
+      >
+        interseção
+      </text>
+    </g>
+  );
 }
 
 function polygonPath(points: ProjectedPoint[]) {
@@ -823,6 +1098,7 @@ function renderMesh({
   angleY,
   scale,
   offset,
+  objectRotation = { x: 0, y: 0, z: 0 },
   theme,
   onGeometryClick,
   onGeometryDoubleClick,
@@ -833,6 +1109,7 @@ function renderMesh({
   angleY: number;
   scale: ScaleInput;
   offset: Vec3;
+  objectRotation?: Vec3;
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
@@ -840,7 +1117,7 @@ function renderMesh({
 }) {
   const transformedFaces = mesh.faces.map((face, index) => {
     const transformed = face.points.map((point) =>
-      transformPoint(point, scale, offset)
+      transformPointWithRotation(point, scale, offset, objectRotation)
     );
 
     const projected = transformed.map((point) =>
@@ -855,7 +1132,7 @@ function renderMesh({
 
   const transformedEdges = mesh.edges.map((edge, index) => {
     const transformed = edge.map((point) =>
-      transformPoint(point, scale, offset)
+      transformPointWithRotation(point, scale, offset, objectRotation)
     );
 
     const projected = transformed.map((point) =>
@@ -2257,14 +2534,20 @@ function projectOverlayPoint({
   angleY,
   scale,
   offset,
+  objectRotation = { x: 0, y: 0, z: 0 },
 }: {
   point: Vec3;
   angleX: number;
   angleY: number;
   scale: ScaleInput;
   offset: Vec3;
+  objectRotation?: Vec3;
 }) {
-  return projectPoint(transformPoint(point, scale, offset), angleX, angleY);
+  return projectPoint(
+    transformPointWithRotation(point, scale, offset, objectRotation),
+    angleX,
+    angleY
+  );
 }
 
 function renderAxes({
@@ -2293,11 +2576,13 @@ function renderCenterMark({
   angleY,
   scale,
   offset,
+  objectRotation = { x: 0, y: 0, z: 0 },
 }: {
   angleX: number;
   angleY: number;
   scale: ScaleInput;
   offset: Vec3;
+  objectRotation?: Vec3;
 }) {
   const center = projectOverlayPoint({
     point: { x: 0, y: 0, z: 0 },
@@ -2305,6 +2590,7 @@ function renderCenterMark({
     angleY,
     scale,
     offset,
+    objectRotation,
   });
 
   return (
@@ -2354,6 +2640,7 @@ function renderMeasurementOverlay({
   angleY,
   scale,
   offset,
+  objectRotation = { x: 0, y: 0, z: 0 },
 }: {
   type: SolidType;
   action: GeometryActionId | null;
@@ -2361,11 +2648,12 @@ function renderMeasurementOverlay({
   angleY: number;
   scale: ScaleInput;
   offset: Vec3;
+  objectRotation?: Vec3;
 }) {
   if (!action) return null;
 
   const p = (point: Vec3) =>
-    projectOverlayPoint({ point, angleX, angleY, scale, offset });
+    projectOverlayPoint({ point, angleX, angleY, scale, offset, objectRotation });
 
   if (type === "sphere") {
     const center = p({ x: 0, y: 0, z: 0 });
@@ -2569,6 +2857,11 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [innerOffsetX, setInnerOffsetX] = useState(0);
   const [innerOffsetY, setInnerOffsetY] = useState(0);
   const [innerOffsetZ, setInnerOffsetZ] = useState(0);
+  const [innerRotationX, setInnerRotationX] = useState(0);
+  const [innerRotationY, setInnerRotationY] = useState(0);
+  const [innerRotationZ, setInnerRotationZ] = useState(0);
+  const [isDraggingScene, setIsDraggingScene] = useState(false);
+  const [overlapQuality, setOverlapQuality] = useState<OverlapQuality>("fast");
 
   const [rotationX, setRotationX] = useState(18);
   const [rotationY, setRotationY] = useState(-28);
@@ -2585,9 +2878,10 @@ export default function AdminSpatialGeometryPrototypePage() {
   );
   const [activeSmartCut, setActiveSmartCut] = useState<SmartCutId | null>("axial");
   const [showNet, setShowNet] = useState(false);
+  const [netOpenAmount, setNetOpenAmount] = useState(0);
 
   useEffect(() => {
-    if (!autoRotate || interactionMode === "moveInner") return;
+    if (!autoRotate || interactionMode !== "rotate") return;
 
     const intervalId = window.setInterval(() => {
       setRotationY((current) => {
@@ -2617,6 +2911,14 @@ export default function AdminSpatialGeometryPrototypePage() {
       document.body.style.userSelect = previousUserSelect;
     };
   }, [isFullscreen]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setNetOpenAmount(showNet ? 1 : 0);
+    }, 40);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [showNet]);
 
   const activeSolid = mode === "simple" ? selectedSolid : outerSolid;
   const inspectedSolid =
@@ -2690,6 +2992,18 @@ export default function AdminSpatialGeometryPrototypePage() {
     };
   }, [innerBaseScale, innerHeightScale, innerRadiusScale, innerSolid]);
 
+  const innerObjectRotation = useMemo(
+    () => ({
+      x: innerRotationX,
+      y: innerRotationY,
+      z: innerRotationZ,
+    }),
+    [innerRotationX, innerRotationY, innerRotationZ]
+  );
+
+  const overlapResolution =
+    isDraggingScene ? 18 : overlapQuality === "precise" ? 48 : 30;
+
   const outerMetrics = useMemo(
     () =>
       getSolidMetrics({
@@ -2760,6 +3074,8 @@ export default function AdminSpatialGeometryPrototypePage() {
               y: innerOffsetY,
               z: innerOffsetZ,
             },
+            innerRotation: innerObjectRotation,
+            sampleResolution: overlapResolution,
             outerVolume: outerMetrics.volume,
             innerVolume: innerMetrics.volume,
           })
@@ -2774,6 +3090,8 @@ export default function AdminSpatialGeometryPrototypePage() {
       innerOffsetX,
       innerOffsetY,
       innerOffsetZ,
+      innerObjectRotation,
+      overlapResolution,
       outerMetrics.volume,
       innerMetrics.volume,
     ]
@@ -2818,6 +3136,12 @@ export default function AdminSpatialGeometryPrototypePage() {
     mode === "inscribed" && selectedTarget === "inner"
       ? innerMetrics
       : outerMetrics;
+  const netBaseArea =
+    inspectedMetrics.baseArea ??
+    (inspectedSolid === "sphere" ? 0 : inspectedMetrics.totalArea / 6);
+  const netLateralArea =
+    inspectedMetrics.lateralArea ??
+    Math.max(inspectedMetrics.totalArea - netBaseArea * 2, 0);
 
   const sceneObjects = [
     {
@@ -2899,6 +3223,31 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetZ(0);
   }
 
+  function resetInnerRotation() {
+    setInnerRotationX(0);
+    setInnerRotationY(0);
+    setInnerRotationZ(0);
+  }
+
+  function normalizeAngle(value: number) {
+    const normalized = value % 360;
+    return normalized < 0 ? normalized + 360 : normalized;
+  }
+
+  function rotateInnerBy(axis: "x" | "y" | "z", degrees: number) {
+    if (axis === "x") {
+      setInnerRotationX((current) => normalizeAngle(current + degrees));
+      return;
+    }
+
+    if (axis === "y") {
+      setInnerRotationY((current) => normalizeAngle(current + degrees));
+      return;
+    }
+
+    setInnerRotationZ((current) => normalizeAngle(current + degrees));
+  }
+
   function setAllInnerScales(value: number) {
     const safeValue = clamp(value, 0.2, 1.15);
     setInnerBaseScale(safeValue);
@@ -2934,6 +3283,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
+    resetInnerRotation();
     setAllInnerScales(getClassicFitScale(preset.outer, preset.inner));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
@@ -2948,6 +3298,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
+    resetInnerRotation();
     setAllInnerScales(getClassicFitScale(outerSolid, innerSolid));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
@@ -2982,6 +3333,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
+    resetInnerRotation();
     setAllInnerScales(getClassicFitScale(suggestedContainer, solidToPlace));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
@@ -3058,9 +3410,6 @@ export default function AdminSpatialGeometryPrototypePage() {
 
       if (target === "base") {
         setInnerBaseScale(safeValue);
-        if (innerSolid === "cylinder" || innerSolid === "cone" || innerSolid === "sphere") {
-          setInnerRadiusScale(safeValue);
-        }
         return;
       }
 
@@ -3219,6 +3568,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
+    resetInnerRotation();
     setAllInnerScales(0.72);
     setActiveAdjustment(null);
     clearSelection();
@@ -3269,6 +3619,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
+    resetInnerRotation();
     setAllInnerScales(getClassicFitScale(preset.outer, preset.inner));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
@@ -3287,12 +3638,15 @@ export default function AdminSpatialGeometryPrototypePage() {
 
     setAutoRotate(false);
     setFloatingMenu(null);
+    setIsDraggingScene(true);
 
     dragStateRef.current = {
       startX: event.clientX,
       startY: event.clientY,
       startRotationX: rotationX,
       startRotationY: rotationY,
+      startInnerRotationX: innerRotationX,
+      startInnerRotationY: innerRotationY,
       startInnerOffsetX: innerOffsetX,
       startInnerOffsetY: innerOffsetY,
       moved: false,
@@ -3319,6 +3673,12 @@ export default function AdminSpatialGeometryPrototypePage() {
       return;
     }
 
+    if (interactionMode === "rotateInner" && mode === "inscribed") {
+      setInnerRotationY(normalizeAngle(dragState.startInnerRotationY + dx * 0.72));
+      setInnerRotationX(normalizeAngle(dragState.startInnerRotationX - dy * 0.72));
+      return;
+    }
+
     setRotationY(
       clamp(dragState.startRotationY + dx * 0.42, -180, 180)
     );
@@ -3329,6 +3689,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
     dragStateRef.current = null;
+    setIsDraggingScene(false);
     cancelLongPress();
 
     try {
@@ -3348,11 +3709,13 @@ export default function AdminSpatialGeometryPrototypePage() {
             y: innerOffsetY,
             z: innerOffsetZ,
           },
+          objectRotation: innerObjectRotation,
         }
       : {
           type: activeSolid,
           scale: outerRenderScale,
           offset: { x: 0, y: 0, z: 0 },
+          objectRotation: { x: 0, y: 0, z: 0 },
         };
 
   return (
@@ -3365,10 +3728,9 @@ export default function AdminSpatialGeometryPrototypePage() {
           className={
             isFullscreen
               ? "fixed inset-0 z-[9999] h-screen select-none overflow-hidden bg-slate-950"
-              : ""
+              : "select-none"
           }
           onDoubleClick={(event) => {
-            if (!isFullscreen) return;
             event.preventDefault();
           }}
         >
@@ -3404,6 +3766,19 @@ export default function AdminSpatialGeometryPrototypePage() {
                   className="rounded-2xl"
                 >
                   Mover interno
+                </Button>
+
+                <Button
+                  type="button"
+                  variant={interactionMode === "rotateInner" ? "default" : "outline"}
+                  onClick={() => {
+                    setMode("inscribed");
+                    setInteractionMode("rotateInner");
+                    setSelectedTarget("inner");
+                  }}
+                  className="rounded-2xl"
+                >
+                  Rotacionar interno
                 </Button>
 
                 <Button
@@ -3525,11 +3900,16 @@ export default function AdminSpatialGeometryPrototypePage() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
+              onMouseDown={(event) => {
+                if (event.detail > 1) event.preventDefault();
+              }}
               className={`relative select-none touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
                 isFullscreen ? "h-screen min-h-screen" : "min-h-[860px]"
               } ${
                 interactionMode === "moveInner" && mode === "inscribed"
                   ? "cursor-move"
+                  : interactionMode === "rotateInner" && mode === "inscribed"
+                    ? "cursor-grab active:cursor-grabbing"
                   : "cursor-grab active:cursor-grabbing"
               }`}
             >
@@ -3556,13 +3936,14 @@ export default function AdminSpatialGeometryPrototypePage() {
               {mode === "inscribed" ? (
                 <div className="absolute bottom-6 left-6 z-20 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
                   <p className="text-xs font-semibold uppercase tracking-wide text-orange-200">
-                    Interseção
+                    Interseção visual
                   </p>
                   <p className="mt-1 text-xl font-black">
                     {formatNumber(occupiedVolume)} u³
                   </p>
                   <p className="mt-1 text-xs font-semibold text-orange-100">
-                    {formatNumber(occupation)}% do sólido externo
+                    {overlapEstimate?.state ?? "calculando"} · {formatNumber(occupation)}%
+                    do externo
                   </p>
                 </div>
               ) : null}
@@ -3577,6 +3958,13 @@ export default function AdminSpatialGeometryPrototypePage() {
                     <stop offset="0%" stopColor="#818cf8" stopOpacity="0.5" />
                     <stop offset="100%" stopColor="#312e81" stopOpacity="0" />
                   </radialGradient>
+                  <filter id="intersectionGlow" x="-60%" y="-60%" width="220%" height="220%">
+                    <feGaussianBlur stdDeviation="16" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
                 </defs>
 
                 <rect
@@ -3689,6 +4077,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           y: innerOffsetY,
                           z: innerOffsetZ,
                         },
+                        objectRotation: innerObjectRotation,
                         onGeometryClick: () => selectGeometry("inner"),
                         onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
                         onGeometryPointerDown: (event) =>
@@ -3722,6 +4111,25 @@ export default function AdminSpatialGeometryPrototypePage() {
                         y: innerOffsetY,
                         z: innerOffsetZ,
                       },
+                      objectRotation: innerObjectRotation,
+                    })
+                  : null}
+
+                {mode === "inscribed" && showInnerSolid
+                  ? renderIntersectionCloud({
+                      outerSolid,
+                      innerSolid,
+                      sides: polygonSides,
+                      outerScale: outerRenderScale,
+                      innerScale: innerRenderScale,
+                      innerOffset: {
+                        x: innerOffsetX,
+                        y: innerOffsetY,
+                        z: innerOffsetZ,
+                      },
+                      innerRotation: innerObjectRotation,
+                      angleX: rotationX,
+                      angleY: rotationY,
                     })
                   : null}
 
@@ -3732,6 +4140,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   angleY: rotationY,
                   scale: overlayTarget.scale,
                   offset: overlayTarget.offset,
+                  objectRotation: overlayTarget.objectRotation,
                 })}
               </svg>
 
@@ -3900,6 +4309,93 @@ export default function AdminSpatialGeometryPrototypePage() {
                         </div>
                       ) : null}
 
+                      {mode === "inscribed" && floatingMenu.target === "inner" ? (
+                        <div className="mt-3 rounded-2xl border border-violet-300/20 bg-violet-400/10 p-3">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-wide text-violet-200">
+                                Rotação do interno
+                              </p>
+                              <p className="mt-1 text-[11px] font-semibold text-violet-100/80">
+                                Gire o sólido inscrito sem mexer na câmera.
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={resetInnerRotation}
+                              className="rounded-xl bg-white/10 px-3 py-2 text-xs font-black text-white hover:bg-white/15"
+                            >
+                              zerar
+                            </button>
+                          </div>
+
+                          {[
+                            {
+                              axis: "x" as const,
+                              label: "Eixo X",
+                              value: innerRotationX,
+                              setter: setInnerRotationX,
+                            },
+                            {
+                              axis: "y" as const,
+                              label: "Eixo Y",
+                              value: innerRotationY,
+                              setter: setInnerRotationY,
+                            },
+                            {
+                              axis: "z" as const,
+                              label: "Eixo Z",
+                              value: innerRotationZ,
+                              setter: setInnerRotationZ,
+                            },
+                          ].map((control) => (
+                            <div key={control.axis} className="mt-3">
+                              <div className="mb-1 flex items-center justify-between text-xs font-bold text-violet-100">
+                                <span>{control.label}</span>
+                                <span>{formatNumber(control.value)}°</span>
+                              </div>
+
+                              <input
+                                type="range"
+                                min="0"
+                                max="360"
+                                step="1"
+                                value={control.value}
+                                onChange={(event) =>
+                                  control.setter(Number(event.target.value))
+                                }
+                                className="w-full accent-violet-300"
+                              />
+
+                              <div className="mt-2 grid grid-cols-3 gap-2">
+                                {[90, 180, 360].map((degrees) => (
+                                  <button
+                                    key={`${control.axis}-${degrees}`}
+                                    type="button"
+                                    onClick={() => rotateInnerBy(control.axis, degrees)}
+                                    className="rounded-lg bg-white/10 px-2 py-1 text-xs font-black text-white hover:bg-white/15"
+                                  >
+                                    +{degrees}°
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInteractionMode("rotateInner");
+                              setSelectedTarget("inner");
+                            }}
+                            className="mt-3 w-full rounded-xl bg-violet-500 px-3 py-2 text-sm font-black text-white hover:bg-violet-400"
+                          >
+                            Arrastar para rotacionar interno
+                          </button>
+                        </div>
+                      ) : null}
+
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
                           type="button"
@@ -4046,6 +4542,19 @@ export default function AdminSpatialGeometryPrototypePage() {
                   >
                     Mover sólido interno
                   </Button>
+
+                  <Button
+                    type="button"
+                    variant={interactionMode === "rotateInner" ? "default" : "outline"}
+                    onClick={() => {
+                      setMode("inscribed");
+                      setInteractionMode("rotateInner");
+                      setSelectedTarget("inner");
+                    }}
+                    className="rounded-2xl"
+                  >
+                    Rotacionar interno
+                  </Button>
                 </div>
               </div>
 
@@ -4102,7 +4611,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   type="button"
                   variant="outline"
                   onClick={() => setAutoRotate((current) => !current)}
-                  disabled={interactionMode === "moveInner"}
+                  disabled={interactionMode !== "rotate"}
                   className="mt-6 gap-2 rounded-2xl"
                 >
                   {autoRotate ? (
@@ -4504,6 +5013,52 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
+                  <div className="mt-4 rounded-2xl bg-white p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                          Precisão da interseção
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-emerald-900">
+                          Estado: {overlapEstimate?.state ?? "calculando"} · grade{" "}
+                          {overlapEstimate?.sampleResolution ?? 0}³ · erro aprox.{" "}
+                          ±{formatNumber(overlapEstimate?.estimatedErrorPercent ?? 0)}%
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setOverlapQuality("fast")}
+                          className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                            overlapQuality === "fast"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                          }`}
+                        >
+                          Rápido
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOverlapQuality("precise")}
+                          className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                            overlapQuality === "precise"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                          }`}
+                        >
+                          Preciso
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-xs leading-5 text-emerald-800">
+                      Enquanto você arrasta, o laboratório usa uma grade leve
+                      para manter o movimento fluido. Ao soltar, ele recalcula
+                      conforme o modo escolhido.
+                    </p>
+                  </div>
+
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-emerald-950">
                     <div className="rounded-xl bg-white p-3">
                       <p className="font-bold uppercase tracking-wide text-emerald-600">
@@ -4560,6 +5115,95 @@ export default function AdminSpatialGeometryPrototypePage() {
                         {formatNumber(innerMetrics.volume)} u³
                       </p>
                     </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-white p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                        Controle fino do interno
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={resetInnerRotation}
+                        className="rounded-2xl"
+                      >
+                        Zerar rotação
+                      </Button>
+                    </div>
+
+                    {[
+                      {
+                        label: "Posição X",
+                        value: innerOffsetX,
+                        min: -1.2,
+                        max: 1.2,
+                        step: 0.01,
+                        onChange: setInnerOffsetX,
+                      },
+                      {
+                        label: "Posição Y",
+                        value: innerOffsetY,
+                        min: -1.2,
+                        max: 1.2,
+                        step: 0.01,
+                        onChange: setInnerOffsetY,
+                      },
+                      {
+                        label: "Posição Z",
+                        value: innerOffsetZ,
+                        min: -1.2,
+                        max: 1.2,
+                        step: 0.01,
+                        onChange: setInnerOffsetZ,
+                      },
+                      {
+                        label: "Rotação X",
+                        value: innerRotationX,
+                        min: 0,
+                        max: 360,
+                        step: 1,
+                        onChange: setInnerRotationX,
+                      },
+                      {
+                        label: "Rotação Y",
+                        value: innerRotationY,
+                        min: 0,
+                        max: 360,
+                        step: 1,
+                        onChange: setInnerRotationY,
+                      },
+                      {
+                        label: "Rotação Z",
+                        value: innerRotationZ,
+                        min: 0,
+                        max: 360,
+                        step: 1,
+                        onChange: setInnerRotationZ,
+                      },
+                    ].map((control) => (
+                      <div key={control.label} className="mt-3">
+                        <div className="mb-1 flex items-center justify-between text-xs font-bold text-emerald-900">
+                          <span>{control.label}</span>
+                          <span>
+                            {formatNumber(control.value)}
+                            {control.label.startsWith("Rotação") ? "°" : ""}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={control.min}
+                          max={control.max}
+                          step={control.step}
+                          value={control.value}
+                          onChange={(event) =>
+                            control.onChange(Number(event.target.value))
+                          }
+                          className="w-full accent-emerald-500"
+                        />
+                      </div>
+                    ))}
                   </div>
 
                   <p className="mt-3 text-xs leading-5 text-emerald-800">
@@ -4668,21 +5312,78 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               {showNet ? (
                 <div className="mt-5 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4">
+                  <div className="mb-4 rounded-2xl bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-fuchsia-700">
+                      <span>Abertura da planificação</span>
+                      <span>{formatNumber(netOpenAmount * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={netOpenAmount}
+                      onChange={(event) => setNetOpenAmount(Number(event.target.value))}
+                      className="w-full accent-fuchsia-600"
+                    />
+                  </div>
+
                   <div className="grid min-h-[170px] place-items-center rounded-2xl bg-white p-4">
                     {inspectedSolid === "cylinder" ? (
                       <div className="flex items-center justify-center gap-3">
-                        <div className="h-14 w-14 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
-                        <div className="h-24 w-32 rounded-xl border-4 border-fuchsia-400 bg-fuchsia-100" />
-                        <div className="h-14 w-14 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                        <div
+                          className="grid h-14 w-14 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900 transition duration-700 ease-out"
+                          style={{
+                            transform: `translateX(${-34 * netOpenAmount}px) rotate(${-28 * netOpenAmount}deg)`,
+                          }}
+                        >
+                          base
+                        </div>
+                        <div
+                          className="grid h-24 w-32 place-items-center rounded-xl border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900 transition duration-700 ease-out"
+                          style={{
+                            transform: `scaleX(${0.78 + 0.22 * netOpenAmount})`,
+                          }}
+                        >
+                          lateral
+                        </div>
+                        <div
+                          className="grid h-14 w-14 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900 transition duration-700 ease-out"
+                          style={{
+                            transform: `translateX(${34 * netOpenAmount}px) rotate(${28 * netOpenAmount}deg)`,
+                          }}
+                        >
+                          base
+                        </div>
                       </div>
                     ) : inspectedSolid === "cone" ? (
                       <div className="flex items-center justify-center gap-4">
-                        <div className="h-24 w-32 rounded-t-full border-4 border-fuchsia-400 bg-fuchsia-100" />
-                        <div className="h-16 w-16 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                        <div
+                          className="grid h-24 w-32 place-items-end rounded-t-full border-4 border-fuchsia-400 bg-fuchsia-100 pb-4 text-xs font-black text-fuchsia-900 transition duration-700 ease-out"
+                          style={{
+                            transform: `translateX(${-22 * netOpenAmount}px) rotate(${-10 * netOpenAmount}deg)`,
+                            clipPath: `polygon(50% 0%, ${100 - 14 * netOpenAmount}% 100%, ${14 * netOpenAmount}% 100%)`,
+                          }}
+                        >
+                          setor lateral
+                        </div>
+                        <div
+                          className="grid h-16 w-16 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900 transition duration-700 ease-out"
+                          style={{
+                            transform: `translateX(${28 * netOpenAmount}px) rotate(${32 * netOpenAmount}deg)`,
+                          }}
+                        >
+                          base
+                        </div>
                       </div>
                     ) : inspectedSolid === "sphere" ? (
                       <div className="text-center">
-                        <div className="mx-auto h-24 w-24 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                        <div
+                          className="mx-auto h-24 w-24 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 transition duration-700 ease-out"
+                          style={{
+                            transform: `scale(${0.84 + 0.16 * netOpenAmount}) rotate(${18 * netOpenAmount}deg)`,
+                          }}
+                        />
                         <p className="mt-3 text-xs font-bold text-fuchsia-800">
                           A esfera não possui planificação plana exata sem
                           distorção.
@@ -4694,7 +5395,14 @@ export default function AdminSpatialGeometryPrototypePage() {
                           (_, index) => (
                             <div
                               key={index}
-                              className="grid h-16 w-16 place-items-center rounded-lg border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900"
+                              className="grid h-16 w-16 place-items-center rounded-lg border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900 transition duration-700 ease-out"
+                              style={{
+                                transform:
+                                  index === 0
+                                    ? `scale(${0.92 + 0.08 * netOpenAmount})`
+                                    : `translate(${((index % 4) - 1.5) * 12 * netOpenAmount}px, ${Math.floor(index / 2) * 10 * netOpenAmount}px) rotate(${(index % 2 === 0 ? -1 : 1) * 18 * netOpenAmount}deg)`,
+                                transformOrigin: "center",
+                              }}
                             >
                               {index === 0 ? "base" : "face"}
                             </div>
@@ -4705,6 +5413,36 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
 
                   <div className="mt-4 rounded-2xl bg-white p-3">
+                    <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
+                      <div className="rounded-xl bg-fuchsia-50 p-3">
+                        <p className="font-black uppercase tracking-wide text-fuchsia-500">
+                          Base
+                        </p>
+                        <p className="mt-1 font-black text-fuchsia-950">
+                          {inspectedSolid === "sphere"
+                            ? "não exata"
+                            : `${formatNumber(netBaseArea)} u²`}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-fuchsia-50 p-3">
+                        <p className="font-black uppercase tracking-wide text-fuchsia-500">
+                          Lateral
+                        </p>
+                        <p className="mt-1 font-black text-fuchsia-950">
+                          {inspectedSolid === "sphere"
+                            ? "distorce"
+                            : `${formatNumber(netLateralArea)} u²`}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-fuchsia-50 p-3">
+                        <p className="font-black uppercase tracking-wide text-fuchsia-500">
+                          Total
+                        </p>
+                        <p className="mt-1 font-black text-fuchsia-950">
+                          {formatNumber(inspectedMetrics.totalArea)} u²
+                        </p>
+                      </div>
+                    </div>
                     <MathFormula formula={inspectedMetrics.formulas.area} display={true} />
                     <MathFormula
                       formula={inspectedMetrics.substitution.area}
