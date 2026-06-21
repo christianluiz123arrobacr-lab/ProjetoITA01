@@ -30,6 +30,8 @@ type Vec3 = {
   z: number;
 };
 
+type ScaleInput = number | Vec3;
+
 type ProjectedPoint = {
   x: number;
   y: number;
@@ -161,6 +163,8 @@ type FloatingMenu =
     };
 
 type AdjustmentTarget = "base" | "height" | "radius";
+
+type SmartCutId = "axial" | "base" | "central" | "diagonal";
 
 type ClassicFitPreset = {
   id: string;
@@ -310,6 +314,33 @@ const VIEW_PRESETS = [
   { label: "Lateral", rotationX: 0, rotationY: 90 },
 ];
 
+const SMART_CUTS: Array<{
+  id: SmartCutId;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "axial",
+    label: "Corte axial",
+    description: "Passa pelo eixo principal e mostra a seção mais usada em cone/cilindro.",
+  },
+  {
+    id: "base",
+    label: "Corte da base",
+    description: "Destaca a região da base para montar área da base e volume.",
+  },
+  {
+    id: "central",
+    label: "Corte central",
+    description: "Passa pelo centro; na esfera, mostra o círculo máximo.",
+  },
+  {
+    id: "diagonal",
+    label: "Corte diagonal",
+    description: "Mostra o triângulo ou retângulo escondido em diagonais.",
+  },
+];
+
 function formatNumber(value: number) {
   if (!Number.isFinite(value)) return "0";
 
@@ -366,11 +397,17 @@ function projectPoint(
   };
 }
 
-function transformPoint(point: Vec3, scale: number, offset: Vec3): Vec3 {
+function normalizeScale(scale: ScaleInput): Vec3 {
+  return typeof scale === "number" ? { x: scale, y: scale, z: scale } : scale;
+}
+
+function transformPoint(point: Vec3, scale: ScaleInput, offset: Vec3): Vec3 {
+  const normalizedScale = normalizeScale(scale);
+
   return {
-    x: point.x * scale + offset.x,
-    y: point.y * scale + offset.y,
-    z: point.z * scale + offset.z,
+    x: point.x * normalizedScale.x + offset.x,
+    y: point.y * normalizedScale.y + offset.y,
+    z: point.z * normalizedScale.z + offset.z,
   };
 }
 
@@ -638,7 +675,7 @@ function pointInsideSolid(type: SolidType, point: Vec3, sides: number) {
   return point.x ** 2 + point.y ** 2 + point.z ** 2 <= 1.35 ** 2;
 }
 
-function getSolidBounds(type: SolidType, sides: number, scale: number, offset: Vec3) {
+function getSolidBounds(type: SolidType, sides: number, scale: ScaleInput, offset: Vec3) {
   const points =
     type === "sphere"
       ? [
@@ -678,6 +715,7 @@ function estimateSolidOverlap({
   outerSolid,
   innerSolid,
   sides,
+  outerScale,
   innerScale,
   innerOffset,
   outerVolume,
@@ -686,13 +724,16 @@ function estimateSolidOverlap({
   outerSolid: SolidType;
   innerSolid: SolidType;
   sides: number;
-  innerScale: number;
+  outerScale: ScaleInput;
+  innerScale: ScaleInput;
   innerOffset: Vec3;
   outerVolume: number;
   innerVolume: number;
 }): OverlapEstimate {
   const sampleResolution = 20;
-  const outerBounds = getSolidBounds(outerSolid, sides, 1, { x: 0, y: 0, z: 0 });
+  const normalizedOuterScale = normalizeScale(outerScale);
+  const normalizedInnerScale = normalizeScale(innerScale);
+  const outerBounds = getSolidBounds(outerSolid, sides, normalizedOuterScale, { x: 0, y: 0, z: 0 });
   const innerBounds = getSolidBounds(innerSolid, sides, innerScale, innerOffset);
 
   const bounds = {
@@ -723,11 +764,16 @@ function estimateSolidOverlap({
           ((zIndex + 0.5) / sampleResolution) * (bounds.maxZ - bounds.minZ);
 
         const point = { x, y, z };
-        const inOuter = pointInsideSolid(outerSolid, point, sides);
+        const outerLocal = {
+          x: point.x / normalizedOuterScale.x,
+          y: point.y / normalizedOuterScale.y,
+          z: point.z / normalizedOuterScale.z,
+        };
+        const inOuter = pointInsideSolid(outerSolid, outerLocal, sides);
         const innerLocal = {
-          x: (point.x - innerOffset.x) / innerScale,
-          y: (point.y - innerOffset.y) / innerScale,
-          z: (point.z - innerOffset.z) / innerScale,
+          x: (point.x - innerOffset.x) / normalizedInnerScale.x,
+          y: (point.y - innerOffset.y) / normalizedInnerScale.y,
+          z: (point.z - innerOffset.z) / normalizedInnerScale.z,
         };
         const inInner = pointInsideSolid(innerSolid, innerLocal, sides);
 
@@ -785,7 +831,7 @@ function renderMesh({
   mesh: SolidMesh;
   angleX: number;
   angleY: number;
-  scale: number;
+  scale: ScaleInput;
   offset: Vec3;
   theme: RenderTheme;
   onGeometryClick?: () => void;
@@ -896,15 +942,18 @@ function renderSphere({
 }: {
   angleX: number;
   angleY: number;
-  scale: number;
+  scale: ScaleInput;
   offset: Vec3;
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
   onGeometryPointerDown?: (event: React.PointerEvent) => void;
 }) {
+  const normalizedScale = normalizeScale(scale);
   const center = projectPoint(offset, angleX, angleY);
-  const radius = 145 * scale * center.perspective;
+  const radiusX = 145 * normalizedScale.x * center.perspective;
+  const radiusY = 145 * normalizedScale.y * center.perspective;
+  const radius = Math.max(radiusX, radiusY);
 
   return (
     <g
@@ -938,8 +987,8 @@ function renderSphere({
       <ellipse
         cx={center.x}
         cy={center.y}
-        rx={radius}
-        ry={radius * 0.28}
+        rx={radiusX}
+        ry={radiusY * 0.28}
         fill="none"
         stroke={theme.edge}
         strokeWidth="3"
@@ -950,8 +999,8 @@ function renderSphere({
       <ellipse
         cx={center.x}
         cy={center.y}
-        rx={radius * 0.34}
-        ry={radius}
+        rx={radiusX * 0.34}
+        ry={radiusY}
         fill="none"
         stroke={theme.edge}
         strokeWidth="3"
@@ -960,9 +1009,9 @@ function renderSphere({
       />
 
       <circle
-        cx={center.x - radius * 0.28}
-        cy={center.y - radius * 0.28}
-        r={radius * 0.12}
+        cx={center.x - radiusX * 0.28}
+        cy={center.y - radiusY * 0.28}
+        r={Math.min(radiusX, radiusY) * 0.12}
         fill="#ffffff"
         opacity="0.25"
       />
@@ -2212,7 +2261,7 @@ function projectOverlayPoint({
   point: Vec3;
   angleX: number;
   angleY: number;
-  scale: number;
+  scale: ScaleInput;
   offset: Vec3;
 }) {
   return projectPoint(transformPoint(point, scale, offset), angleX, angleY);
@@ -2247,7 +2296,7 @@ function renderCenterMark({
 }: {
   angleX: number;
   angleY: number;
-  scale: number;
+  scale: ScaleInput;
   offset: Vec3;
 }) {
   const center = projectOverlayPoint({
@@ -2310,7 +2359,7 @@ function renderMeasurementOverlay({
   action: GeometryActionId | null;
   angleX: number;
   angleY: number;
-  scale: number;
+  scale: ScaleInput;
   offset: Vec3;
 }) {
   if (!action) return null;
@@ -2514,7 +2563,9 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [height, setHeight] = useState(7);
   const [radius, setRadius] = useState(3);
 
-  const [innerScale, setInnerScale] = useState(0.78);
+  const [innerBaseScale, setInnerBaseScale] = useState(0.78);
+  const [innerHeightScale, setInnerHeightScale] = useState(0.78);
+  const [innerRadiusScale, setInnerRadiusScale] = useState(0.78);
   const [innerOffsetX, setInnerOffsetX] = useState(0);
   const [innerOffsetY, setInnerOffsetY] = useState(0);
   const [innerOffsetZ, setInnerOffsetZ] = useState(0);
@@ -2532,6 +2583,8 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [activeAdjustment, setActiveAdjustment] = useState<AdjustmentTarget | null>(
     null
   );
+  const [activeSmartCut, setActiveSmartCut] = useState<SmartCutId | null>("axial");
+  const [showNet, setShowNet] = useState(false);
 
   useEffect(() => {
     if (!autoRotate || interactionMode === "moveInner") return;
@@ -2575,6 +2628,68 @@ export default function AdminSpatialGeometryPrototypePage() {
   const inspectedDefinition =
     SOLIDS.find((solid) => solid.type === inspectedSolid) ?? SOLIDS[0];
 
+  const outerRenderScale = useMemo((): Vec3 => {
+    if (activeSolid === "sphere") {
+      const value = clamp(radius / 3, 0.25, 2.2);
+      return { x: value, y: value, z: value };
+    }
+
+    if (activeSolid === "box") {
+      return {
+        x: clamp(width / 6, 0.25, 2.2),
+        y: clamp(height / 7, 0.25, 2.2),
+        z: clamp(depth / 3, 0.25, 2.2),
+      };
+    }
+
+    if (activeSolid === "cube") {
+      return {
+        x: clamp(side / 4, 0.25, 2.2),
+        y: clamp(height / 7, 0.25, 2.2),
+        z: clamp(side / 4, 0.25, 2.2),
+      };
+    }
+
+    if (activeSolid === "cylinder" || activeSolid === "cone") {
+      const radialScale = clamp(radius / 3, 0.25, 2.2);
+      return {
+        x: radialScale,
+        y: clamp(height / 7, 0.25, 2.2),
+        z: radialScale,
+      };
+    }
+
+    return {
+      x: clamp(side / 4, 0.25, 2.2),
+      y: clamp(height / 7, 0.25, 2.2),
+      z: clamp(side / 4, 0.25, 2.2),
+    };
+  }, [activeSolid, depth, height, radius, side, width]);
+
+  const innerRenderScale = useMemo((): Vec3 => {
+    if (innerSolid === "sphere") {
+      return {
+        x: innerRadiusScale,
+        y: innerRadiusScale,
+        z: innerRadiusScale,
+      };
+    }
+
+    if (innerSolid === "cylinder" || innerSolid === "cone") {
+      return {
+        x: innerRadiusScale,
+        y: innerHeightScale,
+        z: innerRadiusScale,
+      };
+    }
+
+    return {
+      x: innerBaseScale,
+      y: innerHeightScale,
+      z: innerBaseScale,
+    };
+  }, [innerBaseScale, innerHeightScale, innerRadiusScale, innerSolid]);
+
   const outerMetrics = useMemo(
     () =>
       getSolidMetrics({
@@ -2590,20 +2705,20 @@ export default function AdminSpatialGeometryPrototypePage() {
   );
 
   const innerMetrics = useMemo(() => {
-    const innerRadius = radius * innerScale;
-    const innerHeight = height * innerScale;
+    const innerRadius = radius * innerRadiusScale;
+    const innerHeight = height * innerHeightScale;
 
     const innerSide =
       outerSolid === "cylinder" && innerSolid === "regularPrism"
         ? 2 * innerRadius * Math.sin(Math.PI / polygonSides)
-        : side * innerScale;
+        : side * innerBaseScale;
 
     return getSolidMetrics({
       type: innerSolid,
       sides: polygonSides,
       side: innerSide,
-      width: width * innerScale,
-      depth: depth * innerScale,
+      width: width * innerBaseScale,
+      depth: depth * innerBaseScale,
       height: innerHeight,
       radius: innerRadius,
     });
@@ -2616,7 +2731,9 @@ export default function AdminSpatialGeometryPrototypePage() {
     depth,
     height,
     radius,
-    innerScale,
+    innerBaseScale,
+    innerHeightScale,
+    innerRadiusScale,
   ]);
 
   const relationship = getInscribedRelationship({
@@ -2626,7 +2743,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     radius,
     side,
     height,
-    innerScale,
+    innerScale: innerRadiusScale,
   });
 
   const overlapEstimate = useMemo(
@@ -2636,7 +2753,8 @@ export default function AdminSpatialGeometryPrototypePage() {
             outerSolid,
             innerSolid,
             sides: polygonSides,
-            innerScale,
+            outerScale: outerRenderScale,
+            innerScale: innerRenderScale,
             innerOffset: {
               x: innerOffsetX,
               y: innerOffsetY,
@@ -2651,7 +2769,8 @@ export default function AdminSpatialGeometryPrototypePage() {
       outerSolid,
       innerSolid,
       polygonSides,
-      innerScale,
+      outerRenderScale,
+      innerRenderScale,
       innerOffsetX,
       innerOffsetY,
       innerOffsetZ,
@@ -2695,6 +2814,10 @@ export default function AdminSpatialGeometryPrototypePage() {
   const innerMesh = getMeshForSolid(innerSolid, polygonSides);
 
   const actions = getActionsForSolid(inspectedSolid);
+  const inspectedMetrics =
+    mode === "inscribed" && selectedTarget === "inner"
+      ? innerMetrics
+      : outerMetrics;
 
   const sceneObjects = [
     {
@@ -2728,23 +2851,23 @@ export default function AdminSpatialGeometryPrototypePage() {
         sides: polygonSides,
         side:
           mode === "inscribed" && selectedTarget === "inner"
-            ? side * innerScale
+            ? side * innerBaseScale
             : side,
         width:
           mode === "inscribed" && selectedTarget === "inner"
-            ? width * innerScale
+            ? width * innerBaseScale
             : width,
         depth:
           mode === "inscribed" && selectedTarget === "inner"
-            ? depth * innerScale
+            ? depth * innerBaseScale
             : depth,
         height:
           mode === "inscribed" && selectedTarget === "inner"
-            ? height * innerScale
+            ? height * innerHeightScale
             : height,
         radius:
           mode === "inscribed" && selectedTarget === "inner"
-            ? radius * innerScale
+            ? radius * innerRadiusScale
             : radius,
       })
     : null;
@@ -2754,7 +2877,8 @@ export default function AdminSpatialGeometryPrototypePage() {
     Math.abs(innerOffsetY) < 0.05 &&
     Math.abs(innerOffsetZ) < 0.05;
 
-  const exceedsSuggestedScale = innerScale > 1;
+  const exceedsSuggestedScale =
+    innerBaseScale > 1 || innerHeightScale > 1 || innerRadiusScale > 1;
 
   function resetRotation() {
     setRotationX(18);
@@ -2773,6 +2897,13 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
+  }
+
+  function setAllInnerScales(value: number) {
+    const safeValue = clamp(value, 0.2, 1.15);
+    setInnerBaseScale(safeValue);
+    setInnerHeightScale(safeValue);
+    setInnerRadiusScale(safeValue);
   }
 
   function getClassicFitScale(outer: SolidType, inner: SolidType) {
@@ -2803,7 +2934,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
-    setInnerScale(getClassicFitScale(preset.outer, preset.inner));
+    setAllInnerScales(getClassicFitScale(preset.outer, preset.inner));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
     setShowInnerSolid(true);
@@ -2817,7 +2948,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
-    setInnerScale(getClassicFitScale(outerSolid, innerSolid));
+    setAllInnerScales(getClassicFitScale(outerSolid, innerSolid));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
     setShowInnerSolid(true);
@@ -2851,7 +2982,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
-    setInnerScale(getClassicFitScale(suggestedContainer, solidToPlace));
+    setAllInnerScales(getClassicFitScale(suggestedContainer, solidToPlace));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
     setShowInnerSolid(true);
@@ -2864,6 +2995,31 @@ export default function AdminSpatialGeometryPrototypePage() {
     setSelectedAction(null);
   }
 
+  function applySmartCut(cut: SmartCutId) {
+    setActiveSmartCut(cut);
+
+    if (cut === "axial") {
+      setSelectedAction("axialSection");
+      return;
+    }
+
+    if (cut === "central") {
+      setSelectedAction(inspectedSolid === "sphere" ? "greatCircle" : "centralSection");
+      return;
+    }
+
+    if (cut === "diagonal") {
+      setSelectedAction(
+        inspectedSolid === "cube" || inspectedSolid === "box"
+          ? "spaceDiagonal"
+          : "baseDiagonal"
+      );
+      return;
+    }
+
+    setSelectedAction("baseArea");
+  }
+
   const isAdjustingInner =
     mode === "inscribed" && selectedTarget === "inner";
 
@@ -2871,7 +3027,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     ? {
         base: {
           label: isAdjustingInner ? "Escala da base interna" : "Aresta/base",
-          value: isAdjustingInner ? innerScale : side,
+          value: isAdjustingInner ? innerBaseScale : side,
           min: isAdjustingInner ? 0.2 : 1,
           max: isAdjustingInner ? 1.05 : 20,
           step: isAdjustingInner ? 0.01 : 0.5,
@@ -2879,7 +3035,7 @@ export default function AdminSpatialGeometryPrototypePage() {
         },
         height: {
           label: isAdjustingInner ? "Escala da altura interna" : "Altura",
-          value: isAdjustingInner ? innerScale : height,
+          value: isAdjustingInner ? innerHeightScale : height,
           min: isAdjustingInner ? 0.2 : 1,
           max: isAdjustingInner ? 1.05 : 24,
           step: isAdjustingInner ? 0.01 : 0.5,
@@ -2887,7 +3043,7 @@ export default function AdminSpatialGeometryPrototypePage() {
         },
         radius: {
           label: isAdjustingInner ? "Escala do raio interno" : "Raio",
-          value: isAdjustingInner ? innerScale : radius,
+          value: isAdjustingInner ? innerRadiusScale : radius,
           min: isAdjustingInner ? 0.2 : 1,
           max: isAdjustingInner ? 1.05 : 16,
           step: isAdjustingInner ? 0.01 : 0.5,
@@ -2898,12 +3054,33 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   function setAdjustmentValue(target: AdjustmentTarget, value: number) {
     if (isAdjustingInner) {
-      setInnerScale(clamp(value, 0.2, 1.05));
+      const safeValue = clamp(value, 0.2, 1.15);
+
+      if (target === "base") {
+        setInnerBaseScale(safeValue);
+        if (innerSolid === "cylinder" || innerSolid === "cone" || innerSolid === "sphere") {
+          setInnerRadiusScale(safeValue);
+        }
+        return;
+      }
+
+      if (target === "height") {
+        setInnerHeightScale(safeValue);
+        return;
+      }
+
+      setInnerRadiusScale(safeValue);
       return;
     }
 
     if (target === "base") {
       const safeValue = clamp(value, 1, 20);
+
+      if (activeSolid === "cylinder" || activeSolid === "cone" || activeSolid === "sphere") {
+        setRadius(clamp(value, 1, 16));
+        return;
+      }
+
       setSide(safeValue);
       setWidth(safeValue);
       setDepth(safeValue);
@@ -2920,11 +3097,21 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   function nudgeAdjustment(target: AdjustmentTarget, delta: number) {
     const current =
-      target === "base" ? side : target === "height" ? height : radius;
+      isAdjustingInner
+        ? target === "base"
+          ? innerBaseScale
+          : target === "height"
+            ? innerHeightScale
+            : innerRadiusScale
+        : target === "base"
+          ? side
+          : target === "height"
+            ? height
+            : radius;
 
     setAdjustmentValue(
       target,
-      isAdjustingInner ? innerScale + delta : current + delta
+      current + delta
     );
   }
 
@@ -3032,7 +3219,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
-    setInnerScale(0.72);
+    setAllInnerScales(0.72);
     setActiveAdjustment(null);
     clearSelection();
     setFloatingMenu(null);
@@ -3082,7 +3269,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     setInnerOffsetX(0);
     setInnerOffsetY(0);
     setInnerOffsetZ(0);
-    setInnerScale(getClassicFitScale(preset.outer, preset.inner));
+    setAllInnerScales(getClassicFitScale(preset.outer, preset.inner));
     setSelectedTarget("inner");
     setInteractionMode("moveInner");
     setShowInnerSolid(true);
@@ -3155,7 +3342,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     mode === "inscribed" && selectedTarget === "inner"
       ? {
           type: innerSolid,
-          scale: innerScale,
+          scale: innerRenderScale,
           offset: {
             x: innerOffsetX,
             y: innerOffsetY,
@@ -3164,7 +3351,7 @@ export default function AdminSpatialGeometryPrototypePage() {
         }
       : {
           type: activeSolid,
-          scale: 1,
+          scale: outerRenderScale,
           offset: { x: 0, y: 0, z: 0 },
         };
 
@@ -3438,7 +3625,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   ? renderSphere({
                       angleX: rotationX,
                       angleY: rotationY,
-                      scale: 1,
+                      scale: outerRenderScale,
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
@@ -3455,7 +3642,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       mesh: outerMesh,
                       angleX: rotationX,
                       angleY: rotationY,
-                      scale: 1,
+                      scale: outerRenderScale,
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
@@ -3474,7 +3661,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                     ? renderSphere({
                         angleX: rotationX,
                         angleY: rotationY,
-                        scale: innerScale,
+                        scale: innerRenderScale,
                         offset: {
                           x: innerOffsetX,
                           y: innerOffsetY,
@@ -3496,7 +3683,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                         mesh: innerMesh,
                         angleX: rotationX,
                         angleY: rotationY,
-                        scale: innerScale,
+                        scale: innerRenderScale,
                         offset: {
                           x: innerOffsetX,
                           y: innerOffsetY,
@@ -3520,7 +3707,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   ? renderCenterMark({
                       angleX: rotationX,
                       angleY: rotationY,
-                      scale: 1,
+                      scale: outerRenderScale,
                       offset: { x: 0, y: 0, z: 0 },
                     })
                   : null}
@@ -3529,7 +3716,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   ? renderCenterMark({
                       angleX: rotationX,
                       angleY: rotationY,
-                      scale: innerScale,
+                      scale: innerRenderScale,
                       offset: {
                         x: innerOffsetX,
                         y: innerOffsetY,
@@ -4403,6 +4590,132 @@ export default function AdminSpatialGeometryPrototypePage() {
             </Card>
 
             <Card className="border-slate-200 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+                <Ruler className="h-4 w-4" />
+                Cortes inteligentes
+              </div>
+
+              <h2 className="mt-2 text-2xl font-black text-slate-900">
+                Seções do sólido
+              </h2>
+
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                Escolha um corte para revelar a figura plana que aparece dentro
+                do sólido. É aqui que nascem muitas contas de diagonal, geratriz,
+                área da base e volume.
+              </p>
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                {SMART_CUTS.map((cut) => (
+                  <button
+                    key={cut.id}
+                    type="button"
+                    onClick={() => applySmartCut(cut.id)}
+                    className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      activeSmartCut === cut.id
+                        ? "border-amber-300 bg-amber-50 text-amber-950"
+                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-amber-300 hover:bg-amber-50"
+                    }`}
+                  >
+                    <p className="text-sm font-black">{cut.label}</p>
+                    <p className="mt-1 text-xs leading-5 opacity-80">
+                      {cut.description}
+                    </p>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-black text-amber-950">
+                  Corte selecionado:{" "}
+                  {SMART_CUTS.find((cut) => cut.id === activeSmartCut)?.label ??
+                    "nenhum"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-amber-900">
+                  O destaque amarelo no desenho mostra a medida ou seção
+                  associada. Para cilindro e cone, o corte axial mostra
+                  retângulo/triângulo; para esfera, o corte central mostra o
+                  círculo máximo; para cubo e paralelepípedo, a diagonal revela
+                  o triângulo retângulo interno.
+                </p>
+              </div>
+            </Card>
+
+            <Card className="border-slate-200 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-fuchsia-700">
+                <Layers className="h-4 w-4" />
+                Planificação
+              </div>
+
+              <h2 className="mt-2 text-2xl font-black text-slate-900">
+                Abrir o sólido
+              </h2>
+
+              <p className="mt-2 text-sm leading-7 text-slate-600">
+                A planificação mostra de onde vem a área total: bases mais
+                faces laterais. É o antídoto contra decorar fórmula sem enxergar
+                as peças.
+              </p>
+
+              <Button
+                type="button"
+                variant={showNet ? "default" : "outline"}
+                onClick={() => setShowNet((current) => !current)}
+                className="mt-4 w-full rounded-2xl"
+              >
+                {showNet ? "Ocultar planificação" : "Mostrar planificação"}
+              </Button>
+
+              {showNet ? (
+                <div className="mt-5 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4">
+                  <div className="grid min-h-[170px] place-items-center rounded-2xl bg-white p-4">
+                    {inspectedSolid === "cylinder" ? (
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="h-14 w-14 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                        <div className="h-24 w-32 rounded-xl border-4 border-fuchsia-400 bg-fuchsia-100" />
+                        <div className="h-14 w-14 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                      </div>
+                    ) : inspectedSolid === "cone" ? (
+                      <div className="flex items-center justify-center gap-4">
+                        <div className="h-24 w-32 rounded-t-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                        <div className="h-16 w-16 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                      </div>
+                    ) : inspectedSolid === "sphere" ? (
+                      <div className="text-center">
+                        <div className="mx-auto h-24 w-24 rounded-full border-4 border-fuchsia-400 bg-fuchsia-100" />
+                        <p className="mt-3 text-xs font-bold text-fuchsia-800">
+                          A esfera não possui planificação plana exata sem
+                          distorção.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-2">
+                        {Array.from({ length: inspectedSolid === "pyramid" ? 5 : 6 }).map(
+                          (_, index) => (
+                            <div
+                              key={index}
+                              className="grid h-16 w-16 place-items-center rounded-lg border-4 border-fuchsia-400 bg-fuchsia-100 text-xs font-black text-fuchsia-900"
+                            >
+                              {index === 0 ? "base" : "face"}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-white p-3">
+                    <MathFormula formula={inspectedMetrics.formulas.area} display={true} />
+                    <MathFormula
+                      formula={inspectedMetrics.substitution.area}
+                      display={true}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </Card>
+
+            <Card className="border-slate-200 p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700">
                 <MousePointerClick className="h-4 w-4" />
                 Ações geométricas
@@ -4626,16 +4939,20 @@ export default function AdminSpatialGeometryPrototypePage() {
                   <div>
                     <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
                       <span>Escala interna</span>
-                      <span>{formatNumber(innerScale * 100)}%</span>
+                      <span>
+                        B {formatNumber(innerBaseScale * 100)}% · H{" "}
+                        {formatNumber(innerHeightScale * 100)}% · R{" "}
+                        {formatNumber(innerRadiusScale * 100)}%
+                      </span>
                     </div>
                     <input
                       type="range"
                       min="0.2"
                       max="1.05"
                       step="0.01"
-                      value={innerScale}
+                      value={(innerBaseScale + innerHeightScale + innerRadiusScale) / 3}
                       onChange={(event) =>
-                        setInnerScale(Number(event.target.value))
+                        setAllInnerScales(Number(event.target.value))
                       }
                       className="w-full"
                     />
