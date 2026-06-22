@@ -1176,6 +1176,7 @@ function renderMesh({
   theme,
   onGeometryClick,
   onGeometryDoubleClick,
+  onGeometryPointerDown,
   onElementClick,
   onElementDoubleClick,
   onElementPointerDown,
@@ -1189,6 +1190,7 @@ function renderMesh({
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
+  onGeometryPointerDown?: (event: React.PointerEvent) => void;
   onElementClick?: (element: Omit<GeometryElement, "target">) => void;
   onElementDoubleClick?: (
     element: Omit<GeometryElement, "target">,
@@ -1299,7 +1301,13 @@ function renderMesh({
     event.preventDefault();
     event.stopPropagation();
     onGeometryClick?.();
-    onElementDoubleClick?.(element, event);
+
+    if (event.altKey || event.shiftKey || event.metaKey || event.ctrlKey) {
+      onElementDoubleClick?.(element, event);
+      return;
+    }
+
+    onGeometryDoubleClick?.(event);
   };
 
   return (
@@ -1328,6 +1336,7 @@ function renderMesh({
             onClick={(event) => handleElementClick(face.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(face.element, event)}
             onPointerDown={(event) => {
+              onGeometryPointerDown?.(event);
               onElementPointerDown?.(face.element, event);
             }}
           />
@@ -1367,6 +1376,7 @@ function renderMesh({
                   handleElementDoubleClick(edge.element, event);
                 }}
                 onPointerDown={(event) => {
+                  onGeometryPointerDown?.(event);
                   onElementPointerDown?.(edge.element, event);
                 }}
               />
@@ -1388,6 +1398,7 @@ function renderMesh({
             onClick={(event) => handleElementClick(vertex.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(vertex.element, event)}
             onPointerDown={(event) => {
+              onGeometryPointerDown?.(event);
               onElementPointerDown?.(vertex.element, event);
             }}
           />
@@ -3392,6 +3403,49 @@ export default function AdminSpatialGeometryPrototypePage() {
   const exceedsSuggestedScale =
     innerBaseScale > 1 || innerHeightScale > 1 || innerRadiusScale > 1;
 
+  const selectedTargetLabel = selectedTarget === "inner" ? "interno" : "externo";
+
+  const adaptiveInteractionTips = useMemo(() => {
+    const tips: string[] = [];
+
+    if (floatingMenu?.kind === "solid") {
+      tips.push("Use o menu aberto para ajustar base, altura, raio, cortes e fórmulas do sólido.");
+    } else if (floatingMenu?.kind === "background") {
+      tips.push("Escolha um sólido ou uma cena pronta para montar uma comparação rapidamente.");
+    } else if (measurementStart) {
+      tips.push(`Origem: ${measurementStart.label}. Clique em outra face, aresta ou vértice para medir a distância.`);
+    } else if (activeAdjustment) {
+      tips.push("Arraste o controle ou use os botões +/− para comparar como volume e área mudam.");
+    } else if (mode === "inscribed" && selectedTarget === "inner") {
+      tips.push("Você está editando o sólido interno: mova, rotacione ou ajuste a escala para testar inscrição.");
+    } else {
+      tips.push("Dê dois cliques no sólido para abrir o menu de edição; dê dois cliques no fundo para adicionar formas.");
+    }
+
+    if (mode === "inscribed" && !isCentered) {
+      tips.push("O sólido interno está deslocado; centralize para analisar uma inscrição clássica.");
+    }
+
+    if (mode === "inscribed" && exceedsSuggestedScale) {
+      tips.push("A escala interna passou do recomendado; reduza para evitar uma inscrição visualmente inválida.");
+    }
+
+    if (mode === "inscribed" && innerOutsideVolume > 0.01) {
+      tips.push(`${formatNumber(innerOutsideVolume)} u³ do sólido interno estão fora do volume externo.`);
+    }
+
+    return tips.slice(0, 3);
+  }, [
+    activeAdjustment,
+    exceedsSuggestedScale,
+    floatingMenu,
+    innerOutsideVolume,
+    isCentered,
+    measurementStart,
+    mode,
+    selectedTarget,
+  ]);
+
   function closeFloatingMenu() {
     setFloatingMenu(null);
     setFullscreenMenuSection(null);
@@ -4792,15 +4846,19 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </p>
               </div>
 
-              <div className="absolute right-6 top-6 z-20 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
+              <div className="absolute right-6 top-6 z-20 max-w-[320px] rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
                 <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-cyan-200">
                   <MousePointerClick className="h-4 w-4" />
-                  Interação direta
+                  Guia adaptativo · sólido {selectedTargetLabel}
                 </p>
-                <p className="mt-1 max-w-[260px] text-xs leading-5 text-slate-200">
-                  Arraste para girar. Clique no sólido para escolher diagonal,
-                  raio, altura, corte, volume e outras medidas.
-                </p>
+                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-200">
+                  {adaptiveInteractionTips.map((tip) => (
+                    <li key={tip} className="flex gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-cyan-300" />
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               {mode === "inscribed" ? (
@@ -4899,12 +4957,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
-                      onElementClick: (element) =>
-                        handleElementClick(buildGeometryElement({ ...element, target: "outer" })),
-                      onElementDoubleClick: (element, event) =>
-                        openElementMenu("outer", element, event),
-                      onElementPointerDown: (element, event) =>
-                        prepareElementMenuOnTouch("outer", element, event),
+                      onGeometryPointerDown: (event) =>
+                        prepareSolidMenuOnTouch("outer", event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
