@@ -1337,6 +1337,8 @@ function renderMesh({
             onClick={(event) => handleElementClick(face.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(face.element, event)}
             onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
               onGeometryPointerDown?.(event);
               onElementPointerDown?.(face.element, event);
             }}
@@ -1377,6 +1379,8 @@ function renderMesh({
                   handleElementDoubleClick(edge.element, event);
                 }}
                 onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
                   onGeometryPointerDown?.(event);
                   onElementPointerDown?.(edge.element, event);
                 }}
@@ -1399,6 +1403,8 @@ function renderMesh({
             onClick={(event) => handleElementClick(vertex.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(vertex.element, event)}
             onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
               onGeometryPointerDown?.(event);
               onElementPointerDown?.(vertex.element, event);
             }}
@@ -1448,6 +1454,8 @@ function renderSphere({
         onGeometryDoubleClick(event);
       }}
       onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
         onGeometryPointerDown?.(event);
       }}
       className={onGeometryClick ? "cursor-pointer" : undefined}
@@ -3084,6 +3092,7 @@ export default function AdminSpatialGeometryPrototypePage() {
   );
   const [activeSmartCut, setActiveSmartCut] = useState<SmartCutId | null>("axial");
   const [showNet, setShowNet] = useState(false);
+  const [measurementPickMode, setMeasurementPickMode] = useState(false);
   const [measurementStart, setMeasurementStart] = useState<GeometryElement | null>(
     null
   );
@@ -3125,6 +3134,7 @@ export default function AdminSpatialGeometryPrototypePage() {
       if (event.key === "Escape") {
         closeFloatingMenu();
         setMeasurementStart(null);
+        setMeasurementPickMode(false);
         return;
       }
 
@@ -3849,6 +3859,13 @@ export default function AdminSpatialGeometryPrototypePage() {
     setSelectedTarget(element.target);
     setSelectedAction(null);
 
+    if (measurementPickMode && !measurementStart) {
+      setMeasurementStart(element);
+      setMeasurementPickMode(false);
+      closeFloatingMenu();
+      return;
+    }
+
     if (!measurementStart) return;
 
     const sameElement =
@@ -3873,6 +3890,7 @@ export default function AdminSpatialGeometryPrototypePage() {
       },
     ]);
     setMeasurementStart(null);
+    setMeasurementPickMode(false);
     closeFloatingMenu();
   }
 
@@ -3916,6 +3934,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   function startMeasurementFrom(element: GeometryElement) {
     setMeasurementStart(element);
+    setMeasurementPickMode(false);
     setFloatingMenu(null);
     setFullscreenMenuSection(null);
   }
@@ -4077,10 +4096,12 @@ export default function AdminSpatialGeometryPrototypePage() {
     const dx = event.clientX - dragState.startX;
     const dy = event.clientY - dragState.startY;
 
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-      dragState.moved = true;
-      cancelLongPress();
-    }
+    const distanceMoved = Math.hypot(dx, dy);
+
+    if (distanceMoved <= 7) return;
+
+    dragState.moved = true;
+    cancelLongPress();
 
     if (interactionMode === "moveInner" && mode === "inscribed") {
       setInnerOffsetX(clamp(dragState.startInnerOffsetX + dx / 160, -1.2, 1.2));
@@ -4938,7 +4959,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               {showProfessionalPanels ? (
                 <div
-                  className="absolute left-6 top-28 z-20 max-h-[calc(100vh_-_220px)] w-[min(360px,calc(100vw_-_48px))] space-y-3 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-white shadow-2xl backdrop-blur"
+                  className="absolute left-6 top-28 z-20 max-h-[calc(100vh_-_220px)] w-[min(360px,calc(100vw_-_48px))] space-y-3 overflow-y-auto pr-2 [scrollbar-color:rgba(148,163,184,0.55)_transparent] rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-white shadow-2xl backdrop-blur"
                   onPointerDown={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                 >
@@ -5044,6 +5065,21 @@ export default function AdminSpatialGeometryPrototypePage() {
                 >
                   Centralizar
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMeasurementPickMode(true);
+                    setMeasurementStart(null);
+                    closeFloatingMenu();
+                  }}
+                  className={`rounded-xl px-3 py-2 text-xs font-black ring-1 transition ${
+                    measurementPickMode
+                      ? "bg-cyan-300 text-slate-950 ring-cyan-100"
+                      : "bg-cyan-400/15 text-cyan-100 ring-cyan-300/30 hover:bg-cyan-400/25"
+                  }`}
+                >
+                  Medir elemento
+                </button>
                 {VIEW_PRESETS.map((view, index) => (
                   <button
                     key={view.label}
@@ -5074,14 +5110,15 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </div>
               ) : null}
 
-              {measurementStart ? (
+              {measurementPickMode || measurementStart ? (
                 <div className="absolute left-1/2 top-28 z-30 w-[min(520px,calc(100vw_-_32px))] -translate-x-1/2 rounded-2xl border border-cyan-300/30 bg-cyan-950/90 px-4 py-3 text-center text-white shadow-2xl backdrop-blur">
                   <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
                     Medição ativa
                   </p>
                   <p className="mt-1 text-sm font-semibold">
-                    Origem: {measurementStart.label}. Toque em outra face,
-                    aresta ou vértice para criar a linha de distância.
+                    {measurementStart
+                      ? `Origem: ${measurementStart.label}. Clique em outra face, aresta ou vértice para criar a linha de distância.`
+                      : "Clique em uma face, aresta ou vértice para definir a origem da medida."}
                   </p>
                 </div>
               ) : null}
@@ -5174,6 +5211,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
                       onGeometryPointerDown: (event) =>
                         prepareSolidMenuOnTouch("outer", event),
+                      onElementClick: (element) =>
+                        handleElementClick(buildGeometryElement({ ...element, target: "outer" })),
+                      onElementDoubleClick: (element, event) =>
+                        openElementMenu("outer", element, event),
+                      onElementPointerDown: (element, event) =>
+                        prepareElementMenuOnTouch("outer", element, event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
