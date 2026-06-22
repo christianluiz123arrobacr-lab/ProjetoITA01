@@ -1176,6 +1176,7 @@ function renderMesh({
   theme,
   onGeometryClick,
   onGeometryDoubleClick,
+  onGeometryPointerDown,
   onElementClick,
   onElementDoubleClick,
   onElementPointerDown,
@@ -1189,6 +1190,7 @@ function renderMesh({
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
+  onGeometryPointerDown?: (event: React.PointerEvent) => void;
   onElementClick?: (element: Omit<GeometryElement, "target">) => void;
   onElementDoubleClick?: (
     element: Omit<GeometryElement, "target">,
@@ -1299,7 +1301,13 @@ function renderMesh({
     event.preventDefault();
     event.stopPropagation();
     onGeometryClick?.();
-    onElementDoubleClick?.(element, event);
+
+    if (event.altKey || event.shiftKey || event.metaKey || event.ctrlKey) {
+      onElementDoubleClick?.(element, event);
+      return;
+    }
+
+    onGeometryDoubleClick?.(event);
   };
 
   return (
@@ -1328,6 +1336,7 @@ function renderMesh({
             onClick={(event) => handleElementClick(face.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(face.element, event)}
             onPointerDown={(event) => {
+              onGeometryPointerDown?.(event);
               onElementPointerDown?.(face.element, event);
             }}
           />
@@ -1367,6 +1376,7 @@ function renderMesh({
                   handleElementDoubleClick(edge.element, event);
                 }}
                 onPointerDown={(event) => {
+                  onGeometryPointerDown?.(event);
                   onElementPointerDown?.(edge.element, event);
                 }}
               />
@@ -1388,6 +1398,7 @@ function renderMesh({
             onClick={(event) => handleElementClick(vertex.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(vertex.element, event)}
             onPointerDown={(event) => {
+              onGeometryPointerDown?.(event);
               onElementPointerDown?.(vertex.element, event);
             }}
           />
@@ -4899,12 +4910,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
-                      onElementClick: (element) =>
-                        handleElementClick(buildGeometryElement({ ...element, target: "outer" })),
-                      onElementDoubleClick: (element, event) =>
-                        openElementMenu("outer", element, event),
-                      onElementPointerDown: (element, event) =>
-                        prepareElementMenuOnTouch("outer", element, event),
+                      onGeometryPointerDown: (event) =>
+                        prepareSolidMenuOnTouch("outer", event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
