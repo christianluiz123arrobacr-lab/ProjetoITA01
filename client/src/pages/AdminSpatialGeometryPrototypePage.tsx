@@ -4666,9 +4666,74 @@ export default function AdminSpatialGeometryPrototypePage() {
     );
   }
 
+  function getCurrentGeometryElement(element: GeometryElement): GeometryElement {
+    const isInner = element.target === "inner";
+    const mesh = isInner ? innerMesh : outerMesh;
+    const scale = isInner ? innerRenderScale : outerRenderScale;
+    const offset = isInner
+      ? { x: innerOffsetX, y: innerOffsetY, z: innerOffsetZ }
+      : { x: 0, y: 0, z: 0 };
+    const objectRotation = isInner ? innerObjectRotation : { x: 0, y: 0, z: 0 };
+
+    if (element.kind === "face") {
+      const face = mesh.faces[element.index];
+      if (!face) return element;
+
+      return {
+        ...element,
+        worldPoint: midpoint(
+          face.points.map((point) =>
+            transformPointWithRotation(point, scale, offset, objectRotation)
+          )
+        ),
+      };
+    }
+
+    if (element.kind === "edge") {
+      const edge = mesh.edges[element.index];
+      if (!edge) return element;
+
+      return {
+        ...element,
+        worldPoint: midpoint(
+          edge.map((point) =>
+            transformPointWithRotation(point, scale, offset, objectRotation)
+          )
+        ),
+      };
+    }
+
+    const vertexMap = new Map<string, Vec3>();
+    mesh.edges.forEach((edge) => {
+      edge.forEach((point) => {
+        const worldPoint = transformPointWithRotation(
+          point,
+          scale,
+          offset,
+          objectRotation
+        );
+        const key = `${worldPoint.x.toFixed(4)}:${worldPoint.y.toFixed(4)}:${worldPoint.z.toFixed(4)}`;
+
+        if (!vertexMap.has(key)) {
+          vertexMap.set(key, worldPoint);
+        }
+      });
+    });
+
+    const currentVertex = Array.from(vertexMap.values())[element.index];
+
+    return currentVertex ? { ...element, worldPoint: currentVertex } : element;
+  }
+
   function renderGeometryMeasurement(measurement: GeometryMeasurement) {
-    const from = projectPoint(measurement.from.worldPoint, rotationX, rotationY);
-    const to = projectPoint(measurement.to.worldPoint, rotationX, rotationY);
+    const currentFromElement = getCurrentGeometryElement(measurement.from);
+    const currentToElement = getCurrentGeometryElement(measurement.to);
+    const currentDistance = distanceBetweenPoints(
+      currentFromElement.worldPoint,
+      currentToElement.worldPoint
+    );
+    const from = projectPoint(currentFromElement.worldPoint, rotationX, rotationY);
+    const to = projectPoint(currentToElement.worldPoint, rotationX, rotationY);
     const middle = {
       x: (from.x + to.x) / 2,
       y: (from.y + to.y) / 2,
@@ -4701,7 +4766,7 @@ export default function AdminSpatialGeometryPrototypePage() {
         {measurementLabel({
           x: middle.x,
           y: middle.y - 20,
-          text: `d = ${formatNumber(measurement.distance)} u`,
+          text: `d = ${formatNumber(currentDistance)} u`,
         })}
       </g>
     );
@@ -4710,7 +4775,8 @@ export default function AdminSpatialGeometryPrototypePage() {
   function renderMeasurementStartMarker() {
     if (!measurementStart) return null;
 
-    const point = projectPoint(measurementStart.worldPoint, rotationX, rotationY);
+    const currentStartElement = getCurrentGeometryElement(measurementStart);
+    const point = projectPoint(currentStartElement.worldPoint, rotationX, rotationY);
 
     return (
       <g pointerEvents="none">
