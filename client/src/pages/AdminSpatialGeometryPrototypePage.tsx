@@ -4915,23 +4915,33 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </p>
               </div>
 
-              <div className="absolute right-6 top-6 z-20 max-w-[320px] rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
-                <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-cyan-200">
-                  <MousePointerClick className="h-4 w-4" />
-                  Guia adaptativo · sólido {selectedTargetLabel}
-                </p>
-                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-200">
-                  {adaptiveInteractionTips.map((tip) => (
-                    <li key={tip} className="flex gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-cyan-300" />
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {!isFullscreen ? (
+                <div
+                  className="absolute right-6 top-6 z-20 max-w-[320px] rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                >
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-cyan-200">
+                    <MousePointerClick className="h-4 w-4" />
+                    Guia adaptativo · sólido {selectedTargetLabel}
+                  </p>
+                  <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-200">
+                    {adaptiveInteractionTips.map((tip) => (
+                      <li key={tip} className="flex gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-cyan-300" />
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {showProfessionalPanels ? (
-                <div className="absolute left-6 top-28 z-20 w-[min(360px,calc(100vw_-_48px))] space-y-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-white shadow-2xl backdrop-blur">
+                <div
+                  className="absolute left-6 top-28 z-20 max-h-[calc(100vh_-_220px)] w-[min(360px,calc(100vw_-_48px))] space-y-3 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-white shadow-2xl backdrop-blur"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
@@ -5004,7 +5014,15 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </div>
               ) : null}
 
-              <div className="absolute bottom-6 right-6 z-20 flex max-w-[min(520px,calc(100vw_-_48px))] flex-wrap gap-2 rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-white backdrop-blur">
+              <div
+                className={`absolute bottom-6 z-20 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-white backdrop-blur ${
+                  isFullscreen
+                    ? "left-6 right-[440px] max-w-[calc(100vw_-_480px)]"
+                    : "right-6 max-w-[min(520px,calc(100vw_-_48px))]"
+                }`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+              >
                 <button
                   type="button"
                   onClick={() => setShowProfessionalPanels((current) => !current)}
