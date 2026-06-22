@@ -189,6 +189,7 @@ type FloatingMenu =
 
 type AdjustmentTarget = "base" | "height" | "radius";
 type OverlapQuality = "fast" | "precise";
+type ProfessionalUiMode = "classroom" | "exploration";
 type FullscreenMenuSection =
   | null
   | "add"
@@ -1176,6 +1177,7 @@ function renderMesh({
   theme,
   onGeometryClick,
   onGeometryDoubleClick,
+  onGeometryPointerDown,
   onElementClick,
   onElementDoubleClick,
   onElementPointerDown,
@@ -1189,6 +1191,7 @@ function renderMesh({
   theme: RenderTheme;
   onGeometryClick?: () => void;
   onGeometryDoubleClick?: (event: React.MouseEvent) => void;
+  onGeometryPointerDown?: (event: React.PointerEvent) => void;
   onElementClick?: (element: Omit<GeometryElement, "target">) => void;
   onElementDoubleClick?: (
     element: Omit<GeometryElement, "target">,
@@ -1299,7 +1302,13 @@ function renderMesh({
     event.preventDefault();
     event.stopPropagation();
     onGeometryClick?.();
-    onElementDoubleClick?.(element, event);
+
+    if (event.altKey || event.shiftKey || event.metaKey || event.ctrlKey) {
+      onElementDoubleClick?.(element, event);
+      return;
+    }
+
+    onGeometryDoubleClick?.(event);
   };
 
   return (
@@ -1328,6 +1337,7 @@ function renderMesh({
             onClick={(event) => handleElementClick(face.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(face.element, event)}
             onPointerDown={(event) => {
+              onGeometryPointerDown?.(event);
               onElementPointerDown?.(face.element, event);
             }}
           />
@@ -1367,6 +1377,7 @@ function renderMesh({
                   handleElementDoubleClick(edge.element, event);
                 }}
                 onPointerDown={(event) => {
+                  onGeometryPointerDown?.(event);
                   onElementPointerDown?.(edge.element, event);
                 }}
               />
@@ -1388,6 +1399,7 @@ function renderMesh({
             onClick={(event) => handleElementClick(vertex.element, event)}
             onDoubleClick={(event) => handleElementDoubleClick(vertex.element, event)}
             onPointerDown={(event) => {
+              onGeometryPointerDown?.(event);
               onElementPointerDown?.(vertex.element, event);
             }}
           />
@@ -3051,6 +3063,9 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [innerRotationZ, setInnerRotationZ] = useState(0);
   const [isDraggingScene, setIsDraggingScene] = useState(false);
   const [overlapQuality, setOverlapQuality] = useState<OverlapQuality>("fast");
+  const [professionalUiMode, setProfessionalUiMode] =
+    useState<ProfessionalUiMode>("classroom");
+  const [showProfessionalPanels, setShowProfessionalPanels] = useState(true);
 
   const [rotationX, setRotationX] = useState(18);
   const [rotationY, setRotationY] = useState(-28);
@@ -3095,6 +3110,43 @@ export default function AdminSpatialGeometryPrototypePage() {
         window.clearTimeout(longPressTimerRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    function handleKeyboardShortcuts(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+
+      if (isTyping) return;
+
+      if (event.key === "Escape") {
+        closeFloatingMenu();
+        setMeasurementStart(null);
+        return;
+      }
+
+      if (event.key === "r" || event.key === "R") setInteractionMode("rotate");
+      if (event.key === "m" || event.key === "M") setInteractionMode("moveInner");
+      if (event.key === "g" || event.key === "G") setShowGrid((current) => !current);
+      if (event.key === "a" || event.key === "A") setShowAxes((current) => !current);
+      if (event.key === "f" || event.key === "F") setShowFaces((current) => !current);
+      if (event.key === "c" || event.key === "C") setShowCenter((current) => !current);
+
+      const presetIndex = Number(event.key) - 1;
+      const preset = VIEW_PRESETS[presetIndex];
+      if (preset) {
+        setRotationX(preset.rotationX);
+        setRotationY(preset.rotationY);
+        setAutoRotate(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyboardShortcuts);
+
+    return () => window.removeEventListener("keydown", handleKeyboardShortcuts);
   }, []);
 
   useEffect(() => {
@@ -3391,6 +3443,77 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   const exceedsSuggestedScale =
     innerBaseScale > 1 || innerHeightScale > 1 || innerRadiusScale > 1;
+
+  const selectedTargetLabel = selectedTarget === "inner" ? "interno" : "externo";
+
+  const adaptiveInteractionTips = useMemo(() => {
+    const tips: string[] = [];
+
+    if (floatingMenu?.kind === "solid") {
+      tips.push("Use o menu aberto para ajustar base, altura, raio, cortes e fórmulas do sólido.");
+    } else if (floatingMenu?.kind === "background") {
+      tips.push("Escolha um sólido ou uma cena pronta para montar uma comparação rapidamente.");
+    } else if (measurementStart) {
+      tips.push(`Origem: ${measurementStart.label}. Clique em outra face, aresta ou vértice para medir a distância.`);
+    } else if (activeAdjustment) {
+      tips.push("Arraste o controle ou use os botões +/− para comparar como volume e área mudam.");
+    } else if (mode === "inscribed" && selectedTarget === "inner") {
+      tips.push("Você está editando o sólido interno: mova, rotacione ou ajuste a escala para testar inscrição.");
+    } else {
+      tips.push("Dê dois cliques no sólido para abrir o menu de edição; dê dois cliques no fundo para adicionar formas.");
+    }
+
+    if (mode === "inscribed" && !isCentered) {
+      tips.push("O sólido interno está deslocado; centralize para analisar uma inscrição clássica.");
+    }
+
+    if (mode === "inscribed" && exceedsSuggestedScale) {
+      tips.push("A escala interna passou do recomendado; reduza para evitar uma inscrição visualmente inválida.");
+    }
+
+    if (mode === "inscribed" && innerOutsideVolume > 0.01) {
+      tips.push(`${formatNumber(innerOutsideVolume)} u³ do sólido interno estão fora do volume externo.`);
+    }
+
+    return tips.slice(0, 3);
+  }, [
+    activeAdjustment,
+    exceedsSuggestedScale,
+    floatingMenu,
+    innerOutsideVolume,
+    isCentered,
+    measurementStart,
+    mode,
+    selectedTarget,
+  ]);
+
+  const propertyRows = [
+    ["Volume", `${formatNumber(inspectedMetrics.volume)} u³`],
+    ["Área total", `${formatNumber(inspectedMetrics.totalArea)} u²`],
+    ["Área da base", inspectedMetrics.baseArea ? `${formatNumber(inspectedMetrics.baseArea)} u²` : "—"],
+    ["Área lateral", inspectedMetrics.lateralArea ? `${formatNumber(inspectedMetrics.lateralArea)} u²` : "—"],
+  ];
+
+  const constructionSteps =
+    mode === "inscribed"
+      ? [
+          "1. Selecione um preset clássico ou adicione o sólido interno.",
+          "2. Trave a relação visual com Encaixar / Centralizar.",
+          "3. Use cortes, medidas e volume de interseção para validar a construção.",
+        ]
+      : [
+          "1. Escolha o sólido de estudo.",
+          "2. Ajuste dimensões e ative uma medida rápida.",
+          "3. Insira outro sólido para comparar relações de inscrição.",
+        ];
+
+  const constraintRows = [
+    { label: "Centro alinhado", ok: mode !== "inscribed" || isCentered },
+    { label: "Escala interna segura", ok: mode !== "inscribed" || !exceedsSuggestedScale },
+    { label: "Contido no externo", ok: mode !== "inscribed" || innerOutsideVolume <= 0.01 },
+  ];
+
+  const shortcutRows = ["R girar", "M mover", "G grade", "A eixos", "F faces", "C centros", "Esc fechar", "1–4 vistas"];
 
   function closeFloatingMenu() {
     setFloatingMenu(null);
@@ -4792,19 +4915,134 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </p>
               </div>
 
-              <div className="absolute right-6 top-6 z-20 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
+              <div className="absolute right-6 top-6 z-20 max-w-[320px] rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
                 <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-cyan-200">
                   <MousePointerClick className="h-4 w-4" />
-                  Interação direta
+                  Guia adaptativo · sólido {selectedTargetLabel}
                 </p>
-                <p className="mt-1 max-w-[260px] text-xs leading-5 text-slate-200">
-                  Arraste para girar. Clique no sólido para escolher diagonal,
-                  raio, altura, corte, volume e outras medidas.
-                </p>
+                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-200">
+                  {adaptiveInteractionTips.map((tip) => (
+                    <li key={tip} className="flex gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-cyan-300" />
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {showProfessionalPanels ? (
+                <div className="absolute left-6 top-28 z-20 w-[min(360px,calc(100vw_-_48px))] space-y-3 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-white shadow-2xl backdrop-blur">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+                        Modo profissional
+                      </p>
+                      <p className="text-sm font-semibold text-slate-200">
+                        {professionalUiMode === "classroom" ? "Aula" : "Exploração"} · {inspectedDefinition.label}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProfessionalUiMode((current) =>
+                          current === "classroom" ? "exploration" : "classroom"
+                        )
+                      }
+                      className="rounded-xl bg-cyan-400/15 px-3 py-2 text-xs font-black text-cyan-100 ring-1 ring-cyan-300/30 transition hover:bg-cyan-400/25"
+                    >
+                      Alternar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {propertyRows.map(([label, value]) => (
+                      <div key={label} className="rounded-xl bg-white/10 p-2 ring-1 ring-white/10">
+                        <p className="font-semibold text-slate-300">{label}</p>
+                        <p className="mt-1 font-black text-white">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
+                    <p className="text-xs font-black uppercase tracking-wide text-emerald-200">
+                      Construção guiada
+                    </p>
+                    <ol className="mt-2 space-y-1 text-xs leading-5 text-slate-200">
+                      {constructionSteps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  <div className="grid gap-2 text-xs">
+                    {constraintRows.map((item) => (
+                      <div key={item.label} className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10">
+                        <span className="font-semibold text-slate-200">{item.label}</span>
+                        <span className={item.ok ? "text-emerald-300" : "text-amber-300"}>
+                          {item.ok ? "OK" : "Ajustar"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {SMART_CUTS.map((cut) => (
+                      <button
+                        key={cut.id}
+                        type="button"
+                        onClick={() => applySmartCut(cut.id)}
+                        className={`rounded-xl px-3 py-2 text-left font-black ring-1 transition ${
+                          activeSmartCut === cut.id
+                            ? "bg-amber-400 text-slate-950 ring-amber-200"
+                            : "bg-amber-400/10 text-amber-100 ring-amber-300/20 hover:bg-amber-400/20"
+                        }`}
+                      >
+                        {cut.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="absolute bottom-6 right-6 z-20 flex max-w-[min(520px,calc(100vw_-_48px))] flex-wrap gap-2 rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-white backdrop-blur">
+                <button
+                  type="button"
+                  onClick={() => setShowProfessionalPanels((current) => !current)}
+                  className="rounded-xl bg-white/10 px-3 py-2 text-xs font-black ring-1 ring-white/10 transition hover:bg-white/20"
+                >
+                  {showProfessionalPanels ? "Ocultar painéis" : "Mostrar painéis"}
+                </button>
+                <button
+                  type="button"
+                  onClick={fitCurrentSolids}
+                  className="rounded-xl bg-emerald-400/15 px-3 py-2 text-xs font-black text-emerald-100 ring-1 ring-emerald-300/30 transition hover:bg-emerald-400/25"
+                >
+                  Vínculo: encaixar
+                </button>
+                <button
+                  type="button"
+                  onClick={centralizeInner}
+                  className="rounded-xl bg-orange-400/15 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-300/30 transition hover:bg-orange-400/25"
+                >
+                  Centralizar
+                </button>
+                {VIEW_PRESETS.map((view, index) => (
+                  <button
+                    key={view.label}
+                    type="button"
+                    onClick={() => applyViewPreset(view)}
+                    className="rounded-xl bg-indigo-400/15 px-3 py-2 text-xs font-black text-indigo-100 ring-1 ring-indigo-300/30 transition hover:bg-indigo-400/25"
+                  >
+                    {index + 1}. {view.label}
+                  </button>
+                ))}
+                <div className="basis-full text-[11px] font-semibold leading-5 text-slate-300">
+                  Atalhos: {shortcutRows.join(" · ")}
+                </div>
               </div>
 
               {mode === "inscribed" ? (
-                <div className="absolute bottom-6 left-6 z-20 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
+                <div className="absolute bottom-28 left-6 z-20 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
                   <p className="text-xs font-semibold uppercase tracking-wide text-orange-200">
                     Interseção visual
                   </p>
@@ -4899,12 +5137,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       offset: { x: 0, y: 0, z: 0 },
                       onGeometryClick: () => selectGeometry("outer"),
                       onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
-                      onElementClick: (element) =>
-                        handleElementClick(buildGeometryElement({ ...element, target: "outer" })),
-                      onElementDoubleClick: (element, event) =>
-                        openElementMenu("outer", element, event),
-                      onElementPointerDown: (element, event) =>
-                        prepareElementMenuOnTouch("outer", element, event),
+                      onGeometryPointerDown: (event) =>
+                        prepareSolidMenuOnTouch("outer", event),
                       theme: {
                         face: "#38bdf8",
                         edge: selectedTarget === "outer" ? "#facc15" : "#bae6fd",
