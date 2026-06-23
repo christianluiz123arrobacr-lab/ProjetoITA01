@@ -85,6 +85,8 @@ const EMPTY_SUGGESTIONS: SuggestionsState = {
 };
 
 const QUESTION_IMAGES_BUCKET = "questoes-imagens";
+const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 const initialForm: QuestionFormData = {
   codigo: "",
@@ -498,6 +500,16 @@ function AssuntosPorConteudoEditor({
   );
 }
 
+function validarImagemUpload(file: File) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error("A imagem deve ter no máximo 3 MB.");
+  }
+}
+
 function gerarNomeArquivo(originalName: string) {
   const extensao = originalName.includes(".")
     ? originalName.split(".").pop()
@@ -864,6 +876,7 @@ export default function AdminQuestionEditPage() {
     if (!file || !questionId) return;
 
     try {
+      validarImagemUpload(file);
       setUploadingImage(true);
       setError("");
       setSuccessMessage("");
@@ -946,6 +959,7 @@ export default function AdminQuestionEditPage() {
     if (!file || !questionId) return;
 
     try {
+      validarImagemUpload(file);
       setUploadingAlternative(field);
       setError("");
       setSuccessMessage("");
@@ -1235,7 +1249,7 @@ export default function AdminQuestionEditPage() {
           <label className="inline-flex">
             <input
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={(e) => handleAlternativeImageUpload(imageField, e)}
             />
@@ -1517,7 +1531,7 @@ export default function AdminQuestionEditPage() {
                   <label className="inline-flex">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/png,image/jpeg,image/webp"
                       className="hidden"
                       onChange={handleImageUpload}
                     />

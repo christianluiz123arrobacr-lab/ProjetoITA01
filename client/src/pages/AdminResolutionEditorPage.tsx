@@ -63,6 +63,8 @@ type EditableBlock = {
 };
 
 const STORAGE_BUCKET = "resolucoes-imagens";
+const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const AUTORES_RESOLUCAO = ["Christian", "Maurício"];
 
 function textoCurto(texto?: string | null, limite = 140) {
@@ -85,6 +87,16 @@ function criarBlocoVazio(ordem: number): EditableBlock {
     ordem,
     isNew: true,
   };
+}
+
+function validarImagemUpload(file: File) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error("A imagem deve ter no máximo 3 MB.");
+  }
 }
 
 function gerarNomeArquivo(originalName: string) {
@@ -584,6 +596,7 @@ export default function AdminResolutionEditorPage() {
     if (!file || !questaoId) return;
 
     try {
+      validarImagemUpload(file);
       setUploadingBlockId(localId);
       setError("");
       setSuccessMessage("");
@@ -954,7 +967,7 @@ export default function AdminResolutionEditorPage() {
                     <label className="inline-flex">
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg,image/webp"
                         className="hidden"
                         onChange={(e) => handleImageUpload(block.localId, e)}
                       />
