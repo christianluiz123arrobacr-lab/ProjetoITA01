@@ -369,6 +369,7 @@ function PrivateRouter() {
         />
         <Route path="/cinematica/topic/mru" component={CinematicaTopicMRU} />
         <Route path="/cinematica/topic/mruv" component={CinematicaTopicMRUV} />
+        <Route path="/cinematica/topic/mcu" component={CinematicaTopicCircular} />
         <Route
           path="/cinematica/topic/circular"
           component={CinematicaTopicCircular}
