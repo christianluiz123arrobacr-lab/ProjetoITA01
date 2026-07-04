@@ -254,6 +254,123 @@ export const appRouter = router({
 
         return { success: true } as const;
       }),
+
+
+    listQuestions: adminOrEditorProcedure.query(async () => {
+      const [questionsResult, resolutionsResult] = await Promise.all([
+        supabaseAdmin
+          .from("questoes")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabaseAdmin
+          .from("resolucoes")
+          .select("id, questao_id, tipo, url_imagem"),
+      ]);
+
+      if (questionsResult.error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: questionsResult.error.message });
+      }
+
+      if (resolutionsResult.error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: resolutionsResult.error.message });
+      }
+
+      return {
+        questions: questionsResult.data ?? [],
+        resolutions: resolutionsResult.data ?? [],
+      };
+    }),
+
+    setQuestionPublished: adminOrEditorProcedure
+      .input(z.object({ id: z.string().uuid(), publicada: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: question, error: questionError } = await supabaseAdmin
+          .from("questoes")
+          .select("id, codigo, disciplina, diciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição")
+          .eq("id", input.id)
+          .maybeSingle();
+
+        if (questionError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: questionError.message });
+        }
+
+        const { error } = await supabaseAdmin
+          .from("questoes")
+          .update({ publicada: input.publicada })
+          .eq("id", input.id);
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: input.publicada ? "question_published" : "question_unpublished",
+          entity_type: "questao",
+          entity_id: input.id,
+          description: `Questão ${(question as any)?.codigo || input.id} ${input.publicada ? "publicada" : "despublicada"} no ADM`,
+          level: "info",
+          metadata: {
+            ...((question as Record<string, unknown> | null) ?? {}),
+            publicada: input.publicada,
+          },
+        });
+
+        return { success: true } as const;
+      }),
+
+    deleteQuestion: adminOrEditorProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: question, error: questionError } = await supabaseAdmin
+          .from("questoes")
+          .select("id, codigo, disciplina, diciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição")
+          .eq("id", input.id)
+          .maybeSingle();
+
+        if (questionError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: questionError.message });
+        }
+
+        const { error: deleteResolutionsMetaError } = await supabaseAdmin
+          .from("resolucoes_meta")
+          .delete()
+          .eq("questao_id", input.id);
+
+        if (deleteResolutionsMetaError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: deleteResolutionsMetaError.message });
+        }
+
+        const { error: deleteResolutionsError } = await supabaseAdmin
+          .from("resolucoes")
+          .delete()
+          .eq("questao_id", input.id);
+
+        if (deleteResolutionsError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: deleteResolutionsError.message });
+        }
+
+        const { error: deleteQuestionError } = await supabaseAdmin
+          .from("questoes")
+          .delete()
+          .eq("id", input.id);
+
+        if (deleteQuestionError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: deleteQuestionError.message });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "question_deleted",
+          entity_type: "questao",
+          entity_id: input.id,
+          description: `Questão ${(question as any)?.codigo || input.id} excluída no ADM`,
+          level: "warning",
+          metadata: question ?? { id: input.id },
+        });
+
+        return { success: true } as const;
+      }),
   }),
 
   ai: router({
