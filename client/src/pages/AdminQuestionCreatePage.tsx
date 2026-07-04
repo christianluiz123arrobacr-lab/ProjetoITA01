@@ -105,7 +105,6 @@ type ImportedQuestionFile = {
 };
 
 const QUESTION_IMAGES_BUCKET = "questoes-imagens";
-const RESOLUTION_IMPORT_STORAGE_PREFIX = "pending-resolution-import:";
 
 const initialForm: QuestionFormData = {
   codigo: "",
@@ -1034,6 +1033,27 @@ export default function AdminQuestionCreatePage() {
     }
   }
 
+  async function saveImportedResolutionBlocks(
+    questaoId: string,
+    blocks: NormalizedImportedResolutionBlock[]
+  ) {
+    if (blocks.length === 0) return;
+
+    const payload = blocks.map((block, index) => ({
+      questao_id: questaoId,
+      tipo: block.tipo,
+      texto: block.tipo === "imagem" ? null : block.texto,
+      url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
+      ordem: index + 1,
+    }));
+
+    const { error } = await supabase.from("resolucoes").insert(payload);
+
+    if (error) {
+      throw error;
+    }
+  }
+
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1316,6 +1336,16 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
+      try {
+        await saveImportedResolutionBlocks(data.id, pendingResolutionBlocks);
+      } catch (resolutionError) {
+        console.error("Erro ao salvar resolução importada:", resolutionError);
+        setError(
+          "A questão foi criada, mas não foi possível salvar a resolução importada. Abra a tela de resoluções e adicione os blocos manualmente ou tente importar novamente."
+        );
+        return;
+      }
+
       await logAdminAction({
         action: "question_created",
         entityType: "questao",
@@ -1341,17 +1371,15 @@ export default function AdminQuestionCreatePage() {
           alternativaCImagem: form.alternativa_c_imagem || null,
           alternativaDImagem: form.alternativa_d_imagem || null,
           alternativaEImagem: form.alternativa_e_imagem || null,
+          resolucaoImportadaBlocos: pendingResolutionBlocks.length,
         },
       });
 
-      if (pendingResolutionBlocks.length > 0) {
-        window.localStorage.setItem(
-          `${RESOLUTION_IMPORT_STORAGE_PREFIX}${data.id}`,
-          JSON.stringify(pendingResolutionBlocks)
-        );
-      }
-
-      setSuccessMessage("Questão criada com sucesso. Indo para a resolução...");
+      setSuccessMessage(
+        pendingResolutionBlocks.length > 0
+          ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
+          : "Questão criada com sucesso. Indo para a resolução..."
+      );
       setLocation(`/admin/resolucoes/${data.id}`);
     } catch (err) {
       console.error("Erro inesperado ao criar questão:", err);
@@ -1444,45 +1472,55 @@ export default function AdminQuestionCreatePage() {
           </div>
         </Card>
 
-        <Card className="p-6 bg-white border-blue-100">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                <FileJson className="w-6 h-6" />
+        <Card className="p-5 bg-slate-950 border-slate-900 text-white">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/10 text-blue-200 flex items-center justify-center shrink-0">
+                <FileJson className="w-5 h-5" />
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-slate-900">
-                  Importar questão por arquivo
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Envie a imagem da questão para a IA fora do site, peça para ela
-                  gerar o JSON no padrão da plataforma e importe aqui. O site
-                  preenche enunciado, conteúdo, assunto, alternativas, correta e
-                  blocos de resolução. Ano, banca e instituição ficam fora da
-                  importação.
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold">Importação por JSON</h2>
 
-                {pendingResolutionBlocks.length > 0 ? (
-                  <p className="mt-3 inline-flex rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                    {pendingResolutionBlocks.length} bloco(s) de resolução carregado(s)
-                  </p>
-                ) : null}
+                  {pendingResolutionBlocks.length > 0 ? (
+                    <span className="rounded-full bg-emerald-400/15 border border-emerald-300/30 px-3 py-1 text-[11px] font-bold text-emerald-100">
+                      {pendingResolutionBlocks.length} bloco(s) de resolução
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-bold text-slate-200">
+                      opcional
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  Use o arquivo gerado pela IA para preencher a questão. Ano,
+                  banca e instituição continuam manuais quando forem necessários.
+                </p>
               </div>
             </div>
 
-            <label className="inline-flex">
-              <input
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={handleQuestionJsonImport}
-              />
-              <span className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm cursor-pointer hover:bg-slate-800">
-                <Upload className="w-4 h-4 mr-2" />
-                Importar JSON
-              </span>
-            </label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {pendingResolutionBlocks.length > 0 ? (
+                <p className="text-xs font-medium text-emerald-100">
+                  Ao criar, a resolução será salva automaticamente.
+                </p>
+              ) : null}
+
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleQuestionJsonImport}
+                />
+                <span className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 shadow-sm cursor-pointer hover:bg-blue-50">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar JSON
+                </span>
+              </label>
+            </div>
           </div>
         </Card>
 
