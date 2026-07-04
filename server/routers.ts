@@ -9,6 +9,24 @@ import { invokeLLM } from "./_core/llm.js";
 import { assertRateLimit, assertRequestRateLimit } from "./_core/rateLimit.js";
 import { supabaseAdmin } from "./_core/supabaseAdmin.js";
 
+const resolutionBlockInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  tipo: z.enum(["texto", "latex", "imagem"]),
+  texto: z.string().max(20000).nullable().optional(),
+  url_imagem: z.string().url().nullable().optional(),
+  ordem: z.number().int().min(1).max(500),
+});
+
+function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeof resolutionBlockInputSchema>) {
+  return {
+    questao_id: questaoId,
+    tipo: block.tipo,
+    texto: block.tipo === "imagem" ? null : (block.texto?.trim() || null),
+    url_imagem: block.tipo === "imagem" ? (block.url_imagem?.trim() || null) : null,
+    ordem: block.ordem,
+  };
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -198,7 +216,7 @@ export const appRouter = router({
 
     grantAdminAccess: adminProcedure
       .input(z.object({ email: z.string().email(), role: z.enum(["admin", "editor"]) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const email = input.email.trim().toLowerCase();
         const { data: profile, error: profileError } = await supabaseAdmin
           .from("profiles")
@@ -231,7 +249,7 @@ export const appRouter = router({
 
     updateAdminRole: adminProcedure
       .input(z.object({ id: z.string().uuid(), role: z.enum(["admin", "editor"]) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { error } = await supabaseAdmin
           .from("admin_users")
           .update({ role: input.role })
@@ -321,7 +339,7 @@ export const appRouter = router({
           context: z.string().min(1).max(120).optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const extensionByType: Record<typeof input.contentType, string> = {
           "image/png": "png",
           "image/jpeg": "jpg",
@@ -351,6 +369,22 @@ export const appRouter = router({
           .from(input.bucket)
           .getPublicUrl(path);
 
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "admin_image_signed_upload_created",
+          entity_type: "storage_object",
+          entity_id: path,
+          description: `URL assinada criada para upload em ${input.bucket}`,
+          level: "info",
+          metadata: {
+            bucket: input.bucket,
+            path,
+            contentType: input.contentType,
+            originalName: input.originalName,
+            context: input.context ?? null,
+          },
+        });
+
         return {
           bucket: input.bucket,
           path,
@@ -358,6 +392,254 @@ export const appRouter = router({
           signedUrl: data.signedUrl,
           publicUrl: publicUrlData.publicUrl,
         } as const;
+      }),
+
+    getResolutionEditor: adminOrEditorProcedure
+      .input(z.object({ questaoId: z.string().uuid() }))
+      .query(async ({ input }) => {
+        const [questionResult, blocksResult, metaResult] = await Promise.all([
+          supabaseAdmin
+            .from("questoes")
+            .select("id, codigo, enunciado")
+            .eq("id", input.questaoId)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("resolucoes")
+            .select("id, questao_id, tipo, texto, ordem, url_imagem, codigo_resolucao, created_at")
+            .eq("questao_id", input.questaoId)
+            .order("ordem", { ascending: true }),
+          supabaseAdmin
+            .from("resolucoes_meta")
+            .select("*")
+            .eq("questao_id", input.questaoId)
+            .maybeSingle(),
+        ]);
+
+        if (questionResult.error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: questionResult.error.message });
+        }
+
+        if (!questionResult.data) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Questão não encontrada." });
+        }
+
+        if (blocksResult.error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: blocksResult.error.message });
+        }
+
+        if (metaResult.error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: metaResult.error.message });
+        }
+
+        return {
+          question: questionResult.data,
+          blocks: blocksResult.data ?? [],
+          meta: metaResult.data ?? null,
+        };
+      }),
+
+    saveResolutionAuthor: adminOrEditorProcedure
+      .input(z.object({ questaoId: z.string().uuid(), autorNome: z.string().min(1).max(120) }))
+      .mutation(async ({ ctx, input }) => {
+        const autorNome = input.autorNome.trim();
+        const { data, error } = await supabaseAdmin
+          .from("resolucoes_meta")
+          .upsert(
+            {
+              questao_id: input.questaoId,
+              autor_nome: autorNome,
+            },
+            { onConflict: "questao_id" }
+          )
+          .select("*")
+          .single();
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "resolution_author_saved",
+          entity_type: "resolucao_meta",
+          entity_id: input.questaoId,
+          description: `Autor da resolução definido como ${autorNome}`,
+          level: "info",
+          metadata: {
+            questaoId: input.questaoId,
+            autorNome,
+          },
+        });
+
+        return { meta: data } as const;
+      }),
+
+    saveResolutionBlock: adminOrEditorProcedure
+      .input(z.object({ questaoId: z.string().uuid(), block: resolutionBlockInputSchema }))
+      .mutation(async ({ ctx, input }) => {
+        const payload = normalizeResolutionBlockPayload(input.questaoId, input.block);
+
+        if (input.block.id) {
+          const { data, error } = await supabaseAdmin
+            .from("resolucoes")
+            .update(payload)
+            .eq("id", input.block.id)
+            .eq("questao_id", input.questaoId)
+            .select("id")
+            .maybeSingle();
+
+          if (error) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+          }
+
+          if (!data?.id) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Bloco de resolução não encontrado." });
+          }
+
+          await supabaseAdmin.from("admin_logs").insert({
+            admin_user_id: ctx.user.id,
+            action: "resolution_block_updated",
+            entity_type: "resolucao",
+            entity_id: data.id,
+            description: "Bloco de resolução atualizado no ADM",
+            level: "info",
+            metadata: { questaoId: input.questaoId, ...payload },
+          });
+
+          return { id: data.id } as const;
+        }
+
+        const { data, error } = await supabaseAdmin
+          .from("resolucoes")
+          .insert(payload)
+          .select("id")
+          .single();
+
+        if (error || !data?.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Não foi possível criar o bloco." });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "resolution_block_created",
+          entity_type: "resolucao",
+          entity_id: data.id,
+          description: "Bloco de resolução criado no ADM",
+          level: "info",
+          metadata: { questaoId: input.questaoId, ...payload },
+        });
+
+        return { id: data.id } as const;
+      }),
+
+    saveResolutionBlocks: adminOrEditorProcedure
+      .input(
+        z.object({
+          questaoId: z.string().uuid(),
+          blocks: z.array(resolutionBlockInputSchema).min(1).max(500),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const savedBlocks: Array<{ id: string; index: number }> = [];
+        let createdCount = 0;
+        let updatedCount = 0;
+
+        for (let index = 0; index < input.blocks.length; index += 1) {
+          const block = input.blocks[index];
+          const payload = normalizeResolutionBlockPayload(input.questaoId, block);
+
+          if (block.id) {
+            const { data, error } = await supabaseAdmin
+              .from("resolucoes")
+              .update(payload)
+              .eq("id", block.id)
+              .eq("questao_id", input.questaoId)
+              .select("id")
+              .maybeSingle();
+
+            if (error) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            }
+
+            if (!data?.id) {
+              throw new TRPCError({ code: "NOT_FOUND", message: `Bloco ${index + 1} não encontrado.` });
+            }
+
+            updatedCount += 1;
+            savedBlocks.push({ id: data.id, index });
+          } else {
+            const { data, error } = await supabaseAdmin
+              .from("resolucoes")
+              .insert(payload)
+              .select("id")
+              .single();
+
+            if (error || !data?.id) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? `Não foi possível criar o bloco ${index + 1}.` });
+            }
+
+            createdCount += 1;
+            savedBlocks.push({ id: data.id, index });
+          }
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "resolution_blocks_saved",
+          entity_type: "resolucao",
+          entity_id: input.questaoId,
+          description: "Blocos de resolução salvos em lote no ADM",
+          level: "info",
+          metadata: {
+            questaoId: input.questaoId,
+            totalBlocos: input.blocks.length,
+            criados: createdCount,
+            atualizados: updatedCount,
+          },
+        });
+
+        return { blocks: savedBlocks, createdCount, updatedCount } as const;
+      }),
+
+    deleteResolutionBlock: adminOrEditorProcedure
+      .input(z.object({ questaoId: z.string().uuid(), id: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: block, error: blockError } = await supabaseAdmin
+          .from("resolucoes")
+          .select("id, questao_id, tipo, ordem, url_imagem")
+          .eq("id", input.id)
+          .eq("questao_id", input.questaoId)
+          .maybeSingle();
+
+        if (blockError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: blockError.message });
+        }
+
+        if (!block?.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Bloco de resolução não encontrado." });
+        }
+
+        const { error } = await supabaseAdmin
+          .from("resolucoes")
+          .delete()
+          .eq("id", input.id)
+          .eq("questao_id", input.questaoId);
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "resolution_block_deleted",
+          entity_type: "resolucao",
+          entity_id: input.id,
+          description: "Bloco de resolução excluído no ADM",
+          level: "warning",
+          metadata: block,
+        });
+
+        return { success: true } as const;
       }),
 
     updateQuestion: adminOrEditorProcedure

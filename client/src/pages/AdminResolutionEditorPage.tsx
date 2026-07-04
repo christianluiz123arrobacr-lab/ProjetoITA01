@@ -2,7 +2,6 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
-import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -109,8 +108,16 @@ function normalizarOrdens(lista: EditableBlock[]) {
 
 export default function AdminResolutionEditorPage() {
   const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
+  const saveAuthorMutation = trpc.admin.saveResolutionAuthor.useMutation();
+  const saveBlockMutation = trpc.admin.saveResolutionBlock.useMutation();
+  const saveBlocksMutation = trpc.admin.saveResolutionBlocks.useMutation();
+  const deleteBlockMutation = trpc.admin.deleteResolutionBlock.useMutation();
   const [match, params] = useRoute("/admin/resolucoes/:questaoId");
   const questaoId = match ? params.questaoId : null;
+  const resolutionEditorQuery = trpc.admin.getResolutionEditor.useQuery(
+    { questaoId: questaoId ?? "00000000-0000-0000-0000-000000000000" },
+    { enabled: !!questaoId }
+  );
 
   const [question, setQuestion] = useState<QuestionInfo | null>(null);
   const [resolutionMeta, setResolutionMeta] = useState<ResolutionMeta | null>(null);
@@ -125,102 +132,52 @@ export default function AdminResolutionEditorPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
-    async function loadData() {
-      if (!questaoId) {
-        setError("Questão não encontrada.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError("");
-        setSuccessMessage("");
-
-        const [questionResult, resolutionsResult, metaResult] = await Promise.all([
-          supabase
-            .from("questoes")
-            .select("id, codigo, enunciado")
-            .eq("id", questaoId)
-            .single(),
-
-          supabase
-            .from("resolucoes")
-            .select(
-              "id, questao_id, tipo, texto, ordem, url_imagem, codigo_resolucao, created_at"
-            )
-            .eq("questao_id", questaoId)
-            .order("ordem", { ascending: true }),
-
-          supabase
-            .from("resolucoes_meta")
-            .select("*")
-            .eq("questao_id", questaoId)
-            .maybeSingle(),
-        ]);
-
-        if (questionResult.error || !questionResult.data) {
-          console.error(
-            "Erro ao carregar questão da resolução:",
-            questionResult.error
-          );
-          setError("Não foi possível carregar a questão.");
-          return;
-        }
-
-        if (resolutionsResult.error) {
-          console.error(
-            "Erro ao carregar blocos da resolução:",
-            resolutionsResult.error
-          );
-          setError("Não foi possível carregar os blocos da resolução.");
-          return;
-        }
-
-        if (metaResult.error) {
-          console.error(
-            "Erro ao carregar metadados da resolução:",
-            metaResult.error
-          );
-          setError("Não foi possível carregar os dados gerais da resolução.");
-          return;
-        }
-
-        setQuestion(questionResult.data as QuestionInfo);
-
-        const meta = (metaResult.data as ResolutionMeta | null) ?? null;
-        setResolutionMeta(meta);
-        setAuthorName(meta?.autor_nome || "");
-
-        const mappedBlocks: EditableBlock[] = (
-          (resolutionsResult.data as ResolutionBlock[]) || []
-        ).map((block, index) => ({
-          id: block.id,
-          localId: block.id || `${index}-${gerarLocalId()}`,
-          tipo: ((block.tipo || "texto").toLowerCase() as
-            | "texto"
-            | "latex"
-            | "imagem"),
-          texto: block.texto || "",
-          url_imagem: block.url_imagem || "",
-          ordem: block.ordem ?? index + 1,
-          isNew: false,
-        }));
-
-        setBlocks(normalizarOrdens(mappedBlocks));
-      } catch (err) {
-        console.error(
-          "Erro inesperado ao carregar editor de resolução:",
-          err
-        );
-        setError("Ocorreu um erro inesperado ao carregar a resolução.");
-      } finally {
-        setLoading(false);
-      }
+    if (!questaoId) {
+      setError("Questão não encontrada.");
+      setLoading(false);
+      return;
     }
 
-    loadData();
-  }, [questaoId]);
+    if (resolutionEditorQuery.isLoading) {
+      setLoading(true);
+      return;
+    }
+
+    if (resolutionEditorQuery.error) {
+      console.error("Erro ao carregar editor de resolução:", resolutionEditorQuery.error);
+      setError(resolutionEditorQuery.error.message || "Não foi possível carregar a resolução.");
+      setLoading(false);
+      return;
+    }
+
+    if (!resolutionEditorQuery.data) return;
+
+    setError("");
+    setSuccessMessage("");
+    setQuestion(resolutionEditorQuery.data.question as QuestionInfo);
+
+    const meta = (resolutionEditorQuery.data.meta as ResolutionMeta | null) ?? null;
+    setResolutionMeta(meta);
+    setAuthorName(meta?.autor_nome || "");
+
+    const mappedBlocks: EditableBlock[] = (
+      (resolutionEditorQuery.data.blocks as ResolutionBlock[]) || []
+    ).map((block, index) => ({
+      id: block.id,
+      localId: block.id || `${index}-${gerarLocalId()}`,
+      tipo: ((block.tipo || "texto").toLowerCase() as
+        | "texto"
+        | "latex"
+        | "imagem"),
+      texto: block.texto || "",
+      url_imagem: block.url_imagem || "",
+      ordem: block.ordem ?? index + 1,
+      isNew: false,
+    }));
+
+    setBlocks(normalizarOrdens(mappedBlocks));
+    setLoading(false);
+  }, [questaoId, resolutionEditorQuery.data, resolutionEditorQuery.error, resolutionEditorQuery.isLoading]);
 
   const orderedBlocks = useMemo(
     () => [...blocks].sort((a, b) => a.ordem - b.ordem),
@@ -336,40 +293,12 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
-      const payload = {
-        questao_id: questaoId,
-        autor_nome: autor,
-      };
-
-      const { data, error } = await supabase
-        .from("resolucoes_meta")
-        .upsert(payload, { onConflict: "questao_id" })
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error("Erro ao salvar autor da resolução:", error);
-        setError("Não foi possível salvar o autor da resolução.");
-        return;
-      }
-
-      setResolutionMeta((data as ResolutionMeta) || null);
-
-      await logAdminAction({
-        action: "resolution_author_saved",
-        entityType: "resolucao_meta",
-        entityId: questaoId,
-        description: `Autor da resolução da questão ${
-          question?.codigo || questaoId
-        } definido como ${autor}`,
-        level: "info",
-        metadata: {
-          questaoId,
-          questaoCodigo: question?.codigo || null,
-          autorNome: autor,
-        },
+      const result = await saveAuthorMutation.mutateAsync({
+        questaoId,
+        autorNome: autor,
       });
 
+      setResolutionMeta((result.meta as ResolutionMeta) || null);
       setSuccessMessage("Autor da resolução salvo com sucesso.");
     } catch (err) {
       console.error("Erro inesperado ao salvar autor:", err);
@@ -385,33 +314,13 @@ export default function AdminResolutionEditorPage() {
       return;
     }
 
+    if (!questaoId) return;
+
     try {
       setError("");
       setSuccessMessage("");
 
-      const { error } = await supabase.from("resolucoes").delete().eq("id", id);
-
-      if (error) {
-        console.error("Erro ao excluir bloco:", error);
-        setError("Não foi possível excluir o bloco.");
-        return;
-      }
-
-      await logAdminAction({
-        action: "resolution_block_deleted",
-        entityType: "resolucao",
-        entityId: id,
-        description: `Bloco de resolução excluído da questão ${
-          question?.codigo || questaoId
-        }`,
-        level: "warning",
-        metadata: {
-          questaoId,
-          questaoCodigo: question?.codigo || null,
-          blocoId: id,
-          localId,
-        },
-      });
+      await deleteBlockMutation.mutateAsync({ questaoId, id });
 
       removeLocalBlock(localId);
       setSuccessMessage("Bloco excluído com sucesso.");
@@ -424,32 +333,18 @@ export default function AdminResolutionEditorPage() {
   async function saveBlock(block: EditableBlock) {
     if (!questaoId) return;
 
-    const payload = {
-      questao_id: questaoId,
-      tipo: block.tipo,
-      texto: block.tipo === "imagem" ? null : block.texto || null,
-      url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
-      ordem: block.ordem,
-    };
+    const result = await saveBlockMutation.mutateAsync({
+      questaoId,
+      block: {
+        id: block.id,
+        tipo: block.tipo,
+        texto: block.tipo === "imagem" ? null : block.texto || null,
+        url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
+        ordem: block.ordem,
+      },
+    });
 
-    if (block.id) {
-      const { error } = await supabase
-        .from("resolucoes")
-        .update(payload)
-        .eq("id", block.id);
-
-      if (error) throw error;
-      return block.id;
-    }
-
-    const { data, error } = await supabase
-      .from("resolucoes")
-      .insert(payload)
-      .select("id")
-      .single();
-
-    if (error) throw error;
-    return data?.id as string;
+    return result.id;
   }
 
   async function handleSaveSingle(localId: string) {
@@ -473,28 +368,7 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
-      const wasExisting = !!block.id;
       const savedId = await saveBlock(block);
-
-      await logAdminAction({
-        action: "resolution_block_saved",
-        entityType: "resolucao",
-        entityId: savedId,
-        description: `Bloco ${
-          wasExisting ? "atualizado" : "criado"
-        } na resolução da questão ${question?.codigo || questaoId}`,
-        level: "info",
-        metadata: {
-          questaoId,
-          questaoCodigo: question?.codigo || null,
-          blocoId: savedId,
-          tipo: block.tipo,
-          ordem: block.ordem,
-          isNew: !wasExisting,
-          hasImage: block.tipo === "imagem",
-          autorNome: authorName || null,
-        },
-      });
 
       setBlocks((prev) =>
         prev.map((item) =>
@@ -534,41 +408,23 @@ export default function AdminResolutionEditorPage() {
         }
       }
 
-      const updatedBlocks: EditableBlock[] = [];
-      let createdCount = 0;
-      let updatedCount = 0;
-
-      for (const block of orderedBlocks) {
-        const wasExisting = !!block.id;
-        const savedId = await saveBlock(block);
-
-        if (wasExisting) updatedCount += 1;
-        else createdCount += 1;
-
-        updatedBlocks.push({
-          ...block,
-          id: savedId,
-          isNew: false,
-        });
-      }
-
-      await logAdminAction({
-        action: "resolution_blocks_saved",
-        entityType: "resolucao",
-        entityId: questaoId,
-        description: `Todos os blocos da resolução da questão ${
-          question?.codigo || questaoId
-        } foram salvos`,
-        level: "info",
-        metadata: {
-          questaoId,
-          questaoCodigo: question?.codigo || null,
-          totalBlocos: updatedBlocks.length,
-          criados: createdCount,
-          atualizados: updatedCount,
-          autorNome: authorName || null,
-        },
+      const result = await saveBlocksMutation.mutateAsync({
+        questaoId,
+        blocks: orderedBlocks.map((block) => ({
+          id: block.id,
+          tipo: block.tipo,
+          texto: block.tipo === "imagem" ? null : block.texto || null,
+          url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
+          ordem: block.ordem,
+        })),
       });
+
+      const idByIndex = new Map(result.blocks.map((item) => [item.index, item.id]));
+      const updatedBlocks = orderedBlocks.map((block, index) => ({
+        ...block,
+        id: idByIndex.get(index) ?? block.id,
+        isNew: false,
+      }));
 
       setBlocks(updatedBlocks);
       setSuccessMessage("Todos os blocos foram salvos com sucesso.");
@@ -620,26 +476,6 @@ export default function AdminResolutionEditorPage() {
       updateBlock(localId, {
         tipo: "imagem",
         url_imagem: upload.publicUrl,
-      });
-
-      await logAdminAction({
-        action: "resolution_image_uploaded",
-        entityType: "resolucao",
-        entityId: questaoId,
-        description: `Imagem enviada para a resolução da questão ${
-          question?.codigo || questaoId
-        }`,
-        level: "info",
-        metadata: {
-          questaoId,
-          questaoCodigo: question?.codigo || null,
-          localId,
-          bucket: STORAGE_BUCKET,
-          path: upload.path,
-          fileName: file.name,
-          publicUrl: upload.publicUrl,
-          autorNome: authorName || null,
-        },
       });
 
       setSuccessMessage("Imagem enviada com sucesso.");
