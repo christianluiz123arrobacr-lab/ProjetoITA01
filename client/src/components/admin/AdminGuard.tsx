@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,10 @@ export default function AdminGuard({
 }: AdminGuardProps) {
   const { user, loading } = useSupabaseAuth();
   const [, setLocation] = useLocation();
+  const meQuery = trpc.auth.me.useQuery(undefined, {
+    enabled: !loading && Boolean(user?.id),
+    retry: false,
+  });
 
   const [status, setStatus] = useState<AdminGuardStatus>("checking-auth");
   const [role, setRole] = useState<string | null>(null);
@@ -40,69 +44,55 @@ export default function AdminGuard({
   );
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function checkAccess() {
-      if (loading) {
-        if (isMounted) {
-          setStatus("checking-auth");
-        }
-        return;
-      }
-
-      if (!user?.id) {
-        if (isMounted) {
-          setStatus("redirecting");
-        }
-
-        setTimeout(() => {
-          setLocation("/login");
-        }, 150);
-
-        return;
-      }
-
-      if (isMounted) {
-        setStatus("checking-role");
-        setErrorMessage("");
-      }
-
-      const { data, error } = await supabase
-        .from("admin_users")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!isMounted) return;
-
-      if (error) {
-        console.error("Erro ao verificar acesso administrativo:", error);
-        setStatus("error");
-        setErrorMessage(
-          "Não foi possível validar suas permissões administrativas no momento."
-        );
-        return;
-      }
-
-      const userRole = data?.role ?? null;
-      setRole(userRole);
-
-      const allowedSet = new Set(allowedRoles);
-
-      if (!userRole || !allowedSet.has(userRole as AdminRole)) {
-        setStatus("forbidden");
-        return;
-      }
-
-      setStatus("allowed");
+    if (loading) {
+      setStatus("checking-auth");
+      return;
     }
 
-    checkAccess();
+    if (!user?.id) {
+      setStatus("redirecting");
+      setTimeout(() => {
+        setLocation("/login");
+      }, 150);
+      return;
+    }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.id, loading, setLocation, allowedRolesKey]);
+    if (meQuery.isLoading || meQuery.isFetching) {
+      setStatus("checking-role");
+      setErrorMessage("");
+      return;
+    }
+
+    if (meQuery.error) {
+      console.error("Erro ao verificar acesso administrativo no backend:", meQuery.error);
+      setStatus("error");
+      setErrorMessage(
+        "Não foi possível validar suas permissões administrativas no momento."
+      );
+      return;
+    }
+
+    const userRole = meQuery.data?.role ?? null;
+    setRole(userRole);
+
+    const allowedSet = new Set(allowedRoles);
+
+    if (!userRole || !allowedSet.has(userRole as AdminRole)) {
+      setStatus("forbidden");
+      return;
+    }
+
+    setStatus("allowed");
+  }, [
+    user?.id,
+    loading,
+    setLocation,
+    allowedRolesKey,
+    meQuery.data?.role,
+    meQuery.error,
+    meQuery.isFetching,
+    meQuery.isLoading,
+  ]);
 
   if (status === "allowed") {
     return <>{children}</>;
