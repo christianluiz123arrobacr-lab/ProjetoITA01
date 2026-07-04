@@ -3,7 +3,7 @@ import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies.js";
 import { systemRouter } from "./_core/systemRouter.js";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
+import { adminOrEditorProcedure, adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
 import { invokeLLM } from "./_core/llm.js";
 import { assertRateLimit, assertRequestRateLimit } from "./_core/rateLimit.js";
 import { supabaseAdmin } from "./_core/supabaseAdmin.js";
@@ -100,7 +100,7 @@ export const appRouter = router({
   }),
 
   admin: router({
-    createStudent: publicProcedure
+    createStudent: adminProcedure
       .input(
         z.object({
           nome: z.string().min(2, "Nome muito curto"),
@@ -109,20 +109,6 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        if (!ctx.user) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Usuário não autenticado.",
-          });
-        }
-
-        if (ctx.user.role !== "admin") {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Apenas administradores podem criar alunos.",
-          });
-        }
-
         const nome = input.nome.trim();
         const email = input.email.trim().toLowerCase();
 
@@ -180,6 +166,93 @@ export const appRouter = router({
           success: true,
           userId: data.user.id,
         } as const;
+      }),
+
+    listAdminUsers: adminProcedure.query(async () => {
+      const { data: adminUsers, error: adminUsersError } = await supabaseAdmin
+        .from("admin_users")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (adminUsersError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: adminUsersError.message });
+      }
+
+      const userIds = Array.from(new Set((adminUsers ?? []).map((item: any) => item.user_id).filter(Boolean)));
+      const { data: profiles, error: profilesError } = userIds.length
+        ? await supabaseAdmin.from("profiles").select("*").in("id", userIds)
+        : { data: [], error: null };
+
+      if (profilesError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: profilesError.message });
+      }
+
+      const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.id, profile]));
+
+      return (adminUsers ?? []).map((adminUser: any) => ({
+        ...adminUser,
+        profile: profileMap.get(adminUser.user_id) ?? null,
+      }));
+    }),
+
+    grantAdminAccess: adminProcedure
+      .input(z.object({ email: z.string().email(), role: z.enum(["admin", "editor"]) }))
+      .mutation(async ({ input }) => {
+        const email = input.email.trim().toLowerCase();
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .select("id, email")
+          .eq("email", email)
+          .maybeSingle();
+
+        if (profileError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: profileError.message });
+        }
+
+        if (!profile?.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Nenhum usuário com esse e-mail foi encontrado em profiles." });
+        }
+
+        const { error } = await supabaseAdmin.from("admin_users").upsert(
+          {
+            user_id: profile.id,
+            role: input.role,
+          },
+          { onConflict: "user_id" }
+        );
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return { success: true } as const;
+      }),
+
+    updateAdminRole: adminProcedure
+      .input(z.object({ id: z.string().uuid(), role: z.enum(["admin", "editor"]) }))
+      .mutation(async ({ input }) => {
+        const { error } = await supabaseAdmin
+          .from("admin_users")
+          .update({ role: input.role })
+          .eq("id", input.id);
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return { success: true } as const;
+      }),
+
+    removeAdminAccess: adminProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .mutation(async ({ input }) => {
+        const { error } = await supabaseAdmin.from("admin_users").delete().eq("id", input.id);
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return { success: true } as const;
       }),
   }),
 

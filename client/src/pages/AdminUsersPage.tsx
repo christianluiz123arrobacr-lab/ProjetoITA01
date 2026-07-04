@@ -257,6 +257,10 @@ function makeWhatsappUrl(student: StudentBillingRow) {
 
 export default function AdminUsersPage() {
   const createStudentMutation = trpc.admin.createStudent.useMutation();
+  const listAdminUsersQuery = trpc.admin.listAdminUsers.useQuery(undefined, { enabled: false });
+  const grantAdminAccessMutation = trpc.admin.grantAdminAccess.useMutation();
+  const updateAdminRoleMutation = trpc.admin.updateAdminRole.useMutation();
+  const removeAdminAccessMutation = trpc.admin.removeAdminAccess.useMutation();
 
   const [viewMode, setViewMode] = useState<UsersViewMode>("alunos");
   const [students, setStudents] = useState<StudentBillingRow[]>([]);
@@ -456,31 +460,19 @@ export default function AdminUsersPage() {
   }
 
   async function loadAdmins() {
-    const [adminUsersResult, profilesResult] = await Promise.all([
-      supabase.from("admin_users").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-    ]);
+    const result = await listAdminUsersQuery.refetch();
 
-    if (adminUsersResult.error) {
-      throw new Error(
-        adminUsersResult.error.message || "Não foi possível carregar acessos administrativos."
-      );
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar acessos administrativos.");
     }
 
-    if (profilesResult.error) {
-      throw new Error(profilesResult.error.message || "Não foi possível carregar perfis.");
-    }
+    const rows = ((result.data || []) as AdminUserWithProfile[]).map((adminUser) => ({
+      ...adminUser,
+      profile: adminUser.profile || null,
+    }));
 
-    const profileRows = (profilesResult.data as ProfileRow[]) || [];
-    const profileMap = new Map(profileRows.map((profile) => [String(profile.id), profile]));
-
-    setProfiles(profileRows);
-    setAdminUsers(
-      (((adminUsersResult.data as AdminUserRow[]) || []).map((adminUser) => ({
-        ...adminUser,
-        profile: profileMap.get(String(adminUser.user_id)) || null,
-      })))
-    );
+    setAdminUsers(rows);
+    setProfiles(rows.map((adminUser) => adminUser.profile).filter(Boolean) as ProfileRow[]);
   }
 
   async function loadAll() {
@@ -774,31 +766,15 @@ export default function AdminUsersPage() {
       return;
     }
 
-    const foundProfile = profiles.find(
-      (profile) => (profile.email || "").trim().toLowerCase() === trimmedEmail
-    );
-
-    if (!foundProfile) {
-      setError("Nenhum usuário com esse e-mail foi encontrado em profiles.");
-      return;
-    }
-
     try {
       setAddingAdmin(true);
       setError("");
       setSuccessMessage("");
 
-      const { error: upsertError } = await supabase.from("admin_users").upsert(
-        {
-          user_id: foundProfile.id,
-          role: newRole,
-        },
-        { onConflict: "user_id" }
-      );
-
-      if (upsertError) {
-        throw new Error(upsertError.message || "Não foi possível adicionar o ADM.");
-      }
+      await grantAdminAccessMutation.mutateAsync({
+        email: trimmedEmail,
+        role: newRole,
+      });
 
       setSuccessMessage(`Acesso ${newRole} liberado para ${trimmedEmail}.`);
       setNewEmail("");
@@ -819,14 +795,7 @@ export default function AdminUsersPage() {
       setSuccessMessage("");
 
       const nextRole = user.role === "admin" ? "editor" : "admin";
-      const { error: updateError } = await supabase
-        .from("admin_users")
-        .update({ role: nextRole })
-        .eq("id", user.id);
-
-      if (updateError) {
-        throw new Error(updateError.message || "Não foi possível alterar o papel.");
-      }
+      await updateAdminRoleMutation.mutateAsync({ id: user.id, role: nextRole });
 
       setAdminUsers((previous) =>
         previous.map((item) => (item.id === user.id ? { ...item, role: nextRole } : item))
@@ -849,11 +818,7 @@ export default function AdminUsersPage() {
       setError("");
       setSuccessMessage("");
 
-      const { error: deleteError } = await supabase.from("admin_users").delete().eq("id", user.id);
-
-      if (deleteError) {
-        throw new Error(deleteError.message || "Não foi possível remover o acesso.");
-      }
+      await removeAdminAccessMutation.mutateAsync({ id: user.id });
 
       setAdminUsers((previous) => previous.filter((item) => item.id !== user.id));
       setSuccessMessage("Acesso administrativo removido.");
