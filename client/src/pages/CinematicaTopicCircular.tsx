@@ -79,10 +79,7 @@ function Section({
   return (
     <section id={id} className="scroll-mt-24">
       <div className="mb-5">
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600">
-          {id}
-        </p>
-        <h2 className="mt-2 text-3xl font-black text-slate-950">{title}</h2>
+        <h2 className="text-3xl font-black text-slate-950">{title}</h2>
         {subtitle ? (
           <p className="mt-2 max-w-3xl text-base leading-relaxed text-slate-600">
             {subtitle}
@@ -126,7 +123,7 @@ function VectorDiagram() {
 
 export default function CinematicaTopicCircular() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-violet-50">
+    <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
         <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-4">
           <Link href="/cinematica">
@@ -289,6 +286,44 @@ export default function CinematicaTopicCircular() {
                   formula="v = \omega R = \frac{2\pi R}{T}"
                   note="Mede a rapidez ao longo da circunferência."
                 />
+              </div>
+
+              <div className="mt-7 grid gap-5 lg:grid-cols-2">
+                <InfoBox
+                  title="A ponte entre o angular e o linear"
+                  tone="blue"
+                  icon={<Compass className="h-5 w-5 text-blue-600" />}
+                >
+                  <p>
+                    A relação mais importante antes de decorar qualquer fórmula
+                    é esta: o comprimento do arco é proporcional ao ângulo
+                    varrido. Se o ângulo está em radianos:
+                  </p>
+                  <MathFormula formula="s = R\theta" display={true} />
+                  <p>
+                    Derivando em relação ao tempo, aparece naturalmente a
+                    relação entre velocidade tangencial e velocidade angular:
+                  </p>
+                  <MathFormula formula="v = \frac{ds}{dt} = R\frac{d\theta}{dt} = R\omega" display={true} />
+                </InfoBox>
+
+                <InfoBox
+                  title="Média vs instantânea"
+                  tone="purple"
+                  icon={<Target className="h-5 w-5 text-violet-700" />}
+                >
+                  <p>
+                    Em qualquer movimento circular, podemos definir uma
+                    velocidade angular média:
+                  </p>
+                  <MathFormula formula="\omega_m = \frac{\Delta \theta}{\Delta t}" display={true} />
+                  <p>
+                    No MCU, a velocidade angular não muda. Por isso, a média e a
+                    instantânea coincidem. É a mesma lógica do MRU, só que no
+                    mundo angular.
+                  </p>
+                  <MathFormula formula="\omega_m = \omega = \text{constante}" display={true} />
+                </InfoBox>
               </div>
             </Card>
           </Section>
@@ -762,6 +797,73 @@ export default function CinematicaTopicCircular() {
           </Section>
 
           <Section
+            id="graficos"
+            title="Gráficos do MCU"
+            subtitle="No MCU, a parte escalar e angular é previsível. O que varia é a direção do vetor velocidade, não os módulos das grandezas principais."
+          >
+            <Card className="rounded-3xl border-slate-200 bg-white p-7 shadow-lg">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <h3 className="mb-3 text-xl font-black text-slate-950">
+                    Ângulo em função do tempo
+                  </h3>
+                  <p className="mb-4 text-sm leading-relaxed text-slate-700">
+                    Como a velocidade angular é constante, o ângulo cresce de
+                    forma linear com o tempo.
+                  </p>
+                  <MathFormula formula="\theta(t) = \theta_0 + \omega t" display={true} />
+                  <p className="rounded-xl bg-white p-3 text-sm font-semibold text-slate-600">
+                    Gráfico <MathFormula formula="\theta \times t" display={false} />: reta.
+                    A inclinação da reta é <MathFormula formula="\omega" display={false} />.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <h3 className="mb-3 text-xl font-black text-slate-950">
+                    Velocidade angular em função do tempo
+                  </h3>
+                  <p className="mb-4 text-sm leading-relaxed text-slate-700">
+                    No MCU, a velocidade angular não aumenta nem diminui.
+                  </p>
+                  <MathFormula formula="\omega(t) = \text{constante}" display={true} />
+                  <p className="rounded-xl bg-white p-3 text-sm font-semibold text-slate-600">
+                    Gráfico <MathFormula formula="\omega \times t" display={false} />:
+                    reta horizontal.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <h3 className="mb-3 text-xl font-black text-slate-950">
+                    Módulo da velocidade
+                  </h3>
+                  <p className="mb-4 text-sm leading-relaxed text-slate-700">
+                    A rapidez fica constante, embora o vetor velocidade mude de
+                    direção continuamente.
+                  </p>
+                  <MathFormula formula="|\vec{v}(t)| = v = \text{constante}" display={true} />
+                  <p className="rounded-xl bg-white p-3 text-sm font-semibold text-slate-600">
+                    Gráfico <MathFormula formula="v \times t" display={false} />:
+                    reta horizontal se o eixo mostra o módulo.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <h3 className="mb-3 text-xl font-black text-slate-950">
+                    Módulo da aceleração centrípeta
+                  </h3>
+                  <p className="mb-4 text-sm leading-relaxed text-slate-700">
+                    Se <MathFormula formula="v" display={false} /> e{" "}
+                    <MathFormula formula="R" display={false} /> são constantes,
+                    o módulo de <MathFormula formula="a_c" display={false} /> também é constante.
+                    A direção, porém, acompanha o raio para o centro.
+                  </p>
+                  <MathFormula formula="a_c(t) = \frac{v^2}{R} = \text{constante}" display={true} />
+                </div>
+              </div>
+            </Card>
+          </Section>
+
+          <Section
             id="10"
             title="Exemplos resolvidos"
             subtitle="Três modelos que cobrem o grosso das questões: cálculo direto, correia e comparação entre pontos do disco."
@@ -827,6 +929,96 @@ export default function CinematicaTopicCircular() {
                   <FormulaCard title="Centrípeta" formula="a_{cB} = 2a_{cA}" note="Com mesma omega, ac é proporcional ao raio." />
                 </div>
               </Card>
+
+              <Card className="rounded-3xl border-slate-200 bg-white p-7 shadow-lg">
+                <h3 className="mb-4 text-2xl font-black text-slate-950">
+                  Exemplo 4: carro em curva plana com atrito
+                </h3>
+                <p className="mb-4 leading-relaxed text-slate-700">
+                  Um carro faz uma curva plana de raio <MathFormula formula="R" display={false} />.
+                  Quem fornece a força centrípeta é o atrito estático entre os
+                  pneus e o chão. No limite antes de derrapar:
+                </p>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormulaCard
+                    title="Atrito máximo"
+                    formula="F_{at,\max} = \mu mg"
+                    note="A pista plana não tem componente do peso na direção radial."
+                  />
+                  <FormulaCard
+                    title="Condição da curva"
+                    formula="\mu mg = \frac{mv^2}{R}"
+                    note="O atrito faz o papel de resultante radial."
+                  />
+                  <FormulaCard
+                    title="Velocidade máxima"
+                    formula="v_{\max} = \sqrt{\mu gR}"
+                    note="Acima disso, falta atrito e o carro derrapa."
+                  />
+                </div>
+              </Card>
+
+              <Card className="rounded-3xl border-slate-200 bg-white p-7 shadow-lg">
+                <h3 className="mb-4 text-2xl font-black text-slate-950">
+                  Exemplo 5: loop vertical
+                </h3>
+                <p className="mb-4 leading-relaxed text-slate-700">
+                  Em uma circunferência vertical, a direção radial muda de
+                  posição para posição. Por isso, a equação da resultante radial
+                  precisa ser montada em cada ponto, e não decorada no automático.
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormulaCard
+                    title="No topo"
+                    formula="N + mg = \frac{mv^2}{R}"
+                    note="Normal e peso apontam para o centro."
+                  />
+                  <FormulaCard
+                    title="Na base"
+                    formula="N - mg = \frac{mv^2}{R}"
+                    note="Normal aponta para o centro; peso aponta contra o centro."
+                  />
+                </div>
+                <InfoBox
+                  title="Cuidado fino"
+                  tone="amber"
+                  icon={<AlertTriangle className="h-5 w-5 text-amber-600" />}
+                >
+                  <p>
+                    “Força centrípeta” não é sempre <MathFormula formula="N" display={false} />,
+                    nem sempre <MathFormula formula="mg" display={false} />. Ela é a soma das
+                    componentes reais que apontam para o centro.
+                  </p>
+                </InfoBox>
+              </Card>
+
+              <Card className="rounded-3xl border-slate-200 bg-white p-7 shadow-lg">
+                <h3 className="mb-4 text-2xl font-black text-slate-950">
+                  Exemplo 6: pêndulo cônico
+                </h3>
+                <p className="mb-4 leading-relaxed text-slate-700">
+                  No pêndulo cônico, a massa descreve uma circunferência
+                  horizontal. A tração do fio se divide em duas componentes:
+                  uma sustenta o peso e outra fornece a resultante centrípeta.
+                </p>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormulaCard
+                    title="Equilíbrio vertical"
+                    formula="T\cos\theta = mg"
+                    note="Não há aceleração vertical."
+                  />
+                  <FormulaCard
+                    title="Direção radial"
+                    formula="T\sin\theta = \frac{mv^2}{R}"
+                    note="A componente horizontal da tração aponta para o centro."
+                  />
+                  <FormulaCard
+                    title="Dividindo as equações"
+                    formula="\tan\theta = \frac{v^2}{gR}"
+                    note="Ótima forma para ligar geometria e dinâmica."
+                  />
+                </div>
+              </Card>
             </div>
           </Section>
 
@@ -847,6 +1039,7 @@ export default function CinematicaTopicCircular() {
                     "Confundir velocidade angular com velocidade tangencial.",
                     "Usar v = omega R sem conferir o raio correto.",
                     "Tratar força centrípeta como força extra misteriosa.",
+                    "Inventar força centrífuga para fora no referencial inercial.",
                     "Aplicar regra de mesmo disco em problema de correia.",
                     "Esquecer que rpm deve ser convertido para Hz.",
                     "Esquecer que uma volta equivale a 2π radianos.",
@@ -994,4 +1187,3 @@ export default function CinematicaTopicCircular() {
     </div>
   );
 }
-
