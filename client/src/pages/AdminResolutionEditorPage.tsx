@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -99,16 +100,6 @@ function validarImagemUpload(file: File) {
   }
 }
 
-function gerarNomeArquivo(originalName: string) {
-  const extensao = originalName.includes(".")
-    ? originalName.split(".").pop()
-    : "png";
-
-  return `${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}.${extensao}`;
-}
-
 function normalizarOrdens(lista: EditableBlock[]) {
   return lista.map((block, index) => ({
     ...block,
@@ -117,6 +108,7 @@ function normalizarOrdens(lista: EditableBlock[]) {
 }
 
 export default function AdminResolutionEditorPage() {
+  const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
   const [match, params] = useRoute("/admin/resolucoes/:questaoId");
   const questaoId = match ? params.questaoId : null;
 
@@ -601,13 +593,17 @@ export default function AdminResolutionEditorPage() {
       setError("");
       setSuccessMessage("");
 
-      const fileName = gerarNomeArquivo(file.name);
-      const path = `${questaoId}/${fileName}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: STORAGE_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: questaoId,
+      });
 
       const { error: uploadError } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(path, file, {
-          upsert: true,
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.path, upload.token, file, {
+          contentType: file.type,
         });
 
       if (uploadError) {
@@ -616,18 +612,14 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
-      const { data } = supabase.storage
-        .from(STORAGE_BUCKET)
-        .getPublicUrl(path);
-
-      if (!data?.publicUrl) {
+      if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem.");
         return;
       }
 
       updateBlock(localId, {
         tipo: "imagem",
-        url_imagem: data.publicUrl,
+        url_imagem: upload.publicUrl,
       });
 
       await logAdminAction({
@@ -643,9 +635,9 @@ export default function AdminResolutionEditorPage() {
           questaoCodigo: question?.codigo || null,
           localId,
           bucket: STORAGE_BUCKET,
-          path,
+          path: upload.path,
           fileName: file.name,
-          publicUrl: data.publicUrl,
+          publicUrl: upload.publicUrl,
           autorNome: authorName || null,
         },
       });

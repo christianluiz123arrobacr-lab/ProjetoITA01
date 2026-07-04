@@ -511,16 +511,6 @@ function validarImagemUpload(file: File) {
   }
 }
 
-function gerarNomeArquivo(originalName: string) {
-  const extensao = originalName.includes(".")
-    ? originalName.split(".").pop()
-    : "png";
-
-  return `${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}.${extensao}`;
-}
-
 function MarkdownPreview({
   value,
   emptyMessage = "Nada para visualizar ainda.",
@@ -731,6 +721,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 
 export default function AdminQuestionEditPage() {
   const updateQuestionMutation = trpc.admin.updateQuestion.useMutation();
+  const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
   const [match, params] = useRoute("/admin/questoes/:id");
   const [, setLocation] = useLocation();
   const questionId = match ? params.id : null;
@@ -885,13 +876,17 @@ export default function AdminQuestionEditPage() {
 
       const pastaBase =
         form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
-      const fileName = gerarNomeArquivo(file.name);
-      const path = `${pastaBase}/enunciado/${fileName}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/enunciado`,
+      });
 
       const { error: uploadError } = await supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .upload(path, file, {
-          upsert: true,
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.path, upload.token, file, {
+          contentType: file.type,
         });
 
       if (uploadError) {
@@ -904,16 +899,12 @@ export default function AdminQuestionEditPage() {
         return;
       }
 
-      const { data } = supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .getPublicUrl(path);
-
-      if (!data?.publicUrl) {
+      if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem.");
         return;
       }
 
-      updateField("url_imagem", data.publicUrl);
+      updateField("url_imagem", upload.publicUrl);
 
       await logAdminAction({
         action: "question_image_uploaded",
@@ -931,9 +922,9 @@ export default function AdminQuestionEditPage() {
           assuntos: normalizarLista(form.assuntos),
           assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
           bucket: QUESTION_IMAGES_BUCKET,
-          path,
+          path: upload.path,
           fileName: file.name,
-          publicUrl: data.publicUrl,
+          publicUrl: upload.publicUrl,
           tipoImagem: "enunciado",
         },
       });
@@ -968,13 +959,17 @@ export default function AdminQuestionEditPage() {
 
       const pastaBase =
         form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
-      const fileName = gerarNomeArquivo(file.name);
-      const path = `${pastaBase}/alternativas/${field}/${fileName}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/alternativas/${field}`,
+      });
 
       const { error: uploadError } = await supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .upload(path, file, {
-          upsert: true,
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.path, upload.token, file, {
+          contentType: file.type,
         });
 
       if (uploadError) {
@@ -987,16 +982,12 @@ export default function AdminQuestionEditPage() {
         return;
       }
 
-      const { data } = supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .getPublicUrl(path);
-
-      if (!data?.publicUrl) {
+      if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem da alternativa.");
         return;
       }
 
-      updateField(field, data.publicUrl);
+      updateField(field, upload.publicUrl);
 
       const letraAlternativa =
         field === "alternativa_a_imagem"
@@ -1027,9 +1018,9 @@ export default function AdminQuestionEditPage() {
           alternativa: letraAlternativa,
           field,
           bucket: QUESTION_IMAGES_BUCKET,
-          path,
+          path: upload.path,
           fileName: file.name,
-          publicUrl: data.publicUrl,
+          publicUrl: upload.publicUrl,
           tipoImagem: "alternativa",
         },
       });

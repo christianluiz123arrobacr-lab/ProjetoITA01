@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const.js";
@@ -309,6 +310,54 @@ export const appRouter = router({
         });
 
         return { id: data.id } as const;
+      }),
+
+    createAdminImageUpload: adminOrEditorProcedure
+      .input(
+        z.object({
+          bucket: z.enum(["questoes-imagens", "resolucoes-imagens"]),
+          originalName: z.string().min(1).max(180),
+          contentType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+          context: z.string().min(1).max(120).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const extensionByType: Record<typeof input.contentType, string> = {
+          "image/png": "png",
+          "image/jpeg": "jpg",
+          "image/webp": "webp",
+        };
+        const safeContext = (input.context || "admin-upload")
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9/_-]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 100) || "admin-upload";
+        const extension = extensionByType[input.contentType];
+        const path = `${safeContext}/${Date.now()}-${randomUUID()}.${extension}`;
+
+        const { data, error } = await supabaseAdmin.storage
+          .from(input.bucket)
+          .createSignedUploadUrl(path);
+
+        if (error || !data?.token) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error?.message ?? "Não foi possível criar URL assinada para upload.",
+          });
+        }
+
+        const { data: publicUrlData } = supabaseAdmin.storage
+          .from(input.bucket)
+          .getPublicUrl(path);
+
+        return {
+          bucket: input.bucket,
+          path,
+          token: data.token,
+          signedUrl: data.signedUrl,
+          publicUrl: publicUrlData.publicUrl,
+        } as const;
       }),
 
     updateQuestion: adminOrEditorProcedure
