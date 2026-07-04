@@ -1,6 +1,7 @@
 import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -685,6 +686,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 }
 
 export default function AdminQuestionCreatePage() {
+  const createQuestionMutation = trpc.admin.createQuestion.useMutation();
   const [, setLocation] = useLocation();
 
   const [form, setForm] = useState<QuestionFormData>(initialForm);
@@ -1012,54 +1014,12 @@ export default function AdminQuestionCreatePage() {
         alternativa_correta: valorLimpo(form.alternativa_correta),
       };
 
-      const { data, error } = await supabase
-        .from("questoes")
-        .insert([payload])
-        .select("id")
-        .single();
-
-      if (error) {
-        console.error("Erro ao criar questão:", error);
-        setError(
-          error.message
-            ? `Não foi possível criar a questão: ${error.message}`
-            : "Não foi possível criar a questão."
-        );
-        return;
-      }
+      const data = await createQuestionMutation.mutateAsync({ payload });
 
       if (!data?.id) {
         setError("A questão foi criada, mas o ID não retornou como esperado.");
         return;
       }
-
-      await logAdminAction({
-        action: "question_created",
-        entityType: "questao",
-        entityId: data.id,
-        description: `Questão ${form.codigo || data.id} criada no ADM`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          banca: form.banca || null,
-          ano: form.ano ? Number(form.ano) : null,
-          dificuldade: form.dificuldade || null,
-          instituicao: form.instituicao || null,
-          publicada: form.publicada,
-          urlImagem: form.url_imagem || null,
-          alternativaAImagem: form.alternativa_a_imagem || null,
-          alternativaBImagem: form.alternativa_b_imagem || null,
-          alternativaCImagem: form.alternativa_c_imagem || null,
-          alternativaDImagem: form.alternativa_d_imagem || null,
-          alternativaEImagem: form.alternativa_e_imagem || null,
-        },
-      });
 
       setSuccessMessage("Questão criada com sucesso. Indo para a resolução...");
       setLocation(`/admin/resolucoes/${data.id}`);

@@ -1,6 +1,7 @@
 import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -729,6 +730,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 }
 
 export default function AdminQuestionEditPage() {
+  const updateQuestionMutation = trpc.admin.updateQuestion.useMutation();
   const [match, params] = useRoute("/admin/questoes/:id");
   const [, setLocation] = useLocation();
   const questionId = match ? params.id : null;
@@ -1138,48 +1140,7 @@ export default function AdminQuestionEditPage() {
       alternativa_correta: valorLimpo(form.alternativa_correta),
     };
 
-    const { error } = await supabase
-      .from("questoes")
-      .update(payload)
-      .eq("id", questionId);
-
-    if (error) {
-      console.error("Erro ao salvar questão:", error);
-      setError(
-        error.message
-          ? `Não foi possível salvar as alterações: ${error.message}`
-          : "Não foi possível salvar as alterações."
-      );
-      return { ok: false };
-    }
-
-    await logAdminAction({
-      action: "question_updated",
-      entityType: "questao",
-      entityId: questionId,
-      description: `Questão ${form.codigo || questionId} editada no ADM`,
-      level: "info",
-      metadata: {
-        codigo: form.codigo || null,
-        disciplina: form.disciplina || null,
-        conteudo: primeiroValorDaLista(conteudosSelecionados) || null,
-        conteudos: conteudosSelecionados,
-        assunto: primeiroValorDaLista(assuntosSelecionados) || null,
-        assuntos: assuntosSelecionados,
-        assuntosPorConteudo: assuntosPorConteudoSelecionados,
-        banca: form.banca || null,
-        ano: form.ano ? Number(form.ano) : null,
-        dificuldade: form.dificuldade || null,
-        instituicao: form.instituicao || null,
-        publicada: form.publicada,
-        urlImagem: form.url_imagem || null,
-        alternativaAImagem: form.alternativa_a_imagem || null,
-        alternativaBImagem: form.alternativa_b_imagem || null,
-        alternativaCImagem: form.alternativa_c_imagem || null,
-        alternativaDImagem: form.alternativa_d_imagem || null,
-        alternativaEImagem: form.alternativa_e_imagem || null,
-      },
-    });
+    await updateQuestionMutation.mutateAsync({ id: questionId, payload });
 
     return { ok: true };
   }

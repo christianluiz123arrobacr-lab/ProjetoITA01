@@ -281,6 +281,61 @@ export const appRouter = router({
       };
     }),
 
+    createQuestion: adminOrEditorProcedure
+      .input(z.object({ payload: z.record(z.string(), z.any()) }))
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("questoes")
+          .insert([input.payload])
+          .select("id, codigo")
+          .single();
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        if (!data?.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A questão foi criada, mas o ID não retornou." });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "question_created",
+          entity_type: "questao",
+          entity_id: data.id,
+          description: `Questão ${(data as any)?.codigo || data.id} criada no ADM`,
+          level: "info",
+          metadata: input.payload,
+        });
+
+        return { id: data.id } as const;
+      }),
+
+    updateQuestion: adminOrEditorProcedure
+      .input(z.object({ id: z.string().uuid(), payload: z.record(z.string(), z.any()) }))
+      .mutation(async ({ ctx, input }) => {
+        const { error } = await supabaseAdmin
+          .from("questoes")
+          .update(input.payload)
+          .eq("id", input.id);
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "question_updated",
+          entity_type: "questao",
+          entity_id: input.id,
+          description: `Questão ${(input.payload as any).codigo || input.id} editada no ADM`,
+          level: "info",
+          metadata: input.payload,
+        });
+
+        return { success: true } as const;
+      }),
+
     setQuestionPublished: adminOrEditorProcedure
       .input(z.object({ id: z.string().uuid(), publicada: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
