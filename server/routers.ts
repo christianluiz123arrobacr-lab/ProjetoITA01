@@ -118,6 +118,61 @@ export const appRouter = router({
         } as const;
       }),
 
+
+    getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("role, ativo")
+        .eq("id", ctx.user.id)
+        .maybeSingle();
+
+      if (profileError) throw new TRPCError({ code: "BAD_REQUEST", message: profileError.message });
+
+      const role = (profile as any)?.role ?? ctx.user.role;
+      const ativo = (profile as any)?.ativo;
+
+      if (role === "admin") {
+        return { accessState: "allowed", role, ativo: ativo ?? true, hasActiveSubscription: true } as const;
+      }
+
+      if (ativo === false) {
+        return { accessState: "blocked", role, ativo, hasActiveSubscription: false } as const;
+      }
+
+      const rpcResponse = await supabaseAdmin.rpc("user_has_active_subscription", {
+        target_user_id: ctx.user.id,
+      });
+
+      if (!rpcResponse.error && typeof rpcResponse.data === "boolean") {
+        return {
+          accessState: rpcResponse.data ? "allowed" : "blocked",
+          role,
+          ativo: ativo ?? true,
+          hasActiveSubscription: rpcResponse.data,
+        } as const;
+      }
+
+      const now = new Date().toISOString();
+      const { data: subscription, error: subscriptionError } = await supabaseAdmin
+        .from("billing_subscriptions")
+        .select("id")
+        .eq("user_id", ctx.user.id)
+        .in("status", ["active", "trialing"])
+        .or(`current_period_end.is.null,current_period_end.gte.${now}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subscriptionError) throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionError.message });
+
+      return {
+        accessState: subscription ? "allowed" : "blocked",
+        role,
+        ativo: ativo ?? true,
+        hasActiveSubscription: Boolean(subscription),
+      } as const;
+    }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
