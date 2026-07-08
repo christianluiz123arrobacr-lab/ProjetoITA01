@@ -1266,6 +1266,61 @@ export const appRouter = router({
   }),
 
 
+
+  publicStats: router({
+    getRankingData: publicProcedure.query(async () => {
+      const [attemptsResult, profilesResult] = await Promise.all([
+        supabaseAdmin
+          .from("user_question_attempts")
+          .select("id,user_id,question_id,is_correct,time_spent_seconds,answered_at,subject,conteudo,assunto,banca,ano,difficulty")
+          .order("answered_at", { ascending: false }),
+        supabaseAdmin
+          .from("profiles")
+          .select("id,nome,avatar_key,ativo")
+          .eq("ativo", true),
+      ]);
+
+      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
+      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
+
+      return { attempts: attemptsResult.data ?? [], profiles: profilesResult.data ?? [] };
+    }),
+
+    getPublicProfile: publicProcedure
+      .input(z.object({ userId: z.string().uuid() }))
+      .query(async ({ input }) => {
+        const [profileResult, attemptsResult, profilesResult] = await Promise.all([
+          supabaseAdmin
+            .from("profiles")
+            .select("id,nome,ativo,created_at,last_seen_at,avatar_key,bio,prova_alvo,foco_atual,meta_semanal_questoes")
+            .eq("id", input.userId)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("user_question_attempts")
+            .select("id,user_id,question_id,is_correct,time_spent_seconds,answered_at,attempt_number,subject,conteudo,assunto,banca,ano,difficulty")
+            .order("answered_at", { ascending: false }),
+          supabaseAdmin
+            .from("profiles")
+            .select("id,nome,avatar_key,ativo")
+            .eq("ativo", true),
+        ]);
+
+        if (profileResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profileResult.error.message });
+        if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
+        if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
+
+        if (!profileResult.data || profileResult.data.ativo === false) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Perfil não disponível." });
+        }
+
+        return {
+          profile: profileResult.data,
+          attempts: attemptsResult.data ?? [],
+          profiles: profilesResult.data ?? [],
+        };
+      }),
+  }),
+
   vet: router({
     getObjective: protectedProcedure.query(async ({ ctx }) => {
       const { data, error } = await supabaseAdmin
