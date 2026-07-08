@@ -184,6 +184,108 @@ export const appRouter = router({
   }),
 
   admin: router({
+    getDashboardStats: adminOrEditorProcedure.query(async () => {
+      const [
+        usersCountResult,
+        adminsCountResult,
+        questionsCountResult,
+        unpublishedQuestionsCountResult,
+        resolutionsCountResult,
+        resolutionImagesResult,
+        latestQuestionsResult,
+        latestResolutionsResult,
+        latestUsersResult,
+        allQuestionsResult,
+        allResolutionQuestionIdsResult,
+      ] = await Promise.all([
+        supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }),
+        supabaseAdmin.from("admin_users").select("id", { count: "exact", head: true }),
+        supabaseAdmin.from("questoes").select("id", { count: "exact", head: true }),
+        supabaseAdmin
+          .from("questoes")
+          .select("id", { count: "exact", head: true })
+          .eq("publicada", false),
+        supabaseAdmin.from("resolucoes").select("id", { count: "exact", head: true }),
+        supabaseAdmin
+          .from("resolucoes")
+          .select("id", { count: "exact", head: true })
+          .not("url_imagem", "is", null),
+        supabaseAdmin
+          .from("questoes")
+          .select("id,codigo,enunciado,banca,ano,created_at,publicada")
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabaseAdmin
+          .from("resolucoes")
+          .select("id,questao_id,tipo,ordem,codigo_resolucao,created_at")
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabaseAdmin
+          .from("profiles")
+          .select("id,nome,email,role,ativo,created_at")
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabaseAdmin
+          .from("questoes")
+          .select("id,codigo,enunciado,banca,ano,created_at")
+          .order("created_at", { ascending: false }),
+        supabaseAdmin.from("resolucoes").select("questao_id"),
+      ]);
+
+      const possibleError =
+        usersCountResult.error ||
+        adminsCountResult.error ||
+        questionsCountResult.error ||
+        unpublishedQuestionsCountResult.error ||
+        resolutionsCountResult.error ||
+        resolutionImagesResult.error ||
+        latestQuestionsResult.error ||
+        latestResolutionsResult.error ||
+        latestUsersResult.error ||
+        allQuestionsResult.error ||
+        allResolutionQuestionIdsResult.error;
+
+      if (possibleError) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: possibleError.message ?? "Não foi possível carregar o dashboard administrativo.",
+        });
+      }
+
+      const resolutionQuestionIds = new Set(
+        ((allResolutionQuestionIdsResult.data as Array<{ questao_id: string | null }> | null) ?? [])
+          .map((item) => item.questao_id)
+          .filter(Boolean)
+      );
+      const allQuestions =
+        (allQuestionsResult.data as Array<{
+          id: string;
+          codigo?: string | null;
+          enunciado?: string | null;
+          banca?: string | null;
+          ano?: number | null;
+          created_at?: string | null;
+        }> | null) ?? [];
+      const questionsWithoutResolution = allQuestions.filter(
+        (question) => !resolutionQuestionIds.has(question.id)
+      );
+
+      return {
+        stats: {
+          totalUsers: usersCountResult.count ?? 0,
+          totalAdmins: adminsCountResult.count ?? 0,
+          totalQuestions: questionsCountResult.count ?? 0,
+          totalQuestionsWithoutResolution: questionsWithoutResolution.length,
+          totalUnpublishedQuestions: unpublishedQuestionsCountResult.count ?? 0,
+          totalResolutions: resolutionsCountResult.count ?? 0,
+          totalResolutionImages: resolutionImagesResult.count ?? 0,
+        },
+        latestQuestions: latestQuestionsResult.data ?? [],
+        latestResolutions: latestResolutionsResult.data ?? [],
+        latestUsers: latestUsersResult.data ?? [],
+        latestQuestionsWithoutResolution: questionsWithoutResolution.slice(0, 5),
+      } as const;
+    }),
     createStudent: adminProcedure
       .input(
         z.object({
