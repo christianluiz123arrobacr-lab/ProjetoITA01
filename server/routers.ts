@@ -1211,6 +1211,85 @@ export const appRouter = router({
         return { success: true } as const;
       }),
 
+
+
+    listQuestionReports: adminOrEditorProcedure.query(async () => {
+      const { data: reports, error: reportsError } = await supabaseAdmin
+        .from("question_reports")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (reportsError) throw new TRPCError({ code: "BAD_REQUEST", message: reportsError.message });
+
+      const loadedReports = reports ?? [];
+      const questionIds = Array.from(new Set(loadedReports.map((report: any) => report.question_id).filter(Boolean)));
+      const userIds = Array.from(new Set(loadedReports.map((report: any) => report.user_id).filter(Boolean)));
+
+      const [questionsResult, profilesResult] = await Promise.all([
+        questionIds.length > 0
+          ? supabaseAdmin
+              .from("questoes")
+              .select("id, codigo, disciplina, diciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição, enunciado")
+              .in("id", questionIds)
+          : Promise.resolve({ data: [], error: null }),
+        userIds.length > 0
+          ? supabaseAdmin
+              .from("profiles")
+              .select("id, nome, email")
+              .in("id", userIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (questionsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: questionsResult.error.message });
+      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
+
+      return {
+        reports: loadedReports,
+        questions: questionsResult.data ?? [],
+        profiles: profilesResult.data ?? [],
+      };
+    }),
+
+    updateQuestionReport: adminOrEditorProcedure
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          status: z.enum(["pendente", "em_analise", "resolvido", "ignorado"]).optional(),
+          adminNote: z.string().max(5000).nullable().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (input.status !== undefined) payload.status = input.status;
+        if (input.adminNote !== undefined) payload.admin_note = input.adminNote;
+
+        const { data, error } = await supabaseAdmin
+          .from("question_reports")
+          .update(payload)
+          .eq("id", input.id)
+          .select("*")
+          .single();
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "question_report_updated",
+          entity_type: "question_report",
+          entity_id: input.id,
+          description: `Report de erro atualizado para status ${(data as any)?.status ?? input.status ?? "sem alteração"}`,
+          level: "info",
+          metadata: {
+            reportId: input.id,
+            questionId: (data as any)?.question_id ?? null,
+            status: (data as any)?.status ?? input.status ?? null,
+            adminNote: (data as any)?.admin_note ?? null,
+          },
+        });
+
+        return data;
+      }),
+
     deleteQuestion: adminOrEditorProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
@@ -1408,6 +1487,37 @@ export const appRouter = router({
   }),
 
   quiz: router({
+
+    createQuestionReport: protectedProcedure
+      .input(
+        z.object({
+          questionId: z.string().uuid(),
+          reportType: z.enum(["enunciado", "alternativa", "gabarito", "resolucao", "imagem", "latex", "outro"]),
+          comment: z.string().max(2000).nullable().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        assertRateLimit({
+          key: `question-report:${ctx.user.id}`,
+          limit: 10,
+          windowMs: 60 * 60 * 1000,
+        });
+
+        const { data, error } = await supabaseAdmin
+          .from("question_reports")
+          .insert({
+            question_id: input.questionId,
+            user_id: ctx.user.id,
+            report_type: input.reportType,
+            comment: input.comment?.trim() || null,
+            status: "pendente",
+          })
+          .select("id")
+          .single();
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return { id: data.id } as const;
+      }),
     getQuestionOptionStats: protectedProcedure
       .input(z.object({ questionId: z.string().uuid() }))
       .query(async ({ input }) => {

@@ -224,6 +224,7 @@ export function InteractiveQuiz({
   const { user } = useSupabaseAuth();
   const trpcUtils = trpc.useUtils();
   const recordAttemptMutation = trpc.quiz.recordAttempt.useMutation();
+  const createQuestionReportMutation = trpc.quiz.createQuestionReport.useMutation();
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answersByQuestion, setAnswersByQuestion] = useState<Record<number, string>>({});
@@ -497,25 +498,18 @@ export function InteractiveQuiz({
     try {
       setReportSending(true);
 
-      const { error } = await supabase.from("question_reports").insert({
-        question_id: question.id,
-        user_id: user.id,
-        report_type: reportType,
+      await createQuestionReportMutation.mutateAsync({
+        questionId: question.id,
+        reportType: reportType as
+          | "enunciado"
+          | "alternativa"
+          | "gabarito"
+          | "resolucao"
+          | "imagem"
+          | "latex"
+          | "outro",
         comment: reportComment.trim() || null,
-        status: "pendente",
       });
-
-      if (error) {
-        console.error("Erro ao enviar report:", error);
-
-        setReportError(
-          error.message
-            ? `Não foi possível enviar o report: ${error.message}`
-            : "Não foi possível enviar o report."
-        );
-
-        return;
-      }
 
       setReportSuccess("Erro reportado com sucesso. Obrigado pelo aviso.");
       setReportComment("");
