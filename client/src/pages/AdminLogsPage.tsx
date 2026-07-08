@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import {
   Loader2,
   AlertTriangle,
@@ -86,25 +86,16 @@ export default function AdminLogsPage() {
   const [entityFilter, setEntityFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
 
+  const trpcUtils = trpc.useUtils();
+
   useEffect(() => {
     async function loadLogs() {
       try {
         setLoading(true);
         setError("");
 
-        const { data, error } = await supabase
-          .from("admin_logs")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(300);
-
-        if (error) {
-          console.error("Erro ao carregar admin logs:", error);
-          setError("Não foi possível carregar os logs administrativos.");
-          return;
-        }
-
-        setLogs((data as AdminLogRow[]) ?? []);
+        const data = await trpcUtils.admin.listAdminLogs.fetch();
+        setLogs(data as AdminLogRow[]);
       } catch (err) {
         console.error("Erro inesperado ao carregar admin logs:", err);
         setError("Ocorreu um erro inesperado ao carregar os logs.");
@@ -114,22 +105,22 @@ export default function AdminLogsPage() {
     }
 
     loadLogs();
-  }, []);
+  }, [trpcUtils]);
 
   const actionOptions = useMemo(() => {
-    return [...new Set(logs.map((log) => log.action).filter(Boolean))].sort((a, b) =>
+    return Array.from(new Set(logs.map((log) => log.action).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b)
     );
   }, [logs]);
 
   const entityOptions = useMemo(() => {
-    return [...new Set(logs.map((log) => log.entity_type).filter(Boolean))].sort((a, b) =>
+    return Array.from(new Set(logs.map((log) => log.entity_type).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b)
     );
   }, [logs]);
 
   const levelOptions = useMemo(() => {
-    return [...new Set(logs.map((log) => log.level).filter(Boolean))].sort((a, b) =>
+    return Array.from(new Set(logs.map((log) => log.level).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b)
     );
   }, [logs]);

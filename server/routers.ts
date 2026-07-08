@@ -286,6 +286,25 @@ export const appRouter = router({
         latestQuestionsWithoutResolution: questionsWithoutResolution.slice(0, 5),
       } as const;
     }),
+    listAdminLogs: adminProcedure.query(async () => {
+      const { data, error } = await supabaseAdmin
+        .from("admin_logs")
+        .select(
+          "id,created_at,actor_user_id,actor_email,action,entity_type,entity_id,description,level,metadata"
+        )
+        .order("created_at", { ascending: false })
+        .limit(300);
+
+      if (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: error.message ?? "Não foi possível carregar os logs administrativos.",
+        });
+      }
+
+      return data ?? [];
+    }),
+
     createStudent: adminProcedure
       .input(
         z.object({
