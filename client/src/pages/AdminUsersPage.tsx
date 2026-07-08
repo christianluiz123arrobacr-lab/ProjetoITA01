@@ -3,7 +3,6 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import {
   AlertTriangle,
@@ -257,6 +256,11 @@ function makeWhatsappUrl(student: StudentBillingRow) {
 
 export default function AdminUsersPage() {
   const createStudentMutation = trpc.admin.createStudent.useMutation();
+  const listBillingPlansQuery = trpc.admin.listBillingPlans.useQuery(undefined, { enabled: false });
+  const listStudentsWithBillingQuery = trpc.admin.listStudentsWithBilling.useQuery(undefined, { enabled: false });
+  const updateStudentProfileMutation = trpc.admin.updateStudentProfile.useMutation();
+  const renewUserSubscriptionMutation = trpc.admin.renewUserSubscription.useMutation();
+  const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
   const listAdminUsersQuery = trpc.admin.listAdminUsers.useQuery(undefined, { enabled: false });
   const grantAdminAccessMutation = trpc.admin.grantAdminAccess.useMutation();
   const updateAdminRoleMutation = trpc.admin.updateAdminRole.useMutation();
@@ -309,38 +313,13 @@ export default function AdminUsersPage() {
   }
 
   async function loadPlans() {
-    const { data: rpcData, error: rpcError } = await supabase.rpc(
-      "admin_list_billing_plans"
-    );
+    const result = await listBillingPlansQuery.refetch();
 
-    if (!rpcError && Array.isArray(rpcData)) {
-      const mapped = (rpcData as any[]).map((plan) => ({
-        id: String(plan.id),
-        slug: String(plan.slug),
-        name: String(plan.name),
-        price_cents: Number(plan.price_cents || 0),
-        is_active: Boolean(plan.is_active),
-      }));
-
-      setPlans(mapped);
-      return mapped;
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar os planos.");
     }
 
-    if (rpcError) {
-      console.warn("RPC admin_list_billing_plans falhou. Usando fallback.", rpcError);
-    }
-
-    const { data, error: fallbackError } = await supabase
-      .from("billing_plans")
-      .select("id, slug, name, price_cents, is_active")
-      .eq("is_active", true)
-      .order("price_cents", { ascending: true });
-
-    if (fallbackError) {
-      throw new Error(fallbackError.message || "Não foi possível carregar os planos.");
-    }
-
-    const mapped = ((data || []) as any[]).map((plan) => ({
+    const mapped = ((result.data ?? []) as any[]).map((plan) => ({
       id: String(plan.id),
       slug: String(plan.slug),
       name: String(plan.name),
@@ -353,107 +332,18 @@ export default function AdminUsersPage() {
   }
 
   async function loadStudents(availablePlans: BillingPlanRow[]) {
-    const { data, error: rpcError } = await supabase.rpc(
-      "admin_list_students_with_billing"
-    );
+    const result = await listStudentsWithBillingQuery.refetch();
 
-    if (!rpcError && Array.isArray(data)) {
-      const rows = (data as any[]).map((row) => ({
-        ...row,
-        attempts_count: Number(row.attempts_count || 0),
-        correct_count: Number(row.correct_count || 0),
-        wrong_count: Number(row.wrong_count || 0),
-      })) as StudentBillingRow[];
-
-      setStudents(rows);
-      mergeDrafts(rows, availablePlans);
-      return;
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar os alunos.");
     }
 
-    if (rpcError) {
-      console.warn(
-        "RPC admin_list_students_with_billing falhou. Usando fallback simples.",
-        rpcError
-      );
-    }
-
-    const { data: profilesData, error: profilesError } = await supabase
-      .from("profiles")
-      .select("id, nome, email, telefone, role, ativo, created_at, last_seen_at")
-      .order("created_at", { ascending: false });
-
-    if (profilesError) {
-      throw new Error(profilesError.message || "Não foi possível carregar os alunos.");
-    }
-
-    const profileRows = (profilesData || []) as ProfileRow[];
-
-    const { data: subscriptionsData, error: subscriptionsError } = await supabase
-      .from("billing_subscriptions")
-      .select(
-        `
-        id,
-        user_id,
-        status,
-        plan_id,
-        current_period_end,
-        next_due_date,
-        created_at,
-        updated_at,
-        billing_plans (
-          id,
-          slug,
-          name,
-          price_cents
-        )
-      `
-      )
-      .order("created_at", { ascending: false });
-
-    if (subscriptionsError) {
-      console.warn("Não foi possível carregar assinaturas no fallback:", subscriptionsError);
-    }
-
-    const subscriptionMap = new Map<string, any>();
-
-    ((subscriptionsData || []) as any[]).forEach((subscription) => {
-      const userId = String(subscription.user_id);
-      if (!subscriptionMap.has(userId)) {
-        subscriptionMap.set(userId, subscription);
-      }
-    });
-
-    const rows: StudentBillingRow[] = profileRows.map((profile) => {
-      const subscription = subscriptionMap.get(String(profile.id));
-      const plan = Array.isArray(subscription?.billing_plans)
-        ? subscription.billing_plans[0]
-        : subscription?.billing_plans;
-
-      return {
-        id: String(profile.id),
-        nome: profile.nome,
-        email: profile.email,
-        telefone: profile.telefone || null,
-        role: profile.role,
-        ativo: profile.ativo,
-        created_at: profile.created_at,
-        last_seen_at: profile.last_seen_at || null,
-        subscription_id: subscription?.id ? String(subscription.id) : null,
-        subscription_status: subscription?.status || null,
-        plan_id: subscription?.plan_id ? String(subscription.plan_id) : plan?.id ? String(plan.id) : null,
-        plan_slug: plan?.slug || null,
-        plan_name: plan?.name || null,
-        plan_price_cents: plan?.price_cents ?? null,
-        current_period_end: subscription?.current_period_end || null,
-        next_due_date: subscription?.next_due_date || null,
-        subscription_created_at: subscription?.created_at || null,
-        updated_at: subscription?.updated_at || null,
-        attempts_count: 0,
-        correct_count: 0,
-        wrong_count: 0,
-        last_answered_at: null,
-      };
-    });
+    const rows = ((result.data ?? []) as any[]).map((row) => ({
+      ...row,
+      attempts_count: Number(row.attempts_count || 0),
+      correct_count: Number(row.correct_count || 0),
+      wrong_count: Number(row.wrong_count || 0),
+    })) as StudentBillingRow[];
 
     setStudents(rows);
     mergeDrafts(rows, availablePlans);
@@ -621,19 +511,13 @@ export default function AdminUsersPage() {
       setError("");
       setSuccessMessage("");
 
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          nome: student.nome || null,
-          telefone: student.telefone || null,
-          role: student.role || "student",
-          ativo: student.ativo !== false,
-        })
-        .eq("id", student.id);
-
-      if (updateError) {
-        throw new Error(updateError.message || "Não foi possível salvar o aluno.");
-      }
+      await updateStudentProfileMutation.mutateAsync({
+        id: student.id,
+        nome: student.nome || null,
+        telefone: student.telefone || null,
+        role: student.role || "student",
+        ativo: student.ativo !== false,
+      });
 
       setSuccessMessage(`Dados de ${student.nome || student.email} salvos.`);
     } catch (err) {
@@ -652,14 +536,13 @@ export default function AdminUsersPage() {
       setError("");
       setSuccessMessage("");
 
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ ativo: nextActive })
-        .eq("id", student.id);
-
-      if (updateError) {
-        throw new Error(updateError.message || "Não foi possível alterar o status do aluno.");
-      }
+      await updateStudentProfileMutation.mutateAsync({
+        id: student.id,
+        nome: student.nome || null,
+        telefone: student.telefone || null,
+        role: student.role || "student",
+        ativo: nextActive,
+      });
 
       updateLocalProfile(student.id, { ativo: nextActive });
       setSuccessMessage(nextActive ? "Aluno reativado." : "Aluno bloqueado.");
@@ -690,15 +573,11 @@ export default function AdminUsersPage() {
       setError("");
       setSuccessMessage("");
 
-      const { error: rpcError } = await supabase.rpc("admin_renew_user_subscription", {
-        target_user_id: student.id,
-        target_plan_id: planId,
-        access_months: months,
+      await renewUserSubscriptionMutation.mutateAsync({
+        userId: student.id,
+        planId,
+        months,
       });
-
-      if (rpcError) {
-        throw new Error(rpcError.message || "Não foi possível renovar a assinatura.");
-      }
 
       setSuccessMessage(
         `Assinatura de ${student.nome || student.email} renovada/liberada por ${months} mês(es).`
@@ -729,13 +608,9 @@ export default function AdminUsersPage() {
       setError("");
       setSuccessMessage("");
 
-      const { error: rpcError } = await supabase.rpc("admin_cancel_billing_subscription", {
-        target_subscription_id: student.subscription_id,
+      await cancelBillingSubscriptionMutation.mutateAsync({
+        subscriptionId: student.subscription_id,
       });
-
-      if (rpcError) {
-        throw new Error(rpcError.message || "Não foi possível cancelar a assinatura.");
-      }
 
       setSuccessMessage(`Assinatura de ${student.nome || student.email} cancelada.`);
       await loadAll();

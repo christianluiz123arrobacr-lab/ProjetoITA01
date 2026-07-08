@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -162,6 +162,15 @@ function buildPlanForm(plan: AdminBillingPlanRow): PlanFormState {
 }
 
 export default function AdminBillingPage() {
+  const listBillingSubscriptionsQuery = trpc.admin.listBillingSubscriptions.useQuery(undefined, { enabled: false });
+  const listBillingPlansQuery = trpc.admin.listBillingPlans.useQuery(undefined, { enabled: false });
+  const listBillingPlanInvitesQuery = trpc.admin.listBillingPlanInvites.useQuery(undefined, { enabled: false });
+  const renewBillingSubscriptionMutation = trpc.admin.renewBillingSubscription.useMutation();
+  const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
+  const updateBillingPlanMutation = trpc.admin.updateBillingPlan.useMutation();
+  const createBillingPlanInviteMutation = trpc.admin.createBillingPlanInvite.useMutation();
+  const deleteBillingPlanInviteMutation = trpc.admin.deleteBillingPlanInvite.useMutation();
+
   const [activeTab, setActiveTab] = useState<AdminBillingTab>("subscriptions");
 
   const [subscriptions, setSubscriptions] = useState<
@@ -223,63 +232,23 @@ export default function AdminBillingPage() {
   }, [plans]);
 
   async function loadSubscriptionsData() {
-    const { data, error: rpcError } = await supabase.rpc(
-      "admin_list_billing_subscriptions"
-    );
+    const result = await listBillingSubscriptionsQuery.refetch();
 
-    if (rpcError) {
-      console.error("Erro ao carregar assinaturas:", rpcError);
-      throw new Error(rpcError.message || "Não foi possível carregar as assinaturas.");
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar as assinaturas.");
     }
 
-    setSubscriptions((data ?? []) as AdminBillingSubscriptionRow[]);
+    setSubscriptions((result.data ?? []) as AdminBillingSubscriptionRow[]);
   }
 
   async function loadPlansData() {
-    const { data, error: rpcError } = await supabase.rpc(
-      "admin_list_billing_plans"
-    );
+    const result = await listBillingPlansQuery.refetch();
 
-    if (rpcError) {
-      console.warn("RPC admin_list_billing_plans falhou. Usando fallback:", rpcError);
-
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from("billing_plans")
-        .select(
-          "id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions"
-        )
-        .order("price_cents", { ascending: true });
-
-      if (fallbackError) {
-        throw new Error(fallbackError.message || "Não foi possível carregar os planos.");
-      }
-
-      const mapped = (fallbackData ?? []).map((plan: any) => ({
-        id: String(plan.id),
-        slug: plan.slug,
-        name: plan.name,
-        description: plan.description,
-        price_cents: plan.price_cents,
-        currency: plan.currency,
-        billing_cycle: plan.billing_cycle,
-        is_active: plan.is_active,
-        max_active_subscriptions: plan.max_active_subscriptions ?? null,
-        active_subscriptions_count: 0,
-        manual_review_count: 0,
-        used_slots: 0,
-        remaining_slots: plan.max_active_subscriptions ?? null,
-        has_available_slots: true,
-      })) as AdminBillingPlanRow[];
-
-      setPlans(mapped);
-      setPlanForms(
-        Object.fromEntries(mapped.map((plan) => [plan.id, buildPlanForm(plan)]))
-      );
-      setSelectedPlanSlug((current) => current || mapped[0]?.slug || "");
-      return;
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar os planos.");
     }
 
-    const mapped = (data ?? []) as AdminBillingPlanRow[];
+    const mapped = (result.data ?? []) as AdminBillingPlanRow[];
     setPlans(mapped);
     setPlanForms(
       Object.fromEntries(mapped.map((plan) => [plan.id, buildPlanForm(plan)]))
@@ -288,18 +257,13 @@ export default function AdminBillingPage() {
   }
 
   async function loadInvitesData() {
-    const { data, error: rpcError } = await supabase.rpc(
-      "admin_list_billing_plan_invites"
-    );
+    const result = await listBillingPlanInvitesQuery.refetch();
 
-    if (rpcError) {
-      console.error("Erro ao carregar convites:", rpcError);
-      throw new Error(
-        rpcError.message || "Não foi possível carregar os convites."
-      );
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar os convites.");
     }
 
-    setInvites((data ?? []) as InviteRow[]);
+    setInvites((result.data ?? []) as InviteRow[]);
   }
 
   async function loadAllData() {
@@ -368,19 +332,10 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_renew_billing_subscription",
-        {
-          target_subscription_id: subscriptionId,
-          access_months: 1,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao renovar assinatura:", rpcError);
-        setError(rpcError.message || "Não foi possível renovar a assinatura.");
-        return;
-      }
+      await renewBillingSubscriptionMutation.mutateAsync({
+        subscriptionId,
+        months: 1,
+      });
 
       setSuccess(
         label === "aprovar"
@@ -406,18 +361,7 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_cancel_billing_subscription",
-        {
-          target_subscription_id: subscriptionId,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao cancelar assinatura:", rpcError);
-        setError(rpcError.message || "Não foi possível cancelar a assinatura.");
-        return;
-      }
+      await cancelBillingSubscriptionMutation.mutateAsync({ subscriptionId });
 
       setSuccess("Assinatura cancelada com sucesso.");
       await loadSubscriptionsData();
@@ -468,23 +412,14 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_update_billing_plan",
-        {
-          target_plan_id: plan.id,
-          new_name: form.name.trim() || plan.name,
-          new_description: form.description.trim() || null,
-          new_price_cents: priceCents,
-          new_max_active_subscriptions: maxActiveSubscriptions,
-          new_is_active: form.isActive,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao salvar plano:", rpcError);
-        setError(rpcError.message || "Não foi possível salvar o plano.");
-        return;
-      }
+      await updateBillingPlanMutation.mutateAsync({
+        planId: plan.id,
+        name: form.name.trim() || plan.name,
+        description: form.description.trim() || null,
+        priceCents,
+        maxActiveSubscriptions,
+        isActive: form.isActive,
+      });
 
       setSuccess("Plano atualizado com sucesso.");
       await loadPlansData();
@@ -516,20 +451,11 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_create_billing_plan_invite",
-        {
-          target_plan_slug: selectedPlanSlug,
-          target_email: normalizedEmail,
-          target_expires_at: null,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao criar convite:", rpcError);
-        setError(rpcError.message || "Não foi possível criar o convite.");
-        return;
-      }
+      await createBillingPlanInviteMutation.mutateAsync({
+        planSlug: selectedPlanSlug,
+        email: normalizedEmail,
+        expiresAt: null,
+      });
 
       setInviteEmail("");
       setSuccess("Convite criado com sucesso.");
@@ -552,18 +478,7 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_delete_billing_plan_invite",
-        {
-          target_invite_id: inviteId,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao remover convite:", rpcError);
-        setError(rpcError.message || "Não foi possível remover o convite.");
-        return;
-      }
+      await deleteBillingPlanInviteMutation.mutateAsync({ inviteId });
 
       setSuccess("Convite removido com sucesso.");
       await loadInvitesData();

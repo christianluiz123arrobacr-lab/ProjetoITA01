@@ -27,6 +27,16 @@ function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeo
   };
 }
 
+function addMonthsIso(baseDate: Date, months: number) {
+  const next = new Date(baseDate);
+  next.setMonth(next.getMonth() + months);
+  return next.toISOString();
+}
+
+function pickBillingPlan(row: any) {
+  return Array.isArray(row?.billing_plans) ? row.billing_plans[0] : row?.billing_plans;
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -213,6 +223,502 @@ export const appRouter = router({
         profile: profileMap.get(adminUser.user_id) ?? null,
       }));
     }),
+
+
+    listBillingPlans: adminProcedure.query(async () => {
+      const { data: plans, error: plansError } = await supabaseAdmin
+        .from("billing_plans")
+        .select("id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions")
+        .order("price_cents", { ascending: true });
+
+      if (plansError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: plansError.message });
+      }
+
+      const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
+        .from("billing_subscriptions")
+        .select("id, plan_id, status");
+
+      if (subscriptionsError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
+      }
+
+      return (plans ?? []).map((plan: any) => {
+        const planSubscriptions = (subscriptions ?? []).filter((item: any) => String(item.plan_id) === String(plan.id));
+        const activeCount = planSubscriptions.filter((item: any) => ["active", "trialing"].includes(item.status)).length;
+        const manualReviewCount = planSubscriptions.filter((item: any) => item.status === "manual_review").length;
+        const usedSlots = activeCount + manualReviewCount;
+        const maxSlots = plan.max_active_subscriptions ?? null;
+
+        return {
+          id: String(plan.id),
+          slug: plan.slug,
+          name: plan.name,
+          description: plan.description ?? null,
+          price_cents: Number(plan.price_cents || 0),
+          currency: plan.currency ?? "BRL",
+          billing_cycle: plan.billing_cycle ?? null,
+          is_active: Boolean(plan.is_active),
+          max_active_subscriptions: maxSlots,
+          active_subscriptions_count: activeCount,
+          manual_review_count: manualReviewCount,
+          used_slots: usedSlots,
+          remaining_slots: maxSlots == null ? null : Math.max(maxSlots - usedSlots, 0),
+          has_available_slots: maxSlots == null || usedSlots < maxSlots,
+        };
+      });
+    }),
+
+    listBillingSubscriptions: adminProcedure.query(async () => {
+      const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
+        .from("billing_subscriptions")
+        .select(`
+          id,
+          user_id,
+          status,
+          gateway,
+          payment_url,
+          plan_id,
+          started_at,
+          current_period_end,
+          next_due_date,
+          created_at,
+          updated_at,
+          billing_plans (
+            id,
+            slug,
+            name,
+            price_cents
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (subscriptionsError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
+      }
+
+      const userIds = Array.from(new Set((subscriptions ?? []).map((item: any) => item.user_id).filter(Boolean)));
+      const { data: profiles, error: profilesError } = userIds.length
+        ? await supabaseAdmin.from("profiles").select("id, nome, email").in("id", userIds)
+        : { data: [], error: null };
+
+      if (profilesError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: profilesError.message });
+      }
+
+      const profileMap = new Map((profiles ?? []).map((profile: any) => [String(profile.id), profile]));
+
+      return (subscriptions ?? []).map((subscription: any) => {
+        const profile = profileMap.get(String(subscription.user_id));
+        const plan = pickBillingPlan(subscription);
+
+        return {
+          subscription_id: String(subscription.id),
+          user_id: String(subscription.user_id),
+          user_name: profile?.nome || "Aluno sem nome",
+          user_email: profile?.email || "Sem e-mail",
+          plan_id: plan?.id ? String(plan.id) : subscription.plan_id ? String(subscription.plan_id) : "",
+          plan_slug: plan?.slug || "",
+          plan_name: plan?.name || "Plano não encontrado",
+          plan_price_cents: Number(plan?.price_cents || 0),
+          status: subscription.status,
+          gateway: subscription.gateway || "manual",
+          payment_url: subscription.payment_url ?? null,
+          started_at: subscription.started_at ?? null,
+          current_period_end: subscription.current_period_end ?? null,
+          next_due_date: subscription.next_due_date ?? null,
+          created_at: subscription.created_at,
+          updated_at: subscription.updated_at,
+        };
+      });
+    }),
+
+    listBillingPlanInvites: adminProcedure.query(async () => {
+      const { data, error } = await supabaseAdmin
+        .from("billing_plan_invites")
+        .select(`
+          id,
+          plan_id,
+          email,
+          user_id,
+          invite_code,
+          used_at,
+          expires_at,
+          created_at,
+          billing_plans (
+            id,
+            slug,
+            name,
+            price_cents
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      }
+
+      return (data ?? []).map((invite: any) => {
+        const plan = pickBillingPlan(invite);
+        return {
+          invite_id: String(invite.id),
+          plan_id: plan?.id ? String(plan.id) : String(invite.plan_id),
+          plan_slug: plan?.slug || "",
+          plan_name: plan?.name || "Plano não encontrado",
+          plan_price_cents: Number(plan?.price_cents || 0),
+          email: invite.email ?? null,
+          user_id: invite.user_id ?? null,
+          invite_code: invite.invite_code ?? null,
+          used_at: invite.used_at ?? null,
+          expires_at: invite.expires_at ?? null,
+          created_at: invite.created_at,
+        };
+      });
+    }),
+
+    listStudentsWithBilling: adminProcedure.query(async () => {
+      const { data: profiles, error: profilesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, nome, email, telefone, role, ativo, created_at, last_seen_at")
+        .order("created_at", { ascending: false });
+
+      if (profilesError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: profilesError.message });
+      }
+
+      const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
+        .from("billing_subscriptions")
+        .select(`
+          id,
+          user_id,
+          status,
+          plan_id,
+          current_period_end,
+          next_due_date,
+          created_at,
+          updated_at,
+          billing_plans (
+            id,
+            slug,
+            name,
+            price_cents
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (subscriptionsError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
+      }
+
+      const subscriptionMap = new Map<string, any>();
+      for (const subscription of subscriptions ?? []) {
+        const userId = String((subscription as any).user_id);
+        if (!subscriptionMap.has(userId)) subscriptionMap.set(userId, subscription);
+      }
+
+      return (profiles ?? []).map((profile: any) => {
+        const subscription = subscriptionMap.get(String(profile.id));
+        const plan = pickBillingPlan(subscription);
+
+        return {
+          id: String(profile.id),
+          nome: profile.nome ?? null,
+          email: profile.email ?? null,
+          telefone: profile.telefone ?? null,
+          role: profile.role ?? null,
+          ativo: profile.ativo ?? null,
+          created_at: profile.created_at ?? null,
+          last_seen_at: profile.last_seen_at ?? null,
+          subscription_id: subscription?.id ? String(subscription.id) : null,
+          subscription_status: subscription?.status ?? null,
+          plan_id: subscription?.plan_id ? String(subscription.plan_id) : plan?.id ? String(plan.id) : null,
+          plan_slug: plan?.slug ?? null,
+          plan_name: plan?.name ?? null,
+          plan_price_cents: plan?.price_cents ?? null,
+          current_period_end: subscription?.current_period_end ?? null,
+          next_due_date: subscription?.next_due_date ?? null,
+          subscription_created_at: subscription?.created_at ?? null,
+          updated_at: subscription?.updated_at ?? null,
+          attempts_count: 0,
+          correct_count: 0,
+          wrong_count: 0,
+          last_answered_at: null,
+        };
+      });
+    }),
+
+    updateStudentProfile: adminProcedure
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          nome: z.string().max(180).nullable().optional(),
+          telefone: z.string().max(40).nullable().optional(),
+          role: z.string().max(40).default("student"),
+          ativo: z.boolean(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { error } = await supabaseAdmin
+          .from("profiles")
+          .update({
+            nome: input.nome || null,
+            telefone: input.telefone || null,
+            role: input.role || "student",
+            ativo: input.ativo,
+          })
+          .eq("id", input.id);
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "student_profile_updated",
+          entity_type: "profile",
+          entity_id: input.id,
+          description: "Perfil de aluno atualizado no ADM",
+          level: "info",
+          metadata: input,
+        });
+
+        return { success: true } as const;
+      }),
+
+    renewUserSubscription: adminProcedure
+      .input(z.object({ userId: z.string().uuid(), planId: z.string().uuid(), months: z.number().int().min(1).max(24) }))
+      .mutation(async ({ ctx, input }) => {
+        const now = new Date();
+        const currentPeriodStart = now.toISOString();
+
+        const { data: existing, error: existingError } = await supabaseAdmin
+          .from("billing_subscriptions")
+          .select("id, current_period_end")
+          .eq("user_id", input.userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: existingError.message });
+        }
+
+        const renewalBase = existing?.current_period_end && new Date(existing.current_period_end) > now
+          ? new Date(existing.current_period_end)
+          : now;
+        const currentPeriodEnd = addMonthsIso(renewalBase, input.months);
+
+        if (existing?.id) {
+          const { error } = await supabaseAdmin
+            .from("billing_subscriptions")
+            .update({
+              plan_id: input.planId,
+              status: "active",
+              gateway: "manual",
+              started_at: currentPeriodStart,
+              current_period_start: currentPeriodStart,
+              current_period_end: currentPeriodEnd,
+              next_due_date: currentPeriodEnd,
+              canceled_at: null,
+            })
+            .eq("id", existing.id);
+
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        } else {
+          const { error } = await supabaseAdmin.from("billing_subscriptions").insert({
+            user_id: input.userId,
+            plan_id: input.planId,
+            status: "active",
+            gateway: "manual",
+            started_at: currentPeriodStart,
+            current_period_start: currentPeriodStart,
+            current_period_end: currentPeriodEnd,
+            next_due_date: currentPeriodEnd,
+          });
+
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "billing_user_subscription_renewed",
+          entity_type: "billing_subscription",
+          entity_id: input.userId,
+          description: "Assinatura de aluno renovada/liberada no ADM",
+          level: "info",
+          metadata: input,
+        });
+
+        return { success: true } as const;
+      }),
+
+    renewBillingSubscription: adminProcedure
+      .input(z.object({ subscriptionId: z.string().uuid(), months: z.number().int().min(1).max(24).default(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const now = new Date();
+        const { data: subscription, error: subscriptionError } = await supabaseAdmin
+          .from("billing_subscriptions")
+          .select("id, current_period_end")
+          .eq("id", input.subscriptionId)
+          .maybeSingle();
+
+        if (subscriptionError) throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionError.message });
+        if (!subscription?.id) throw new TRPCError({ code: "NOT_FOUND", message: "Assinatura não encontrada." });
+
+        const renewalBase = subscription.current_period_end && new Date(subscription.current_period_end) > now
+          ? new Date(subscription.current_period_end)
+          : now;
+        const end = addMonthsIso(renewalBase, input.months);
+        const { error } = await supabaseAdmin
+          .from("billing_subscriptions")
+          .update({
+            status: "active",
+            gateway: "manual",
+            started_at: now.toISOString(),
+            current_period_start: now.toISOString(),
+            current_period_end: end,
+            next_due_date: end,
+            canceled_at: null,
+          })
+          .eq("id", input.subscriptionId);
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "billing_subscription_renewed",
+          entity_type: "billing_subscription",
+          entity_id: input.subscriptionId,
+          description: "Assinatura renovada/aprovada no ADM financeiro",
+          level: "info",
+          metadata: input,
+        });
+
+        return { success: true } as const;
+      }),
+
+    cancelBillingSubscription: adminProcedure
+      .input(z.object({ subscriptionId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const now = new Date().toISOString();
+        const { error } = await supabaseAdmin
+          .from("billing_subscriptions")
+          .update({ status: "canceled", canceled_at: now })
+          .eq("id", input.subscriptionId);
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "billing_subscription_canceled",
+          entity_type: "billing_subscription",
+          entity_id: input.subscriptionId,
+          description: "Assinatura cancelada no ADM financeiro",
+          level: "warning",
+          metadata: input,
+        });
+
+        return { success: true } as const;
+      }),
+
+    updateBillingPlan: adminProcedure
+      .input(
+        z.object({
+          planId: z.string().uuid(),
+          name: z.string().min(1).max(160),
+          description: z.string().max(2000).nullable().optional(),
+          priceCents: z.number().int().min(0),
+          maxActiveSubscriptions: z.number().int().min(0).nullable(),
+          isActive: z.boolean(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { error } = await supabaseAdmin
+          .from("billing_plans")
+          .update({
+            name: input.name,
+            description: input.description ?? null,
+            price_cents: input.priceCents,
+            max_active_subscriptions: input.maxActiveSubscriptions,
+            is_active: input.isActive,
+          })
+          .eq("id", input.planId);
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "billing_plan_updated",
+          entity_type: "billing_plan",
+          entity_id: input.planId,
+          description: "Plano financeiro atualizado no ADM",
+          level: "info",
+          metadata: input,
+        });
+
+        return { success: true } as const;
+      }),
+
+    createBillingPlanInvite: adminProcedure
+      .input(z.object({ planSlug: z.string().min(1).max(160), email: z.string().email(), expiresAt: z.string().datetime().nullable().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: plan, error: planError } = await supabaseAdmin
+          .from("billing_plans")
+          .select("id, slug, name")
+          .eq("slug", input.planSlug)
+          .maybeSingle();
+
+        if (planError) throw new TRPCError({ code: "BAD_REQUEST", message: planError.message });
+        if (!plan?.id) throw new TRPCError({ code: "NOT_FOUND", message: "Plano não encontrado." });
+
+        const { data, error } = await supabaseAdmin
+          .from("billing_plan_invites")
+          .insert({
+            plan_id: plan.id,
+            email: input.email.trim().toLowerCase(),
+            invite_code: randomUUID(),
+            expires_at: input.expiresAt ?? null,
+          })
+          .select("id")
+          .single();
+
+        if (error || !data?.id) throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Não foi possível criar o convite." });
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "billing_plan_invite_created",
+          entity_type: "billing_plan_invite",
+          entity_id: data.id,
+          description: "Convite de plano criado no ADM financeiro",
+          level: "info",
+          metadata: { ...input, planId: plan.id },
+        });
+
+        return { id: data.id } as const;
+      }),
+
+    deleteBillingPlanInvite: adminProcedure
+      .input(z.object({ inviteId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const { error } = await supabaseAdmin
+          .from("billing_plan_invites")
+          .delete()
+          .eq("id", input.inviteId);
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "billing_plan_invite_deleted",
+          entity_type: "billing_plan_invite",
+          entity_id: input.inviteId,
+          description: "Convite de plano removido no ADM financeiro",
+          level: "warning",
+          metadata: input,
+        });
+
+        return { success: true } as const;
+      }),
 
     grantAdminAccess: adminProcedure
       .input(z.object({ email: z.string().email(), role: z.enum(["admin", "editor"]) }))
