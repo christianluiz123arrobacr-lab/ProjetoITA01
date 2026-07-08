@@ -305,6 +305,93 @@ export const appRouter = router({
       return data ?? [];
     }),
 
+    listProfiles: adminProcedure.query(async () => {
+      const { data, error } = await supabaseAdmin
+        .from("profiles")
+        .select("id,nome,email,role,ativo,created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: error.message ?? "Não foi possível carregar os perfis.",
+        });
+      }
+
+      return data ?? [];
+    }),
+
+    updateProfile: adminProcedure
+      .input(
+        z.object({
+          id: z.string().uuid(),
+          nome: z.string().trim().min(1, "Nome é obrigatório").max(160),
+          role: z.enum(["student", "admin", "editor"]),
+          ativo: z.boolean(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("profiles")
+          .update({
+            nome: input.nome,
+            role: input.role,
+            ativo: input.ativo,
+          })
+          .eq("id", input.id)
+          .select("id,nome,email,role,ativo,created_at")
+          .single();
+
+        if (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error.message ?? "Não foi possível salvar as alterações do perfil.",
+          });
+        }
+
+        await supabaseAdmin.from("admin_logs").insert({
+          actor_user_id: ctx.user.id,
+          actor_email: ctx.user.email,
+          action: "update_profile",
+          entity_type: "profile",
+          entity_id: input.id,
+          description: `Perfil ${data.email ?? input.id} atualizado.`,
+          level: "info",
+          metadata: {
+            role: input.role,
+            ativo: input.ativo,
+          },
+        });
+
+        return data;
+      }),
+
+    listResolutionOverview: adminOrEditorProcedure.query(async () => {
+      const [questionsResult, resolutionsResult] = await Promise.all([
+        supabaseAdmin
+          .from("questoes")
+          .select(
+            "id,codigo,enunciado,disciplina,diciplina,conteudo,assunto,banca,ano,created_at"
+          )
+          .order("created_at", { ascending: false }),
+        supabaseAdmin.from("resolucoes").select("id,questao_id,tipo,url_imagem"),
+      ]);
+
+      const possibleError = questionsResult.error || resolutionsResult.error;
+
+      if (possibleError) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: possibleError.message ?? "Não foi possível carregar as resoluções.",
+        });
+      }
+
+      return {
+        questions: questionsResult.data ?? [],
+        resolutions: resolutionsResult.data ?? [],
+      } as const;
+    }),
+
     createStudent: adminProcedure
       .input(
         z.object({
