@@ -1265,6 +1265,174 @@ export const appRouter = router({
       }),
   }),
 
+  quiz: router({
+    getQuestionOptionStats: protectedProcedure
+      .input(z.object({ questionId: z.string().uuid() }))
+      .query(async ({ input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("user_question_attempts")
+          .select("selected_option")
+          .eq("question_id", input.questionId);
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+
+        const counts = new Map<string, number>();
+        for (const row of data ?? []) {
+          const option = (row as any).selected_option;
+          if (!option) continue;
+          counts.set(option, (counts.get(option) ?? 0) + 1);
+        }
+
+        return Array.from(counts.entries()).map(([selected_option, total]) => ({ selected_option, total }));
+      }),
+
+    recordAttempt: protectedProcedure
+      .input(
+        z.object({
+          questionId: z.string().uuid(),
+          selectedOption: z.string().min(1).max(20),
+          isCorrect: z.boolean(),
+          timeSpentSeconds: z.number().int().min(1).max(24 * 60 * 60),
+          subject: z.string().max(160).nullable().optional(),
+          conteudo: z.string().max(220).nullable().optional(),
+          assunto: z.string().max(220).nullable().optional(),
+          banca: z.string().max(160).nullable().optional(),
+          ano: z.union([z.number().int(), z.string()]).nullable().optional(),
+          difficulty: z.string().max(80).nullable().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        assertRateLimit({
+          key: `quiz:attempt:${ctx.user.id}`,
+          limit: 120,
+          windowMs: 60 * 60 * 1000,
+        });
+
+        const { count, error: countError } = await supabaseAdmin
+          .from("user_question_attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", ctx.user.id)
+          .eq("question_id", input.questionId);
+
+        if (countError) throw new TRPCError({ code: "BAD_REQUEST", message: countError.message });
+
+        const attemptNumber = (count ?? 0) + 1;
+        const parsedYear = typeof input.ano === "string" ? Number.parseInt(input.ano, 10) : input.ano;
+        const { data, error } = await supabaseAdmin
+          .from("user_question_attempts")
+          .insert({
+            user_id: ctx.user.id,
+            question_id: input.questionId,
+            selected_option: input.selectedOption,
+            is_correct: input.isCorrect,
+            time_spent_seconds: input.timeSpentSeconds,
+            attempt_number: attemptNumber,
+            subject: input.subject ?? null,
+            conteudo: input.conteudo ?? null,
+            assunto: input.assunto ?? null,
+            banca: input.banca ?? null,
+            ano: Number.isFinite(parsedYear as number) ? parsedYear : null,
+            difficulty: input.difficulty ?? null,
+          })
+          .select("id, attempt_number")
+          .single();
+
+        if (error || !data?.id) throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Não foi possível salvar a tentativa." });
+
+        return { id: data.id, attemptNumber: data.attempt_number } as const;
+      }),
+
+    getMyAttempts: protectedProcedure
+      .input(
+        z.object({
+          onlyWrong: z.boolean().optional(),
+          summary: z.boolean().optional(),
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        let query = supabaseAdmin
+          .from("user_question_attempts")
+          .select(input?.summary ? "question_id,is_correct,answered_at" : "*")
+          .eq("user_id", ctx.user.id)
+          .order("answered_at", { ascending: false });
+
+        if (input?.onlyWrong) query = query.eq("is_correct", false);
+
+        const { data, error } = await query;
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return data ?? [];
+      }),
+
+    getErrorNotebook: protectedProcedure.query(async ({ ctx }) => {
+      const [attemptsResult, reviewResult] = await Promise.all([
+        supabaseAdmin
+          .from("user_question_attempts")
+          .select("*")
+          .eq("user_id", ctx.user.id)
+          .eq("is_correct", false)
+          .order("answered_at", { ascending: false }),
+        supabaseAdmin
+          .from("user_error_review_status")
+          .select("*")
+          .eq("user_id", ctx.user.id),
+      ]);
+
+      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
+      if (reviewResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: reviewResult.error.message });
+
+      return { attempts: attemptsResult.data ?? [], reviewStatuses: reviewResult.data ?? [] };
+    }),
+
+    upsertErrorReviewStatus: protectedProcedure
+      .input(
+        z.object({
+          questionId: z.string().uuid(),
+          reviewed: z.boolean(),
+          reviewedAt: z.string().datetime().nullable().optional(),
+          errorType: z.string().max(120).nullable().optional(),
+          note: z.string().max(5000).nullable().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const payload = {
+          user_id: ctx.user.id,
+          question_id: input.questionId,
+          reviewed: input.reviewed,
+          reviewed_at: input.reviewed ? input.reviewedAt ?? new Date().toISOString() : null,
+          error_type: input.errorType ?? null,
+          note: input.note ?? null,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await supabaseAdmin
+          .from("user_error_review_status")
+          .upsert(payload, { onConflict: "user_id,question_id" })
+          .select()
+          .single();
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return data;
+      }),
+
+    getProfileStats: protectedProcedure.query(async ({ ctx }) => {
+      const [profileResult, attemptsResult, profilesResult] = await Promise.all([
+        supabaseAdmin.from("profiles").select("*").eq("id", ctx.user.id).maybeSingle(),
+        supabaseAdmin.from("user_question_attempts").select("*").order("answered_at", { ascending: false }),
+        supabaseAdmin.from("profiles").select("id, nome, email, avatar_key, ativo"),
+      ]);
+
+      if (profileResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profileResult.error.message });
+      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
+      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
+
+      return {
+        profile: profileResult.data ?? null,
+        attempts: attemptsResult.data ?? [],
+        profiles: profilesResult.data ?? [],
+      };
+    }),
+  }),
+
   ai: router({
     solvePhysics: protectedProcedure
       .input(

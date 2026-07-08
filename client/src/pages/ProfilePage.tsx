@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -744,6 +745,7 @@ function getRankingTier(position: number | null) {
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
   const [, setLocation] = useLocation();
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -769,36 +771,11 @@ export default function ProfilePage() {
         setError("");
         setSuccessMessage("");
 
-        const [profileResult, attemptsResult, profilesResult] = await Promise.all([
-          supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-          supabase
-            .from("user_question_attempts")
-            .select("*")
-            .order("answered_at", { ascending: false }),
-          supabase.from("profiles").select("id, nome, email, avatar_key, ativo"),
-        ]);
+        const data = await trpcUtils.quiz.getProfileStats.fetch();
 
-        if (profileResult.error) {
-          console.error(profileResult.error);
-          setError("Não foi possível carregar seu perfil.");
-          return;
-        }
-
-        if (attemptsResult.error) {
-          console.error(attemptsResult.error);
-          setError("Não foi possível carregar suas estatísticas.");
-          return;
-        }
-
-        if (profilesResult.error) {
-          console.error(profilesResult.error);
-          setError("Não foi possível carregar os perfis do ranking.");
-          return;
-        }
-
-        const profileData = (profileResult.data as ProfileRow | null) ?? null;
-        const attemptsData = (attemptsResult.data as AttemptRow[]) ?? [];
-        const profilesData = (profilesResult.data as ProfileRow[]) ?? [];
+        const profileData = (data.profile as ProfileRow | null) ?? null;
+        const attemptsData = (data.attempts as AttemptRow[]) ?? [];
+        const profilesData = (data.profiles as ProfileRow[]) ?? [];
 
         setProfile(profileData);
         setAttempts(attemptsData);
@@ -823,7 +800,7 @@ export default function ProfilePage() {
     }
 
     if (!authLoading) loadData();
-  }, [user?.id, authLoading, user?.user_metadata]);
+  }, [user?.id, authLoading, user?.user_metadata, trpcUtils]);
 
   function updateField<K extends keyof EditableProfile>(field: K, value: EditableProfile[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));

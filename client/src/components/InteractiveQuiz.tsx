@@ -24,6 +24,7 @@ import {
 import type { Question } from "@/types/question";
 import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { trpc } from "@/lib/trpc";
 
 export type QuizCompletionData = {
   totalQuestions: number;
@@ -133,27 +134,6 @@ function buildAnswerStatsFromRows(rows: AnswerStatsRow[]): AnswerStats {
   return { total, counts, percentages };
 }
 
-function buildAnswerStatsFromAttempts(
-  rows: { selected_option?: string | null }[]
-): AnswerStats {
-  const counts: Record<string, number> = {};
-
-  rows.forEach((row) => {
-    const optionId = normalizeOptionId(row.selected_option);
-    if (!optionId) return;
-    counts[optionId] = (counts[optionId] ?? 0) + 1;
-  });
-
-  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
-  const percentages: Record<string, number> = {};
-
-  Object.entries(counts).forEach(([optionId, count]) => {
-    percentages[optionId] = total > 0 ? Math.round((count / total) * 100) : 0;
-  });
-
-  return { total, counts, percentages };
-}
-
 function getDifficultyClasses(value?: string | null) {
   const normalized = (value || "").trim().toLowerCase();
 
@@ -242,6 +222,8 @@ export function InteractiveQuiz({
   onQuestionAnswered,
 }: InteractiveQuizProps) {
   const { user } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
+  const recordAttemptMutation = trpc.quiz.recordAttempt.useMutation();
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answersByQuestion, setAnswersByQuestion] = useState<Record<number, string>>({});
@@ -433,40 +415,11 @@ export function InteractiveQuiz({
     setAnswerStatsLoadingQuestionId(questionId);
 
     try {
-      const rpcResponse = await supabase.rpc("get_question_option_stats", {
-        p_question_id: questionId,
-      });
-
-      if (!rpcResponse.error && Array.isArray(rpcResponse.data)) {
-        setAnswerStatsByQuestionId((prev) => ({
-          ...prev,
-          [questionId]: buildAnswerStatsFromRows(
-            rpcResponse.data as AnswerStatsRow[]
-          ),
-        }));
-        return;
-      }
-
-      if (rpcResponse.error) {
-        console.warn(
-          "RPC get_question_option_stats indisponível. Usando fallback direto.",
-          rpcResponse.error
-        );
-      }
-
-      const { data, error } = await supabase
-        .from("user_question_attempts")
-        .select("selected_option")
-        .eq("question_id", questionId);
-
-      if (error) {
-        console.error("Erro ao carregar estatísticas da questão:", error);
-        return;
-      }
+      const data = await trpcUtils.quiz.getQuestionOptionStats.fetch({ questionId });
 
       setAnswerStatsByQuestionId((prev) => ({
         ...prev,
-        [questionId]: buildAnswerStatsFromAttempts(data || []),
+        [questionId]: buildAnswerStatsFromRows(data as AnswerStatsRow[]),
       }));
     } catch (error) {
       console.error("Erro inesperado ao carregar estatísticas:", error);
@@ -486,40 +439,20 @@ export function InteractiveQuiz({
         Math.round((Date.now() - questionStartedAt) / 1000)
       );
 
-      const { count, error: countError } = await supabase
-        .from("user_question_attempts")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("question_id", question.id);
-
-      if (countError) {
-        console.error("Erro ao contar tentativas:", countError);
-        return;
-      }
-
-      const attemptNumber = (count ?? 0) + 1;
       const correct = optionId === question.correctOptionId;
 
-      const { error: insertError } = await supabase
-        .from("user_question_attempts")
-        .insert({
-          user_id: user.id,
-          question_id: question.id,
-          selected_option: optionId,
-          is_correct: correct,
-          time_spent_seconds: elapsedSeconds,
-          attempt_number: attemptNumber,
-          subject: question.subject,
-          conteudo: getQuestionTopics(question)[0] ?? null,
-          assunto: getQuestionSubtopics(question)[0] ?? null,
-          banca: question.exam,
-          ano: question.year,
-          difficulty: question.difficulty,
-        });
-
-      if (insertError) {
-        console.error("Erro ao salvar tentativa:", insertError);
-      }
+      await recordAttemptMutation.mutateAsync({
+        questionId: question.id,
+        selectedOption: optionId,
+        isCorrect: correct,
+        timeSpentSeconds: elapsedSeconds,
+        subject: question.subject ?? null,
+        conteudo: getQuestionTopics(question)[0] ?? null,
+        assunto: getQuestionSubtopics(question)[0] ?? null,
+        banca: question.exam ?? null,
+        ano: question.year ?? null,
+        difficulty: question.difficulty ?? null,
+      });
     } catch (error) {
       console.error("Erro inesperado ao salvar tentativa:", error);
     }

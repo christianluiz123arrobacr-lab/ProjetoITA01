@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
 import { getQuestions } from "@/services/questions.service";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
 import {
@@ -840,6 +840,8 @@ export default function QuestionBankPage() {
     selectedPracticeStatus,
   ]);
 
+  const trpcUtils = trpc.useUtils();
+
   useEffect(() => {
     async function loadQuestions() {
       const data = await getQuestions();
@@ -862,22 +864,12 @@ export default function QuestionBankPage() {
 
       setAttemptsLoading(true);
 
-      const { data, error } = await supabase
-        .from("user_question_attempts")
-        .select("question_id, is_correct, answered_at")
-        .eq("user_id", user.id)
-        .order("answered_at", { ascending: false });
+      try {
+        const data = await trpcUtils.quiz.getMyAttempts.fetch({ summary: true });
 
-      if (error) {
-        console.error("Erro ao carregar tentativas do usuário:", error);
-        setUserQuestionStatus({});
-        setAttemptsLoading(false);
-        return;
-      }
+        const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
 
-      const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
-
-      ((data as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
+        ((data as unknown as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
         if (!attempt.question_id) return;
 
         const current = nextStatus[attempt.question_id];
@@ -895,12 +887,17 @@ export default function QuestionBankPage() {
         current.attempts += 1;
       });
 
-      setUserQuestionStatus(nextStatus);
-      setAttemptsLoading(false);
+        setUserQuestionStatus(nextStatus);
+      } catch (error) {
+        console.error("Erro ao carregar tentativas do usuário:", error);
+        setUserQuestionStatus({});
+      } finally {
+        setAttemptsLoading(false);
+      }
     }
 
     loadUserAttempts();
-  }, [authLoading, user?.id]);
+  }, [authLoading, trpcUtils, user?.id]);
 
   useEffect(() => {
     let filtered = questions;
