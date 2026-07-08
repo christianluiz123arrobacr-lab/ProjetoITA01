@@ -1265,6 +1265,93 @@ export const appRouter = router({
       }),
   }),
 
+
+  vet: router({
+    getObjective: protectedProcedure.query(async ({ ctx }) => {
+      const { data, error } = await supabaseAdmin
+        .from("user_vet_profiles")
+        .select("*")
+        .eq("user_id", ctx.user.id)
+        .maybeSingle();
+
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return data ?? null;
+    }),
+
+    saveObjective: protectedProcedure
+      .input(
+        z.object({
+          targetExam: z.string().min(2).max(40),
+          monthsUntilExam: z.number().int().min(1).max(120),
+          hoursPerDay: z.number().min(0.5).max(24),
+          focusSubject: z.string().min(1).max(160),
+          studyDaysPerWeek: z.number().int().min(1).max(7),
+          studyWeekdays: z.array(z.string().max(20)).min(1).max(7),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const payload = {
+          user_id: ctx.user.id,
+          target_exam: input.targetExam,
+          months_until_exam: input.monthsUntilExam,
+          hours_per_day: input.hoursPerDay,
+          focus_subject: input.focusSubject,
+          study_days_per_week: input.studyDaysPerWeek,
+          study_weekdays: input.studyWeekdays,
+        };
+
+        const { data, error } = await supabaseAdmin
+          .from("user_vet_profiles")
+          .upsert(payload, { onConflict: "user_id" })
+          .select("*")
+          .single();
+
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return data;
+      }),
+
+    getLearningData: protectedProcedure.query(async ({ ctx }) => {
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from("user_vet_profiles")
+        .select("*")
+        .eq("user_id", ctx.user.id)
+        .maybeSingle();
+
+      if (profileError) throw new TRPCError({ code: "BAD_REQUEST", message: profileError.message });
+
+      if (!profile?.target_exam) {
+        return { profile: profile ?? null, attempts: [], weights: [], collectiveStats: [] };
+      }
+
+      const [attemptsResponse, weightsResponse, collectiveResponse] = await Promise.all([
+        supabaseAdmin
+          .from("user_question_attempts")
+          .select("*")
+          .eq("user_id", ctx.user.id)
+          .order("answered_at", { ascending: false }),
+        supabaseAdmin
+          .from("vet_exam_content_weights")
+          .select("*")
+          .eq("exam", profile.target_exam),
+        supabaseAdmin
+          .from("vet_content_collective_stats")
+          .select("*")
+          .eq("exam", profile.target_exam),
+      ]);
+
+      if (attemptsResponse.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResponse.error.message });
+      if (weightsResponse.error) throw new TRPCError({ code: "BAD_REQUEST", message: weightsResponse.error.message });
+      if (collectiveResponse.error) throw new TRPCError({ code: "BAD_REQUEST", message: collectiveResponse.error.message });
+
+      return {
+        profile,
+        attempts: attemptsResponse.data ?? [],
+        weights: weightsResponse.data ?? [],
+        collectiveStats: collectiveResponse.data ?? [],
+      };
+    }),
+  }),
+
   quiz: router({
     getQuestionOptionStats: protectedProcedure
       .input(z.object({ questionId: z.string().uuid() }))
