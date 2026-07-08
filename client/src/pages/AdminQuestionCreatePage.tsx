@@ -20,6 +20,7 @@ import {
   Upload,
   Image as ImageIcon,
   Eye,
+  FileJson,
 } from "lucide-react";
 
 type AssuntosPorConteudoItem = {
@@ -120,6 +121,232 @@ const EMPTY_SUGGESTIONS: SuggestionsState = {
   bancas: [],
   instituicoes: [],
 };
+
+const QUESTION_JSON_EXAMPLE = JSON.stringify(
+  {
+    codigo: "Q00001",
+    disciplina: "fisica",
+    conteudos: ["Cinemática"],
+    assuntos_por_conteudo: [
+      {
+        conteudo: "Cinemática",
+        assuntos: ["Movimento Uniforme"],
+      },
+    ],
+    banca: "eear",
+    ano: 2024,
+    dificuldade: "medio",
+    instituição: "eear",
+    publicada: true,
+    enunciado: "Texto do enunciado em Markdown/LaTeX.",
+    enunciado_pos_imagem: "Texto opcional depois da imagem.",
+    formula: "$$ v = \\frac{\\Delta s}{\\Delta t} $$",
+    url_imagem: "",
+    alternativas: {
+      A: "Alternativa A",
+      B: "Alternativa B",
+      C: "Alternativa C",
+      D: "Alternativa D",
+      E: "Alternativa E",
+    },
+    alternativa_correta: "a",
+  },
+  null,
+  2
+);
+
+type JsonRecord = Record<string, unknown>;
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readJsonValue(record: JsonRecord, keys: string[]) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      return record[key];
+    }
+  }
+
+  return undefined;
+}
+
+function readJsonString(record: JsonRecord, keys: string[]) {
+  const value = readJsonValue(record, keys);
+
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  return "";
+}
+
+function readJsonBoolean(record: JsonRecord, keys: string[], fallback: boolean) {
+  const value = readJsonValue(record, keys);
+
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "sim", "publicada"].includes(normalized)) return true;
+    if (["false", "0", "nao", "não", "rascunho"].includes(normalized)) return false;
+  }
+
+  return fallback;
+}
+
+function readJsonStringArray(record: JsonRecord, keys: string[]) {
+  const value = readJsonValue(record, keys);
+
+  if (Array.isArray(value)) {
+    return normalizarLista(
+      value
+        .map((item) => (typeof item === "string" || typeof item === "number" ? String(item) : ""))
+        .filter(Boolean)
+    );
+  }
+
+  if (typeof value === "string") {
+    return normalizarLista(value.split(/[;,\n]/g));
+  }
+
+  return [];
+}
+
+function normalizeCorrectAlternative(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  if (["a", "b", "c", "d", "e"].includes(normalized)) return normalized;
+
+  return "";
+}
+
+function readAlternativeText(record: JsonRecord, letter: "A" | "B" | "C" | "D" | "E") {
+  const lower = letter.toLowerCase();
+  const alternatives = readJsonValue(record, ["alternativas", "alternatives", "opcoes", "opções"]);
+
+  if (isJsonRecord(alternatives)) {
+    const rawValue = readJsonValue(alternatives, [letter, lower]);
+
+    if (typeof rawValue === "string" || typeof rawValue === "number") return String(rawValue);
+
+    if (isJsonRecord(rawValue)) {
+      return readJsonString(rawValue, ["texto", "text", "valor", "value", "conteudo"]);
+    }
+  }
+
+  if (Array.isArray(alternatives)) {
+    const item = alternatives.find((alternative) => {
+      if (!isJsonRecord(alternative)) return false;
+      return readJsonString(alternative, ["letra", "letter", "alternativa"]).trim().toLowerCase() === lower;
+    });
+
+    if (isJsonRecord(item)) {
+      return readJsonString(item, ["texto", "text", "valor", "value", "conteudo"]);
+    }
+  }
+
+  return readJsonString(record, [letter, lower, `alternativa_${lower}`, `alternativa_${letter}`]);
+}
+
+function readAlternativeImage(record: JsonRecord, letter: "A" | "B" | "C" | "D" | "E") {
+  const lower = letter.toLowerCase();
+  const alternatives = readJsonValue(record, ["alternativas", "alternatives", "opcoes", "opções"]);
+
+  if (isJsonRecord(alternatives)) {
+    const rawValue = readJsonValue(alternatives, [letter, lower]);
+
+    if (isJsonRecord(rawValue)) {
+      return readJsonString(rawValue, ["url_imagem", "image", "imagem", "imageUrl"]);
+    }
+  }
+
+  if (Array.isArray(alternatives)) {
+    const item = alternatives.find((alternative) => {
+      if (!isJsonRecord(alternative)) return false;
+      return readJsonString(alternative, ["letra", "letter", "alternativa"]).trim().toLowerCase() === lower;
+    });
+
+    if (isJsonRecord(item)) {
+      return readJsonString(item, ["url_imagem", "image", "imagem", "imageUrl"]);
+    }
+  }
+
+  return readJsonString(record, [
+    `${lower}_url_imagem`,
+    `${letter}_url_imagem`,
+    `alternativa_${lower}_imagem`,
+    `alternativa_${letter}_imagem`,
+  ]);
+}
+
+function readAssuntosPorConteudo(record: JsonRecord, conteudos: string[]) {
+  const value = readJsonValue(record, ["assuntos_por_conteudo", "assuntosPorConteudo"]);
+
+  if (!Array.isArray(value)) return sincronizarAssuntosPorConteudo(conteudos, []);
+
+  return normalizarAssuntosPorConteudo(
+    value
+      .map((item) => {
+        if (!isJsonRecord(item)) return null;
+
+        return {
+          conteudo: readJsonString(item, ["conteudo", "content"]),
+          assuntos: readJsonStringArray(item, ["assuntos", "subtopics"]),
+        };
+      })
+      .filter((item): item is AssuntosPorConteudoItem => item !== null)
+  );
+}
+
+function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
+  const conteudos = normalizarLista([
+    ...readJsonStringArray(record, ["conteudos", "contents"]),
+    readJsonString(record, ["conteudo", "content"]),
+  ]);
+  const assuntosPorConteudo = readAssuntosPorConteudo(record, conteudos);
+  const assuntosFromGroups = flattenAssuntosPorConteudo(assuntosPorConteudo);
+  const assuntos = normalizarLista([
+    ...assuntosFromGroups,
+    ...readJsonStringArray(record, ["assuntos", "subtopics"]),
+    readJsonString(record, ["assunto", "subtopic"]),
+  ]);
+
+  return {
+    ...currentForm,
+    codigo: readJsonString(record, ["codigo", "código", "code"]) || currentForm.codigo,
+    disciplina: readJsonString(record, ["disciplina", "subject"]) || currentForm.disciplina,
+    conteudo: primeiroValorDaLista(conteudos) || currentForm.conteudo,
+    conteudos: conteudos.length ? conteudos : currentForm.conteudos,
+    assunto: primeiroValorDaLista(assuntos) || currentForm.assunto,
+    assuntos: assuntos.length ? assuntos : currentForm.assuntos,
+    assuntosPorConteudo: assuntosPorConteudo.length ? assuntosPorConteudo : currentForm.assuntosPorConteudo,
+    banca: readJsonString(record, ["banca", "examBoard"]) || currentForm.banca,
+    ano: readJsonString(record, ["ano", "year"]) || currentForm.ano,
+    dificuldade: readJsonString(record, ["dificuldade", "difficulty"]) || currentForm.dificuldade,
+    instituicao:
+      readJsonString(record, ["instituição", "instituicao", "institution"]) || currentForm.instituicao,
+    publicada: readJsonBoolean(record, ["publicada", "published"], currentForm.publicada),
+    enunciado: readJsonString(record, ["enunciado", "statement", "pergunta"]) || currentForm.enunciado,
+    enunciado_pos_imagem:
+      readJsonString(record, ["enunciado_pos_imagem", "enunciadoPosImagem", "postImageStatement"]) ||
+      currentForm.enunciado_pos_imagem,
+    formula: readJsonString(record, ["formula", "fórmula", "latex"]) || currentForm.formula,
+    url_imagem: readJsonString(record, ["url_imagem", "imagem", "imageUrl"]) || currentForm.url_imagem,
+    alternativa_a: readAlternativeText(record, "A") || currentForm.alternativa_a,
+    alternativa_b: readAlternativeText(record, "B") || currentForm.alternativa_b,
+    alternativa_c: readAlternativeText(record, "C") || currentForm.alternativa_c,
+    alternativa_d: readAlternativeText(record, "D") || currentForm.alternativa_d,
+    alternativa_e: readAlternativeText(record, "E") || currentForm.alternativa_e,
+    alternativa_a_imagem: readAlternativeImage(record, "A") || currentForm.alternativa_a_imagem,
+    alternativa_b_imagem: readAlternativeImage(record, "B") || currentForm.alternativa_b_imagem,
+    alternativa_c_imagem: readAlternativeImage(record, "C") || currentForm.alternativa_c_imagem,
+    alternativa_d_imagem: readAlternativeImage(record, "D") || currentForm.alternativa_d_imagem,
+    alternativa_e_imagem: readAlternativeImage(record, "E") || currentForm.alternativa_e_imagem,
+    alternativa_correta:
+      normalizeCorrectAlternative(readJsonString(record, ["alternativa_correta", "correta", "answer"])) ||
+      currentForm.alternativa_correta,
+  };
+}
+
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -685,6 +912,7 @@ export default function AdminQuestionCreatePage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAlternative, setUploadingAlternative] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionsState>(EMPTY_SUGGESTIONS);
+  const [jsonInput, setJsonInput] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -735,6 +963,38 @@ export default function AdminQuestionCreatePage() {
       ...prev,
       [field]: value,
     }));
+  }
+
+  function handleApplyQuestionJson() {
+    try {
+      setError("");
+      setSuccessMessage("");
+
+      if (!jsonInput.trim()) {
+        setError("Cole um JSON de questão antes de importar.");
+        return;
+      }
+
+      const parsed = JSON.parse(jsonInput) as unknown;
+      const questionRecord = Array.isArray(parsed) ? parsed[0] : parsed;
+
+      if (!isJsonRecord(questionRecord)) {
+        setError("O JSON precisa ser um objeto de questão ou uma lista com uma questão.");
+        return;
+      }
+
+      setForm((prev) => mapQuestionJsonToForm(questionRecord, prev));
+      setSuccessMessage("JSON importado para o formulário. Revise a prévia antes de salvar.");
+    } catch (err) {
+      console.error("Erro ao importar JSON da questão:", err);
+      setError("JSON inválido. Verifique vírgulas, aspas e chaves antes de importar.");
+    }
+  }
+
+  function handleUseJsonExample() {
+    setJsonInput(QUESTION_JSON_EXAMPLE);
+    setError("");
+    setSuccessMessage("Exemplo carregado. Edite o JSON e clique em importar.");
   }
 
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -1127,6 +1387,56 @@ export default function AdminQuestionCreatePage() {
             </div>
           </Card>
         ) : null}
+
+        <Card className="p-6 bg-white border-slate-200">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <FileJson className="w-5 h-5 text-slate-700" />
+                <h2 className="text-xl font-bold text-slate-900">Importar questão por JSON</h2>
+              </div>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Cole o JSON antigo da questão para preencher automaticamente o formulário. Depois revise a prévia e salve normalmente pelo backend.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-2xl shrink-0"
+              onClick={handleUseJsonExample}
+            >
+              Carregar exemplo
+            </Button>
+          </div>
+
+          <TextArea
+            rows={10}
+            value={jsonInput}
+            onChange={(e) => setJsonInput(e.target.value)}
+            placeholder={QUESTION_JSON_EXAMPLE}
+            className="font-mono text-xs"
+          />
+
+          <div className="flex flex-wrap gap-3 mt-4">
+            <Button
+              type="button"
+              className="rounded-2xl"
+              onClick={handleApplyQuestionJson}
+            >
+              <FileJson className="w-4 h-4 mr-2" />
+              Importar JSON para o formulário
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-2xl"
+              onClick={() => setJsonInput("")}
+            >
+              Limpar JSON
+            </Button>
+          </div>
+        </Card>
 
         <Card className="p-6 bg-white border-slate-200">
           <h2 className="text-xl font-bold text-slate-900 mb-6">
