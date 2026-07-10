@@ -2,7 +2,6 @@ import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
-import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -26,6 +25,13 @@ import {
 type AssuntosPorConteudoItem = {
   conteudo: string;
   assuntos: string[];
+};
+
+type ResolutionDraftBlock = {
+  tipo: "texto" | "latex" | "imagem";
+  texto?: string | null;
+  url_imagem?: string | null;
+  ordem: number;
 };
 
 type QuestionFormData = {
@@ -150,6 +156,18 @@ const QUESTION_JSON_EXAMPLE = JSON.stringify(
       E: "Alternativa E",
     },
     alternativa_correta: "a",
+    resolucao: {
+      blocos: [
+        {
+          tipo: "texto",
+          texto: "Primeiro passo da resolução.",
+        },
+        {
+          tipo: "latex",
+          texto: "$$ v = \\frac{\\Delta s}{\\Delta t} $$",
+        },
+      ],
+    },
   },
   null,
   2
@@ -276,6 +294,66 @@ function readAlternativeImage(record: JsonRecord, letter: "A" | "B" | "C" | "D" 
     `alternativa_${lower}_imagem`,
     `alternativa_${letter}_imagem`,
   ]);
+}
+
+function normalizeResolutionBlockType(value: string, urlImagem: string): "texto" | "latex" | "imagem" {
+  const normalized = value.trim().toLowerCase();
+
+  if (["imagem", "image"].includes(normalized) || urlImagem.trim()) return "imagem";
+  if (["latex", "formula", "fórmula", "math"].includes(normalized)) return "latex";
+
+  return "texto";
+}
+
+function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
+  const resolutionValue = readJsonValue(record, [
+    "resolucao",
+    "resolução",
+    "resolution",
+    "resolucoes",
+    "resoluções",
+  ]);
+  const blocksValue = isJsonRecord(resolutionValue)
+    ? readJsonValue(resolutionValue, ["blocos", "blocks", "passos", "steps"])
+    : resolutionValue;
+
+  if (!Array.isArray(blocksValue)) return [];
+
+  const parsedBlocks: ResolutionDraftBlock[] = [];
+
+  blocksValue.forEach((item, index) => {
+    let block: ResolutionDraftBlock | null = null;
+
+    if (typeof item === "string") {
+      block = {
+        tipo: "texto",
+        texto: item,
+        url_imagem: null,
+        ordem: index + 1,
+      };
+    } else if (isJsonRecord(item)) {
+      const texto = readJsonString(item, ["texto", "text", "conteudo", "content", "latex"]);
+      const urlImagem = readJsonString(item, ["url_imagem", "imagem", "image", "imageUrl"]);
+      const tipo = normalizeResolutionBlockType(readJsonString(item, ["tipo", "type"]), urlImagem);
+
+      block = {
+        tipo,
+        texto: tipo === "imagem" ? null : texto,
+        url_imagem: tipo === "imagem" ? urlImagem : null,
+        ordem: Number(readJsonString(item, ["ordem", "order"])) || index + 1,
+      };
+    }
+
+    if (!block) return;
+    if (block.tipo === "imagem" && !block.url_imagem?.trim()) return;
+    if (block.tipo !== "imagem" && !block.texto?.trim()) return;
+
+    parsedBlocks.push(block);
+  });
+
+  return parsedBlocks
+    .sort((a, b) => a.ordem - b.ordem)
+    .map((item, index) => ({ ...item, ordem: index + 1 }));
 }
 
 function readAssuntosPorConteudo(record: JsonRecord, conteudos: string[]) {
@@ -905,6 +983,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 export default function AdminQuestionCreatePage() {
   const createQuestionMutation = trpc.admin.createQuestion.useMutation();
   const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
+  const saveResolutionBlocksMutation = trpc.admin.saveResolutionBlocks.useMutation();
   const [, setLocation] = useLocation();
 
   const [form, setForm] = useState<QuestionFormData>(initialForm);
@@ -913,6 +992,7 @@ export default function AdminQuestionCreatePage() {
   const [uploadingAlternative, setUploadingAlternative] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionsState>(EMPTY_SUGGESTIONS);
   const [jsonInput, setJsonInput] = useState("");
+  const [resolutionDraftBlocks, setResolutionDraftBlocks] = useState<ResolutionDraftBlock[]>([]);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -965,29 +1045,63 @@ export default function AdminQuestionCreatePage() {
     }));
   }
 
+  function applyQuestionJsonText(rawJson: string) {
+    if (!rawJson.trim()) {
+      setError("Cole ou importe um arquivo JSON de questão antes de importar.");
+      return;
+    }
+
+    const parsed = JSON.parse(rawJson) as unknown;
+    const questionRecord = Array.isArray(parsed) ? parsed[0] : parsed;
+
+    if (!isJsonRecord(questionRecord)) {
+      setError("O JSON precisa ser um objeto de questão ou uma lista com uma questão.");
+      return;
+    }
+
+    const importedResolutionBlocks = readResolutionBlocks(questionRecord);
+
+    setForm((prev) => mapQuestionJsonToForm(questionRecord, prev));
+    setResolutionDraftBlocks(importedResolutionBlocks);
+    setSuccessMessage(
+      importedResolutionBlocks.length > 0
+        ? `JSON importado com ${importedResolutionBlocks.length} bloco(s) de resolução. Revise a prévia antes de salvar.`
+        : "JSON importado para o formulário. Revise a prévia antes de salvar."
+    );
+  }
+
   function handleApplyQuestionJson() {
     try {
       setError("");
       setSuccessMessage("");
-
-      if (!jsonInput.trim()) {
-        setError("Cole um JSON de questão antes de importar.");
-        return;
-      }
-
-      const parsed = JSON.parse(jsonInput) as unknown;
-      const questionRecord = Array.isArray(parsed) ? parsed[0] : parsed;
-
-      if (!isJsonRecord(questionRecord)) {
-        setError("O JSON precisa ser um objeto de questão ou uma lista com uma questão.");
-        return;
-      }
-
-      setForm((prev) => mapQuestionJsonToForm(questionRecord, prev));
-      setSuccessMessage("JSON importado para o formulário. Revise a prévia antes de salvar.");
+      applyQuestionJsonText(jsonInput);
     } catch (err) {
       console.error("Erro ao importar JSON da questão:", err);
       setError("JSON inválido. Verifique vírgulas, aspas e chaves antes de importar.");
+    }
+  }
+
+  async function handleQuestionJsonFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setError("");
+      setSuccessMessage("");
+
+      if (!file.name.toLowerCase().endsWith(".json") && file.type !== "application/json") {
+        setError("Envie um arquivo .json válido.");
+        return;
+      }
+
+      const text = await file.text();
+      setJsonInput(text);
+      applyQuestionJsonText(text);
+    } catch (err) {
+      console.error("Erro ao importar arquivo JSON da questão:", err);
+      setError("Não foi possível ler o arquivo JSON. Verifique o conteúdo e tente novamente.");
+    } finally {
+      event.target.value = "";
     }
   }
 
@@ -1038,28 +1152,6 @@ export default function AdminQuestionCreatePage() {
       }
 
       updateField("url_imagem", upload.publicUrl);
-
-      await logAdminAction({
-        action: "question_image_uploaded",
-        entityType: "questao_imagem",
-        entityId: null,
-        description: `Imagem principal enviada para nova questão ${form.codigo || "sem código"}`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          bucket: QUESTION_IMAGES_BUCKET,
-          path: upload.path,
-          fileName: file.name,
-          publicUrl: upload.publicUrl,
-          tipoImagem: "enunciado",
-        },
-      });
 
       setSuccessMessage("Imagem da questão enviada com sucesso.");
     } catch (err) {
@@ -1120,41 +1212,6 @@ export default function AdminQuestionCreatePage() {
       }
 
       updateField(field, upload.publicUrl);
-
-      const letraAlternativa =
-        field === "alternativa_a_imagem"
-          ? "A"
-          : field === "alternativa_b_imagem"
-            ? "B"
-            : field === "alternativa_c_imagem"
-              ? "C"
-              : field === "alternativa_d_imagem"
-                ? "D"
-                : "E";
-
-      await logAdminAction({
-        action: "question_alternative_image_uploaded",
-        entityType: "questao_alternativa_imagem",
-        entityId: null,
-        description: `Imagem enviada para a alternativa ${letraAlternativa} da nova questão ${form.codigo || "sem código"}`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          alternativa: letraAlternativa,
-          field,
-          bucket: QUESTION_IMAGES_BUCKET,
-          path: upload.path,
-          fileName: file.name,
-          publicUrl: upload.publicUrl,
-          tipoImagem: "alternativa",
-        },
-      });
 
       setSuccessMessage("Imagem da alternativa enviada com sucesso.");
     } catch (err) {
@@ -1272,7 +1329,23 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
-      setSuccessMessage("Questão criada com sucesso. Indo para a resolução...");
+      if (resolutionDraftBlocks.length > 0) {
+        await saveResolutionBlocksMutation.mutateAsync({
+          questaoId: data.id,
+          blocks: resolutionDraftBlocks.map((block, index) => ({
+            tipo: block.tipo,
+            texto: block.tipo === "imagem" ? null : block.texto ?? null,
+            url_imagem: block.tipo === "imagem" ? block.url_imagem ?? null : null,
+            ordem: index + 1,
+          })),
+        });
+      }
+
+      setSuccessMessage(
+        resolutionDraftBlocks.length > 0
+          ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
+          : "Questão criada com sucesso. Indo para a resolução..."
+      );
       setLocation(`/admin/resolucoes/${data.id}`);
     } catch (err) {
       console.error("Erro inesperado ao criar questão:", err);
@@ -1400,14 +1473,29 @@ export default function AdminQuestionCreatePage() {
               </p>
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-2xl shrink-0"
-              onClick={handleUseJsonExample}
-            >
-              Carregar exemplo
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleQuestionJsonFileUpload}
+                />
+                <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar arquivo .json
+                </span>
+              </label>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-2xl shrink-0"
+                onClick={handleUseJsonExample}
+              >
+                Carregar exemplo
+              </Button>
+            </div>
           </div>
 
           <TextArea
@@ -1431,11 +1519,20 @@ export default function AdminQuestionCreatePage() {
               type="button"
               variant="outline"
               className="rounded-2xl"
-              onClick={() => setJsonInput("")}
+              onClick={() => {
+                setJsonInput("");
+                setResolutionDraftBlocks([]);
+              }}
             >
               Limpar JSON
             </Button>
           </div>
+
+          {resolutionDraftBlocks.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {resolutionDraftBlocks.length} bloco(s) de resolução importado(s). Ao clicar em criar questão, eles serão salvos automaticamente e aparecerão no editor de resolução.
+            </div>
+          ) : null}
         </Card>
 
         <Card className="p-6 bg-white border-slate-200">

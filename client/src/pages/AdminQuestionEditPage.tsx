@@ -2,7 +2,6 @@ import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
-import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -906,29 +905,6 @@ export default function AdminQuestionEditPage() {
 
       updateField("url_imagem", upload.publicUrl);
 
-      await logAdminAction({
-        action: "question_image_uploaded",
-        entityType: "questao_imagem",
-        entityId: questionId,
-        description: `Imagem principal enviada para a questão ${form.codigo || questionId}`,
-        level: "info",
-        metadata: {
-          questionId,
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          bucket: QUESTION_IMAGES_BUCKET,
-          path: upload.path,
-          fileName: file.name,
-          publicUrl: upload.publicUrl,
-          tipoImagem: "enunciado",
-        },
-      });
-
       setSuccessMessage("Imagem da questão enviada com sucesso.");
     } catch (err) {
       console.error("Erro inesperado ao enviar imagem da questão:", err);
@@ -988,42 +964,6 @@ export default function AdminQuestionEditPage() {
       }
 
       updateField(field, upload.publicUrl);
-
-      const letraAlternativa =
-        field === "alternativa_a_imagem"
-          ? "A"
-          : field === "alternativa_b_imagem"
-            ? "B"
-            : field === "alternativa_c_imagem"
-              ? "C"
-              : field === "alternativa_d_imagem"
-                ? "D"
-                : "E";
-
-      await logAdminAction({
-        action: "question_alternative_image_uploaded",
-        entityType: "questao_alternativa_imagem",
-        entityId: questionId,
-        description: `Imagem enviada para a alternativa ${letraAlternativa} da questão ${form.codigo || questionId}`,
-        level: "info",
-        metadata: {
-          questionId,
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          alternativa: letraAlternativa,
-          field,
-          bucket: QUESTION_IMAGES_BUCKET,
-          path: upload.path,
-          fileName: file.name,
-          publicUrl: upload.publicUrl,
-          tipoImagem: "alternativa",
-        },
-      });
 
       setSuccessMessage("Imagem da alternativa enviada com sucesso.");
     } catch (err) {
