@@ -1,7 +1,7 @@
 import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { logAdminAction } from "@/lib/adminLogs";
+import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -85,6 +85,8 @@ const EMPTY_SUGGESTIONS: SuggestionsState = {
 };
 
 const QUESTION_IMAGES_BUCKET = "questoes-imagens";
+const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 const initialForm: QuestionFormData = {
   codigo: "",
@@ -498,14 +500,14 @@ function AssuntosPorConteudoEditor({
   );
 }
 
-function gerarNomeArquivo(originalName: string) {
-  const extensao = originalName.includes(".")
-    ? originalName.split(".").pop()
-    : "png";
+function validarImagemUpload(file: File) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  }
 
-  return `${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}.${extensao}`;
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error("A imagem deve ter no máximo 3 MB.");
+  }
 }
 
 function MarkdownPreview({
@@ -717,6 +719,8 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 }
 
 export default function AdminQuestionEditPage() {
+  const updateQuestionMutation = trpc.admin.updateQuestion.useMutation();
+  const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
   const [match, params] = useRoute("/admin/questoes/:id");
   const [, setLocation] = useLocation();
   const questionId = match ? params.id : null;
@@ -864,19 +868,24 @@ export default function AdminQuestionEditPage() {
     if (!file || !questionId) return;
 
     try {
+      validarImagemUpload(file);
       setUploadingImage(true);
       setError("");
       setSuccessMessage("");
 
       const pastaBase =
         form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
-      const fileName = gerarNomeArquivo(file.name);
-      const path = `${pastaBase}/enunciado/${fileName}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/enunciado`,
+      });
 
       const { error: uploadError } = await supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .upload(path, file, {
-          upsert: true,
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.path, upload.token, file, {
+          contentType: file.type,
         });
 
       if (uploadError) {
@@ -889,39 +898,12 @@ export default function AdminQuestionEditPage() {
         return;
       }
 
-      const { data } = supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .getPublicUrl(path);
-
-      if (!data?.publicUrl) {
+      if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem.");
         return;
       }
 
-      updateField("url_imagem", data.publicUrl);
-
-      await logAdminAction({
-        action: "question_image_uploaded",
-        entityType: "questao_imagem",
-        entityId: questionId,
-        description: `Imagem principal enviada para a questão ${form.codigo || questionId}`,
-        level: "info",
-        metadata: {
-          questionId,
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          bucket: QUESTION_IMAGES_BUCKET,
-          path,
-          fileName: file.name,
-          publicUrl: data.publicUrl,
-          tipoImagem: "enunciado",
-        },
-      });
+      updateField("url_imagem", upload.publicUrl);
 
       setSuccessMessage("Imagem da questão enviada com sucesso.");
     } catch (err) {
@@ -946,19 +928,24 @@ export default function AdminQuestionEditPage() {
     if (!file || !questionId) return;
 
     try {
+      validarImagemUpload(file);
       setUploadingAlternative(field);
       setError("");
       setSuccessMessage("");
 
       const pastaBase =
         form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
-      const fileName = gerarNomeArquivo(file.name);
-      const path = `${pastaBase}/alternativas/${field}/${fileName}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/alternativas/${field}`,
+      });
 
       const { error: uploadError } = await supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .upload(path, file, {
-          upsert: true,
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.path, upload.token, file, {
+          contentType: file.type,
         });
 
       if (uploadError) {
@@ -971,52 +958,12 @@ export default function AdminQuestionEditPage() {
         return;
       }
 
-      const { data } = supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .getPublicUrl(path);
-
-      if (!data?.publicUrl) {
+      if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem da alternativa.");
         return;
       }
 
-      updateField(field, data.publicUrl);
-
-      const letraAlternativa =
-        field === "alternativa_a_imagem"
-          ? "A"
-          : field === "alternativa_b_imagem"
-            ? "B"
-            : field === "alternativa_c_imagem"
-              ? "C"
-              : field === "alternativa_d_imagem"
-                ? "D"
-                : "E";
-
-      await logAdminAction({
-        action: "question_alternative_image_uploaded",
-        entityType: "questao_alternativa_imagem",
-        entityId: questionId,
-        description: `Imagem enviada para a alternativa ${letraAlternativa} da questão ${form.codigo || questionId}`,
-        level: "info",
-        metadata: {
-          questionId,
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          alternativa: letraAlternativa,
-          field,
-          bucket: QUESTION_IMAGES_BUCKET,
-          path,
-          fileName: file.name,
-          publicUrl: data.publicUrl,
-          tipoImagem: "alternativa",
-        },
-      });
+      updateField(field, upload.publicUrl);
 
       setSuccessMessage("Imagem da alternativa enviada com sucesso.");
     } catch (err) {
@@ -1124,48 +1071,7 @@ export default function AdminQuestionEditPage() {
       alternativa_correta: valorLimpo(form.alternativa_correta),
     };
 
-    const { error } = await supabase
-      .from("questoes")
-      .update(payload)
-      .eq("id", questionId);
-
-    if (error) {
-      console.error("Erro ao salvar questão:", error);
-      setError(
-        error.message
-          ? `Não foi possível salvar as alterações: ${error.message}`
-          : "Não foi possível salvar as alterações."
-      );
-      return { ok: false };
-    }
-
-    await logAdminAction({
-      action: "question_updated",
-      entityType: "questao",
-      entityId: questionId,
-      description: `Questão ${form.codigo || questionId} editada no ADM`,
-      level: "info",
-      metadata: {
-        codigo: form.codigo || null,
-        disciplina: form.disciplina || null,
-        conteudo: primeiroValorDaLista(conteudosSelecionados) || null,
-        conteudos: conteudosSelecionados,
-        assunto: primeiroValorDaLista(assuntosSelecionados) || null,
-        assuntos: assuntosSelecionados,
-        assuntosPorConteudo: assuntosPorConteudoSelecionados,
-        banca: form.banca || null,
-        ano: form.ano ? Number(form.ano) : null,
-        dificuldade: form.dificuldade || null,
-        instituicao: form.instituicao || null,
-        publicada: form.publicada,
-        urlImagem: form.url_imagem || null,
-        alternativaAImagem: form.alternativa_a_imagem || null,
-        alternativaBImagem: form.alternativa_b_imagem || null,
-        alternativaCImagem: form.alternativa_c_imagem || null,
-        alternativaDImagem: form.alternativa_d_imagem || null,
-        alternativaEImagem: form.alternativa_e_imagem || null,
-      },
-    });
+    await updateQuestionMutation.mutateAsync({ id: questionId, payload });
 
     return { ok: true };
   }
@@ -1235,7 +1141,7 @@ export default function AdminQuestionEditPage() {
           <label className="inline-flex">
             <input
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={(e) => handleAlternativeImageUpload(imageField, e)}
             />
@@ -1517,7 +1423,7 @@ export default function AdminQuestionEditPage() {
                   <label className="inline-flex">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/png,image/jpeg,image/webp"
                       className="hidden"
                       onChange={handleImageUpload}
                     />

@@ -246,8 +246,17 @@ function RootGate() {
 
 function PrivateRouter() {
   const [location] = useLocation();
-  const isAdminRoute = location.startsWith("/admin");
+  const legacyAdminPrefix = "/plataforma/admin";
+  const isLegacyAdminRoute =
+    location === legacyAdminPrefix || location.startsWith(`${legacyAdminPrefix}/`);
+  const isAdminRoute = location.startsWith("/admin") || isLegacyAdminRoute;
   const [studentMenuOpen, setStudentMenuOpen] = useState(false);
+
+  if (isLegacyAdminRoute) {
+    const normalizedAdminPath = location.replace(/^\/plataforma\/admin/, "/admin");
+
+    return <Redirect to={normalizedAdminPath || "/admin"} />;
+  }
 
   return (
     <SubscriptionGuard>
@@ -360,6 +369,7 @@ function PrivateRouter() {
         />
         <Route path="/cinematica/topic/mru" component={CinematicaTopicMRU} />
         <Route path="/cinematica/topic/mruv" component={CinematicaTopicMRUV} />
+        <Route path="/cinematica/topic/mcu" component={CinematicaTopicCircular} />
         <Route
           path="/cinematica/topic/circular"
           component={CinematicaTopicCircular}
