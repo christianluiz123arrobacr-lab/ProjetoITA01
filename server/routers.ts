@@ -161,10 +161,14 @@ export const appRouter = router({
 
       if (profileError) throw new TRPCError({ code: "BAD_REQUEST", message: profileError.message });
 
-      const role = (profile as any)?.role ?? ctx.user.role;
+      const profileRole = (profile as any)?.role;
+      const role =
+        ctx.user.role === "admin" || ctx.user.role === "editor"
+          ? ctx.user.role
+          : profileRole ?? ctx.user.role;
       const ativo = (profile as any)?.ativo;
 
-      if (role === "admin") {
+      if (role === "admin" || role === "editor") {
         return { accessState: "allowed", role, ativo: ativo ?? true, hasActiveSubscription: true } as const;
       }
 
