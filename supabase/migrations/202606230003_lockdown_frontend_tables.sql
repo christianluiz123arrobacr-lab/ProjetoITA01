@@ -197,24 +197,34 @@ begin
   end if;
 
   if to_regclass('public.vet_content_collective_stats') is not null then
-    alter table public.vet_content_collective_stats enable row level security;
     grant select on public.vet_content_collective_stats to anon, authenticated;
-    grant insert, update, delete on public.vet_content_collective_stats to authenticated;
 
-    drop policy if exists "vet_content_collective_stats_public_select" on public.vet_content_collective_stats;
-    create policy "vet_content_collective_stats_public_select"
-    on public.vet_content_collective_stats
-    for select
-    to anon, authenticated
-    using (true);
+    if exists (
+      select 1
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relname = 'vet_content_collective_stats'
+        and c.relkind in ('r', 'p')
+    ) then
+      alter table public.vet_content_collective_stats enable row level security;
+      grant insert, update, delete on public.vet_content_collective_stats to authenticated;
 
-    drop policy if exists "vet_content_collective_stats_admin_editor_all" on public.vet_content_collective_stats;
-    create policy "vet_content_collective_stats_admin_editor_all"
-    on public.vet_content_collective_stats
-    for all
-    to authenticated
-    using (public.is_admin_or_editor())
-    with check (public.is_admin_or_editor());
+      drop policy if exists "vet_content_collective_stats_public_select" on public.vet_content_collective_stats;
+      create policy "vet_content_collective_stats_public_select"
+      on public.vet_content_collective_stats
+      for select
+      to anon, authenticated
+      using (true);
+
+      drop policy if exists "vet_content_collective_stats_admin_editor_all" on public.vet_content_collective_stats;
+      create policy "vet_content_collective_stats_admin_editor_all"
+      on public.vet_content_collective_stats
+      for all
+      to authenticated
+      using (public.is_admin_or_editor())
+      with check (public.is_admin_or_editor());
+    end if;
   end if;
 
   if to_regclass('public.resolucoes_meta') is not null then
