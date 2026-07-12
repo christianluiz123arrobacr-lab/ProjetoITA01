@@ -1,6 +1,6 @@
 import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -991,6 +991,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 }
 
 export default function AdminQuestionCreatePage() {
+  const trpcUtils = trpc.useUtils();
   const createQuestionMutation = trpc.admin.createQuestion.useMutation();
   const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
   const saveResolutionBlocksMutation = trpc.admin.saveResolutionBlocks.useMutation();
@@ -1008,14 +1009,7 @@ export default function AdminQuestionCreatePage() {
 
   useEffect(() => {
     async function loadSuggestions() {
-      const { data, error } = await supabase
-        .from("questoes")
-        .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição");
-
-      if (error) {
-        console.error("Erro ao carregar sugestões da questão:", error);
-        return;
-      }
+      const data = await trpcUtils.admin.getQuestionSuggestions.fetch();
 
       const conteudosSet = new Set<string>();
       const assuntosSet = new Set<string>();
@@ -1043,7 +1037,7 @@ export default function AdminQuestionCreatePage() {
     }
 
     loadSuggestions();
-  }, []);
+  }, [trpcUtils]);
 
   function updateField<K extends keyof QuestionFormData>(
     field: K,
@@ -1140,11 +1134,13 @@ export default function AdminQuestionCreatePage() {
         context: `${pastaBase}/enunciado`,
       });
 
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, file, {
-          contentType: file.type,
-        });
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem da questão:", uploadError);
@@ -1200,11 +1196,13 @@ export default function AdminQuestionCreatePage() {
         context: `${pastaBase}/alternativas/${field}`,
       });
 
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, file, {
-          contentType: file.type,
-        });
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem da alternativa:", uploadError);

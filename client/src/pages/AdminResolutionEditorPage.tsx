@@ -1,6 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -456,11 +456,13 @@ export default function AdminResolutionEditorPage() {
         context: questaoId,
       });
 
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, file, {
-          contentType: file.type,
-        });
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem:", uploadError);

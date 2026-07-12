@@ -244,6 +244,45 @@ export const appRouter = router({
       }),
 
 
+    updateMyProfile: protectedProcedure
+      .input(
+        z.object({
+          nome: z.string().trim().min(1).max(120),
+          email: z.string().email().nullable().optional(),
+          avatarKey: z.string().trim().min(1).max(80),
+          bio: z.string().max(180).nullable().optional(),
+          provaAlvo: z.string().max(120).nullable().optional(),
+          focoAtual: z.string().max(160).nullable().optional(),
+          metaSemanalQuestoes: z.number().int().min(0).nullable().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("profiles")
+          .upsert(
+            {
+              id: ctx.user.id,
+              nome: input.nome,
+              email: input.email ?? ctx.user.email ?? null,
+              avatar_key: input.avatarKey,
+              bio: input.bio?.trim() || null,
+              prova_alvo: input.provaAlvo?.trim() || null,
+              foco_atual: input.focoAtual?.trim() || null,
+              meta_semanal_questoes: input.metaSemanalQuestoes ?? null,
+            },
+            { onConflict: "id" }
+          )
+          .select("*")
+          .single();
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return data;
+      }),
+
+
     getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
       const { data: profile, error: profileError } = await supabaseAdmin
         .from("profiles")
@@ -1631,6 +1670,39 @@ export const appRouter = router({
       }),
 
 
+    getQuestionSuggestions: adminOrEditorProcedure.query(async () => {
+      const { data, error } = await supabaseAdmin
+        .from("questoes")
+        .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição");
+
+      if (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      }
+
+      return data ?? [];
+    }),
+
+    getQuestionById: adminOrEditorProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .query(async ({ input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("questoes")
+          .select("*")
+          .eq("id", input.id)
+          .maybeSingle();
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        if (!data) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Questão não encontrada." });
+        }
+
+        return data;
+      }),
+
+
     listQuestions: adminOrEditorProcedure.query(async () => {
       const [questionsResult, resolutionsResult] = await Promise.all([
         supabaseAdmin
@@ -2337,6 +2409,26 @@ export const appRouter = router({
   }),
 
   quiz: router({
+
+    getResolutionAuthors: publicProcedure
+      .input(
+        z.object({
+          questionIds: z.array(z.string().uuid()).min(1).max(100),
+        })
+      )
+      .query(async ({ input }) => {
+        const uniqueQuestionIds = Array.from(new Set(input.questionIds));
+        const { data, error } = await supabaseAdmin
+          .from("resolucoes_meta")
+          .select("questao_id, autor_nome")
+          .in("questao_id", uniqueQuestionIds);
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return data ?? [];
+      }),
 
     createQuestionReport: protectedProcedure
       .input(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -53,10 +53,16 @@ export function useSupabaseAuth() {
     };
   }, []);
 
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem("supabase_access_token");
+  }, []);
+
   return {
     session,
     user,
     loading,
     isAuthenticated: !!user,
+    signOut,
   };
 }

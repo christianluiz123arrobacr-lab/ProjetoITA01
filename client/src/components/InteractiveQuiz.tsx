@@ -22,7 +22,6 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Question } from "@/types/question";
-import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { trpc } from "@/lib/trpc";
 
@@ -369,15 +368,9 @@ export function InteractiveQuiz({
           return;
         }
 
-        const { data, error } = await supabase
-          .from("resolucoes_meta")
-          .select("questao_id, autor_nome")
-          .in("questao_id", uniqueQuestionIds);
-
-        if (error) {
-          console.error("Erro ao carregar autores das resoluções:", error);
-          return;
-        }
+        const data = await trpcUtils.quiz.getResolutionAuthors.fetch({
+          questionIds: uniqueQuestionIds,
+        });
 
         const authorMap: Record<string, string> = {};
 
@@ -394,7 +387,7 @@ export function InteractiveQuiz({
     }
 
     loadResolutionAuthors();
-  }, [questions]);
+  }, [questions, trpcUtils]);
 
   useEffect(() => {
     if (isQuizComplete && completionData && onComplete && !hasSentCompletion) {

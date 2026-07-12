@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
@@ -744,8 +743,9 @@ function getRankingTier(position: number | null) {
 }
 
 export default function ProfilePage() {
-  const { user, loading: authLoading } = useSupabaseAuth();
+  const { user, loading: authLoading, signOut } = useSupabaseAuth();
   const trpcUtils = trpc.useUtils();
+  const updateMyProfileMutation = trpc.auth.updateMyProfile.useMutation();
   const [, setLocation] = useLocation();
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -833,28 +833,15 @@ export default function ProfilePage() {
         return;
       }
 
-      const payload = {
-        id: user.id,
+      const data = await updateMyProfileMutation.mutateAsync({
         nome: form.nome.trim(),
         email: profile?.email ?? user.email ?? null,
-        avatar_key: form.avatar_key,
+        avatarKey: form.avatar_key,
         bio: form.bio.trim() || null,
-        prova_alvo: form.prova_alvo.trim() || null,
-        foco_atual: form.foco_atual.trim() || null,
-        meta_semanal_questoes: metaSemanal,
-      };
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .upsert(payload, { onConflict: "id" })
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error(error);
-        setError("Não foi possível salvar seu perfil.");
-        return;
-      }
+        provaAlvo: form.prova_alvo.trim() || null,
+        focoAtual: form.foco_atual.trim() || null,
+        metaSemanalQuestoes: metaSemanal,
+      });
 
       setProfile(data as ProfileRow);
       setEditing(false);
@@ -870,7 +857,7 @@ export default function ProfilePage() {
   async function handleLogout() {
     try {
       setLoggingOut(true);
-      await supabase.auth.signOut();
+      await signOut();
       setLocation("/login");
     } catch (err) {
       console.error(err);

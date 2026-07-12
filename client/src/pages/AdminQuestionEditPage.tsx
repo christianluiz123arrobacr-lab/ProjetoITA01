@@ -1,6 +1,6 @@
 import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -719,6 +719,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 }
 
 export default function AdminQuestionEditPage() {
+  const trpcUtils = trpc.useUtils();
   const updateQuestionMutation = trpc.admin.updateQuestion.useMutation();
   const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
   const [match, params] = useRoute("/admin/questoes/:id");
@@ -739,14 +740,7 @@ export default function AdminQuestionEditPage() {
 
   useEffect(() => {
     async function loadSuggestions() {
-      const { data, error } = await supabase
-        .from("questoes")
-        .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição");
-
-      if (error) {
-        console.error("Erro ao carregar sugestões da questão:", error);
-        return;
-      }
+      const data = await trpcUtils.admin.getQuestionSuggestions.fetch();
 
       const conteudosSet = new Set<string>();
       const assuntosSet = new Set<string>();
@@ -774,7 +768,7 @@ export default function AdminQuestionEditPage() {
     }
 
     loadSuggestions();
-  }, []);
+  }, [trpcUtils]);
 
   useEffect(() => {
     async function loadQuestion() {
@@ -789,17 +783,9 @@ export default function AdminQuestionEditPage() {
         setError("");
         setSuccessMessage("");
 
-        const { data, error } = await supabase
-          .from("questoes")
-          .select("*")
-          .eq("id", questionId)
-          .single();
-
-        if (error || !data) {
-          console.error("Erro ao carregar questão:", error);
-          setError("Não foi possível carregar a questão.");
-          return;
-        }
+        const data = await trpcUtils.admin.getQuestionById.fetch({
+          id: questionId,
+        });
 
         const conteudos = listaDoBanco(data.conteudos, data.conteudo);
         const assuntos = listaDoBanco(data.assuntos, data.assunto);
@@ -851,7 +837,7 @@ export default function AdminQuestionEditPage() {
     }
 
     loadQuestion();
-  }, [questionId]);
+  }, [questionId, trpcUtils]);
 
   function updateField<K extends keyof QuestionFormData>(
     field: K,
@@ -882,11 +868,13 @@ export default function AdminQuestionEditPage() {
         context: `${pastaBase}/enunciado`,
       });
 
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, file, {
-          contentType: file.type,
-        });
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem da questão:", uploadError);
@@ -942,11 +930,13 @@ export default function AdminQuestionEditPage() {
         context: `${pastaBase}/alternativas/${field}`,
       });
 
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, file, {
-          contentType: file.type,
-        });
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem da alternativa:", uploadError);
