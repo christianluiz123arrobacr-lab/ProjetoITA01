@@ -521,6 +521,91 @@ export const appRouter = router({
     }),
   }),
 
+  questions: router({
+    list: publicProcedure
+      .input(
+        z
+          .object({
+            subject: z.string().optional(),
+            exam: z.string().optional(),
+            year: z.number().int().optional(),
+            difficulty: z.string().optional(),
+            institution: z.string().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => {
+        let query = supabaseAdmin.from("questoes").select(`
+          *,
+          resolucoes (
+            id,
+            tipo,
+            texto,
+            ordem,
+            url_imagem
+          )
+        `);
+
+        if (input?.subject) {
+          query = query.or(`disciplina.eq.${input.subject},diciplina.eq.${input.subject}`);
+        }
+
+        if (input?.exam) {
+          query = query.eq("banca", input.exam);
+        }
+
+        if (input?.year) {
+          query = query.eq("ano", input.year);
+        }
+
+        if (input?.difficulty) {
+          query = query.eq("dificuldade", input.difficulty);
+        }
+
+        if (input?.institution) {
+          query = query.eq("instituição", input.institution);
+        }
+
+        query = query.eq("publicada", true);
+
+        const { data, error } = await query.order("created_at", {
+          ascending: false,
+        });
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return data ?? [];
+      }),
+
+    getById: publicProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .query(async ({ input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("questoes")
+          .select(`
+            *,
+            resolucoes (
+              id,
+              tipo,
+              texto,
+              ordem,
+              url_imagem
+            )
+          `)
+          .eq("id", input.id)
+          .eq("publicada", true)
+          .maybeSingle();
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return data ?? null;
+      }),
+  }),
+
   notes: router({
     getQuestionNote: protectedProcedure
       .input(z.object({ questionId: z.string().uuid() }))
