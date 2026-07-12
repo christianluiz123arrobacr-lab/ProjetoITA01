@@ -70,6 +70,98 @@ function pickBillingPlan(row: any) {
   return Array.isArray(row?.billing_plans) ? row.billing_plans[0] : row?.billing_plans;
 }
 
+function flattenBillingSubscription(row: any) {
+  if (!row) return null;
+
+  const plan = pickBillingPlan(row);
+
+  return {
+    subscription_id: row.id,
+    status: row.status,
+    gateway: row.gateway ?? null,
+    payment_url: row.payment_url ?? null,
+    started_at: row.started_at ?? null,
+    current_period_start: row.current_period_start ?? null,
+    current_period_end: row.current_period_end ?? null,
+    next_due_date: row.next_due_date ?? null,
+    created_at: row.created_at ?? null,
+    plan_id: plan?.id ?? "",
+    plan_slug: plan?.slug ?? "",
+    plan_name: plan?.name ?? "Plano da plataforma",
+    plan_description: plan?.description ?? null,
+    plan_price_cents: Number(plan?.price_cents ?? 0),
+    plan_currency: plan?.currency ?? "BRL",
+    plan_billing_cycle: plan?.billing_cycle ?? null,
+  };
+}
+
+async function getLatestUserBillingSubscription(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("billing_subscriptions")
+    .select(
+      `
+      *,
+      billing_plans (
+        id,
+        slug,
+        name,
+        description,
+        price_cents,
+        currency,
+        billing_cycle
+      )
+    `
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+  }
+
+  return data ?? null;
+}
+
+function isBlockingBillingSubscription(row: any) {
+  if (!row) return false;
+  if (row.status === "manual_review") return true;
+  if (!["active", "trialing"].includes(row.status)) return false;
+  if (!row.current_period_end) return true;
+
+  const end = new Date(row.current_period_end).getTime();
+  return Number.isFinite(end) && end >= Date.now();
+}
+
+function getBillingPlanSlugCandidates(slug: string) {
+  const candidatesBySlug: Record<string, string[]> = {
+    "beta-selecionado-5": [
+      "beta-selecionado-5",
+      "selecionados_5",
+      "selecionado",
+      "selecionados",
+      "beta_selecionado",
+    ],
+    "beta-fundador-8": [
+      "beta-fundador-8",
+      "fundador_8",
+      "fundador",
+      "beta_fundador",
+    ],
+    "mensal-1099": [
+      "mensal-1099",
+      "normal_1099",
+      "mensal",
+      "normal",
+      "plano_mensal",
+    ],
+  };
+
+  const candidates = candidatesBySlug[slug] ?? [slug];
+  return candidates.includes(slug) ? candidates : [slug, ...candidates];
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -169,12 +261,35 @@ export const appRouter = router({
       const ativo = (profile as any)?.ativo;
 
       if (role === "admin" || role === "editor") {
-        return { accessState: "allowed", role, ativo: ativo ?? true, hasActiveSubscription: true } as const;
+        return {
+          accessState: "allowed",
+          role,
+          ativo: ativo ?? true,
+          hasActiveSubscription: true,
+          subscriptionStatus: "admin_override",
+          currentPeriodEnd: null,
+          planName: null,
+          blockReason: null,
+          source: "role",
+        } as const;
       }
 
       if (ativo === false) {
-        return { accessState: "blocked", role, ativo, hasActiveSubscription: false } as const;
+        return {
+          accessState: "blocked",
+          role,
+          ativo,
+          hasActiveSubscription: false,
+          subscriptionStatus: null,
+          currentPeriodEnd: null,
+          planName: null,
+          blockReason: "inactive_profile",
+          source: "profile",
+        } as const;
       }
+
+      const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
+      const latestSubscriptionDetails = flattenBillingSubscription(latestSubscription);
 
       const rpcResponse = await supabaseAdmin.rpc("user_has_active_subscription", {
         target_user_id: ctx.user.id,
@@ -186,6 +301,11 @@ export const appRouter = router({
           role,
           ativo: ativo ?? true,
           hasActiveSubscription: rpcResponse.data,
+          subscriptionStatus: latestSubscriptionDetails?.status ?? null,
+          currentPeriodEnd: latestSubscriptionDetails?.current_period_end ?? null,
+          planName: latestSubscriptionDetails?.plan_name ?? null,
+          blockReason: rpcResponse.data ? null : (latestSubscriptionDetails ? "expired_subscription" : "no_subscription"),
+          source: "rpc",
         } as const;
       }
 
@@ -207,6 +327,11 @@ export const appRouter = router({
         role,
         ativo: ativo ?? true,
         hasActiveSubscription: Boolean(subscription),
+        subscriptionStatus: latestSubscriptionDetails?.status ?? null,
+        currentPeriodEnd: latestSubscriptionDetails?.current_period_end ?? null,
+        planName: latestSubscriptionDetails?.plan_name ?? null,
+        blockReason: subscription ? null : (latestSubscriptionDetails ? "expired_subscription" : "no_subscription"),
+        source: "fallback",
       } as const;
     }),
 
@@ -217,6 +342,182 @@ export const appRouter = router({
       return {
         success: true,
       } as const;
+    }),
+  }),
+
+  billing: router({
+    listPublicPlans: publicProcedure.query(async () => {
+      const rpcResponse = await supabaseAdmin.rpc("get_public_billing_plans");
+
+      if (!rpcResponse.error && Array.isArray(rpcResponse.data) && rpcResponse.data.length > 0) {
+        return rpcResponse.data;
+      }
+
+      if (rpcResponse.error) {
+        console.warn("[billing.listPublicPlans] RPC get_public_billing_plans falhou:", rpcResponse.error);
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("billing_plans")
+        .select("id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions")
+        .eq("is_active", true)
+        .order("price_cents", { ascending: true });
+
+      if (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      }
+
+      return (data ?? []).map((plan: any) => ({
+        id: String(plan.id),
+        slug: plan.slug,
+        name: plan.name,
+        description: plan.description,
+        price_cents: plan.price_cents,
+        currency: plan.currency,
+        billing_cycle: plan.billing_cycle,
+        is_active: plan.is_active,
+        max_active_subscriptions: plan.max_active_subscriptions ?? null,
+        active_subscriptions_count: 0,
+        manual_review_count: 0,
+        used_slots: 0,
+        remaining_slots: plan.max_active_subscriptions ?? null,
+        has_available_slots: true,
+      }));
+    }),
+
+    requestManualSubscription: protectedProcedure
+      .input(z.object({ planSlug: z.string().min(1).max(120) }))
+      .mutation(async ({ ctx, input }) => {
+        const planSlug = input.planSlug.trim();
+        const planSlugCandidates = getBillingPlanSlugCandidates(planSlug);
+
+        const publicPlansResponse = await supabaseAdmin.rpc("get_public_billing_plans");
+        const publicPlans = !publicPlansResponse.error && Array.isArray(publicPlansResponse.data)
+          ? publicPlansResponse.data
+          : [];
+        const publicPlan = publicPlans.find((plan: any) => planSlugCandidates.includes(plan.slug));
+
+        if (publicPlan?.has_available_slots === false) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Este plano atingiu o limite de vagas disponível no momento.",
+          });
+        }
+
+        const { data: billingPlan, error: billingPlanError } = await supabaseAdmin
+          .from("billing_plans")
+          .select("id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions")
+          .in("slug", planSlugCandidates)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+
+        if (billingPlanError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: billingPlanError.message });
+        }
+
+        if (!billingPlan?.id) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `Plano não encontrado no banco. Slug enviado: ${planSlug}. Verifique os slugs em billing_plans.`,
+          });
+        }
+
+        const { data: existingSubscriptions, error: existingSubscriptionsError } = await supabaseAdmin
+          .from("billing_subscriptions")
+          .select("*")
+          .eq("user_id", ctx.user.id)
+          .in("status", ["manual_review", "active", "trialing"])
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (existingSubscriptionsError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: existingSubscriptionsError.message });
+        }
+
+        const existingSubscription = (existingSubscriptions ?? []).find(isBlockingBillingSubscription);
+
+        if (existingSubscription) {
+          return {
+            ...existingSubscription,
+            table_used: "billing_subscriptions",
+          };
+        }
+
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("id, nome, telefone, email, role, ativo")
+          .eq("id", ctx.user.id)
+          .maybeSingle();
+
+        const metadata = {
+          origin: "site_beta_manual_pix",
+          requestedAt: new Date().toISOString(),
+          frontendPlanSlug: planSlug,
+          databasePlanSlug: billingPlan.slug,
+          paymentMethod: "pix_manual",
+          plan: {
+            slug: planSlug,
+            dbSlug: billingPlan.slug,
+            name: billingPlan.name,
+            amountCents: billingPlan.price_cents,
+            currency: billingPlan.currency ?? "BRL",
+          },
+          customer: {
+            name: (profile as any)?.nome || ctx.user.email || "Aluno",
+            email: (profile as any)?.email || ctx.user.email || null,
+            phone: (profile as any)?.telefone || null,
+          },
+        };
+
+        const payload = {
+          user_id: ctx.user.id,
+          plan_id: billingPlan.id,
+          status: "manual_review",
+          gateway: "manual",
+          payment_url: null,
+          metadata,
+        };
+
+        const { data, error } = await supabaseAdmin
+          .from("billing_subscriptions")
+          .insert(payload)
+          .select("*")
+          .single();
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return {
+          ...(data as any),
+          table_used: "billing_subscriptions",
+        };
+      }),
+
+    getMyActiveSubscription: protectedProcedure.query(async ({ ctx }) => {
+      const now = new Date().toISOString();
+
+      const { data, error } = await supabaseAdmin
+        .from("billing_subscriptions")
+        .select("*")
+        .eq("user_id", ctx.user.id)
+        .in("status", ["active", "trialing"])
+        .or(`current_period_end.is.null,current_period_end.gte.${now}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      }
+
+      return data ?? null;
+    }),
+
+    getMyLatestSubscriptionRequest: protectedProcedure.query(async ({ ctx }) => {
+      const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
+      return flattenBillingSubscription(latestSubscription);
     }),
   }),
 

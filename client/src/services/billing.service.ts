@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { trpcClient } from "@/lib/trpcClient";
 
 export type BillingPlanSlug = string;
 
@@ -156,285 +156,29 @@ function mapPublicRowToPlan(row: PublicBillingPlanRow): BillingPlan {
 }
 
 export async function loadPublicBillingPlans(): Promise<BillingPlan[]> {
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    "get_public_billing_plans"
-  );
+  try {
+    const rows = await trpcClient.billing.listPublicPlans.query();
 
-  if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
-    return (rpcData as PublicBillingPlanRow[]).map(mapPublicRowToPlan);
+    if (Array.isArray(rows) && rows.length > 0) {
+      return (rows as PublicBillingPlanRow[]).map(mapPublicRowToPlan);
+    }
+  } catch (error) {
+    console.warn("Não foi possível carregar planos públicos via backend. Usando fallback local:", error);
   }
 
-  if (rpcError) {
-    console.warn("Não foi possível carregar planos públicos via RPC:", rpcError);
-  }
-
-  const { data, error } = await supabase
-    .from("billing_plans")
-    .select(
-      "id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions"
-    )
-    .eq("is_active", true)
-    .order("price_cents", { ascending: true });
-
-  if (error) {
-    console.warn("Não foi possível carregar billing_plans. Usando fallback local:", error);
-    return BILLING_PLANS;
-  }
-
-  if (!data || data.length === 0) {
-    return BILLING_PLANS;
-  }
-
-  return data.map((row: any) =>
-    mapPublicRowToPlan({
-      id: String(row.id),
-      slug: row.slug,
-      name: row.name,
-      description: row.description,
-      price_cents: row.price_cents,
-      currency: row.currency,
-      billing_cycle: row.billing_cycle,
-      is_active: row.is_active,
-      max_active_subscriptions: row.max_active_subscriptions ?? null,
-      active_subscriptions_count: 0,
-      manual_review_count: 0,
-      used_slots: 0,
-      remaining_slots: row.max_active_subscriptions ?? null,
-      has_available_slots: true,
-    })
-  );
-}
-
-async function getCurrentUserOrThrow() {
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-
-  if (sessionError) {
-    throw new Error(sessionError.message);
-  }
-
-  if (!session?.user) {
-    throw new Error("Você precisa estar logado para solicitar uma assinatura.");
-  }
-
-  return session.user;
-}
-
-async function getUserProfile(userId: string) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, nome, telefone, email, role, ativo")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.warn("Não foi possível buscar o perfil do usuário:", error);
-    return null;
-  }
-
-  return data;
-}
-
-async function findBillingPlan(planSlug: string) {
-  const localPlan = getBillingPlanBySlug(planSlug);
-  const candidates = localPlan?.dbSlugCandidates ?? [planSlug];
-
-  if (!candidates.includes(planSlug)) {
-    candidates.unshift(planSlug);
-  }
-
-  const { data, error } = await supabase
-    .from("billing_plans")
-    .select(
-      "id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions"
-    )
-    .in("slug", candidates)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.warn("Não foi possível buscar billing_plans pelo slug:", error);
-    return null;
-  }
-
-  return data;
-}
-
-async function findLatestUserBlockingSubscription(userId: string) {
-  const now = Date.now();
-
-  const { data, error } = await supabase
-    .from("billing_subscriptions")
-    .select("*")
-    .eq("user_id", userId)
-    .in("status", ["manual_review", "active", "trialing"])
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (error) {
-    console.warn("Não foi possível buscar assinatura existente:", error);
-    return null;
-  }
-
-  return (data ?? []).find((subscription: any) => {
-    if (subscription.status === "manual_review") return true;
-
-    if (!subscription.current_period_end) return true;
-
-    const end = new Date(subscription.current_period_end).getTime();
-    return Number.isFinite(end) && end >= now;
-  });
-}
-
-async function assertPlanHasAvailableSlots(planSlug: string) {
-  const publicPlans = await loadPublicBillingPlans().catch(() => []);
-  const publicPlan = publicPlans.find(
-    (plan) => plan.slug === planSlug || plan.dbSlugCandidates.includes(planSlug)
-  );
-
-  if (publicPlan && publicPlan.hasAvailableSlots === false) {
-    throw new Error("Este plano atingiu o limite de vagas disponível no momento.");
-  }
+  return BILLING_PLANS;
 }
 
 export async function requestManualSubscription(
   planSlug: string
 ): Promise<ManualSubscriptionRequestResult> {
-  const user = await getCurrentUserOrThrow();
-  const profile = await getUserProfile(user.id);
-
-  await assertPlanHasAvailableSlots(planSlug);
-
-  const billingPlan = await findBillingPlan(planSlug);
-
-  if (!billingPlan?.id) {
-    throw new Error(
-      `Plano não encontrado no banco. Slug enviado: ${planSlug}. Verifique os slugs em billing_plans.`
-    );
-  }
-
-  const existingSubscription = await findLatestUserBlockingSubscription(user.id);
-
-  if (existingSubscription) {
-    return {
-      ...(existingSubscription as ManualSubscriptionRequestResult),
-      table_used: "billing_subscriptions",
-    };
-  }
-
-  const customerName =
-    profile?.nome ||
-    user.user_metadata?.nome ||
-    user.user_metadata?.full_name ||
-    user.email ||
-    "Aluno";
-
-  const customerEmail = profile?.email || user.email || null;
-  const customerPhone = profile?.telefone || user.user_metadata?.telefone || null;
-
-  const metadata = {
-    origin: "site_beta_manual_pix",
-    requestedAt: new Date().toISOString(),
-    frontendPlanSlug: planSlug,
-    databasePlanSlug: billingPlan.slug,
-    paymentMethod: "pix_manual",
-    plan: {
-      slug: planSlug,
-      dbSlug: billingPlan.slug,
-      name: billingPlan.name,
-      amountCents: billingPlan.price_cents,
-      currency: billingPlan.currency ?? "BRL",
-      isBeta: isBetaPlan(billingPlan.slug),
-    },
-    customer: {
-      name: customerName,
-      email: customerEmail,
-      phone: customerPhone,
-    },
-  };
-
-  const payload = {
-    user_id: user.id,
-    plan_id: billingPlan.id,
-    status: "manual_review",
-    gateway: "manual",
-    payment_url: null,
-    metadata,
-  };
-
-  const { data, error } = await supabase
-    .from("billing_subscriptions")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error("Erro ao criar assinatura manual:", error);
-
-    throw new Error(
-      error.message ||
-        "Não foi possível registrar a solicitação de assinatura manual."
-    );
-  }
-
-  return {
-    ...(data as ManualSubscriptionRequestResult),
-    table_used: "billing_subscriptions",
-  };
+  return trpcClient.billing.requestManualSubscription.mutate({ planSlug });
 }
 
 export async function getMyActiveSubscription() {
-  const user = await getCurrentUserOrThrow();
-  const now = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from("billing_subscriptions")
-    .select("*")
-    .eq("user_id", user.id)
-    .in("status", ["active", "trialing"])
-    .or(`current_period_end.is.null,current_period_end.gte.${now}`)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.warn("Erro ao buscar assinatura ativa:", error);
-    return null;
-  }
-
-  return data;
+  return trpcClient.billing.getMyActiveSubscription.query();
 }
 
 export async function getMyLatestSubscriptionRequest() {
-  const user = await getCurrentUserOrThrow();
-
-  const { data, error } = await supabase
-    .from("billing_subscriptions")
-    .select(
-      `
-      *,
-      billing_plans (
-        id,
-        slug,
-        name,
-        price_cents,
-        currency,
-        billing_cycle
-      )
-    `
-    )
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.warn("Erro ao buscar solicitação de assinatura:", error);
-    return null;
-  }
-
-  return data;
+  return trpcClient.billing.getMyLatestSubscriptionRequest.query();
 }

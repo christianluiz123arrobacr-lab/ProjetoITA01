@@ -19,6 +19,7 @@ import {
 import PublicHeader from "@/components/layout/PublicHeader";
 import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { getMyLatestSubscriptionRequest } from "@/services/billing.service";
 
 const MANUAL_PIX = {
   key: "66997227099",
@@ -155,60 +156,15 @@ export default function SubscriptionPendingPage() {
       setErrorMessage("");
       setCopyMessage("");
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        setSubscription(null);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("billing_subscriptions")
-        .select(
-          `
-          id,
-          status,
-          gateway,
-          payment_url,
-          started_at,
-          current_period_start,
-          current_period_end,
-          next_due_date,
-          created_at,
-          billing_plans (
-            id,
-            slug,
-            name,
-            description,
-            price_cents
-          )
-        `
-        )
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Erro ao carregar assinatura:", error);
-        setErrorMessage("Não foi possível carregar sua assinatura.");
-        return;
-      }
+      const data = await getMyLatestSubscriptionRequest();
 
       if (!data) {
         setSubscription(null);
         return;
       }
 
-      const plan = Array.isArray(data.billing_plans)
-        ? data.billing_plans[0]
-        : data.billing_plans;
-
       setSubscription({
-        subscription_id: data.id,
+        subscription_id: data.subscription_id,
         status: data.status,
         gateway: data.gateway,
         payment_url: data.payment_url,
@@ -217,11 +173,11 @@ export default function SubscriptionPendingPage() {
         current_period_end: data.current_period_end,
         next_due_date: data.next_due_date,
         created_at: data.created_at,
-        plan_id: plan?.id || "",
-        plan_slug: plan?.slug || "",
-        plan_name: plan?.name || "Plano da plataforma",
-        plan_description: plan?.description || null,
-        plan_price_cents: Number(plan?.price_cents || 0),
+        plan_id: data.plan_id || "",
+        plan_slug: data.plan_slug || "",
+        plan_name: data.plan_name || "Plano da plataforma",
+        plan_description: data.plan_description || null,
+        plan_price_cents: Number(data.plan_price_cents || 0),
       });
     } catch (error) {
       console.error("Erro inesperado ao carregar assinatura:", error);
