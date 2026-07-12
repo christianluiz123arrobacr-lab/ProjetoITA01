@@ -521,6 +521,87 @@ export const appRouter = router({
     }),
   }),
 
+  contentPages: router({
+    getBySlug: publicProcedure
+      .input(z.object({ slug: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("content_pages")
+          .select("*")
+          .eq("slug", input.slug)
+          .eq("is_published", true)
+          .maybeSingle();
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        if (!data) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Página de conteúdo não encontrada.",
+          });
+        }
+
+        return data;
+      }),
+
+    getBlocksByPageId: publicProcedure
+      .input(z.object({ pageId: z.string().uuid() }))
+      .query(async ({ input }) => {
+        const { data, error } = await supabaseAdmin
+          .from("content_blocks")
+          .select("*")
+          .eq("page_id", input.pageId)
+          .eq("is_visible", true)
+          .order("order_index", { ascending: true });
+
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+
+        return data ?? [];
+      }),
+
+    getWithBlocks: publicProcedure
+      .input(z.object({ slug: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const { data: page, error: pageError } = await supabaseAdmin
+          .from("content_pages")
+          .select("*")
+          .eq("slug", input.slug)
+          .eq("is_published", true)
+          .maybeSingle();
+
+        if (pageError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: pageError.message });
+        }
+
+        if (!page) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Página de conteúdo não encontrada.",
+          });
+        }
+
+        const { data: blocks, error: blocksError } = await supabaseAdmin
+          .from("content_blocks")
+          .select("*")
+          .eq("page_id", page.id)
+          .eq("is_visible", true)
+          .order("order_index", { ascending: true });
+
+        if (blocksError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: blocksError.message });
+        }
+
+        return {
+          page,
+          blocks: blocks ?? [],
+        };
+      }),
+  }),
+
   questions: router({
     list: publicProcedure
       .input(
