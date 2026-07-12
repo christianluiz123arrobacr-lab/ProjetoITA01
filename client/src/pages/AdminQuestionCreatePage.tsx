@@ -306,6 +306,14 @@ function normalizeResolutionBlockType(value: string, urlImagem: string): "texto"
 }
 
 function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
+  const directBlocksValue = readJsonValue(record, [
+    "resolucao_blocos",
+    "resolução_blocos",
+    "blocos_resolucao",
+    "blocos_resolução",
+    "resolution_blocks",
+    "resolutionBlocks",
+  ]);
   const resolutionValue = readJsonValue(record, [
     "resolucao",
     "resolução",
@@ -313,7 +321,9 @@ function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
     "resolucoes",
     "resoluções",
   ]);
-  const blocksValue = isJsonRecord(resolutionValue)
+  const blocksValue = Array.isArray(directBlocksValue)
+    ? directBlocksValue
+    : isJsonRecord(resolutionValue)
     ? readJsonValue(resolutionValue, ["blocos", "blocks", "passos", "steps"])
     : resolutionValue;
 
@@ -1469,7 +1479,10 @@ export default function AdminQuestionCreatePage() {
                 <h2 className="text-xl font-bold text-slate-900">Importar questão por JSON</h2>
               </div>
               <p className="text-sm text-slate-500 leading-relaxed">
-                Cole o JSON antigo da questão para preencher automaticamente o formulário. Depois revise a prévia e salve normalmente pelo backend.
+                Cole o JSON antigo da questão para preencher automaticamente o formulário. A resolução pode vir em
+                <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">resolucao_blocos</code>
+                ou em <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">resolucao.blocos</code>.
+                Depois revise a prévia e salve normalmente pelo backend.
               </p>
             </div>
 
