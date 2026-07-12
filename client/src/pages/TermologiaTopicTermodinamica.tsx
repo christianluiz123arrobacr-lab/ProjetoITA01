@@ -281,7 +281,7 @@ export default function TermologiaTopicTermodinamica() {
 
         {/* ===== EXERCÍCIOS INTERATIVOS ===== */}
         <div className="my-8">
-          <InteractiveQuiz />
+          <InteractiveQuiz questions={[]} />
         </div>
 
         {/* ===== RESUMO RÁPIDO ===== */}

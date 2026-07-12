@@ -1571,6 +1571,13 @@ export default function AdminMolecularGeometryPrototypePage() {
       : "Como não há pares livres no átomo central, a geometria molecular coincide com a organização das regiões ligantes."
   }`;
 
+  const centralRenderObject: RenderObject = {
+    type: "central",
+    key: "central",
+    z: centralPoint.z,
+    point: centralPoint,
+  };
+
   const renderObjects: RenderObject[] = [
     ...projectedAtoms.map((item): RenderObject => {
       return {
@@ -1592,12 +1599,7 @@ export default function AdminMolecularGeometryPrototypePage() {
           };
         })
       : []),
-    {
-      type: "central",
-      key: "central",
-      z: centralPoint.z,
-      point: centralPoint,
-    },
+    centralRenderObject,
   ].sort((a, b) => a.z - b.z);
 
   function resetRotation() {

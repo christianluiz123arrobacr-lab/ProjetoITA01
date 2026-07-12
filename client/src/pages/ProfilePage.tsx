@@ -335,11 +335,15 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
   const prevAvgTime = getAverageTime(previousAttempts);
 
   const uniqueConteudos = new Set(
-    currentAttempts.map((a) => a.conteudo?.trim()).filter(Boolean)
+    currentAttempts
+      .map((a) => a.conteudo?.trim())
+      .filter((conteudo): conteudo is string => Boolean(conteudo))
   ).size;
 
   const prevUniqueConteudos = new Set(
-    previousAttempts.map((a) => a.conteudo?.trim()).filter(Boolean)
+    previousAttempts
+      .map((a) => a.conteudo?.trim())
+      .filter((conteudo): conteudo is string => Boolean(conteudo))
   ).size;
 
   const difficultyWeights = currentAttempts
@@ -359,8 +363,8 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
 
   const difficultyScore =
     maxDifficultyWeights.length > 0
-      ? (difficultyWeights.reduce((a, b) => a + b, 0) /
-          maxDifficultyWeights.reduce((a, b) => a + b, 0)) *
+      ? (difficultyWeights.reduce((a: number, b: number) => a + b, 0) /
+          maxDifficultyWeights.reduce((a: number, b: number) => a + b, 0)) *
         100
       : 0;
 
@@ -381,8 +385,8 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
 
   const prevDifficultyScore =
     prevMaxDifficultyWeights.length > 0
-      ? (prevDifficultyWeights.reduce((a, b) => a + b, 0) /
-          prevMaxDifficultyWeights.reduce((a, b) => a + b, 0)) *
+      ? (prevDifficultyWeights.reduce((a: number, b: number) => a + b, 0) /
+          prevMaxDifficultyWeights.reduce((a: number, b: number) => a + b, 0)) *
         100
       : 0;
 
@@ -639,7 +643,7 @@ function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
 
   const rows: RankingEntry[] = [];
 
-  for (const [userId, userAttempts] of byUser.entries()) {
+  for (const [userId, userAttempts] of Array.from(byUser.entries())) {
     const profile = profilesMap.get(userId);
     if (!profile) continue;
 
@@ -669,7 +673,7 @@ function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
     let mediumCorrect = 0;
     let hardCorrect = 0;
 
-    for (const attempt of uniqueCorrectByQuestion.values()) {
+    for (const attempt of Array.from(uniqueCorrectByQuestion.values())) {
       const bucket = getDifficultyBucket(attempt.difficulty);
       const points = getDifficultyPoints(attempt.difficulty);
 

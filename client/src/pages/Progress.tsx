@@ -500,7 +500,7 @@ function buildEvolutionRows(
   const currentMap = new Map(currentStats.map((item) => [item.label, item]));
   const previousMap = new Map(previousStats.map((item) => [item.label, item]));
 
-  const labels = Array.from(new Set([...currentMap.keys(), ...previousMap.keys()]));
+  const labels = Array.from(new Set([...Array.from(currentMap.keys()), ...Array.from(previousMap.keys())]));
 
   return labels
     .map((label) => {
