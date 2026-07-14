@@ -674,7 +674,7 @@ export const appRouter = router({
         `);
 
         if (input?.subject) {
-          query = query.or(`disciplina.eq.${input.subject},diciplina.eq.${input.subject}`);
+          query = query.eq("disciplina", input.subject);
         }
 
         if (input?.exam) {
@@ -1004,7 +1004,7 @@ export const appRouter = router({
         supabaseAdmin
           .from("questoes")
           .select(
-            "id,codigo,enunciado,disciplina,diciplina,conteudo,assunto,banca,ano,created_at"
+            "id,codigo,enunciado,disciplina,conteudo,assunto,banca,ano,created_at"
           )
           .order("created_at", { ascending: false }),
         supabaseAdmin.from("resolucoes").select("id,questao_id,tipo,url_imagem"),
@@ -2251,7 +2251,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { data: question, error: questionError } = await supabaseAdmin
           .from("questoes")
-          .select("id, codigo, disciplina, diciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição")
+          .select("id, codigo, disciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição")
           .eq("id", input.id)
           .maybeSingle();
 
@@ -2302,7 +2302,7 @@ export const appRouter = router({
         questionIds.length > 0
           ? supabaseAdmin
               .from("questoes")
-              .select("id, codigo, disciplina, diciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição, enunciado")
+              .select("id, codigo, disciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição, enunciado")
               .in("id", questionIds)
           : Promise.resolve({ data: [], error: null }),
         userIds.length > 0
@@ -2368,7 +2368,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { data: question, error: questionError } = await supabaseAdmin
           .from("questoes")
-          .select("id, codigo, disciplina, diciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição")
+          .select("id, codigo, disciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição")
           .eq("id", input.id)
           .maybeSingle();
 
