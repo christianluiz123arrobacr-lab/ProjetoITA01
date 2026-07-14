@@ -8,6 +8,13 @@ import { adminOrEditorProcedure, adminProcedure, protectedProcedure, publicProce
 import { invokeLLM } from "./_core/llm.js";
 import { assertRateLimit, assertRequestRateLimit } from "./_core/rateLimit.js";
 import { supabaseAdmin } from "./_core/supabaseAdmin.js";
+import {
+  buildQuestionInsertPayload,
+  getQuestionImportSourceId,
+  questionImportPayloadSchema,
+  validateQuestionImportItem,
+  type ImportResultStatus,
+} from "../shared/questionImportSchema.js";
 
 const resolutionBlockInputSchema = z.object({
   id: z.string().uuid().optional(),
@@ -1756,6 +1763,150 @@ export const appRouter = router({
         });
 
         return { id: data.id } as const;
+      }),
+
+    importQuestionBatch: adminProcedure
+      .input(questionImportPayloadSchema)
+      .mutation(async ({ ctx, input }) => {
+        const startedAt = Date.now();
+        const results: Array<{
+          index: number;
+          importSourceId: string;
+          status: ImportResultStatus;
+          questionId: string | null;
+          codigo: string | null;
+          resolutionBlocksSaved: number;
+          message: string;
+        }> = [];
+
+        for (const question of input.questions) {
+          const preview = validateQuestionImportItem(question);
+          const importSourceId = getQuestionImportSourceId(question);
+
+          if (preview.status === "invalida") {
+            results.push({
+              index: question.raw_index,
+              importSourceId,
+              status: "falhou",
+              questionId: null,
+              codigo: question.codigo,
+              resolutionBlocksSaved: 0,
+              message: preview.errors.join(" ") || "Questão inválida.",
+            });
+            continue;
+          }
+
+          try {
+            const duplicateResult = await supabaseAdmin
+              .from("questoes")
+              .select("id, codigo")
+              .eq("import_source_id", importSourceId)
+              .maybeSingle();
+
+            if (duplicateResult.error) {
+              throw new Error(
+                duplicateResult.error.message.includes("import_source_id")
+                  ? "A migration de importação em lote ainda não foi aplicada no Supabase. Rode o SQL criado neste PR antes de importar."
+                  : "Não foi possível verificar duplicidade da questão."
+              );
+            }
+
+            if (duplicateResult.data?.id) {
+              results.push({
+                index: question.raw_index,
+                importSourceId,
+                status: "duplicada",
+                questionId: duplicateResult.data.id,
+                codigo: (duplicateResult.data as any).codigo ?? question.codigo,
+                resolutionBlocksSaved: 0,
+                message: "Questão já importada anteriormente.",
+              });
+              continue;
+            }
+
+            const payload = buildQuestionInsertPayload(question, input.batchId, ctx.user.id);
+            const { data, error } = await supabaseAdmin
+              .from("questoes")
+              .insert([payload])
+              .select("id, codigo")
+              .single();
+
+            if (error || !data?.id) {
+              throw new Error(error?.message.includes("import_source_id")
+                ? "A migration de importação em lote ainda não foi aplicada no Supabase. Rode o SQL criado neste PR antes de importar."
+                : "Não foi possível criar a questão.");
+            }
+
+            const resolutionPayload = question.resolucao_blocos.map((block) =>
+              normalizeResolutionBlockPayload(data.id, block)
+            );
+            const resolutionResult = await supabaseAdmin
+              .from("resolucoes")
+              .insert(resolutionPayload)
+              .select("id");
+
+            if (resolutionResult.error || !resolutionResult.data) {
+              await supabaseAdmin.from("resolucoes_meta").delete().eq("questao_id", data.id);
+              await supabaseAdmin.from("resolucoes").delete().eq("questao_id", data.id);
+              await supabaseAdmin.from("questoes").delete().eq("id", data.id);
+              throw new Error("Questão criada, mas a resolução falhou; a questão foi revertida.");
+            }
+
+            results.push({
+              index: question.raw_index,
+              importSourceId,
+              status: "criada",
+              questionId: data.id,
+              codigo: (data as any).codigo ?? question.codigo,
+              resolutionBlocksSaved: resolutionResult.data.length,
+              message: "Questão e resolução importadas com sucesso.",
+            });
+          } catch (error) {
+            results.push({
+              index: question.raw_index,
+              importSourceId,
+              status: "falhou",
+              questionId: null,
+              codigo: question.codigo,
+              resolutionBlocksSaved: 0,
+              message: error instanceof Error ? error.message : "Falha inesperada ao importar a questão.",
+            });
+          }
+        }
+
+        const createdCount = results.filter((result) => result.status === "criada").length;
+        const duplicatedCount = results.filter((result) => result.status === "duplicada").length;
+        const failedCount = results.filter((result) => result.status === "falhou").length;
+        const resolutionBlocksSaved = results.reduce((sum, result) => sum + result.resolutionBlocksSaved, 0);
+        const durationMs = Date.now() - startedAt;
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "question_batch_imported",
+          entity_type: "question_import_batch",
+          entity_id: input.batchId,
+          description: `Importação em lote: ${createdCount} criada(s), ${duplicatedCount} duplicada(s), ${failedCount} falha(s)`,
+          level: failedCount > 0 ? "warning" : "info",
+          metadata: {
+            batchId: input.batchId,
+            receivedCount: input.questions.length,
+            createdCount,
+            duplicatedCount,
+            failedCount,
+            resolutionBlocksSaved,
+            durationMs,
+          },
+        });
+
+        return {
+          batchId: input.batchId,
+          createdCount,
+          duplicatedCount,
+          failedCount,
+          resolutionBlocksSaved,
+          durationMs,
+          results,
+        } as const;
       }),
 
     createAdminImageUpload: adminOrEditorProcedure

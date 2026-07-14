@@ -8,6 +8,7 @@ import AdminGuard from "@/components/admin/AdminGuard";
 import {
   Search,
   Plus,
+  FileJson,
   Loader2,
   AlertTriangle,
   Pencil,
@@ -360,6 +361,13 @@ export default function AdminQuestionsPage() {
                   className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
+
+              <Link href="/admin/questoes/importar-lote">
+                <Button variant="outline" className="rounded-2xl w-full sm:w-auto">
+                  <FileJson className="w-4 h-4 mr-2" />
+                  Importar lote JSON
+                </Button>
+              </Link>
 
               <Link href="/admin/questoes/nova">
                 <Button className="rounded-2xl w-full sm:w-auto">

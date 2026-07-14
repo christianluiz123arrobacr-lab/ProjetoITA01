@@ -28,6 +28,7 @@ import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminBillingPage from "./pages/AdminBillingPage";
 import AdminQuestionsPage from "./pages/AdminQuestionsPage";
 import AdminQuestionCreatePage from "./pages/AdminQuestionCreatePage";
+import AdminQuestionBatchImportPage from "./pages/AdminQuestionBatchImportPage";
 import AdminQuestionEditPage from "./pages/AdminQuestionEditPage";
 import AdminQuestionReportsPage from "./pages/AdminQuestionReportsPage";
 import AdminResolutionsPage from "./pages/AdminResolutionsPage";
@@ -285,6 +286,7 @@ function PrivateRouter() {
 
         <Route path="/admin/questoes" component={AdminQuestionsPage} />
         <Route path="/admin/questoes/nova" component={AdminQuestionCreatePage} />
+        <Route path="/admin/questoes/importar-lote" component={AdminQuestionBatchImportPage} />
 
         <Route path="/admin/reports" component={AdminQuestionReportsPage} />
         <Route
