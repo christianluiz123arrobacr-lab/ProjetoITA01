@@ -131,10 +131,21 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function normalizeJsonKey(value: string) {
+  return normalizeSearch(value).replace(/[^a-z0-9]+/g, "");
+}
+
 function read(record: JsonRecord, keys: string[]) {
   for (const key of keys) {
     if (Object.prototype.hasOwnProperty.call(record, key)) return record[key];
   }
+
+  const normalizedKeys = new Set(keys.map(normalizeJsonKey));
+
+  for (const [recordKey, value] of Object.entries(record)) {
+    if (normalizedKeys.has(normalizeJsonKey(recordKey))) return value;
+  }
+
   return undefined;
 }
 
@@ -335,9 +346,22 @@ function normalizeQuestion(record: JsonRecord, rawIndex: number): { item: Normal
     conteudos,
     assuntos,
     assuntos_por_conteudo: normalizedGroups,
-    banca: nullable(readString(record, ["banca", "examBoard"])),
+    banca: nullable(readString(record, ["banca", "examBoard", "exam_board", "board"])),
     ano,
-    instituição: nullable(readString(record, ["instituição", "instituicao", "institution"])),
+    instituição: nullable(readString(record, [
+      "instituição",
+      "instituicao",
+      "institution",
+      "instituicao_prova",
+      "instituição_prova",
+      "instituicao_nome",
+      "instituição_nome",
+      "instituicoes",
+      "instituições",
+      "institutions",
+      "escola",
+      "prova",
+    ])),
     publicada: readBoolean(record, ["publicada", "published"], true),
     enunciado: readString(record, ["enunciado", "statement", "pergunta"]).trim(),
     enunciado_pos_imagem: nullable(readString(record, ["enunciado_pos_imagem", "enunciadoPosImagem", "postImageStatement"])),
@@ -460,6 +484,8 @@ export function summarizeQuestionImport(items: QuestionImportPreviewItem[]): Que
 }
 
 export function buildQuestionInsertPayload(question: NormalizedQuestionImportItem, importBatchId: string, importedBy: string) {
+  const currentYear = new Date().getFullYear();
+
   return {
     codigo: question.codigo,
     disciplina: question.disciplina,
@@ -468,10 +494,10 @@ export function buildQuestionInsertPayload(question: NormalizedQuestionImportIte
     assunto: first(question.assuntos),
     assuntos: question.assuntos,
     assuntos_por_conteudo: question.assuntos_por_conteudo,
-    banca: question.banca,
-    ano: question.ano,
+    banca: question.banca ?? "Não informada",
+    ano: question.ano ?? currentYear,
     dificuldade: question.dificuldade,
-    instituição: question.instituição,
+    instituição: question.instituição ?? "Não informada",
     publicada: question.publicada,
     enunciado: question.enunciado,
     enunciado_pos_imagem: question.enunciado_pos_imagem,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseQuestionImportPayload, validateQuestionImportItem } from "../shared/questionImportSchema";
+import {
+  buildQuestionInsertPayload,
+  parseQuestionImportPayload,
+  validateQuestionImportItem,
+} from "../shared/questionImportSchema";
 
 const validQuestion = {
   id_importacao: "questao-001",
@@ -63,5 +67,31 @@ describe("questionImportSchema", () => {
   it("revalida item normalizado no backend", () => {
     const item = parseQuestionImportPayload(validQuestion).questoes[0].item;
     expect(validateQuestionImportItem(item).status).toBe("valida");
+  });
+
+  it("lê instituição, banca e ano mesmo com variações de maiúsculas e acentos", () => {
+    const batch = parseQuestionImportPayload({
+      ...validQuestion,
+      Instituicao: "ITA",
+      BANCA: "ITA",
+      Ano: 2026,
+    });
+
+    expect(batch.questoes[0].item.instituição).toBe("ITA");
+    expect(batch.questoes[0].item.banca).toBe("ITA");
+    expect(batch.questoes[0].item.ano).toBe(2026);
+  });
+
+  it("usa fallback seguro para campos not-null do banco quando o JSON não informa banca, ano ou instituição", () => {
+    const item = parseQuestionImportPayload(validQuestion).questoes[0].item;
+    const payload = buildQuestionInsertPayload(
+      { ...item, banca: null, ano: null, instituição: null },
+      "batch-test",
+      "00000000-0000-0000-0000-000000000000"
+    );
+
+    expect(payload.banca).toBe("Não informada");
+    expect(payload.instituição).toBe("Não informada");
+    expect(typeof payload.ano).toBe("number");
   });
 });
