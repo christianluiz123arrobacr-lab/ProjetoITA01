@@ -67,6 +67,51 @@ function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeo
   };
 }
 
+async function saveImportedResolutionBlocks(questionId: string, blocks: z.infer<typeof resolutionBlockInputSchema>[]) {
+  if (blocks.length === 0) return 0;
+
+  const resolutionPayload = blocks.map((block) =>
+    normalizeResolutionBlockPayload(questionId, block)
+  );
+
+  const { data, error } = await supabaseAdmin
+    .from("resolucoes")
+    .insert(resolutionPayload)
+    .select("id");
+
+  if (error || !data) {
+    throw new Error("Não foi possível salvar os blocos de resolução da questão.");
+  }
+
+  const { count, error: countError } = await supabaseAdmin
+    .from("resolucoes")
+    .select("id", { count: "exact", head: true })
+    .eq("questao_id", questionId);
+
+  if (countError) {
+    throw new Error("Não foi possível confirmar o salvamento da resolução.");
+  }
+
+  if ((count ?? 0) < blocks.length) {
+    throw new Error("A resolução foi enviada, mas nem todos os blocos ficaram disponíveis para a questão.");
+  }
+
+  return data.length;
+}
+
+async function getResolutionBlocksCount(questionId: string) {
+  const { count, error } = await supabaseAdmin
+    .from("resolucoes")
+    .select("id", { count: "exact", head: true })
+    .eq("questao_id", questionId);
+
+  if (error) {
+    throw new Error("Não foi possível verificar os blocos de resolução existentes.");
+  }
+
+  return count ?? 0;
+}
+
 function addMonthsIso(baseDate: Date, months: number) {
   const next = new Date(baseDate);
   next.setMonth(next.getMonth() + months);
@@ -1812,14 +1857,27 @@ export const appRouter = router({
             }
 
             if (duplicateResult.data?.id) {
+              const existingResolutionBlocks = await getResolutionBlocksCount(duplicateResult.data.id);
+              let repairedResolutionBlocks = 0;
+              let duplicateMessage = "Questão já importada anteriormente.";
+
+              if (existingResolutionBlocks === 0 && question.resolucao_blocos.length > 0) {
+                repairedResolutionBlocks = await saveImportedResolutionBlocks(
+                  duplicateResult.data.id,
+                  question.resolucao_blocos
+                );
+                duplicateMessage =
+                  "Questão já importada anteriormente; blocos de resolução ausentes foram salvos agora.";
+              }
+
               results.push({
                 index: question.raw_index,
                 importSourceId,
                 status: "duplicada",
                 questionId: duplicateResult.data.id,
                 codigo: (duplicateResult.data as any).codigo ?? question.codigo,
-                resolutionBlocksSaved: 0,
-                message: "Questão já importada anteriormente.",
+                resolutionBlocksSaved: repairedResolutionBlocks,
+                message: duplicateMessage,
               });
               continue;
             }
@@ -1837,19 +1895,19 @@ export const appRouter = router({
                 : "Não foi possível criar a questão.");
             }
 
-            const resolutionPayload = question.resolucao_blocos.map((block) =>
-              normalizeResolutionBlockPayload(data.id, block)
-            );
-            const resolutionResult = await supabaseAdmin
-              .from("resolucoes")
-              .insert(resolutionPayload)
-              .select("id");
+            let resolutionBlocksSaved = 0;
 
-            if (resolutionResult.error || !resolutionResult.data) {
+            try {
+              resolutionBlocksSaved = await saveImportedResolutionBlocks(data.id, question.resolucao_blocos);
+            } catch (resolutionError) {
               await supabaseAdmin.from("resolucoes_meta").delete().eq("questao_id", data.id);
               await supabaseAdmin.from("resolucoes").delete().eq("questao_id", data.id);
               await supabaseAdmin.from("questoes").delete().eq("id", data.id);
-              throw new Error("Questão criada, mas a resolução falhou; a questão foi revertida.");
+              throw new Error(
+                resolutionError instanceof Error
+                  ? `${resolutionError.message} A questão foi revertida para não ficar sem resolução.`
+                  : "Questão criada, mas a resolução falhou; a questão foi revertida."
+              );
             }
 
             results.push({
@@ -1858,7 +1916,7 @@ export const appRouter = router({
               status: "criada",
               questionId: data.id,
               codigo: (data as any).codigo ?? question.codigo,
-              resolutionBlocksSaved: resolutionResult.data.length,
+              resolutionBlocksSaved,
               message: "Questão e resolução importadas com sucesso.",
             });
           } catch (error) {
