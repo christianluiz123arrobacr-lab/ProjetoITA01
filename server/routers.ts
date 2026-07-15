@@ -112,6 +112,55 @@ async function getResolutionBlocksCount(questionId: string) {
   return count ?? 0;
 }
 
+type ResolutionSummaryRow = {
+  questao_id: string;
+  totalBlocks: number;
+  totalImages: number;
+};
+
+async function loadAllResolutionSummaries() {
+  const pageSize = 1000;
+  const summaries = new Map<string, ResolutionSummaryRow>();
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("resolucoes")
+      .select("questao_id, tipo, url_imagem")
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+    }
+
+    for (const item of data ?? []) {
+      const questionId = (item as any).questao_id;
+
+      if (!questionId) continue;
+
+      const current = summaries.get(questionId) ?? {
+        questao_id: questionId,
+        totalBlocks: 0,
+        totalImages: 0,
+      };
+
+      current.totalBlocks += 1;
+
+      if (
+        String((item as any).tipo ?? "").toLowerCase().trim() === "imagem" ||
+        Boolean((item as any).url_imagem)
+      ) {
+        current.totalImages += 1;
+      }
+
+      summaries.set(questionId, current);
+    }
+
+    if (!data || data.length < pageSize) break;
+  }
+
+  return Array.from(summaries.values());
+}
+
 function addMonthsIso(baseDate: Date, months: number) {
   const next = new Date(baseDate);
   next.setMonth(next.getMonth() + months);
@@ -1756,27 +1805,22 @@ export const appRouter = router({
 
 
     listQuestions: adminOrEditorProcedure.query(async () => {
-      const [questionsResult, resolutionsResult] = await Promise.all([
+      const [questionsResult, resolutionSummaries] = await Promise.all([
         supabaseAdmin
           .from("questoes")
           .select("*")
           .order("created_at", { ascending: false }),
-        supabaseAdmin
-          .from("resolucoes")
-          .select("id, questao_id, tipo, url_imagem"),
+        loadAllResolutionSummaries(),
       ]);
 
       if (questionsResult.error) {
         throw new TRPCError({ code: "BAD_REQUEST", message: questionsResult.error.message });
       }
 
-      if (resolutionsResult.error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: resolutionsResult.error.message });
-      }
-
       return {
         questions: questionsResult.data ?? [],
-        resolutions: resolutionsResult.data ?? [],
+        resolutions: [],
+        resolutionSummaries,
       };
     }),
 

@@ -50,6 +50,10 @@ type ResolutionSummary = {
   totalImages: number;
 };
 
+type ResolutionSummaryRow = ResolutionSummary & {
+  questao_id: string;
+};
+
 type PublishFilter = "todas" | "publicadas" | "nao_publicadas";
 
 function normalizarDisciplina(row: AdminQuestionRow) {
@@ -136,6 +140,7 @@ export default function AdminQuestionsPage() {
 
   const [questions, setQuestions] = useState<AdminQuestionRow[]>([]);
   const [resolutions, setResolutions] = useState<ResolutionRow[]>([]);
+  const [resolutionSummaries, setResolutionSummaries] = useState<ResolutionSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
@@ -161,11 +166,23 @@ export default function AdminQuestionsPage() {
       setError("");
       setQuestions((listQuestionsQuery.data.questions as AdminQuestionRow[]) || []);
       setResolutions((listQuestionsQuery.data.resolutions as ResolutionRow[]) || []);
+      setResolutionSummaries(
+        ((listQuestionsQuery.data as any).resolutionSummaries as ResolutionSummaryRow[]) || []
+      );
     }
   }, [listQuestionsQuery.data, listQuestionsQuery.error, listQuestionsQuery.isFetching, listQuestionsQuery.isLoading]);
 
   const resolutionMap = useMemo(() => {
     const map = new Map<string, ResolutionSummary>();
+
+    for (const summary of resolutionSummaries) {
+      map.set(summary.questao_id, {
+        totalBlocks: summary.totalBlocks,
+        totalImages: summary.totalImages,
+      });
+    }
+
+    if (map.size > 0) return map;
 
     for (const item of resolutions) {
       const current = map.get(item.questao_id) || {
@@ -186,7 +203,7 @@ export default function AdminQuestionsPage() {
     }
 
     return map;
-  }, [resolutions]);
+  }, [resolutionSummaries, resolutions]);
 
   const disciplinasDisponiveis = useMemo(() => {
     return Array.from(new Set(questions.map((q) => normalizarDisciplina(q)).filter(Boolean)))
