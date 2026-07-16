@@ -131,7 +131,6 @@ export default function SubscriptionPendingPage() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    localStorage.removeItem("supabase_access_token");
     navigate("/");
   }
 

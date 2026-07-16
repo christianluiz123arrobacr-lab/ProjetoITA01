@@ -17,15 +17,6 @@ export function useSupabaseAuth() {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
 
-      if (currentSession?.access_token) {
-        localStorage.setItem(
-          "supabase_access_token",
-          currentSession.access_token
-        );
-      } else {
-        localStorage.removeItem("supabase_access_token");
-      }
-
       setLoading(false);
     });
 
@@ -34,15 +25,6 @@ export function useSupabaseAuth() {
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession ?? null);
       setUser(newSession?.user ?? null);
-
-      if (newSession?.access_token) {
-        localStorage.setItem(
-          "supabase_access_token",
-          newSession.access_token
-        );
-      } else {
-        localStorage.removeItem("supabase_access_token");
-      }
 
       setLoading(false);
     });
@@ -55,7 +37,6 @@ export function useSupabaseAuth() {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem("supabase_access_token");
   }, []);
 
   return {
