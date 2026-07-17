@@ -82,6 +82,13 @@ import CinematicaTopicQuedaLivre from "./pages/CinematicaTopicQuedaLivre";
 const Progress = lazy(() => import("./pages/Progress"));
 const IAResolver = lazy(() => import("./pages/IAResolver"));
 const QuestionBank = lazy(() => import("./pages/QuestionBankPage"));
+const SimulatorsPage = lazy(() => import("./pages/SimulatorsPage"));
+const SpatialGeometrySimulatorPage = lazy(
+  () => import("./pages/SpatialGeometrySimulatorPage")
+);
+const MolecularGeometrySimulatorPage = lazy(
+  () => import("./pages/MolecularGeometrySimulatorPage")
+);
 
 import ProfilePage from "./pages/ProfilePage";
 import PublicProfilePage from "./pages/PublicProfilePage";
@@ -364,6 +371,17 @@ function PrivateRouter() {
             {/* Banco de questões */}
             <Route path="/banco-questoes" component={QuestionBank} />
             <Route path="/banco-de-questoes" component={QuestionBank} />
+
+            {/* Central de simuladores */}
+            <Route path="/simuladores" component={SimulatorsPage} />
+            <Route
+              path="/simuladores/geometria-espacial"
+              component={SpatialGeometrySimulatorPage}
+            />
+            <Route
+              path="/simuladores/geometria-molecular"
+              component={MolecularGeometrySimulatorPage}
+            />
 
             {/* Perfil, assinatura, ranking e caderno de erros */}
             <Route path="/perfil" component={ProfilePage} />
