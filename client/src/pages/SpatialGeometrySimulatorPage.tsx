@@ -37,7 +37,7 @@ export default function SpatialGeometrySimulatorPage() {
           </Link>
         </header>
 
-        <SpatialGeometrySimulator />
+        <SpatialGeometrySimulator initialFullscreen={false} />
       </div>
     </main>
   );

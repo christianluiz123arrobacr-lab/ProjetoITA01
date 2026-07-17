@@ -3058,7 +3058,13 @@ function renderMeasurementOverlay({
   });
 }
 
-export function SpatialGeometrySimulator() {
+type SpatialGeometrySimulatorProps = {
+  initialFullscreen?: boolean;
+};
+
+export function SpatialGeometrySimulator({
+  initialFullscreen = true,
+}: SpatialGeometrySimulatorProps) {
   const visualRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const menuDragStateRef = useRef<MenuDragState | null>(null);
@@ -3105,7 +3111,7 @@ export function SpatialGeometrySimulator() {
   const [showAxes, setShowAxes] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [showCenter, setShowCenter] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
   const [floatingMenu, setFloatingMenu] = useState<FloatingMenu | null>(null);
   const [fullscreenMenuSection, setFullscreenMenuSection] =
     useState<FullscreenMenuSection>(null);
