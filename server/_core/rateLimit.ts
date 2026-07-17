@@ -1,13 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import { TRPCError } from "@trpc/server";
 
-type RateLimitBucket = {
-  count: number;
-  resetAt: number;
-};
-
-const buckets = new Map<string, RateLimitBucket>();
-
 export type RateLimitOptions = {
   key: string;
   limit: number;
@@ -34,34 +27,44 @@ export function getClientIp(req: IncomingMessage) {
   return req.socket.remoteAddress ?? "unknown";
 }
 
-export function assertRateLimit({ key, limit, windowMs }: RateLimitOptions) {
-  const now = Date.now();
-  const current = buckets.get(key);
+export async function assertRateLimit({
+  key,
+  limit,
+  windowMs,
+}: RateLimitOptions) {
+  const { supabaseAdmin } = await import("./supabaseAdmin.js");
+  const { data, error } = await supabaseAdmin.rpc("consume_rate_limit", {
+    p_bucket_key: key,
+    p_limit: limit,
+    p_window_ms: windowMs,
+  });
 
-  if (!current || current.resetAt <= now) {
-    buckets.set(key, {
-      count: 1,
-      resetAt: now + windowMs,
+  if (error) {
+    console.error("[rateLimit] shared bucket unavailable", {
+      code: error.code,
     });
-    return;
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message:
+        "Não foi possível validar o limite de requisições. Tente novamente em instantes.",
+    });
   }
 
-  if (current.count >= limit) {
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result || !result.allowed) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
       message: "Muitas tentativas em pouco tempo. Aguarde e tente novamente.",
     });
   }
-
-  current.count += 1;
 }
 
-export function assertRequestRateLimit(
+export async function assertRequestRateLimit(
   req: IncomingMessage,
   scope: string,
   options: Omit<RateLimitOptions, "key">
 ) {
-  assertRateLimit({
+  await assertRateLimit({
     ...options,
     key: `${scope}:${getClientIp(req)}`,
   });

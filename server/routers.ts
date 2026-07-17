@@ -283,11 +283,11 @@ export const appRouter = router({
         const telefone = input.telefone.trim();
         const email = input.email.trim().toLowerCase();
 
-        assertRequestRateLimit(ctx.req, "auth:register:ip", {
+        await assertRequestRateLimit(ctx.req, "auth:register:ip", {
           limit: 10,
           windowMs: 15 * 60 * 1000,
         });
-        assertRateLimit({
+        await assertRateLimit({
           key: `auth:register:email:${email}`,
           limit: 3,
           windowMs: 60 * 60 * 1000,
@@ -1131,11 +1131,11 @@ export const appRouter = router({
         const nome = input.nome.trim();
         const email = input.email.trim().toLowerCase();
 
-        assertRequestRateLimit(ctx.req, "auth:register:ip", {
+        await assertRequestRateLimit(ctx.req, "auth:register:ip", {
           limit: 10,
           windowMs: 15 * 60 * 1000,
         });
-        assertRateLimit({
+        await assertRateLimit({
           key: `auth:register:email:${email}`,
           limit: 3,
           windowMs: 60 * 60 * 1000,
@@ -2692,7 +2692,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        assertRateLimit({
+        await assertRateLimit({
           key: `question-report:${ctx.user.id}`,
           limit: 10,
           windowMs: 60 * 60 * 1000,
@@ -2749,7 +2749,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        assertRateLimit({
+        await assertRateLimit({
           key: `quiz:attempt:${ctx.user.id}`,
           limit: 120,
           windowMs: 60 * 60 * 1000,
@@ -2893,12 +2893,12 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { text, imageBase64, imageMimeType, mode } = input;
 
-        assertRateLimit({
+        await assertRateLimit({
           key: `ai:solve:user:${ctx.user.id}`,
           limit: 20,
           windowMs: 60 * 60 * 1000,
         });
-        assertRequestRateLimit(ctx.req, "ai:solve:ip", {
+        await assertRequestRateLimit(ctx.req, "ai:solve:ip", {
           limit: 60,
           windowMs: 60 * 60 * 1000,
         });
