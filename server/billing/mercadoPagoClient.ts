@@ -12,6 +12,10 @@ export const mercadoPagoPaymentSchema = z.object({
   currency_id: z.string().nullable().optional(),
   date_approved: z.string().nullable().optional(),
   date_of_expiration: z.string().nullable().optional(),
+  preapproval_id: z.union([z.string(), z.number()]).nullable().optional(),
+  subscription_id: z.union([z.string(), z.number()]).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  preapproval: z.object({ id: z.union([z.string(), z.number()]).nullable().optional() }).passthrough().nullable().optional(),
   point_of_interaction: z.object({
     transaction_data: z.object({
       qr_code: z.string().nullable().optional(),

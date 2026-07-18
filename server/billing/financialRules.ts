@@ -2,6 +2,10 @@ import { addDaysPreservingFuturePeriod, mapMercadoPagoPaymentStatus, mercadoPago
 
 export type FinancialValidationResult = { ok: true } | { ok: false; reason: string };
 
+const uuidPattern = "[0-9a-f-]{36}";
+const pixReferencePattern = new RegExp(`^payment:${uuidPattern}:subscription:${uuidPattern}$`, "i");
+const subscriptionReferencePattern = new RegExp(`^${uuidPattern}$`, "i");
+
 export function validateClientCheckoutInput(input: { planSlug?: unknown; amountCents?: unknown }, authenticated: boolean): FinancialValidationResult {
   if (!authenticated) return { ok: false, reason: "unauthenticated" };
   if (typeof input.planSlug !== "string" || input.planSlug.trim().length === 0) return { ok: false, reason: "invalid_plan" };
@@ -16,6 +20,13 @@ export function validatePlanForCheckout(plan: { is_active?: boolean; has_availab
   return { ok: true };
 }
 
+export function classifyExternalReference(externalReference: string | null | undefined) {
+  const value = String(externalReference ?? "");
+  if (pixReferencePattern.test(value)) return "pix_payment" as const;
+  if (subscriptionReferencePattern.test(value)) return "card_subscription" as const;
+  return "invalid" as const;
+}
+
 export function validateGatewayPayment(input: {
   expectedAmountCents: number;
   expectedCurrency: string;
@@ -23,7 +34,7 @@ export function validateGatewayPayment(input: {
   transactionAmount: unknown;
   currencyId: string | null | undefined;
 }): FinancialValidationResult {
-  if (!/^payment:[0-9a-f-]{36}:subscription:[0-9a-f-]{36}$/i.test(String(input.externalReference ?? ""))) {
+  if (classifyExternalReference(input.externalReference) === "invalid") {
     return { ok: false, reason: "invalid_external_reference" };
   }
   if (mercadoPagoAmountToCents(input.transactionAmount) !== input.expectedAmountCents) return { ok: false, reason: "amount_mismatch" };
@@ -47,4 +58,14 @@ export function resolveCancellationAccess(input: { currentPeriodEnd?: string | n
 
 export function extendPixAccess(currentPeriodEnd: string | null | undefined, now = new Date()) {
   return addDaysPreservingFuturePeriod(currentPeriodEnd, 30, now);
+}
+
+export function shouldPreserveAccessOnPreapprovalCancel(input: { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd?: string | null; now?: Date }) {
+  const now = input.now ?? new Date();
+  const end = input.currentPeriodEnd ? new Date(input.currentPeriodEnd) : null;
+  return input.cancelAtPeriodEnd && input.status === "active" && Boolean(end && Number.isFinite(end.getTime()) && end > now);
+}
+
+export function isDuplicateApprovedPayment(input: { approvedAt?: string | null }) {
+  return Boolean(input.approvedAt);
 }

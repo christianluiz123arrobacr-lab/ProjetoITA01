@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
 import {
@@ -15,13 +14,116 @@ import {
   getPayment,
   getPreapproval,
   type MercadoPagoPayment,
+  type MercadoPagoPreapproval,
 } from "./mercadoPagoClient.js";
 import { validateMercadoPagoWebhookSignature } from "./webhookSignature.js";
-import type { BillingCapabilities, MercadoPagoWebhookPayload } from "./billingTypes.js";
+import type { BillingCapabilities, BillingPaymentStatus, MercadoPagoWebhookPayload } from "./billingTypes.js";
 
 const RESERVATION_MINUTES = 30;
 const PIX_EXPIRATION_MINUTES = 60 * 24;
-const PIX_ACCESS_DAYS = 30;
+const ACCESS_DAYS_PER_PAYMENT = 30;
+const GATEWAY = "mercadopago";
+const DEFAULT_CURRENCY = "BRL";
+
+type BillingPlanRow = {
+  id: string;
+  slug: string;
+  name: string;
+  price_cents: number;
+  currency: string | null;
+  invite_only?: boolean | null;
+  max_active_subscriptions?: number | null;
+};
+
+type LocalSubscription = Record<string, any> & {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  status: string;
+  current_period_end?: string | null;
+  gateway_subscription_id?: string | null;
+  gateway_payment_id?: string | null;
+  metadata?: Record<string, any> | null;
+  cancel_at_period_end?: boolean | null;
+};
+
+type LocalPayment = Record<string, any> & {
+  id: string;
+  subscription_id: string | null;
+  user_id: string;
+  plan_id: string | null;
+  payment_method: string;
+  status: BillingPaymentStatus;
+  amount_cents: number;
+  currency: string;
+  gateway_payment_id?: string | null;
+  approved_at?: string | null;
+  metadata?: Record<string, any> | null;
+};
+
+function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
+  throw new TRPCError({ code, message });
+}
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function addMinutes(date: Date, minutes: number) {
+  const next = new Date(date);
+  next.setMinutes(next.getMinutes() + minutes);
+  return next;
+}
+
+function normalizeCurrency(currency: string | null | undefined) {
+  return currency || DEFAULT_CURRENCY;
+}
+
+function firstHeader(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isUuid(value: string | null | undefined) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ""));
+}
+
+function buildPaymentReference(paymentId: string, subscriptionId: string) {
+  return `payment:${paymentId}:subscription:${subscriptionId}`;
+}
+
+function extractPixPaymentReference(externalReference: string | null | undefined) {
+  const match = String(externalReference ?? "").match(/^payment:([0-9a-f-]{36}):subscription:([0-9a-f-]{36})$/i);
+  if (!match) return null;
+  return { paymentId: match[1], subscriptionId: match[2] };
+}
+
+function getPaymentPreapprovalId(payment: MercadoPagoPayment) {
+  const raw = payment.preapproval_id ?? payment.preapproval?.id ?? payment.metadata?.preapproval_id ?? null;
+  return raw ? String(raw) : null;
+}
+
+function isRecurringSubscription(subscription: LocalSubscription | null | undefined) {
+  return subscription?.gateway === GATEWAY && subscription?.metadata?.payment_method === "card";
+}
+
+function getContractedAmount(subscription: LocalSubscription) {
+  const value = Number(subscription.metadata?.contracted_price_cents);
+  if (!Number.isInteger(value) || value <= 0) throw new Error("Preço contratado inválido na assinatura local.");
+  return value;
+}
+
+function getContractedCurrency(subscription: LocalSubscription) {
+  return normalizeCurrency(subscription.metadata?.contracted_currency);
+}
+
+function isPaidSubscriptionStillValid(subscription: LocalSubscription, now = new Date()) {
+  const currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end) : null;
+  return subscription.status === "active" && currentPeriodEnd && Number.isFinite(currentPeriodEnd.getTime()) && currentPeriodEnd > now;
+}
+
+function shouldPreserveAccessAfterGatewayCancel(subscription: LocalSubscription, now = new Date()) {
+  return Boolean(subscription.cancel_at_period_end && isPaidSubscriptionStillValid(subscription, now));
+}
 
 export function getBillingCapabilities(): BillingCapabilities {
   const mode = process.env.BILLING_MODE === "manual" ? "manual" : "mercadopago";
@@ -34,9 +136,9 @@ export function getBillingCapabilities(): BillingCapabilities {
 
 export function getRequiredAppBaseUrl() {
   const appBaseUrl = process.env.APP_BASE_URL;
-  if (!appBaseUrl) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APP_BASE_URL não configurado." });
+  if (!appBaseUrl) fail("APP_BASE_URL não configurado.", "PRECONDITION_FAILED");
   if (process.env.NODE_ENV === "production" && !appBaseUrl.startsWith("https://")) {
-    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APP_BASE_URL precisa usar HTTPS em produção." });
+    fail("APP_BASE_URL precisa usar HTTPS em produção.", "PRECONDITION_FAILED");
   }
   return appBaseUrl.replace(/\/+$/, "");
 }
@@ -49,22 +151,22 @@ function getSubscriptionReturnUrl() {
   return `${getRequiredAppBaseUrl()}/assinatura-pendente`;
 }
 
-function addMinutes(date: Date, minutes: number) {
-  const next = new Date(date);
-  next.setMinutes(next.getMinutes() + minutes);
-  return next;
+async function expireStaleReservations() {
+  const { error } = await supabaseAdmin.rpc("expire_stale_billing_reservations");
+  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: `Falha ao expirar reservas antigas: ${error.message}` });
 }
 
 async function getUserProfile(userId: string) {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("profiles")
     .select("id, nome, email, telefone")
     .eq("id", userId)
     .maybeSingle();
+  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
   return data as any | null;
 }
 
-async function getPlanForCheckout(planSlug: string) {
+async function getPlanForCheckout(planSlug: string): Promise<BillingPlanRow> {
   const slug = planSlug.trim();
   const { data, error } = await supabaseAdmin
     .from("billing_plans")
@@ -72,79 +174,209 @@ async function getPlanForCheckout(planSlug: string) {
     .eq("slug", slug)
     .maybeSingle();
 
-  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-  if (!data?.id || data.is_active === false) throw new TRPCError({ code: "NOT_FOUND", message: "Plano não encontrado ou inativo." });
-  if ((data.currency ?? "BRL") !== "BRL") throw new TRPCError({ code: "BAD_REQUEST", message: "Plano com moeda não suportada." });
-  if (!Number.isInteger(data.price_cents) || Number(data.price_cents) <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Preço do plano inválido." });
-  return data as any;
+  if (error) fail(error.message);
+  if (!data?.id || data.is_active === false) fail("Plano não encontrado ou inativo.", "NOT_FOUND");
+  if (normalizeCurrency(data.currency) !== DEFAULT_CURRENCY) fail("Plano com moeda não suportada.");
+  if (!Number.isInteger(data.price_cents) || Number(data.price_cents) <= 0) fail("Preço do plano inválido.");
+  return data as BillingPlanRow;
 }
 
-async function assertPlanAvailability(plan: any) {
-  const publicPlansResponse = await supabaseAdmin.rpc("get_public_billing_plans");
-  if (!publicPlansResponse.error && Array.isArray(publicPlansResponse.data)) {
-    const publicPlan = publicPlansResponse.data.find((item: any) => item.slug === plan.slug || item.id === plan.id);
-    if (publicPlan?.has_available_slots === false) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Este plano atingiu o limite de vagas disponível no momento." });
-    }
-  }
-}
-
-async function assertValidInviteIfNeeded(plan: any, userId: string, email: string | null) {
-  if (!plan.invite_only) return;
-  const now = new Date().toISOString();
-  let query = supabaseAdmin
-    .from("billing_plan_invites")
-    .select("id, used_at, expires_at")
-    .eq("plan_id", plan.id)
-    .is("used_at", null)
-    .or(`user_id.eq.${userId},email.eq.${email ?? "__missing__"}`)
-    .limit(1);
-
-  const { data, error } = await query;
-  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-  const invite = (data ?? []).find((item: any) => !item.expires_at || item.expires_at >= now);
-  if (!invite) throw new TRPCError({ code: "FORBIDDEN", message: "Este plano exige convite válido." });
-}
-
-async function assertNoBlockingSubscription(userId: string) {
-  const now = new Date().toISOString();
+async function assertNoBlockingRecurringSubscription(userId: string) {
+  const now = isoNow();
   const { data, error } = await supabaseAdmin
     .from("billing_subscriptions")
     .select("id, status, current_period_end, gateway, metadata")
     .eq("user_id", userId)
-    .in("status", ["active", "trialing", "manual_review"])
+    .eq("gateway", GATEWAY)
+    .in("status", ["active", "trialing", "overdue"])
     .or(`current_period_end.is.null,current_period_end.gte.${now}`)
-    .limit(1);
+    .limit(10);
 
-  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-  if ((data ?? []).length > 0) throw new TRPCError({ code: "CONFLICT", message: "Você já possui uma assinatura ativa ou em análise." });
+  if (error) fail(error.message);
+  const recurring = (data ?? []).find((item: any) => item.metadata?.payment_method === "card");
+  if (recurring) fail("Você já possui uma assinatura recorrente ativa.", "CONFLICT");
 }
 
 async function reusePendingSubscription(userId: string, planId: string, paymentMethod: "card" | "pix") {
-  const now = new Date().toISOString();
+  const now = isoNow();
   const { data, error } = await supabaseAdmin
     .from("billing_subscriptions")
     .select("*")
     .eq("user_id", userId)
     .eq("plan_id", planId)
-    .eq("gateway", "mercadopago")
+    .eq("gateway", GATEWAY)
     .eq("status", "pending")
     .gt("reservation_expires_at", now)
     .order("created_at", { ascending: false })
     .limit(5);
 
-  if (error) return null;
-  return (data ?? []).find((item: any) => item.metadata?.payment_method === paymentMethod) ?? null;
+  if (error) fail(error.message);
+  return ((data ?? []).find((item: any) => item.metadata?.payment_method === paymentMethod) ?? null) as LocalSubscription | null;
+}
+
+async function reserveCheckout(input: {
+  userId: string;
+  userEmail: string | null;
+  plan: BillingPlanRow;
+  paymentMethod: "card" | "pix";
+}) {
+  const reservationExpiresAt = addMinutes(new Date(), RESERVATION_MINUTES).toISOString();
+  const { data, error } = await supabaseAdmin.rpc("reserve_mercadopago_checkout", {
+    p_user_id: input.userId,
+    p_user_email: input.userEmail,
+    p_plan_id: input.plan.id,
+    p_payment_method: input.paymentMethod,
+    p_reservation_expires_at: reservationExpiresAt,
+    p_metadata: {
+      payment_method: input.paymentMethod,
+      contracted_price_cents: input.plan.price_cents,
+      contracted_currency: normalizeCurrency(input.plan.currency),
+    },
+  });
+
+  if (error) fail(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.subscription_id) fail("Não foi possível reservar checkout.");
+  return { subscriptionId: String(row.subscription_id), reservationExpiresAt };
+}
+
+async function markSubscriptionFailed(subscriptionId: string, reason: string) {
+  const { error } = await supabaseAdmin
+    .from("billing_subscriptions")
+    .update({ status: "failed", reservation_expires_at: null, metadata: { failure_reason: reason } })
+    .eq("id", subscriptionId)
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+}
+
+async function markPaymentFailed(paymentId: string, reason: string) {
+  const { error } = await supabaseAdmin
+    .from("billing_payments")
+    .update({ status: "failed", metadata: { failure_reason: reason } })
+    .eq("id", paymentId)
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+}
+
+async function getSubscriptionById(subscriptionId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("billing_subscriptions")
+    .select("*")
+    .eq("id", subscriptionId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data ?? null) as LocalSubscription | null;
+}
+
+async function getActiveAccessSubscriptionForUser(userId: string) {
+  const now = isoNow();
+  const { data, error } = await supabaseAdmin
+    .from("billing_subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("gateway", GATEWAY)
+    .eq("status", "active")
+    .gte("current_period_end", now)
+    .order("current_period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data ?? null) as LocalSubscription | null;
+}
+
+async function findSubscriptionForRecurringPayment(payment: MercadoPagoPayment) {
+  const externalReference = payment.external_reference ? String(payment.external_reference) : null;
+  if (externalReference && isUuid(externalReference)) {
+    const subscription = await getSubscriptionById(externalReference);
+    if (subscription) return subscription;
+  }
+
+  const preapprovalId = getPaymentPreapprovalId(payment);
+  if (preapprovalId) {
+    const { data, error } = await supabaseAdmin
+      .from("billing_subscriptions")
+      .select("*")
+      .eq("gateway", GATEWAY)
+      .eq("gateway_subscription_id", preapprovalId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data?.id) return data as LocalSubscription;
+  }
+
+  if (externalReference) {
+    const { data, error } = await supabaseAdmin
+      .from("billing_subscriptions")
+      .select("*")
+      .eq("gateway", GATEWAY)
+      .eq("gateway_subscription_id", externalReference)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data?.id) return data as LocalSubscription;
+  }
+
+  return null;
+}
+
+async function upsertRecurringPaymentRecord(input: {
+  payment: MercadoPagoPayment;
+  subscription: LocalSubscription;
+  paymentStatus: BillingPaymentStatus;
+}) {
+  const gatewayPaymentId = input.payment.id ? String(input.payment.id) : null;
+  if (!gatewayPaymentId) throw new Error("Pagamento Mercado Pago sem id.");
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("billing_payments")
+    .select("*")
+    .eq("gateway", GATEWAY)
+    .eq("gateway_payment_id", gatewayPaymentId)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+  if (existing?.id) return existing as LocalPayment;
+
+  const { data, error } = await supabaseAdmin
+    .from("billing_payments")
+    .insert({
+      subscription_id: input.subscription.id,
+      user_id: input.subscription.user_id,
+      plan_id: input.subscription.plan_id,
+      gateway: GATEWAY,
+      gateway_payment_id: gatewayPaymentId,
+      payment_method: "mercadopago_card",
+      status: input.paymentStatus,
+      amount_cents: getContractedAmount(input.subscription),
+      currency: getContractedCurrency(input.subscription),
+      metadata: {
+        external_reference: input.payment.external_reference ?? null,
+        preapproval_id: getPaymentPreapprovalId(input.payment) ?? input.subscription.gateway_subscription_id ?? null,
+        gateway_status: input.payment.status ?? null,
+        gateway_status_detail: input.payment.status_detail ?? null,
+      },
+    })
+    .select("*")
+    .single();
+
+  if (error || !data?.id) throw new Error(error?.message ?? "Falha ao criar histórico de pagamento recorrente.");
+  return data as LocalPayment;
+}
+
+async function updatePaymentOrThrow(paymentId: string, patch: Record<string, unknown>) {
+  const { error } = await supabaseAdmin.from("billing_payments").update(patch).eq("id", paymentId);
+  if (error) throw new Error(error.message);
+}
+
+async function updateSubscriptionOrThrow(subscriptionId: string, patch: Record<string, unknown>) {
+  const { error } = await supabaseAdmin.from("billing_subscriptions").update(patch).eq("id", subscriptionId);
+  if (error) throw new Error(error.message);
 }
 
 export async function createCardSubscriptionCheckout(input: { userId: string; userEmail: string | null; planSlug: string }) {
   const capabilities = getBillingCapabilities();
-  if (!capabilities.mercadoPagoEnabled) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Mercado Pago não configurado." });
+  if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
 
+  await expireStaleReservations();
   const plan = await getPlanForCheckout(input.planSlug);
-  await assertPlanAvailability(plan);
-  await assertValidInviteIfNeeded(plan, input.userId, input.userEmail);
-  await assertNoBlockingSubscription(input.userId);
+  await assertNoBlockingRecurringSubscription(input.userId);
 
   const existing = await reusePendingSubscription(input.userId, plan.id, "card");
   if (existing?.payment_url) {
@@ -159,69 +391,50 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   }
 
   const profile = await getUserProfile(input.userId);
-  const now = new Date();
-  const reservationExpiresAt = addMinutes(now, RESERVATION_MINUTES).toISOString();
+  const reservation = await reserveCheckout({ userId: input.userId, userEmail: input.userEmail, plan, paymentMethod: "card" });
 
-  const { data: subscription, error } = await supabaseAdmin
-    .from("billing_subscriptions")
-    .insert({
-      user_id: input.userId,
-      plan_id: plan.id,
-      status: "pending",
-      gateway: "mercadopago",
-      reservation_expires_at: reservationExpiresAt,
-      metadata: {
-        payment_method: "card",
-        contracted_price_cents: plan.price_cents,
-        contracted_currency: plan.currency ?? "BRL",
-      },
-    })
-    .select("id")
-    .single();
+  try {
+    const checkout = await createPreapprovalCheckout({
+      reason: `Rumo ao ITA - ${plan.name}`,
+      externalReference: reservation.subscriptionId,
+      payerEmail: profile?.email || input.userEmail || "comprador@rumoaoita.local",
+      amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
+      backUrl: getSubscriptionReturnUrl(),
+      notificationUrl: getMercadoPagoWebhookUrl(),
+      idempotencyKey: `mp-card-${reservation.subscriptionId}`,
+    });
 
-  if (error || !subscription?.id) throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Não foi possível reservar checkout." });
-
-  const checkout = await createPreapprovalCheckout({
-    reason: `Rumo ao ITA - ${plan.name}`,
-    externalReference: String(subscription.id),
-    payerEmail: profile?.email || input.userEmail || "comprador@rumoaoita.local",
-    amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
-    backUrl: getSubscriptionReturnUrl(),
-    notificationUrl: getMercadoPagoWebhookUrl(),
-    idempotencyKey: `mp-card-${subscription.id}`,
-  });
-
-  const checkoutUrl = checkout.init_point ?? checkout.sandbox_init_point ?? null;
-  await supabaseAdmin
-    .from("billing_subscriptions")
-    .update({
+    const checkoutUrl = checkout.init_point ?? checkout.sandbox_init_point ?? null;
+    await updateSubscriptionOrThrow(reservation.subscriptionId, {
       gateway_subscription_id: checkout.id ? String(checkout.id) : null,
       last_gateway_status: checkout.status ?? null,
       payment_url: checkoutUrl,
-    })
-    .eq("id", subscription.id);
+    });
 
-  return {
-    subscriptionId: String(subscription.id),
-    status: "pending" as const,
-    checkoutUrl,
-    paymentUrl: checkoutUrl,
-    gateway: "mercadopago" as const,
-    paymentMethod: "mercadopago_card" as const,
-  };
+    return {
+      subscriptionId: reservation.subscriptionId,
+      status: "pending" as const,
+      checkoutUrl,
+      paymentUrl: checkoutUrl,
+      gateway: "mercadopago" as const,
+      paymentMethod: "mercadopago_card" as const,
+    };
+  } catch (error) {
+    await markSubscriptionFailed(reservation.subscriptionId, error instanceof Error ? error.message : "Falha ao criar checkout Mercado Pago.");
+    throw error;
+  }
 }
 
 export async function createPixPayment(input: { userId: string; userEmail: string | null; planSlug: string }) {
   const capabilities = getBillingCapabilities();
-  if (!capabilities.mercadoPagoEnabled) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Mercado Pago não configurado." });
+  if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
 
+  await expireStaleReservations();
   const plan = await getPlanForCheckout(input.planSlug);
-  await assertPlanAvailability(plan);
-  await assertValidInviteIfNeeded(plan, input.userId, input.userEmail);
 
   const existing = await reusePendingSubscription(input.userId, plan.id, "pix");
   if (existing?.id) {
-    const { data: payment } = await supabaseAdmin
+    const { data: payment, error } = await supabaseAdmin
       .from("billing_payments")
       .select("*")
       .eq("subscription_id", existing.id)
@@ -229,13 +442,14 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (error) fail(error.message);
     if (payment?.id) {
       return {
         subscriptionId: String(existing.id),
         paymentId: String(payment.id),
         status: payment.status,
         amountCents: Number(payment.amount_cents),
-        currency: payment.currency ?? "BRL",
+        currency: payment.currency ?? DEFAULT_CURRENCY,
         qrCode: payment.pix_qr_code ?? null,
         qrCodeBase64: payment.pix_qr_code_base64 ?? null,
         expiresAt: payment.expires_at ?? null,
@@ -245,94 +459,79 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
   }
 
   const profile = await getUserProfile(input.userId);
-  const now = new Date();
-  const expiresAt = addMinutes(now, PIX_EXPIRATION_MINUTES).toISOString();
-  const reservationExpiresAt = addMinutes(now, RESERVATION_MINUTES).toISOString();
-
-  const { data: subscription, error: subscriptionError } = await supabaseAdmin
-    .from("billing_subscriptions")
-    .insert({
-      user_id: input.userId,
-      plan_id: plan.id,
-      status: "pending",
-      gateway: "mercadopago",
-      reservation_expires_at: reservationExpiresAt,
-      metadata: {
-        payment_method: "pix",
-        contracted_price_cents: plan.price_cents,
-        contracted_currency: plan.currency ?? "BRL",
-      },
-    })
-    .select("id")
-    .single();
-
-  if (subscriptionError || !subscription?.id) throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionError?.message ?? "Não foi possível criar assinatura pendente." });
+  const expiresAt = addMinutes(new Date(), PIX_EXPIRATION_MINUTES).toISOString();
+  const reservation = await reserveCheckout({ userId: input.userId, userEmail: input.userEmail, plan, paymentMethod: "pix" });
 
   const { data: payment, error: paymentError } = await supabaseAdmin
     .from("billing_payments")
     .insert({
-      subscription_id: subscription.id,
+      subscription_id: reservation.subscriptionId,
       user_id: input.userId,
       plan_id: plan.id,
-      gateway: "mercadopago",
+      gateway: GATEWAY,
       payment_method: "mercadopago_pix",
       status: "pending",
       amount_cents: plan.price_cents,
-      currency: plan.currency ?? "BRL",
+      currency: normalizeCurrency(plan.currency),
       expires_at: expiresAt,
       metadata: { external_reference_kind: "pix_single_30_days" },
     })
     .select("id")
     .single();
 
-  if (paymentError || !payment?.id) throw new TRPCError({ code: "BAD_REQUEST", message: paymentError?.message ?? "Não foi possível criar pagamento local." });
+  if (paymentError || !payment?.id) {
+    await markSubscriptionFailed(reservation.subscriptionId, paymentError?.message ?? "Falha ao criar pagamento local.");
+    fail(paymentError?.message ?? "Não foi possível criar pagamento local.");
+  }
 
-  const externalReference = `payment:${payment.id}:subscription:${subscription.id}`;
-  const mpPayment = await createMercadoPagoPixPayment({
-    externalReference,
-    payerEmail: profile?.email || input.userEmail || "comprador@rumoaoita.local",
-    amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
-    description: `Rumo ao ITA - ${plan.name}`,
-    notificationUrl: getMercadoPagoWebhookUrl(),
-    expiresAt,
-    idempotencyKey: `mp-pix-${payment.id}`,
-  });
+  const externalReference = buildPaymentReference(String(payment.id), reservation.subscriptionId);
+  try {
+    const mpPayment = await createMercadoPagoPixPayment({
+      externalReference,
+      payerEmail: profile?.email || input.userEmail || "comprador@rumoaoita.local",
+      amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
+      description: `Rumo ao ITA - ${plan.name}`,
+      notificationUrl: getMercadoPagoWebhookUrl(),
+      expiresAt,
+      idempotencyKey: `mp-pix-${payment.id}`,
+    });
 
-  const transactionData = mpPayment.point_of_interaction?.transaction_data;
-  await supabaseAdmin
-    .from("billing_payments")
-    .update({
+    const transactionData = mpPayment.point_of_interaction?.transaction_data;
+    await updatePaymentOrThrow(String(payment.id), {
       gateway_payment_id: mpPayment.id ? String(mpPayment.id) : null,
       status: mapMercadoPagoPaymentStatus(mpPayment.status, mpPayment.status_detail),
       payment_url: transactionData?.ticket_url ?? null,
       pix_qr_code: transactionData?.qr_code ?? null,
       pix_qr_code_base64: transactionData?.qr_code_base64 ?? null,
-      metadata: { external_reference: externalReference, gateway_status: mpPayment.status, gateway_status_detail: mpPayment.status_detail },
-    })
-    .eq("id", payment.id);
+      metadata: {
+        external_reference: externalReference,
+        gateway_status: mpPayment.status ?? null,
+        gateway_status_detail: mpPayment.status_detail ?? null,
+      },
+    });
 
-  await supabaseAdmin
-    .from("billing_subscriptions")
-    .update({ gateway_payment_id: mpPayment.id ? String(mpPayment.id) : null, last_gateway_status: mpPayment.status ?? null })
-    .eq("id", subscription.id);
+    await updateSubscriptionOrThrow(reservation.subscriptionId, {
+      gateway_payment_id: mpPayment.id ? String(mpPayment.id) : null,
+      last_gateway_status: mpPayment.status ?? null,
+    });
 
-  return {
-    subscriptionId: String(subscription.id),
-    paymentId: String(payment.id),
-    status: mapMercadoPagoPaymentStatus(mpPayment.status, mpPayment.status_detail),
-    amountCents: Number(plan.price_cents),
-    currency: plan.currency ?? "BRL",
-    qrCode: transactionData?.qr_code ?? null,
-    qrCodeBase64: transactionData?.qr_code_base64 ?? null,
-    expiresAt,
-    paymentUrl: transactionData?.ticket_url ?? null,
-  };
-}
-
-function extractPaymentReference(externalReference: string | null | undefined) {
-  const match = String(externalReference ?? "").match(/^payment:([0-9a-f-]{36}):subscription:([0-9a-f-]{36})$/i);
-  if (!match) return null;
-  return { paymentId: match[1], subscriptionId: match[2] };
+    return {
+      subscriptionId: reservation.subscriptionId,
+      paymentId: String(payment.id),
+      status: mapMercadoPagoPaymentStatus(mpPayment.status, mpPayment.status_detail),
+      amountCents: Number(plan.price_cents),
+      currency: normalizeCurrency(plan.currency),
+      qrCode: transactionData?.qr_code ?? null,
+      qrCodeBase64: transactionData?.qr_code_base64 ?? null,
+      expiresAt,
+      paymentUrl: transactionData?.ticket_url ?? null,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha ao criar Pix Mercado Pago.";
+    await markPaymentFailed(String(payment.id), message);
+    await markSubscriptionFailed(reservation.subscriptionId, message);
+    throw error;
+  }
 }
 
 export async function getMyPayments(userId: string) {
@@ -342,7 +541,7 @@ export async function getMyPayments(userId: string) {
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);
-  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+  if (error) fail(error.message);
   return data ?? [];
 }
 
@@ -351,142 +550,252 @@ export async function cancelUserMercadoPagoSubscription(userId: string) {
     .from("billing_subscriptions")
     .select("*")
     .eq("user_id", userId)
-    .eq("gateway", "mercadopago")
+    .eq("gateway", GATEWAY)
     .in("status", ["active", "pending", "overdue"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-  if (!subscription?.id) throw new TRPCError({ code: "NOT_FOUND", message: "Assinatura Mercado Pago não encontrada." });
+  if (error) fail(error.message);
+  if (!subscription?.id) fail("Assinatura Mercado Pago não encontrada.", "NOT_FOUND");
 
   if (subscription.gateway_subscription_id) {
     await cancelPreapproval(String(subscription.gateway_subscription_id), `mp-cancel-user-${subscription.id}`);
   }
 
-  const now = new Date().toISOString();
-  await supabaseAdmin
-    .from("billing_subscriptions")
-    .update({ cancel_at_period_end: true, canceled_at: now, last_gateway_status: "cancelled" })
-    .eq("id", subscription.id);
+  const now = isoNow();
+  const patch = subscription.current_period_end && new Date(subscription.current_period_end) > new Date()
+    ? { cancel_at_period_end: true, canceled_at: now, last_gateway_status: "cancelled" }
+    : { status: "canceled", cancel_at_period_end: false, canceled_at: now, current_period_end: now, last_gateway_status: "cancelled" };
+  await updateSubscriptionOrThrow(subscription.id, patch);
 
   return { success: true, accessUntil: subscription.current_period_end ?? null } as const;
 }
 
 export async function cancelAdminMercadoPagoSubscription(input: { subscriptionId: string; adminUserId: string }) {
-  const { data: subscription, error } = await supabaseAdmin
-    .from("billing_subscriptions")
-    .select("*")
-    .eq("id", input.subscriptionId)
-    .maybeSingle();
-
-  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-  if (!subscription?.id) throw new TRPCError({ code: "NOT_FOUND", message: "Assinatura não encontrada." });
-  if (subscription.gateway === "mercadopago" && subscription.gateway_subscription_id) {
+  const subscription = await getSubscriptionById(input.subscriptionId);
+  if (!subscription?.id) fail("Assinatura não encontrada.", "NOT_FOUND");
+  if (subscription.gateway === GATEWAY && subscription.gateway_subscription_id) {
     await cancelPreapproval(String(subscription.gateway_subscription_id), `mp-cancel-admin-${subscription.id}`);
   }
 
-  const now = new Date().toISOString();
-  const { error: updateError } = await supabaseAdmin
-    .from("billing_subscriptions")
-    .update({
-      status: "canceled",
-      cancel_at_period_end: false,
-      canceled_at: now,
-      current_period_end: now,
-      last_gateway_status: subscription.gateway === "mercadopago" ? "cancelled" : subscription.last_gateway_status ?? null,
-      metadata: { ...(subscription.metadata ?? {}), admin_cancelled_by: input.adminUserId, admin_cancelled_at: now },
-    })
-    .eq("id", input.subscriptionId);
-
-  if (updateError) throw new TRPCError({ code: "BAD_REQUEST", message: updateError.message });
+  const now = isoNow();
+  await updateSubscriptionOrThrow(input.subscriptionId, {
+    status: "canceled",
+    cancel_at_period_end: false,
+    canceled_at: now,
+    current_period_end: now,
+    last_gateway_status: subscription.gateway === GATEWAY ? "cancelled" : subscription.last_gateway_status ?? null,
+    metadata: { ...(subscription.metadata ?? {}), admin_cancelled_by: input.adminUserId, admin_cancelled_at: now },
+  });
   return { success: true } as const;
 }
 
-export async function processApprovedPayment(payment: MercadoPagoPayment) {
-  const reference = extractPaymentReference(payment.external_reference);
-  if (!reference) throw new Error("external_reference inválida.");
-
-  const { data: localPayment, error } = await supabaseAdmin
-    .from("billing_payments")
-    .select("*, billing_subscriptions(current_period_end)")
-    .eq("id", reference.paymentId)
-    .eq("subscription_id", reference.subscriptionId)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  if (!localPayment?.id) throw new Error("Pagamento local não encontrado.");
-
-  const amountCents = mercadoPagoAmountToCents(payment.transaction_amount);
-  if (amountCents !== Number(localPayment.amount_cents)) throw new Error("Valor divergente no pagamento.");
-  if ((payment.currency_id ?? "BRL") !== localPayment.currency) throw new Error("Moeda divergente no pagamento.");
-
+async function resolvePaymentContext(payment: MercadoPagoPayment) {
   const paymentStatus = mapMercadoPagoPaymentStatus(payment.status, payment.status_detail);
-  const now = new Date();
-  const period = paymentStatus === "approved"
-    ? addDaysPreservingFuturePeriod((localPayment as any).billing_subscriptions?.current_period_end, PIX_ACCESS_DAYS, now)
-    : null;
+  const pixReference = extractPixPaymentReference(payment.external_reference);
 
+  if (pixReference) {
+    const { data: localPayment, error } = await supabaseAdmin
+      .from("billing_payments")
+      .select("*, billing_subscriptions(*)")
+      .eq("id", pixReference.paymentId)
+      .eq("subscription_id", pixReference.subscriptionId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!localPayment?.id) throw new Error("Pagamento local não encontrado.");
+    return {
+      kind: "pix" as const,
+      localPayment: localPayment as LocalPayment,
+      subscription: (localPayment as any).billing_subscriptions as LocalSubscription,
+      paymentStatus,
+    };
+  }
+
+  const subscription = await findSubscriptionForRecurringPayment(payment);
+  if (!subscription?.id) throw new Error("Assinatura local não encontrada para pagamento recorrente.");
+  const localPayment = await upsertRecurringPaymentRecord({ payment, subscription, paymentStatus });
+  return { kind: "card" as const, localPayment, subscription, paymentStatus };
+}
+
+async function applyApprovedAccess(input: {
+  kind: "pix" | "card";
+  localPayment: LocalPayment;
+  subscription: LocalSubscription;
+  payment: MercadoPagoPayment;
+  now: Date;
+}) {
+  if (input.localPayment.approved_at) return;
+
+  const targetSubscription = input.kind === "pix"
+    ? (await getActiveAccessSubscriptionForUser(input.subscription.user_id)) ?? input.subscription
+    : input.subscription;
+  const period = addDaysPreservingFuturePeriod(targetSubscription.current_period_end, ACCESS_DAYS_PER_PAYMENT, input.now);
+  const approvedAt = input.payment.date_approved ?? input.now.toISOString();
+
+  await updatePaymentOrThrow(input.localPayment.id, {
+    status: "approved",
+    subscription_id: targetSubscription.id,
+    approved_at: approvedAt,
+    current_period_start: period.start,
+    current_period_end: period.end,
+    gateway_payment_id: input.payment.id ? String(input.payment.id) : input.localPayment.gateway_payment_id,
+    metadata: {
+      ...(input.localPayment.metadata ?? {}),
+      gateway_status: input.payment.status ?? null,
+      gateway_status_detail: input.payment.status_detail ?? null,
+      applied_to_subscription_id: targetSubscription.id,
+    },
+  });
+
+  await updateSubscriptionOrThrow(targetSubscription.id, {
+    status: "active",
+    started_at: targetSubscription.started_at ?? period.start,
+    current_period_start: period.start,
+    current_period_end: period.end,
+    next_due_date: period.end,
+    reservation_expires_at: null,
+    gateway_payment_id: input.payment.id ? String(input.payment.id) : targetSubscription.gateway_payment_id ?? null,
+    last_gateway_status: input.payment.status ?? null,
+  });
+
+  if (input.kind === "pix" && targetSubscription.id !== input.subscription.id) {
+    await updateSubscriptionOrThrow(input.subscription.id, {
+      status: "expired",
+      reservation_expires_at: null,
+      metadata: { ...(input.subscription.metadata ?? {}), applied_to_subscription_id: targetSubscription.id },
+    });
+  }
+}
+
+export async function processApprovedPayment(payment: MercadoPagoPayment) {
+  const context = await resolvePaymentContext(payment);
+  const amountCents = mercadoPagoAmountToCents(payment.transaction_amount);
+  if (amountCents !== Number(context.localPayment.amount_cents)) throw new Error("Valor divergente no pagamento.");
+  if (normalizeCurrency(payment.currency_id) !== context.localPayment.currency) throw new Error("Moeda divergente no pagamento.");
+
+  const now = new Date();
   const paymentPatch: Record<string, unknown> = {
-    status: paymentStatus,
-    gateway_payment_id: payment.id ? String(payment.id) : localPayment.gateway_payment_id,
-    metadata: { ...(localPayment.metadata ?? {}), gateway_status: payment.status, gateway_status_detail: payment.status_detail },
+    status: context.paymentStatus,
+    gateway_payment_id: payment.id ? String(payment.id) : context.localPayment.gateway_payment_id,
+    metadata: {
+      ...(context.localPayment.metadata ?? {}),
+      gateway_status: payment.status ?? null,
+      gateway_status_detail: payment.status_detail ?? null,
+      preapproval_id: getPaymentPreapprovalId(payment) ?? context.subscription.gateway_subscription_id ?? null,
+    },
   };
 
-  if (paymentStatus === "approved" && !localPayment.approved_at) paymentPatch.approved_at = payment.date_approved ?? now.toISOString();
-  if (["refunded", "chargeback"].includes(paymentStatus)) paymentPatch.refunded_at = now.toISOString();
+  if (["refunded", "chargeback"].includes(context.paymentStatus)) paymentPatch.refunded_at = now.toISOString();
+  await updatePaymentOrThrow(context.localPayment.id, paymentPatch);
 
-  await supabaseAdmin.from("billing_payments").update(paymentPatch).eq("id", localPayment.id);
-
-  if (paymentStatus === "approved" && !localPayment.approved_at && period) {
-    await supabaseAdmin
-      .from("billing_subscriptions")
-      .update({
-        status: "active",
-        started_at: period.start,
-        current_period_start: period.start,
-        current_period_end: period.end,
-        next_due_date: period.end,
-        reservation_expires_at: null,
-        last_gateway_status: payment.status ?? null,
-      })
-      .eq("id", reference.subscriptionId);
+  if (context.paymentStatus === "approved") {
+    await applyApprovedAccess({ kind: context.kind, localPayment: context.localPayment, subscription: context.subscription, payment, now });
   }
 
-  if (["refunded", "chargeback"].includes(paymentStatus)) {
-    await supabaseAdmin
-      .from("billing_subscriptions")
-      .update({ status: "refunded", current_period_end: now.toISOString(), last_gateway_status: payment.status ?? null })
-      .eq("id", reference.subscriptionId);
+  if (["refunded", "chargeback"].includes(context.paymentStatus)) {
+    await updateSubscriptionOrThrow(context.subscription.id, {
+      status: "refunded",
+      current_period_end: now.toISOString(),
+      last_gateway_status: payment.status ?? null,
+    });
   }
 
-  if (["rejected", "failed", "expired"].includes(paymentStatus)) {
-    await supabaseAdmin
-      .from("billing_subscriptions")
-      .update({ status: paymentStatus === "expired" ? "expired" : "failed", last_gateway_status: payment.status ?? null })
-      .eq("id", reference.subscriptionId)
-      .eq("status", "pending");
+  if (["rejected", "failed", "expired"].includes(context.paymentStatus)) {
+    const nextStatus = context.paymentStatus === "expired" ? "expired" : "failed";
+    await updateSubscriptionOrThrow(context.subscription.id, {
+      status: isRecurringSubscription(context.subscription) && context.subscription.status === "active" ? "overdue" : nextStatus,
+      last_gateway_status: payment.status ?? null,
+      reservation_expires_at: null,
+    });
   }
 
-  return { paymentStatus } as const;
+  return { paymentStatus: context.paymentStatus, kind: context.kind } as const;
 }
 
 export async function processPreapprovalUpdate(resourceId: string) {
   const preapproval = await getPreapproval(resourceId);
-  const subscriptionId = preapproval.external_reference;
-  if (!subscriptionId) throw new Error("Preapproval sem external_reference.");
+  const subscriptionId = preapproval.external_reference && isUuid(String(preapproval.external_reference)) ? String(preapproval.external_reference) : null;
+  const subscription = subscriptionId ? await getSubscriptionById(subscriptionId) : null;
+  const targetSubscription = subscription ?? await (async () => {
+    const { data, error } = await supabaseAdmin
+      .from("billing_subscriptions")
+      .select("*")
+      .eq("gateway", GATEWAY)
+      .eq("gateway_subscription_id", String(preapproval.id ?? resourceId))
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data as LocalSubscription | null;
+  })();
+
+  if (!targetSubscription?.id) throw new Error("Preapproval sem assinatura local correspondente.");
   const mapped = mapMercadoPagoPreapprovalStatus(preapproval.status);
   const patch: Record<string, unknown> = {
     gateway_subscription_id: preapproval.id ? String(preapproval.id) : resourceId,
     last_gateway_status: preapproval.status ?? null,
   };
-  if (mapped !== "pending") patch.status = mapped;
 
-  await supabaseAdmin
-    .from("billing_subscriptions")
-    .update(patch)
-    .eq("id", subscriptionId);
+  if (mapped === "canceled") {
+    if (shouldPreserveAccessAfterGatewayCancel(targetSubscription)) {
+      patch.cancel_at_period_end = true;
+      patch.canceled_at = targetSubscription.canceled_at ?? isoNow();
+    } else {
+      patch.status = targetSubscription.status === "pending" ? "canceled" : "expired";
+      patch.current_period_end = targetSubscription.current_period_end ?? isoNow();
+    }
+  } else if (mapped !== "pending") {
+    patch.status = mapped;
+  }
+
+  await updateSubscriptionOrThrow(targetSubscription.id, patch);
   return { subscriptionStatus: mapped } as const;
+}
+
+async function claimWebhookEvent(input: {
+  eventId: string;
+  type: string;
+  resourceId: string;
+  requestId: string | null;
+}) {
+  const eventPayload = {
+    provider: GATEWAY,
+    event_id: input.eventId,
+    event_type: input.type,
+    resource_id: input.resourceId,
+    request_id: input.requestId,
+    status: "processing",
+    attempts: 1,
+    payload: { type: input.type, resourceId: input.resourceId },
+  };
+
+  const inserted = await supabaseAdmin
+    .from("billing_webhook_events")
+    .insert(eventPayload)
+    .select("id, status, attempts")
+    .single();
+
+  if (!inserted.error && inserted.data?.id) return { row: inserted.data as any, duplicateProcessed: false };
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("billing_webhook_events")
+    .select("id, status, attempts")
+    .eq("provider", GATEWAY)
+    .eq("event_id", input.eventId)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+  if (!existing?.id) throw new Error(inserted.error?.message ?? "Falha ao registrar webhook.");
+  if (existing.status === "processed") return { row: existing as any, duplicateProcessed: true };
+
+  const attempts = Number(existing.attempts ?? 0) + 1;
+  const { data: claimed, error: claimError } = await supabaseAdmin
+    .from("billing_webhook_events")
+    .update({ status: "processing", attempts, error_message: null })
+    .eq("id", existing.id)
+    .neq("status", "processed")
+    .select("id, status, attempts")
+    .single();
+  if (claimError || !claimed?.id) throw new Error(claimError?.message ?? "Falha ao reivindicar webhook.");
+  return { row: claimed as any, duplicateProcessed: false };
 }
 
 export async function processMercadoPagoWebhook(input: {
@@ -498,8 +807,8 @@ export async function processMercadoPagoWebhook(input: {
   if (!secret) throw new Error("MERCADO_PAGO_WEBHOOK_SECRET não configurado.");
 
   const resourceId = String((input.query["data.id"] as any) ?? input.body?.data?.id ?? input.body?.id ?? "");
-  const type = String(input.body?.type ?? input.body?.topic ?? input.query.type ?? "payment");
-  const requestId = input.headers["x-request-id"];
+  const type = String(input.body?.type ?? input.body?.topic ?? input.query.type ?? input.body?.action ?? "payment");
+  const requestId = firstHeader(input.headers["x-request-id"]);
   const signatureValid = validateMercadoPagoWebhookSignature({
     xSignature: input.headers["x-signature"],
     xRequestId: requestId,
@@ -509,29 +818,9 @@ export async function processMercadoPagoWebhook(input: {
 
   if (!signatureValid) return { ok: false, status: 401 as const, message: "invalid_signature" };
 
-  const eventId = String(input.body?.id ?? `${type}:${resourceId}:${Array.isArray(requestId) ? requestId[0] : requestId}`);
-  const eventPayload = {
-    provider: "mercadopago",
-    event_id: eventId,
-    event_type: type,
-    resource_id: resourceId,
-    request_id: Array.isArray(requestId) ? requestId[0] : requestId ?? null,
-    status: "received",
-    payload: { type, resourceId },
-  };
-
-  const { data: existing } = await supabaseAdmin
-    .from("billing_webhook_events")
-    .select("id, status")
-    .eq("provider", "mercadopago")
-    .eq("event_id", eventId)
-    .maybeSingle();
-
-  if (existing?.status === "processed") return { ok: true, status: 200 as const, duplicate: true };
-
-  const { data: eventRow } = existing?.id
-    ? await supabaseAdmin.from("billing_webhook_events").update({ attempts: (existing as any).attempts + 1, status: "received" }).eq("id", existing.id).select("id").single()
-    : await supabaseAdmin.from("billing_webhook_events").insert(eventPayload).select("id").single();
+  const eventId = String(input.body?.id ?? `${type}:${resourceId}:${requestId ?? "no-request-id"}`);
+  const claim = await claimWebhookEvent({ eventId, type, resourceId, requestId: requestId ?? null });
+  if (claim.duplicateProcessed) return { ok: true, status: 200 as const, duplicate: true };
 
   try {
     if (type.includes("preapproval") || type.includes("subscription")) {
@@ -541,15 +830,26 @@ export async function processMercadoPagoWebhook(input: {
       await processApprovedPayment(payment);
     }
 
-    if (eventRow?.id) {
-      await supabaseAdmin.from("billing_webhook_events").update({ status: "processed", processed_at: new Date().toISOString(), error_message: null }).eq("id", eventRow.id);
-    }
+    const { error } = await supabaseAdmin
+      .from("billing_webhook_events")
+      .update({ status: "processed", processed_at: isoNow(), error_message: null })
+      .eq("id", claim.row.id);
+    if (error) throw new Error(error.message);
     return { ok: true, status: 200 as const };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido no webhook.";
-    if (eventRow?.id) {
-      await supabaseAdmin.from("billing_webhook_events").update({ status: "failed", error_message: message }).eq("id", eventRow.id);
-    }
-    return { ok: true, status: 200 as const, processingError: message };
+    const { error: updateError } = await supabaseAdmin
+      .from("billing_webhook_events")
+      .update({ status: "failed", error_message: message })
+      .eq("id", claim.row.id);
+    if (updateError) throw new Error(updateError.message);
+    return { ok: false, status: 500 as const, processingError: message };
   }
 }
+
+export const __billingTestHooks = {
+  extractPixPaymentReference,
+  buildPaymentReference,
+  isUuid,
+  shouldPreserveAccessAfterGatewayCancel,
+};
