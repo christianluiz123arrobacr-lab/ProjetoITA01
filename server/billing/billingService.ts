@@ -11,6 +11,12 @@ import {
   cancelPreapproval,
   createPixPayment as createMercadoPagoPixPayment,
   createPreapprovalCheckout,
+  extractAuthorizedPaymentId,
+  extractChargebackPaymentId,
+  extractClaimPaymentId,
+  getAuthorizedPayment,
+  getChargeback,
+  getClaim,
   getPayment,
   getPreapproval,
   type MercadoPagoPayment,
@@ -45,6 +51,7 @@ type LocalSubscription = Record<string, any> & {
   gateway_payment_id?: string | null;
   metadata?: Record<string, any> | null;
   cancel_at_period_end?: boolean | null;
+  canonical_access_subscription_id?: string | null;
 };
 
 type LocalPayment = Record<string, any> & {
@@ -155,7 +162,10 @@ export function getRequiredAppBaseUrl() {
 }
 
 function getMercadoPagoWebhookUrl() {
-  return `${getRequiredAppBaseUrl()}/api/mercadopago/webhook`;
+  const url = new URL(`${getRequiredAppBaseUrl()}/api/mercadopago/webhook`);
+  const urlSecret = process.env.MERCADO_PAGO_WEBHOOK_URL_SECRET;
+  if (urlSecret) url.searchParams.set("webhook_secret", urlSecret);
+  return url.toString();
 }
 
 function getSubscriptionReturnUrl() {
@@ -242,6 +252,47 @@ async function resolveReusableCardReservation(subscription: LocalSubscription) {
   await markSubscriptionFailed(subscription.id, `Preapproval antigo ${preapproval.status ?? "desconhecido"} cancelado antes de nova tentativa.`, {
     gatewaySubscriptionId,
   });
+  return null;
+}
+
+
+async function findReusableCardSubscriptionForUser(userId: string, planId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("billing_subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("plan_id", planId)
+    .eq("gateway", GATEWAY)
+    .not("gateway_subscription_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) fail(error.message);
+
+  for (const row of (data ?? []) as LocalSubscription[]) {
+    if (row.metadata?.payment_method !== "card" || !row.gateway_subscription_id) continue;
+    const preapproval = await getPreapproval(String(row.gateway_subscription_id));
+    const mapped = mapMercadoPagoPreapprovalStatus(preapproval.status);
+    const checkoutUrl = preapproval.init_point ?? preapproval.sandbox_init_point ?? row.payment_url ?? null;
+    if (["pending", "active", "overdue"].includes(mapped)) {
+      await updateSubscriptionOrThrow(row.id, {
+        status: mapped === "active" ? "active" : "pending",
+        last_gateway_status: preapproval.status ?? null,
+        gateway_subscription_id: preapproval.id ? String(preapproval.id) : row.gateway_subscription_id,
+        payment_url: checkoutUrl,
+        reservation_expires_at: mapped === "pending" ? addMinutes(new Date(), RESERVATION_MINUTES).toISOString() : row.reservation_expires_at ?? null,
+        gateway_reconciliation_status: null,
+        gateway_reconciliation_error: null,
+      });
+      return { subscription: row, checkoutUrl, status: mapped };
+    }
+
+    await updateSubscriptionOrThrow(row.id, {
+      status: mapped === "canceled" ? "canceled" : "expired",
+      last_gateway_status: preapproval.status ?? null,
+      reservation_expires_at: null,
+    });
+  }
+
   return null;
 }
 
@@ -428,25 +479,22 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
 
   await expireStaleReservations();
   const plan = await getPlanForCheckout(input.planSlug);
-  await assertNoBlockingRecurringSubscription(input.userId);
-
-  const existing = await reusePendingSubscription(input.userId, plan.id, "card");
-  if (existing?.id) {
-    const reusable = await resolveReusableCardReservation(existing);
-    if (reusable?.usable) {
-      return {
-        subscriptionId: String(existing.id),
-        status: existing.status,
-        checkoutUrl: reusable.checkoutUrl,
-        paymentUrl: reusable.checkoutUrl,
-        gateway: "mercadopago" as const,
-        paymentMethod: "mercadopago_card" as const,
-      };
-    }
-  }
-
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
+
+  const reusableCard = await findReusableCardSubscriptionForUser(input.userId, plan.id);
+  if (reusableCard?.subscription?.id) {
+    return {
+      subscriptionId: String(reusableCard.subscription.id),
+      status: reusableCard.status,
+      checkoutUrl: reusableCard.checkoutUrl,
+      paymentUrl: reusableCard.checkoutUrl,
+      gateway: "mercadopago" as const,
+      paymentMethod: "mercadopago_card" as const,
+    };
+  }
+
+  await assertNoBlockingRecurringSubscription(input.userId);
   const reservation = await reserveCheckout({ userId: input.userId, userEmail: payerEmail, plan, paymentMethod: "card" });
   let checkout: MercadoPagoPreapproval | null = null;
 
@@ -827,6 +875,60 @@ async function claimWebhookEvent(input: {
   return { row: row as any, claimStatus: String(row.claim_status) };
 }
 
+
+function normalizeWebhookType(input: string) {
+  return input.toLowerCase().replace(/^topic:/, "").replace(/\s+/g, "_");
+}
+
+function isSubscriptionWebhookType(type: string) {
+  return ["subscription_preapproval", "subscription_authorized_payment", "subscription_preapproval_plan"].includes(type);
+}
+
+function hasValidWebhookFallback(input: { type: string; query: Record<string, unknown> }) {
+  const urlSecret = process.env.MERCADO_PAGO_WEBHOOK_URL_SECRET;
+  if (!urlSecret || !isSubscriptionWebhookType(input.type)) return false;
+  const provided = String(input.query.webhook_secret ?? input.query.secret ?? "");
+  return provided.length > 0 && provided === urlSecret;
+}
+
+async function processAuthorizedPaymentUpdate(resourceId: string) {
+  const authorized = await getAuthorizedPayment(resourceId);
+  const paymentId = extractAuthorizedPaymentId(authorized);
+  if (!paymentId) throw new Error("Pagamento autorizado sem payment_id oficial.");
+  const payment = await getPayment(paymentId);
+  return processApprovedPayment(payment);
+}
+
+async function processChargebackUpdate(resourceId: string) {
+  const chargeback = await getChargeback(resourceId);
+  const paymentId = extractChargebackPaymentId(chargeback);
+  if (!paymentId) throw new Error("Chargeback sem payment_id oficial.");
+  const payment = await getPayment(paymentId);
+  return processApprovedPayment(payment);
+}
+
+async function processClaimUpdate(resourceId: string) {
+  const claim = await getClaim(resourceId);
+  const paymentId = extractClaimPaymentId(claim);
+  if (!paymentId) throw new Error("Reclamação sem payment_id oficial.");
+  const payment = await getPayment(paymentId);
+  return processApprovedPayment(payment);
+}
+
+async function dispatchMercadoPagoWebhook(type: string, resourceId: string) {
+  if (!resourceId) throw new Error("Webhook Mercado Pago sem data.id.");
+  if (type === "payment" || type.startsWith("payment.")) {
+    const payment = await getPayment(resourceId);
+    return processApprovedPayment(payment);
+  }
+  if (type === "subscription_preapproval") return processPreapprovalUpdate(resourceId);
+  if (type === "subscription_authorized_payment") return processAuthorizedPaymentUpdate(resourceId);
+  if (type === "subscription_preapproval_plan") return { ignored: true, reason: "preapproval_plan_not_used" } as const;
+  if (type === "topic_chargebacks_wh" || type === "chargebacks" || type === "chargeback") return processChargebackUpdate(resourceId);
+  if (type === "topic_claims_integration_wh" || type === "claims" || type === "claim") return processClaimUpdate(resourceId);
+  return { ignored: true, reason: "unknown_webhook_type" } as const;
+}
+
 export async function processMercadoPagoWebhook(input: {
   headers: Record<string, string | string[] | undefined>;
   query: Record<string, unknown>;
@@ -836,7 +938,7 @@ export async function processMercadoPagoWebhook(input: {
   if (!secret) throw new Error("MERCADO_PAGO_WEBHOOK_SECRET não configurado.");
 
   const resourceId = String((input.query["data.id"] as any) ?? input.body?.data?.id ?? input.body?.id ?? "");
-  const type = String(input.body?.type ?? input.body?.topic ?? input.query.type ?? input.body?.action ?? "payment");
+  const type = normalizeWebhookType(String(input.body?.type ?? input.body?.topic ?? input.query.type ?? input.body?.action ?? "payment"));
   const requestId = firstHeader(input.headers["x-request-id"]);
   const signatureValid = validateMercadoPagoWebhookSignature({
     xSignature: input.headers["x-signature"],
@@ -845,7 +947,9 @@ export async function processMercadoPagoWebhook(input: {
     secret,
   });
 
-  if (!signatureValid) return { ok: false, status: 401 as const, message: "invalid_signature" };
+  if (!signatureValid && !hasValidWebhookFallback({ type, query: input.query })) {
+    return { ok: false, status: 401 as const, message: "invalid_signature" };
+  }
 
   const eventId = String(input.body?.id ?? `${type}:${resourceId}:${requestId ?? "no-request-id"}`);
   const claim = await claimWebhookEvent({ eventId, type, resourceId, requestId: requestId ?? null });
@@ -853,12 +957,7 @@ export async function processMercadoPagoWebhook(input: {
   if (claim.claimStatus === "already_processing") return { ok: false, status: 409 as const, message: "already_processing" };
 
   try {
-    if (type.includes("preapproval") || type.includes("subscription")) {
-      await processPreapprovalUpdate(resourceId);
-    } else {
-      const payment = await getPayment(resourceId);
-      await processApprovedPayment(payment);
-    }
+    await dispatchMercadoPagoWebhook(type, resourceId);
 
     const { error } = await supabaseAdmin
       .from("billing_webhook_events")

@@ -33,8 +33,31 @@ export const mercadoPagoPreapprovalSchema = z.object({
   sandbox_init_point: z.string().nullable().optional(),
 }).passthrough();
 
+export const mercadoPagoAuthorizedPaymentSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  status: z.string().nullable().optional(),
+  payment_id: z.union([z.string(), z.number()]).nullable().optional(),
+  payment: z.object({ id: z.union([z.string(), z.number()]).nullable().optional() }).passthrough().nullable().optional(),
+}).passthrough();
+
+export const mercadoPagoChargebackSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  payment_id: z.union([z.string(), z.number()]).nullable().optional(),
+  payment: z.object({ id: z.union([z.string(), z.number()]).nullable().optional() }).passthrough().nullable().optional(),
+}).passthrough();
+
+export const mercadoPagoClaimSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  resource_id: z.union([z.string(), z.number()]).nullable().optional(),
+  payment_id: z.union([z.string(), z.number()]).nullable().optional(),
+  payment: z.object({ id: z.union([z.string(), z.number()]).nullable().optional() }).passthrough().nullable().optional(),
+}).passthrough();
+
 export type MercadoPagoPayment = z.infer<typeof mercadoPagoPaymentSchema>;
 export type MercadoPagoPreapproval = z.infer<typeof mercadoPagoPreapprovalSchema>;
+export type MercadoPagoAuthorizedPayment = z.infer<typeof mercadoPagoAuthorizedPaymentSchema>;
+export type MercadoPagoChargeback = z.infer<typeof mercadoPagoChargebackSchema>;
+export type MercadoPagoClaim = z.infer<typeof mercadoPagoClaimSchema>;
 
 function getAccessToken() {
   const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
@@ -151,4 +174,32 @@ export async function createPixPayment(input: {
 export async function getPayment(id: string) {
   const json = await mercadoPagoFetch(`/v1/payments/${encodeURIComponent(id)}`);
   return mercadoPagoPaymentSchema.parse(json);
+}
+
+
+export async function getAuthorizedPayment(id: string) {
+  const json = await mercadoPagoFetch(`/authorized_payments/${encodeURIComponent(id)}`);
+  return mercadoPagoAuthorizedPaymentSchema.parse(json);
+}
+
+export async function getChargeback(id: string) {
+  const json = await mercadoPagoFetch(`/v1/chargebacks/${encodeURIComponent(id)}`);
+  return mercadoPagoChargebackSchema.parse(json);
+}
+
+export async function getClaim(id: string) {
+  const json = await mercadoPagoFetch(`/post-purchase/v1/claims/${encodeURIComponent(id)}`);
+  return mercadoPagoClaimSchema.parse(json);
+}
+
+export function extractAuthorizedPaymentId(resource: MercadoPagoAuthorizedPayment) {
+  return resource.payment_id ? String(resource.payment_id) : resource.payment?.id ? String(resource.payment.id) : null;
+}
+
+export function extractChargebackPaymentId(resource: MercadoPagoChargeback) {
+  return resource.payment_id ? String(resource.payment_id) : resource.payment?.id ? String(resource.payment.id) : null;
+}
+
+export function extractClaimPaymentId(resource: MercadoPagoClaim) {
+  return resource.payment_id ? String(resource.payment_id) : resource.payment?.id ? String(resource.payment.id) : resource.resource_id ? String(resource.resource_id) : null;
 }
