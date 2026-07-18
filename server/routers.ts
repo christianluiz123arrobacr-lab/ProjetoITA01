@@ -1326,6 +1326,8 @@ export const appRouter = router({
           gateway_subscription_id,
           gateway_payment_id,
           last_gateway_status,
+          gateway_reconciliation_status,
+          gateway_reconciliation_error,
           cancel_at_period_end,
           metadata,
           payment_url,
@@ -1377,6 +1379,8 @@ export const appRouter = router({
           gateway_subscription_id: subscription.gateway_subscription_id ?? null,
           gateway_payment_id: subscription.gateway_payment_id ?? null,
           last_gateway_status: subscription.last_gateway_status ?? null,
+          gateway_reconciliation_status: subscription.gateway_reconciliation_status ?? null,
+          gateway_reconciliation_error: subscription.gateway_reconciliation_error ?? null,
           cancel_at_period_end: subscription.cancel_at_period_end ?? null,
           metadata: subscription.metadata ?? null,
           payment_url: subscription.payment_url ?? null,
@@ -1452,6 +1456,8 @@ export const appRouter = router({
           gateway_subscription_id,
           gateway_payment_id,
           last_gateway_status,
+          gateway_reconciliation_status,
+          gateway_reconciliation_error,
           cancel_at_period_end,
           metadata,
           plan_id,
@@ -1497,6 +1503,8 @@ export const appRouter = router({
           gateway_subscription_id: subscription?.gateway_subscription_id ?? null,
           gateway_payment_id: subscription?.gateway_payment_id ?? null,
           last_gateway_status: subscription?.last_gateway_status ?? null,
+          gateway_reconciliation_status: subscription?.gateway_reconciliation_status ?? null,
+          gateway_reconciliation_error: subscription?.gateway_reconciliation_error ?? null,
           cancel_at_period_end: subscription?.cancel_at_period_end ?? null,
           metadata: subscription?.metadata ?? null,
           plan_id: subscription?.plan_id ? String(subscription.plan_id) : plan?.id ? String(plan.id) : null,
@@ -1647,12 +1655,14 @@ export const appRouter = router({
       .query(async ({ input }) => {
         let query = supabaseAdmin
           .from("billing_payments")
-          .select("*")
+          .select("id, subscription_id, original_subscription_id, applied_to_subscription_id, user_id, plan_id, gateway, gateway_payment_id, payment_method, status, amount_cents, currency, approved_at, access_applied_at, current_period_start, current_period_end, access_duration_value, access_duration_unit, gateway_reconciliation_status, gateway_reconciliation_error, refunded_at, expires_at, payment_url, metadata, created_at, updated_at")
           .order("created_at", { ascending: false })
           .limit(100);
 
         if (input?.userId) query = query.eq("user_id", input.userId);
-        if (input?.subscriptionId) query = query.eq("subscription_id", input.subscriptionId);
+        if (input?.subscriptionId) {
+          query = query.or(`subscription_id.eq.${input.subscriptionId},original_subscription_id.eq.${input.subscriptionId},applied_to_subscription_id.eq.${input.subscriptionId}`);
+        }
 
         const { data, error } = await query;
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });

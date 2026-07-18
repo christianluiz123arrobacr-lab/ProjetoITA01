@@ -225,6 +225,26 @@ async function reusePendingSubscription(userId: string, planId: string, paymentM
   return ((data ?? []).find((item: any) => item.metadata?.payment_method === paymentMethod) ?? null) as LocalSubscription | null;
 }
 
+async function resolveReusableCardReservation(subscription: LocalSubscription) {
+  const gatewaySubscriptionId = subscription.gateway_subscription_id ? String(subscription.gateway_subscription_id) : null;
+  if (!gatewaySubscriptionId) return subscription.payment_url ? { checkoutUrl: subscription.payment_url, usable: true } : null;
+
+  const preapproval = await getPreapproval(gatewaySubscriptionId);
+  const status = mapMercadoPagoPreapprovalStatus(preapproval.status);
+  if (["pending", "active", "overdue"].includes(status)) {
+    return {
+      checkoutUrl: preapproval.init_point ?? preapproval.sandbox_init_point ?? subscription.payment_url ?? null,
+      usable: true,
+    };
+  }
+
+  await cancelPreapproval(gatewaySubscriptionId, `mp-cancel-stale-${subscription.id}`);
+  await markSubscriptionFailed(subscription.id, `Preapproval antigo ${preapproval.status ?? "desconhecido"} cancelado antes de nova tentativa.`, {
+    gatewaySubscriptionId,
+  });
+  return null;
+}
+
 async function reserveCheckout(input: {
   userId: string;
   userEmail: string | null;
@@ -267,15 +287,21 @@ async function markSubscriptionFailed(
   if (error) throw new Error(error.message);
 }
 
-async function finalizeInvite(subscriptionId: string) {
-  const { error } = await supabaseAdmin.rpc("finalize_mercadopago_invite", { p_subscription_id: subscriptionId });
-  if (error) throw new Error(error.message);
-}
 
 async function markPaymentFailed(paymentId: string, reason: string) {
+  const { data: payment, error: fetchError } = await supabaseAdmin
+    .from("billing_payments")
+    .select("metadata")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (fetchError) throw new Error(fetchError.message);
+
   const { error } = await supabaseAdmin
     .from("billing_payments")
-    .update({ status: "failed", metadata: { failure_reason: reason } })
+    .update({
+      status: "failed",
+      metadata: { ...((payment as any)?.metadata ?? {}), failure_reason: reason },
+    })
     .eq("id", paymentId)
     .eq("status", "pending");
   if (error) throw new Error(error.message);
@@ -366,7 +392,10 @@ async function upsertRecurringPaymentRecord(input: {
       gateway: GATEWAY,
       gateway_payment_id: gatewayPaymentId,
       payment_method: "mercadopago_card",
-      status: input.paymentStatus,
+      status: "pending",
+      original_subscription_id: input.subscription.id,
+      access_duration_value: 1,
+      access_duration_unit: "months",
       amount_cents: getContractedAmount(input.subscription),
       currency: getContractedCurrency(input.subscription),
       metadata: {
@@ -402,15 +431,18 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   await assertNoBlockingRecurringSubscription(input.userId);
 
   const existing = await reusePendingSubscription(input.userId, plan.id, "card");
-  if (existing?.payment_url) {
-    return {
-      subscriptionId: String(existing.id),
-      status: existing.status,
-      checkoutUrl: existing.payment_url,
-      paymentUrl: existing.payment_url,
-      gateway: "mercadopago" as const,
-      paymentMethod: "mercadopago_card" as const,
-    };
+  if (existing?.id) {
+    const reusable = await resolveReusableCardReservation(existing);
+    if (reusable?.usable) {
+      return {
+        subscriptionId: String(existing.id),
+        status: existing.status,
+        checkoutUrl: reusable.checkoutUrl,
+        paymentUrl: reusable.checkoutUrl,
+        gateway: "mercadopago" as const,
+        paymentMethod: "mercadopago_card" as const,
+      };
+    }
   }
 
   const profile = await getUserProfile(input.userId);
@@ -435,7 +467,6 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
       last_gateway_status: checkout.status ?? null,
       payment_url: checkoutUrl,
     });
-    await finalizeInvite(reservation.subscriptionId);
 
     return {
       subscriptionId: reservation.subscriptionId,
@@ -516,6 +547,8 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
       currency: normalizeCurrency(plan.currency),
       expires_at: expiresAt,
       original_subscription_id: reservation.subscriptionId,
+      access_duration_value: ACCESS_DAYS_PER_PAYMENT,
+      access_duration_unit: "days",
       metadata: { external_reference_kind: "pix_single_30_days" },
     })
     .select("id")
@@ -556,7 +589,6 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
       gateway_payment_id: mpPayment.id ? String(mpPayment.id) : null,
       last_gateway_status: mpPayment.status ?? null,
     });
-    await finalizeInvite(reservation.subscriptionId);
 
     return {
       subscriptionId: reservation.subscriptionId,

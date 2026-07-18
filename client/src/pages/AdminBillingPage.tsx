@@ -42,6 +42,8 @@ type AdminBillingSubscriptionRow = {
   gateway_subscription_id?: string | null;
   gateway_payment_id?: string | null;
   last_gateway_status?: string | null;
+  gateway_reconciliation_status?: string | null;
+  gateway_reconciliation_error?: string | null;
   cancel_at_period_end?: boolean | null;
   metadata?: Record<string, unknown> | null;
   payment_url: string | null;
@@ -104,7 +106,8 @@ type StatusFilter =
   | "overdue"
   | "expired"
   | "canceled"
-  | "failed";
+  | "failed"
+  | "reconciliation";
 type AdminBillingTab = "subscriptions" | "plans" | "invites";
 
 function formatDate(date?: string | null) {
@@ -208,6 +211,9 @@ export default function AdminBillingPage() {
 
   const filteredSubscriptions = useMemo(() => {
     if (statusFilter === "all") return subscriptions;
+    if (statusFilter === "reconciliation") {
+      return subscriptions.filter((subscription) => Boolean(subscription.gateway_reconciliation_status));
+    }
 
     return subscriptions.filter(
       (subscription) => subscription.status === statusFilter
@@ -222,6 +228,7 @@ export default function AdminBillingPage() {
       active: subscriptions.filter((item) => item.status === "active").length,
       expired: subscriptions.filter((item) => item.status === "expired").length,
       canceled: subscriptions.filter((item) => item.status === "canceled").length,
+      reconciliation: subscriptions.filter((item) => Boolean(item.gateway_reconciliation_status)).length,
     };
   }, [subscriptions]);
 
@@ -648,6 +655,7 @@ export default function AdminBillingPage() {
                   ["overdue", "Em atraso"],
                   ["expired", "Expiradas"],
                   ["canceled", "Canceladas"],
+                  ["reconciliation", `Reconciliação necessária (${subscriptionStats.reconciliation})`],
                 ].map(([value, label]) => (
                   <button
                     key={value}
@@ -714,6 +722,12 @@ export default function AdminBillingPage() {
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
                               {subscription.gateway}
                             </span>
+
+                            {subscription.gateway_reconciliation_status ? (
+                              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                                Reconciliação necessária
+                              </span>
+                            ) : null}
                           </div>
 
                           <h3 className="mt-3 text-lg font-black text-slate-900">
@@ -727,6 +741,15 @@ export default function AdminBillingPage() {
                           <p className="mt-2 text-xs text-slate-400">
                             Solicitada em {formatDate(subscription.created_at)}
                           </p>
+
+                          {subscription.gateway_reconciliation_status ? (
+                            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                              <p className="font-black uppercase tracking-wide">Reconciliação financeira</p>
+                              <p className="mt-1">Status: {subscription.gateway_reconciliation_status}</p>
+                              <p className="mt-1 break-all">Mercado Pago: {subscription.gateway_subscription_id || subscription.gateway_payment_id || "Sem ID"}</p>
+                              <p className="mt-1 line-clamp-2">Erro: {subscription.gateway_reconciliation_error || "Sem detalhe registrado"}</p>
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
