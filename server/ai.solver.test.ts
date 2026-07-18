@@ -1,9 +1,24 @@
 import { describe, it, expect, vi } from "vitest";
 import { appRouter } from "./routers";
 
+function createAuthedCaller() {
+  return appRouter.createCaller({
+    req: {
+      headers: {},
+      socket: { remoteAddress: "127.0.0.1" },
+    },
+    res: {},
+    user: {
+      id: "00000000-0000-0000-0000-000000000001",
+      email: "student@example.com",
+      role: "student",
+    },
+  } as any);
+}
+
 describe("ai.solvePhysics", () => {
   it("should reject when both text and image are missing", async () => {
-    const caller = appRouter.createCaller({} as any);
+    const caller = createAuthedCaller();
 
     try {
       await caller.ai.solvePhysics({
@@ -18,7 +33,7 @@ describe("ai.solvePhysics", () => {
   });
 
   it("should accept text input", async () => {
-    const caller = appRouter.createCaller({} as any);
+    const caller = createAuthedCaller();
 
     // Mock the invokeLLM to avoid actual API calls
     vi.mock("./_core/llm", () => ({
@@ -45,7 +60,7 @@ describe("ai.solvePhysics", () => {
   });
 
   it("should handle image input with base64 encoding", async () => {
-    const caller = appRouter.createCaller({} as any);
+    const caller = createAuthedCaller();
 
     const mockBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
@@ -66,7 +81,7 @@ describe("ai.solvePhysics", () => {
   });
 
   it("should return a string result", async () => {
-    const caller = appRouter.createCaller({} as any);
+    const caller = createAuthedCaller();
 
     try {
       const result = await caller.ai.solvePhysics({
