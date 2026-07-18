@@ -9,6 +9,14 @@ import { invokeLLM } from "./_core/llm.js";
 import { assertRateLimit, assertRequestRateLimit } from "./_core/rateLimit.js";
 import { supabaseAdmin } from "./_core/supabaseAdmin.js";
 import {
+  cancelAdminMercadoPagoSubscription,
+  cancelUserMercadoPagoSubscription,
+  createCardSubscriptionCheckout,
+  createPixPayment,
+  getBillingCapabilities,
+  getMyPayments,
+} from "./billing/billingService.js";
+import {
   buildQuestionInsertPayload,
   getQuestionImportSourceId,
   questionImportPayloadSchema,
@@ -486,6 +494,46 @@ export const appRouter = router({
   }),
 
   billing: router({
+    getCapabilities: publicProcedure.query(() => getBillingCapabilities()),
+
+    createCardSubscriptionCheckout: protectedProcedure
+      .input(z.object({ planSlug: z.string().min(1).max(120) }))
+      .mutation(async ({ ctx, input }) =>
+        createCardSubscriptionCheckout({
+          userId: ctx.user.id,
+          userEmail: ctx.user.email ?? null,
+          planSlug: input.planSlug,
+        })
+      ),
+
+    createPixPayment: protectedProcedure
+      .input(z.object({ planSlug: z.string().min(1).max(120) }))
+      .mutation(async ({ ctx, input }) =>
+        createPixPayment({
+          userId: ctx.user.id,
+          userEmail: ctx.user.email ?? null,
+          planSlug: input.planSlug,
+        })
+      ),
+
+    getMySubscription: protectedProcedure.query(async ({ ctx }) => {
+      const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
+      return flattenBillingSubscription(latestSubscription);
+    }),
+
+    getMyPayments: protectedProcedure.query(async ({ ctx }) => getMyPayments(ctx.user.id)),
+
+    cancelMySubscription: protectedProcedure.mutation(async ({ ctx }) =>
+      cancelUserMercadoPagoSubscription(ctx.user.id)
+    ),
+
+    refreshMyPaymentStatus: protectedProcedure.query(async ({ ctx }) => {
+      return {
+        subscription: flattenBillingSubscription(await getLatestUserBillingSubscription(ctx.user.id)),
+        payments: await getMyPayments(ctx.user.id),
+      };
+    }),
+
     listPublicPlans: publicProcedure.query(async () => {
       const rpcResponse = await supabaseAdmin.rpc("get_public_billing_plans");
 
@@ -528,6 +576,14 @@ export const appRouter = router({
     requestManualSubscription: protectedProcedure
       .input(z.object({ planSlug: z.string().min(1).max(120) }))
       .mutation(async ({ ctx, input }) => {
+        const capabilities = getBillingCapabilities();
+        if (!capabilities.manualPixFallbackEnabled) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Pix manual está desabilitado. Use Mercado Pago.",
+          });
+        }
+
         const planSlug = input.planSlug.trim();
         const planSlugCandidates = getBillingPlanSlugCandidates(planSlug);
 
@@ -1542,18 +1598,70 @@ export const appRouter = router({
         return { success: true } as const;
       }),
 
+    cancelMercadoPagoSubscriptionNow: adminProcedure
+      .input(z.object({ subscriptionId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await cancelAdminMercadoPagoSubscription({
+          subscriptionId: input.subscriptionId,
+          adminUserId: ctx.user.id,
+        });
+
+        await supabaseAdmin.from("admin_logs").insert({
+          admin_user_id: ctx.user.id,
+          action: "billing_mercadopago_subscription_canceled_now",
+          entity_type: "billing_subscription",
+          entity_id: input.subscriptionId,
+          description: "Assinatura Mercado Pago cancelada imediatamente no ADM financeiro",
+          level: "warning",
+          metadata: input,
+        });
+
+        return result;
+      }),
+
+    listBillingPayments: adminProcedure
+      .input(z.object({ userId: z.string().uuid().optional(), subscriptionId: z.string().uuid().optional() }).optional())
+      .query(async ({ input }) => {
+        let query = supabaseAdmin
+          .from("billing_payments")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (input?.userId) query = query.eq("user_id", input.userId);
+        if (input?.subscriptionId) query = query.eq("subscription_id", input.subscriptionId);
+
+        const { data, error } = await query;
+        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        return data ?? [];
+      }),
+
+    listBillingWebhookEvents: adminProcedure.query(async () => {
+      const { data, error } = await supabaseAdmin
+        .from("billing_webhook_events")
+        .select("id, provider, event_id, event_type, resource_id, request_id, status, attempts, error_message, received_at, processed_at, created_at")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return data ?? [];
+    }),
+
     renewBillingSubscription: adminProcedure
       .input(z.object({ subscriptionId: z.string().uuid(), months: z.number().int().min(1).max(24).default(1) }))
       .mutation(async ({ ctx, input }) => {
         const now = new Date();
         const { data: subscription, error: subscriptionError } = await supabaseAdmin
           .from("billing_subscriptions")
-          .select("id, current_period_end")
+          .select("id, current_period_end, gateway, metadata")
           .eq("id", input.subscriptionId)
           .maybeSingle();
 
         if (subscriptionError) throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionError.message });
         if (!subscription?.id) throw new TRPCError({ code: "NOT_FOUND", message: "Assinatura não encontrada." });
+        if ((subscription as any).gateway === "mercadopago" && (subscription as any).metadata?.payment_method === "card") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura recorrente Mercado Pago não deve ser renovada manualmente." });
+        }
 
         const renewalBase = subscription.current_period_end && new Date(subscription.current_period_end) > now
           ? new Date(subscription.current_period_end)

@@ -19,7 +19,7 @@ import {
 import PublicHeader from "@/components/layout/PublicHeader";
 import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { getMyLatestSubscriptionRequest } from "@/services/billing.service";
+import { getBillingCapabilities, getMyLatestSubscriptionRequest, refreshMyPaymentStatus } from "@/services/billing.service";
 
 const MANUAL_PIX = {
   key: "66997227099",
@@ -118,6 +118,8 @@ export default function SubscriptionPendingPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
+  const [manualPixEnabled, setManualPixEnabled] = useState(false);
+  const [latestPayment, setLatestPayment] = useState<any | null>(null);
 
   const whatsappUrl = useMemo(() => {
     const planName = subscription?.plan_name || "plano da plataforma";
@@ -128,6 +130,14 @@ export default function SubscriptionPendingPage() {
 
     return `https://wa.me/${MANUAL_PIX.whatsapp}?text=${encodeURIComponent(message)}`;
   }, [subscription]);
+
+  useEffect(() => {
+    if (!subscription || ["active", "expired", "failed", "refunded", "canceled"].includes(subscription.status)) return;
+    const timer = window.setInterval(() => {
+      loadLatestSubscription(true);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [subscription?.subscription_id, subscription?.status]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -155,7 +165,14 @@ export default function SubscriptionPendingPage() {
       setErrorMessage("");
       setCopyMessage("");
 
-      const data = await getMyLatestSubscriptionRequest();
+      const [data, capabilities, refreshed] = await Promise.all([
+        getMyLatestSubscriptionRequest(),
+        getBillingCapabilities(),
+        refreshMyPaymentStatus().catch(() => null),
+      ]);
+      setManualPixEnabled(Boolean(capabilities.manualPixFallbackEnabled));
+      const payments = Array.isArray(refreshed?.payments) ? refreshed.payments : [];
+      setLatestPayment(payments[0] ?? null);
 
       if (!data) {
         setSubscription(null);
@@ -334,7 +351,7 @@ export default function SubscriptionPendingPage() {
               </div>
             ) : null}
 
-            {showPix ? (
+            {manualPixEnabled && showPix ? (
               <div className="mt-6 rounded-3xl border border-cyan-300/25 bg-cyan-300/10 p-5">
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950">

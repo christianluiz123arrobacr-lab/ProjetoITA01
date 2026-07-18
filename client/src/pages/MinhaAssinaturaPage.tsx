@@ -15,7 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getMyLatestSubscriptionRequest } from "@/services/billing.service";
+import { cancelMySubscription, getBillingCapabilities, getMyLatestSubscriptionRequest, getMyPayments } from "@/services/billing.service";
 import { manualPaymentConfig } from "@/config/payment";
 import {
   formatPriceFromCents,
@@ -110,6 +110,12 @@ function getStatusInfo(status: string) {
   }
 }
 
+function formatGatewayLabel(gateway?: string | null) {
+  if (gateway === "mercadopago") return "Mercado Pago";
+  if (gateway === "manual") return "Manual";
+  return gateway || "Sem gateway";
+}
+
 export default function MinhaAssinaturaPage() {
   const [subscription, setSubscription] = useState<MySubscriptionRow | null>(
     null
@@ -118,9 +124,12 @@ export default function MinhaAssinaturaPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
+  const [manualPixEnabled, setManualPixEnabled] = useState(false);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [canceling, setCanceling] = useState(false);
 
   const shouldShowManualPayment =
-    subscription?.status === "manual_review" || subscription?.status === "pending";
+    manualPixEnabled && (subscription?.status === "manual_review" || subscription?.status === "pending");
 
   async function loadSubscription(showRefreshing = false) {
     try {
@@ -133,7 +142,13 @@ export default function MinhaAssinaturaPage() {
       setErrorMessage("");
       setCopyMessage("");
 
-      const data = await getMyLatestSubscriptionRequest();
+      const [data, capabilities, userPayments] = await Promise.all([
+        getMyLatestSubscriptionRequest(),
+        getBillingCapabilities(),
+        getMyPayments().catch(() => []),
+      ]);
+      setManualPixEnabled(Boolean(capabilities.manualPixFallbackEnabled));
+      setPayments(Array.isArray(userPayments) ? userPayments : []);
 
       if (!data) {
         setSubscription(null);
@@ -162,6 +177,19 @@ export default function MinhaAssinaturaPage() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  async function handleCancelSubscription() {
+    if (!window.confirm("Cancelar próximas cobranças da assinatura? O acesso já pago será preservado até o fim do período.")) return;
+    try {
+      setCanceling(true);
+      await cancelMySubscription();
+      await loadSubscription(true);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível cancelar a assinatura.");
+    } finally {
+      setCanceling(false);
     }
   }
 
@@ -339,7 +367,7 @@ export default function MinhaAssinaturaPage() {
 
               <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
                 <span className="text-slate-400">Gateway</span>
-                <strong className="text-white">{subscription.gateway}</strong>
+                <strong className="text-white">{formatGatewayLabel(subscription.gateway)}</strong>
               </div>
 
               <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
@@ -379,6 +407,17 @@ export default function MinhaAssinaturaPage() {
                 </Link>
               )}
 
+              {subscription.gateway === "mercadopago" && subscription.status === "active" && (
+                <Button
+                  variant="outline"
+                  onClick={handleCancelSubscription}
+                  disabled={canceling}
+                  className="w-full rounded-2xl border-red-300/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                >
+                  {canceling ? "Cancelando..." : "Cancelar próximas cobranças"}
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 onClick={() => loadSubscription(true)}
@@ -400,6 +439,23 @@ export default function MinhaAssinaturaPage() {
             </div>
           </Card>
         </div>
+
+        {payments.length > 0 && (
+          <Card className="mx-auto mt-6 max-w-4xl border-white/10 bg-white/[0.04] p-6 text-white">
+            <h2 className="text-xl font-black">Histórico de pagamentos</h2>
+            <div className="mt-4 space-y-3">
+              {payments.slice(0, 8).map((payment) => (
+                <div key={payment.id} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-bold text-white">{formatPriceFromCents(Number(payment.amount_cents || 0))}</p>
+                    <p className="text-xs text-slate-400">{formatGatewayLabel(payment.gateway)} • {payment.payment_method}</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-slate-200">{payment.status}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {shouldShowManualPayment && (
           <Card className="mx-auto mt-6 max-w-4xl border-emerald-400/30 bg-emerald-500/10 p-6 text-emerald-50">

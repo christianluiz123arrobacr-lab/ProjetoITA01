@@ -34,6 +34,34 @@ export type PublicBillingPlanRow = {
   has_available_slots: boolean;
 };
 
+
+export type BillingCapabilities = {
+  mode: "mercadopago" | "manual";
+  mercadoPagoEnabled: boolean;
+  manualPixFallbackEnabled: boolean;
+};
+
+export type MercadoPagoPixResult = {
+  subscriptionId: string;
+  paymentId: string;
+  status: string;
+  amountCents: number;
+  currency: string;
+  qrCode: string | null;
+  qrCodeBase64: string | null;
+  expiresAt: string | null;
+  paymentUrl: string | null;
+};
+
+export type MercadoPagoCheckoutResult = {
+  subscriptionId: string;
+  status: string;
+  checkoutUrl: string | null;
+  paymentUrl: string | null;
+  gateway: "mercadopago";
+  paymentMethod: "mercadopago_card";
+};
+
 export type ManualSubscriptionRequestResult = {
   id?: string;
   user_id?: string;
@@ -89,8 +117,8 @@ export const BILLING_PLANS: BillingPlan[] = [
       "Plano inicial para os primeiros alunos que entrarem durante a fase beta.",
     isBeta: true,
     maxActiveSubscriptions: 15,
-    usedSlots: 6,
-    remainingSlots: 9,
+    usedSlots: 0,
+    remainingSlots: null,
     hasAvailableSlots: true,
   },
   {
@@ -181,4 +209,36 @@ export async function getMyActiveSubscription() {
 
 export async function getMyLatestSubscriptionRequest() {
   return trpcClient.billing.getMyLatestSubscriptionRequest.query();
+}
+
+export async function getBillingCapabilities(): Promise<BillingCapabilities> {
+  return trpcClient.billing.getCapabilities.query();
+}
+
+export async function createCardSubscriptionCheckout(
+  planSlug: string
+): Promise<MercadoPagoCheckoutResult> {
+  return trpcClient.billing.createCardSubscriptionCheckout.mutate({ planSlug });
+}
+
+export async function createMercadoPagoPixPayment(
+  planSlug: string
+): Promise<MercadoPagoPixResult> {
+  return trpcClient.billing.createPixPayment.mutate({ planSlug });
+}
+
+export async function getMySubscription() {
+  return trpcClient.billing.getMySubscription.query();
+}
+
+export async function getMyPayments() {
+  return trpcClient.billing.getMyPayments.query();
+}
+
+export async function cancelMySubscription() {
+  return trpcClient.billing.cancelMySubscription.mutate();
+}
+
+export async function refreshMyPaymentStatus() {
+  return trpcClient.billing.refreshMyPaymentStatus.query();
 }

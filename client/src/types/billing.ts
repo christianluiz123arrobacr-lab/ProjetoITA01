@@ -1,6 +1,6 @@
 export type BillingCycle = "MONTHLY" | "YEARLY" | "ONE_TIME";
 
-export type BillingGateway = "manual";
+export type BillingGateway = "manual" | "mercadopago";
 
 export type BillingSubscriptionStatus =
   | "pending"
@@ -10,7 +10,8 @@ export type BillingSubscriptionStatus =
   | "expired"
   | "refunded"
   | "failed"
-  | "manual_review";
+  | "manual_review"
+  | "trialing";
 
 export interface BillingPlan {
   id: string;
@@ -53,6 +54,10 @@ export interface BillingSubscription {
   status: BillingSubscriptionStatus;
   gateway: BillingGateway;
 
+  gateway_customer_id: string | null;
+  gateway_subscription_id: string | null;
+  gateway_payment_id: string | null;
+
   payment_url: string | null;
 
   started_at: string | null;
@@ -60,6 +65,10 @@ export interface BillingSubscription {
   current_period_end: string | null;
   next_due_date: string | null;
   canceled_at: string | null;
+
+  last_gateway_status: string | null;
+  cancel_at_period_end: boolean;
+  reservation_expires_at: string | null;
 
   metadata: Record<string, unknown>;
 
