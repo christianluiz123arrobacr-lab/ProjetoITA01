@@ -10,6 +10,7 @@ import {
   shouldBlockFromPayment,
   shouldGrantAccessFromPayment,
   shouldPreserveAccessOnPreapprovalCancel,
+  validateBuyerEmailAddress,
   validateClientCheckoutInput,
   validateGatewayPayment,
   validatePlanForCheckout,
@@ -111,6 +112,12 @@ describe("Mercado Pago billing rules", () => {
 
   it("rejeita usuário sem autenticação", () => {
     expect(validateClientCheckoutInput({ planSlug: "mensal-1099" }, false)).toEqual({ ok: false, reason: "unauthenticated" });
+  });
+
+  it("rejeita e-mail ausente, inválido ou fictício antes de chamar o Mercado Pago", () => {
+    expect(validateBuyerEmailAddress(null)).toEqual({ ok: false, reason: "invalid_buyer_email" });
+    expect(validateBuyerEmailAddress("comprador@rumoaoita.local")).toEqual({ ok: false, reason: "invalid_buyer_email" });
+    expect(validateBuyerEmailAddress("aluno@example.com")).toEqual({ ok: true });
   });
 
   it("rejeita plano inativo, sem vagas e convite ausente", () => {

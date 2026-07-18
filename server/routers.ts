@@ -1323,6 +1323,11 @@ export const appRouter = router({
           user_id,
           status,
           gateway,
+          gateway_subscription_id,
+          gateway_payment_id,
+          last_gateway_status,
+          cancel_at_period_end,
+          metadata,
           payment_url,
           plan_id,
           started_at,
@@ -1369,6 +1374,11 @@ export const appRouter = router({
           plan_price_cents: Number(plan?.price_cents || 0),
           status: subscription.status,
           gateway: subscription.gateway || "manual",
+          gateway_subscription_id: subscription.gateway_subscription_id ?? null,
+          gateway_payment_id: subscription.gateway_payment_id ?? null,
+          last_gateway_status: subscription.last_gateway_status ?? null,
+          cancel_at_period_end: subscription.cancel_at_period_end ?? null,
+          metadata: subscription.metadata ?? null,
           payment_url: subscription.payment_url ?? null,
           started_at: subscription.started_at ?? null,
           current_period_end: subscription.current_period_end ?? null,
@@ -1438,6 +1448,12 @@ export const appRouter = router({
           id,
           user_id,
           status,
+          gateway,
+          gateway_subscription_id,
+          gateway_payment_id,
+          last_gateway_status,
+          cancel_at_period_end,
+          metadata,
           plan_id,
           current_period_end,
           next_due_date,
@@ -1477,6 +1493,12 @@ export const appRouter = router({
           last_seen_at: profile.last_seen_at ?? null,
           subscription_id: subscription?.id ? String(subscription.id) : null,
           subscription_status: subscription?.status ?? null,
+          gateway: subscription?.gateway ?? null,
+          gateway_subscription_id: subscription?.gateway_subscription_id ?? null,
+          gateway_payment_id: subscription?.gateway_payment_id ?? null,
+          last_gateway_status: subscription?.last_gateway_status ?? null,
+          cancel_at_period_end: subscription?.cancel_at_period_end ?? null,
+          metadata: subscription?.metadata ?? null,
           plan_id: subscription?.plan_id ? String(subscription.plan_id) : plan?.id ? String(plan.id) : null,
           plan_slug: plan?.slug ?? null,
           plan_name: plan?.name ?? null,
@@ -1606,7 +1628,7 @@ export const appRouter = router({
           adminUserId: ctx.user.id,
         });
 
-        await supabaseAdmin.from("admin_logs").insert({
+        const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
           admin_user_id: ctx.user.id,
           action: "billing_mercadopago_subscription_canceled_now",
           entity_type: "billing_subscription",
@@ -1615,6 +1637,7 @@ export const appRouter = router({
           level: "warning",
           metadata: input,
         });
+        if (logError) throw new TRPCError({ code: "BAD_REQUEST", message: logError.message });
 
         return result;
       }),
@@ -1698,15 +1721,27 @@ export const appRouter = router({
     cancelBillingSubscription: adminProcedure
       .input(z.object({ subscriptionId: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
+        const { data: subscription, error: fetchError } = await supabaseAdmin
+          .from("billing_subscriptions")
+          .select("id, gateway, gateway_subscription_id, metadata")
+          .eq("id", input.subscriptionId)
+          .maybeSingle();
+        if (fetchError) throw new TRPCError({ code: "BAD_REQUEST", message: fetchError.message });
+        if (!subscription?.id) throw new TRPCError({ code: "NOT_FOUND", message: "Assinatura não encontrada." });
+
+        if ((subscription as any).gateway === "mercadopago" && (subscription as any).metadata?.payment_method === "card") {
+          return cancelAdminMercadoPagoSubscription({ subscriptionId: input.subscriptionId, adminUserId: ctx.user.id });
+        }
+
         const now = new Date().toISOString();
         const { error } = await supabaseAdmin
           .from("billing_subscriptions")
-          .update({ status: "canceled", canceled_at: now })
+          .update({ status: "canceled", canceled_at: now, current_period_end: now, cancel_at_period_end: false })
           .eq("id", input.subscriptionId);
 
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
-        await supabaseAdmin.from("admin_logs").insert({
+        const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
           admin_user_id: ctx.user.id,
           action: "billing_subscription_canceled",
           entity_type: "billing_subscription",
@@ -1715,6 +1750,7 @@ export const appRouter = router({
           level: "warning",
           metadata: input,
         });
+        if (logError) throw new TRPCError({ code: "BAD_REQUEST", message: logError.message });
 
         return { success: true } as const;
       }),

@@ -39,6 +39,11 @@ type AdminBillingSubscriptionRow = {
 
   status: string;
   gateway: string;
+  gateway_subscription_id?: string | null;
+  gateway_payment_id?: string | null;
+  last_gateway_status?: string | null;
+  cancel_at_period_end?: boolean | null;
+  metadata?: Record<string, unknown> | null;
   payment_url: string | null;
 
   started_at: string | null;
@@ -87,6 +92,10 @@ type PlanFormState = {
   maxActiveSubscriptions: string;
   isActive: boolean;
 };
+
+function isMercadoPagoCardSubscription(subscription: Pick<AdminBillingSubscriptionRow, "gateway" | "metadata">) {
+  return subscription.gateway === "mercadopago" && subscription.metadata?.payment_method === "card";
+}
 
 type StatusFilter =
   | "all"
@@ -167,6 +176,7 @@ export default function AdminBillingPage() {
   const listBillingPlanInvitesQuery = trpc.admin.listBillingPlanInvites.useQuery(undefined, { enabled: false });
   const renewBillingSubscriptionMutation = trpc.admin.renewBillingSubscription.useMutation();
   const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
+  const cancelMercadoPagoSubscriptionNowMutation = trpc.admin.cancelMercadoPagoSubscriptionNow.useMutation();
   const updateBillingPlanMutation = trpc.admin.updateBillingPlan.useMutation();
   const createBillingPlanInviteMutation = trpc.admin.createBillingPlanInvite.useMutation();
   const deleteBillingPlanInviteMutation = trpc.admin.deleteBillingPlanInvite.useMutation();
@@ -351,23 +361,32 @@ export default function AdminBillingPage() {
     }
   }
 
-  async function cancelSubscription(subscriptionId: string) {
-    const confirmed = window.confirm("Cancelar esta assinatura?");
+  async function cancelSubscription(subscription: AdminBillingSubscriptionRow) {
+    const recurringCard = isMercadoPagoCardSubscription(subscription);
+    const confirmed = window.confirm(
+      recurringCard
+        ? "Cancelar agora a recorrência no Mercado Pago? Esta ação administrativa é imediata e impede novas cobranças."
+        : "Cancelar esta assinatura agora? O acesso pago será bloqueado imediatamente."
+    );
 
     if (!confirmed) return;
 
     try {
-      setActionLoadingId(subscriptionId);
+      setActionLoadingId(subscription.subscription_id);
       setError("");
       setSuccess("");
 
-      await cancelBillingSubscriptionMutation.mutateAsync({ subscriptionId });
+      if (recurringCard) {
+        await cancelMercadoPagoSubscriptionNowMutation.mutateAsync({ subscriptionId: subscription.subscription_id });
+      } else {
+        await cancelBillingSubscriptionMutation.mutateAsync({ subscriptionId: subscription.subscription_id });
+      }
 
-      setSuccess("Assinatura cancelada com sucesso.");
+      setSuccess(recurringCard ? "Recorrência Mercado Pago cancelada no gateway e no sistema." : "Assinatura cancelada com sucesso.");
       await loadSubscriptionsData();
     } catch (err) {
       console.error("Erro inesperado ao cancelar assinatura:", err);
-      setError("Ocorreu um erro inesperado ao cancelar a assinatura.");
+      setError(err instanceof Error ? err.message : "Ocorreu um erro inesperado ao cancelar a assinatura.");
     } finally {
       setActionLoadingId(null);
     }
@@ -772,7 +791,7 @@ export default function AdminBillingPage() {
                             <Button
                               variant="outline"
                               onClick={() =>
-                                cancelSubscription(subscription.subscription_id)
+                                cancelSubscription(subscription)
                               }
                               disabled={isActionLoading}
                               className="gap-2 border-red-200 text-red-700 hover:bg-red-50"

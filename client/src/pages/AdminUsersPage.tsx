@@ -70,6 +70,12 @@ type StudentBillingRow = {
 
   subscription_id: string | null;
   subscription_status: string | null;
+  gateway?: string | null;
+  gateway_subscription_id?: string | null;
+  gateway_payment_id?: string | null;
+  last_gateway_status?: string | null;
+  cancel_at_period_end?: boolean | null;
+  metadata?: Record<string, unknown> | null;
   plan_id: string | null;
   plan_slug: string | null;
   plan_name: string | null;
@@ -100,6 +106,10 @@ type StudentPlanDraft = {
   planId: string;
   months: string;
 };
+
+function isMercadoPagoCardStudentSubscription(student: Pick<StudentBillingRow, "gateway" | "metadata">) {
+  return student.gateway === "mercadopago" && student.metadata?.payment_method === "card";
+}
 
 function formatDate(date?: string | null) {
   if (!date) return "Sem data";
@@ -261,6 +271,7 @@ export default function AdminUsersPage() {
   const updateStudentProfileMutation = trpc.admin.updateStudentProfile.useMutation();
   const renewUserSubscriptionMutation = trpc.admin.renewUserSubscription.useMutation();
   const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
+  const cancelMercadoPagoSubscriptionNowMutation = trpc.admin.cancelMercadoPagoSubscriptionNow.useMutation();
   const listAdminUsersQuery = trpc.admin.listAdminUsers.useQuery(undefined, { enabled: false });
   const grantAdminAccessMutation = trpc.admin.grantAdminAccess.useMutation();
   const updateAdminRoleMutation = trpc.admin.updateAdminRole.useMutation();
@@ -597,8 +608,11 @@ export default function AdminUsersPage() {
       return;
     }
 
+    const recurringCard = isMercadoPagoCardStudentSubscription(student);
     const confirmed = window.confirm(
-      `Cancelar a assinatura de ${student.nome || student.email}? O acesso pago será bloqueado.`
+      recurringCard
+        ? `Cancelar agora a recorrência Mercado Pago de ${student.nome || student.email}? Esta ação administrativa é imediata e impede novas cobranças.`
+        : `Cancelar a assinatura de ${student.nome || student.email}? O acesso pago será bloqueado imediatamente.`
     );
 
     if (!confirmed) return;
@@ -608,11 +622,19 @@ export default function AdminUsersPage() {
       setError("");
       setSuccessMessage("");
 
-      await cancelBillingSubscriptionMutation.mutateAsync({
-        subscriptionId: student.subscription_id,
-      });
+      if (recurringCard) {
+        await cancelMercadoPagoSubscriptionNowMutation.mutateAsync({ subscriptionId: student.subscription_id });
+      } else {
+        await cancelBillingSubscriptionMutation.mutateAsync({
+          subscriptionId: student.subscription_id,
+        });
+      }
 
-      setSuccessMessage(`Assinatura de ${student.nome || student.email} cancelada.`);
+      setSuccessMessage(
+        recurringCard
+          ? `Recorrência Mercado Pago de ${student.nome || student.email} cancelada no gateway e no sistema.`
+          : `Assinatura de ${student.nome || student.email} cancelada.`
+      );
       await loadAll();
     } catch (err) {
       console.error("Erro ao cancelar assinatura:", err);

@@ -228,7 +228,7 @@ export default function SubscriptionPendingPage() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
-              O acesso aos conteúdos pagos é liberado após a confirmação da assinatura. Nesta fase inicial, a conferência pode ser manual, então envie o comprovante pelo WhatsApp depois de fazer o Pix.
+              O acesso aos conteúdos pagos é liberado somente depois da confirmação do pagamento. Pagamentos Mercado Pago são confirmados automaticamente pelo webhook; comprovante por WhatsApp aparece apenas no Pix manual emergencial.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -248,7 +248,7 @@ export default function SubscriptionPendingPage() {
                 </div>
                 <p className="font-black text-white">Pagamento</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Faça o Pix do plano escolhido e envie o comprovante.
+                  Para Mercado Pago, conclua o checkout e use “Atualizar status”; para Pix manual, siga as instruções exibidas abaixo.
                 </p>
               </div>
 
@@ -359,8 +359,8 @@ export default function SubscriptionPendingPage() {
                   </div>
 
                   <div>
-                    <p className="font-black text-cyan-100">Pagamento via Pix</p>
-                    <p className="text-xs text-cyan-50/70">Envie o comprovante após o pagamento.</p>
+                    <p className="font-black text-cyan-100">Pix manual emergencial</p>
+                    <p className="text-xs text-cyan-50/70">Use somente quando o fallback manual estiver habilitado.</p>
                   </div>
                 </div>
 
@@ -403,7 +403,9 @@ export default function SubscriptionPendingPage() {
                 <div>
                   <p className="font-black text-amber-100">Já pagou?</p>
                   <p className="mt-2 text-sm leading-6 text-amber-50/80">
-                    Envie o comprovante pelo WhatsApp. A liberação pode levar alguns instantes porque a confirmação ainda é manual nesta fase.
+                    {manualPixEnabled && showPix
+                      ? "Se você usou o Pix manual emergencial, envie o comprovante pelo WhatsApp. Se pagou pelo Mercado Pago, aguarde a confirmação automática e clique em Atualizar status."
+                      : "Se o pagamento foi feito pelo Mercado Pago, a confirmação é automática. Use Atualizar status; não envie comprovante manual para Pix automático."}
                   </p>
                 </div>
               </div>

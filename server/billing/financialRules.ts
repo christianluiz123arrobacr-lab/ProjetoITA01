@@ -6,6 +6,13 @@ const uuidPattern = "[0-9a-f-]{36}";
 const pixReferencePattern = new RegExp(`^payment:${uuidPattern}:subscription:${uuidPattern}$`, "i");
 const subscriptionReferencePattern = new RegExp(`^${uuidPattern}$`, "i");
 
+export function validateBuyerEmailAddress(email: string | null | undefined): FinancialValidationResult {
+  const value = String(email ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { ok: false, reason: "invalid_buyer_email" };
+  if (value.endsWith(".local")) return { ok: false, reason: "invalid_buyer_email" };
+  return { ok: true };
+}
+
 export function validateClientCheckoutInput(input: { planSlug?: unknown; amountCents?: unknown }, authenticated: boolean): FinancialValidationResult {
   if (!authenticated) return { ok: false, reason: "unauthenticated" };
   if (typeof input.planSlug !== "string" || input.planSlug.trim().length === 0) return { ok: false, reason: "invalid_plan" };

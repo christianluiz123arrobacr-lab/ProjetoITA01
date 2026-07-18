@@ -113,7 +113,7 @@ export async function getPreapproval(id: string) {
 export async function cancelPreapproval(id: string, idempotencyKey: string) {
   const json = await mercadoPagoFetch(`/preapproval/${encodeURIComponent(id)}`, {
     method: "PUT",
-    body: JSON.stringify({ status: "cancelled" }),
+    body: JSON.stringify({ status: "canceled" }),
     idempotencyKey,
   });
 
