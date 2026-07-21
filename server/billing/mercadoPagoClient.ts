@@ -3,6 +3,17 @@ import { z } from "zod";
 const MP_API_BASE_URL = "https://api.mercadopago.com";
 const DEFAULT_TIMEOUT_MS = 12_000;
 
+export class MercadoPagoHttpError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "MercadoPagoHttpError";
+  }
+}
+
+export function isMercadoPagoNotFound(error: unknown) {
+  return error instanceof MercadoPagoHttpError && error.status === 404;
+}
+
 export const mercadoPagoPaymentSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   status: z.string().nullable().optional(),
@@ -87,7 +98,7 @@ async function mercadoPagoFetch(path: string, options: RequestInit & { idempoten
 
     if (!response.ok) {
       const message = typeof json?.message === "string" ? json.message : `Mercado Pago HTTP ${response.status}`;
-      throw new Error(message);
+      throw new MercadoPagoHttpError(response.status, message);
     }
 
     return json;
@@ -197,14 +208,13 @@ export function extractAuthorizedPaymentId(resource: MercadoPagoAuthorizedPaymen
   return resource.payment_id ? String(resource.payment_id) : resource.payment?.id ? String(resource.payment.id) : null;
 }
 
+export function extractChargebackPaymentIds(resource: MercadoPagoChargeback) {
+  const candidates = [resource.payment_id, resource.payment?.id, ...(resource.payments ?? [])];
+  return Array.from(new Set(candidates.map(value => String(value ?? "").trim()).filter(value => /^\d+$/.test(value))));
+}
+
 export function extractChargebackPaymentId(resource: MercadoPagoChargeback) {
-  return resource.payment_id
-    ? String(resource.payment_id)
-    : resource.payment?.id
-      ? String(resource.payment.id)
-      : resource.payments?.[0] != null
-        ? String(resource.payments[0])
-        : null;
+  return extractChargebackPaymentIds(resource)[0] ?? null;
 }
 
 export function extractClaimPaymentId(resource: MercadoPagoClaim) {

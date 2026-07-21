@@ -1,4 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
+
+vi.mock("./_core/rateLimit", () => ({
+  assertRateLimit: vi.fn().mockResolvedValue(undefined),
+  assertRequestRateLimit: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./_core/llm", () => ({
+  invokeLLM: vi.fn().mockResolvedValue({
+    choices: [{ message: { content: "Resposta de teste" } }],
+  }),
+}));
+
 import { appRouter } from "./routers";
 
 function createAuthedCaller() {
@@ -34,20 +46,6 @@ describe("ai.solvePhysics", () => {
 
   it("should accept text input", async () => {
     const caller = createAuthedCaller();
-
-    // Mock the invokeLLM to avoid actual API calls
-    vi.mock("./_core/llm", () => ({
-      invokeLLM: vi.fn().mockResolvedValue({
-        choices: [
-          {
-            message: {
-              content:
-                "A velocidade média é calculada como: $v = \\frac{\\Delta s}{\\Delta t} = \\frac{100 \\text{ km}}{2 \\text{ h}} = 50 \\text{ km/h}$",
-            },
-          },
-        ],
-      }),
-    }));
 
     const result = await caller.ai.solvePhysics({
       text: "Um carro percorre 100km em 2h, qual sua velocidade média?",

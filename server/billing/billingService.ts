@@ -13,16 +13,18 @@ import {
   createPixPayment as createMercadoPagoPixPayment,
   createPreapprovalCheckout,
   extractAuthorizedPaymentId,
-  extractChargebackPaymentId,
+  extractChargebackPaymentIds,
   extractClaimPaymentId,
   getAuthorizedPayment,
   getChargeback,
   getClaim,
   getPayment,
   getPreapproval,
+  isMercadoPagoNotFound,
   type MercadoPagoPayment,
   type MercadoPagoPreapproval,
 } from "./mercadoPagoClient.js";
+import { processBatchIndependently, sanitizeBillingError } from "./billingOrchestration.js";
 import { validateMercadoPagoWebhookSignature } from "./webhookSignature.js";
 import type { BillingCapabilities, BillingPaymentStatus, MercadoPagoWebhookPayload } from "./billingTypes.js";
 
@@ -280,13 +282,28 @@ async function findReusableCardSubscriptionForUser(userId: string, planId: strin
     .eq("plan_id", planId)
     .eq("gateway", GATEWAY)
     .not("gateway_subscription_id", "is", null)
-    .order("created_at", { ascending: false })
+    .order("recurring_slot_active", { ascending: false })
+    .order("created_at", { ascending: true })
     .limit(20);
   if (error) fail(error.message);
 
   for (const row of (data ?? []) as LocalSubscription[]) {
     if (row.metadata?.payment_method !== "card" || !row.gateway_subscription_id) continue;
-    const preapproval = await getPreapproval(String(row.gateway_subscription_id));
+    if (row.recurring_state === "reconciliation_required" || row.gateway_reconciliation_status) continue;
+    if (!row.recurring_slot_active) continue;
+    let preapproval: MercadoPagoPreapproval;
+    try {
+      preapproval = await getPreapproval(String(row.gateway_subscription_id));
+    } catch (error) {
+      if (!isMercadoPagoNotFound(error)) throw error;
+      await updateSubscriptionOrThrow(row.id, {
+        recurring_state: "finished",
+        recurring_slot_active: false,
+        last_gateway_status: "not_found",
+        reservation_expires_at: null,
+      });
+      continue;
+    }
     const mapped = mapMercadoPagoPreapprovalStatus(preapproval.status);
     const checkoutUrl = preapproval.init_point ?? preapproval.sandbox_init_point ?? row.payment_url ?? null;
     if (["pending", "active", "overdue"].includes(mapped)) {
@@ -296,8 +313,6 @@ async function findReusableCardSubscriptionForUser(userId: string, planId: strin
         gateway_subscription_id: preapproval.id ? String(preapproval.id) : row.gateway_subscription_id,
         payment_url: checkoutUrl,
         reservation_expires_at: mapped === "pending" ? addMinutes(new Date(), RESERVATION_MINUTES).toISOString() : row.reservation_expires_at ?? null,
-        gateway_reconciliation_status: null,
-        gateway_reconciliation_error: null,
         recurring_state: mapRecurringState(preapproval.status),
         recurring_slot_active: true,
       });
@@ -314,6 +329,67 @@ async function findReusableCardSubscriptionForUser(userId: string, planId: strin
   }
 
   return null;
+}
+
+type CancellationOutcome = {
+  outcome: "success" | "partial" | "failed";
+  successes: string[];
+  failures: Array<{ subscriptionId: string; error: string }>;
+};
+
+function isTerminalPreapprovalStatus(status: unknown) {
+  return ["cancelled", "canceled", "finished"].includes(String(status ?? "").toLowerCase());
+}
+
+async function cancelRelatedPreapprovals(origins: LocalSubscription[], actor: "user" | "admin" | "reconciliation"): Promise<CancellationOutcome> {
+  const candidates = origins.filter(origin => origin.gateway_subscription_id);
+  const results = await Promise.all(candidates.map(async origin => {
+    try {
+      let current: MercadoPagoPreapproval | null = null;
+      try {
+        current = await getPreapproval(String(origin.gateway_subscription_id));
+      } catch (error) {
+        if (!isMercadoPagoNotFound(error)) throw error;
+      }
+      if (current && !isTerminalPreapprovalStatus(current.status)) {
+        await cancelPreapproval(String(origin.gateway_subscription_id), `mp-cancel-${actor}-${origin.id}`);
+        try {
+          current = await getPreapproval(String(origin.gateway_subscription_id));
+        } catch (error) {
+          if (!isMercadoPagoNotFound(error)) throw error;
+          current = null;
+        }
+      }
+      if (current && !isTerminalPreapprovalStatus(current.status)) throw new Error("Cancelamento não confirmado pelo Mercado Pago.");
+      await updateSubscriptionOrThrow(origin.id, {
+        recurring_state: current?.status === "finished" ? "finished" : "canceled",
+        recurring_slot_active: false,
+        last_gateway_status: current?.status ?? "not_found",
+        gateway_reconciliation_status: null,
+        gateway_reconciliation_error: null,
+      });
+      return { subscriptionId: origin.id, ok: true as const };
+    } catch (error) {
+      const message = sanitizeBillingError(error);
+      await updateSubscriptionOrThrow(origin.id, {
+        recurring_state: "reconciliation_required",
+        recurring_slot_active: false,
+        gateway_reconciliation_status: `${actor}_cancel_gateway_failed`,
+        gateway_reconciliation_error: message,
+        gateway_reconciliation_last_attempt_at: isoNow(),
+        gateway_reconciliation_attempts: Number(origin.gateway_reconciliation_attempts ?? 0) + 1,
+      });
+      return { subscriptionId: origin.id, ok: false as const, error: message };
+    }
+  }));
+  const successes = results.filter(result => result.ok).map(result => result.subscriptionId);
+  const failures = results.filter((result): result is { subscriptionId: string; ok: false; error: string } => !result.ok)
+    .map(({ subscriptionId, error }) => ({ subscriptionId, error }));
+  return {
+    outcome: failures.length === 0 ? "success" : successes.length ? "partial" : "failed",
+    successes,
+    failures,
+  };
 }
 
 async function reserveCheckout(input: {
@@ -528,6 +604,8 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
 
   await expireStaleReservations();
+  const { error: slotExpiryError } = await supabaseAdmin.rpc("release_expired_mercadopago_recurring_slots", { p_now: isoNow() });
+  if (slotExpiryError) fail(slotExpiryError.message);
   const plan = await getPlanForCheckout(input.planSlug);
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
@@ -747,22 +825,9 @@ export async function cancelUserMercadoPagoSubscription(userId: string) {
     .order("created_at", { ascending: true });
 
   if (error) fail(error.message);
-  const recurring = ((subscriptions ?? []) as LocalSubscription[]).filter((item) => item.gateway_subscription_id && !["canceled", "finished"].includes(String(item.recurring_state)));
+  const recurring = ((subscriptions ?? []) as LocalSubscription[]).filter(item => item.gateway_subscription_id);
   if (!recurring.length) fail("Assinatura Mercado Pago não encontrada.", "NOT_FOUND");
-
-  const failures: string[] = [];
-  for (const origin of recurring) {
-    try {
-      await cancelPreapproval(String(origin.gateway_subscription_id), `mp-cancel-user-${origin.id}`);
-      const confirmed = await getPreapproval(String(origin.gateway_subscription_id));
-      if (!["cancelled", "canceled", "finished"].includes(String(confirmed.status).toLowerCase())) throw new Error("cancelamento não confirmado");
-      await updateSubscriptionOrThrow(origin.id, { recurring_state: "canceled", recurring_slot_active: false, last_gateway_status: confirmed.status ?? "cancelled" });
-    } catch (cause) {
-      failures.push(origin.id);
-      await updateSubscriptionOrThrow(origin.id, { recurring_state: "reconciliation_required", gateway_reconciliation_status: "cancel_gateway_failed", gateway_reconciliation_error: cause instanceof Error ? cause.message.slice(0, 500) : "Falha no cancelamento" });
-    }
-  }
-  if (failures.length) fail("Não foi possível confirmar o cancelamento de todas as cobranças. O caso foi enviado para reconciliação.", "INTERNAL_SERVER_ERROR");
+  const cancellation = await cancelRelatedPreapprovals(recurring, "user");
 
   const now = isoNow();
   const canonicalId = recurring.find((item) => item.canonical_access_subscription_id)?.canonical_access_subscription_id ?? recurring[0].id;
@@ -772,7 +837,7 @@ export async function cancelUserMercadoPagoSubscription(userId: string) {
     : { status: "canceled", cancel_at_period_end: false, canceled_at: now, current_period_end: now, last_gateway_status: "cancelled" };
   await updateSubscriptionOrThrow(canonicalId, patch);
 
-  return { success: true, accessUntil: subscription?.current_period_end ?? null } as const;
+  return { success: cancellation.outcome === "success", accessUntil: subscription?.current_period_end ?? null, ...cancellation } as const;
 }
 
 export async function cancelAdminMercadoPagoSubscription(input: { subscriptionId: string; adminUserId: string }) {
@@ -781,22 +846,11 @@ export async function cancelAdminMercadoPagoSubscription(input: { subscriptionId
   const canonicalId = subscription.canonical_access_subscription_id ?? subscription.id;
   const { data: origins, error: originsError } = await supabaseAdmin.from("billing_subscriptions").select("*").eq("user_id", subscription.user_id).eq("gateway", GATEWAY).eq("metadata->>payment_method", "card");
   if (originsError) fail(originsError.message);
-  for (const origin of (origins ?? []) as LocalSubscription[]) {
-    if (!origin.gateway_subscription_id || ["canceled", "finished"].includes(String(origin.recurring_state))) continue;
-    try {
-      await cancelPreapproval(String(origin.gateway_subscription_id), `mp-cancel-admin-${origin.id}`);
-      const confirmed = await getPreapproval(String(origin.gateway_subscription_id));
-      if (!["cancelled", "canceled", "finished"].includes(String(confirmed.status).toLowerCase())) throw new Error("O Mercado Pago não confirmou o cancelamento.");
-      await updateSubscriptionOrThrow(origin.id, { recurring_state: "canceled", recurring_slot_active: false, last_gateway_status: confirmed.status ?? "cancelled" });
-    } catch (cause) {
-      await updateSubscriptionOrThrow(origin.id, {
-        recurring_state: "reconciliation_required",
-        gateway_reconciliation_status: "admin_cancel_gateway_failed",
-        gateway_reconciliation_error: cause instanceof Error ? cause.message.slice(0, 500) : "Falha no cancelamento administrativo",
-      });
-      fail("O cancelamento não foi confirmado pelo Mercado Pago e exige reconciliação.", "INTERNAL_SERVER_ERROR");
-    }
-  }
+  const relatedOrigins = ((origins ?? []) as LocalSubscription[]).filter(origin => {
+    const originCanonical = origin.canonical_access_subscription_id ?? origin.id;
+    return origin.id === subscription.id || originCanonical === canonicalId;
+  });
+  const cancellation = await cancelRelatedPreapprovals(relatedOrigins, "admin");
 
   const now = isoNow();
   await updateSubscriptionOrThrow(canonicalId, {
@@ -807,7 +861,37 @@ export async function cancelAdminMercadoPagoSubscription(input: { subscriptionId
     last_gateway_status: subscription.gateway === GATEWAY ? "cancelled" : subscription.last_gateway_status ?? null,
     metadata: { ...(subscription.metadata ?? {}), admin_cancelled_by: input.adminUserId, admin_cancelled_at: now },
   });
-  return { success: true } as const;
+  return { success: cancellation.outcome === "success", ...cancellation } as const;
+}
+
+export async function reconcileDuplicateMercadoPagoSubscriptions(input: { subscriptionId?: string; adminUserId: string }) {
+  let query = supabaseAdmin
+    .from("billing_subscriptions")
+    .select("*")
+    .eq("gateway", GATEWAY)
+    .eq("metadata->>payment_method", "card")
+    .or("recurring_state.eq.reconciliation_required,gateway_reconciliation_status.not.is.null");
+  if (input.subscriptionId) query = query.eq("id", input.subscriptionId);
+  const { data, error } = await query.order("created_at", { ascending: true }).limit(100);
+  if (error) fail(error.message);
+
+  const candidates = ((data ?? []) as LocalSubscription[]).filter(origin =>
+    Boolean(origin.gateway_subscription_id) &&
+    String(origin.gateway_reconciliation_status ?? "").includes("duplicate") &&
+    !origin.recurring_slot_active
+  );
+  const cancellation = await cancelRelatedPreapprovals(candidates, "reconciliation");
+  const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
+    admin_user_id: input.adminUserId,
+    action: "billing_mercadopago_duplicates_reconciled",
+    entity_type: "billing_subscription",
+    entity_id: input.subscriptionId ?? null,
+    description: "Reconciliação de recorrências duplicadas do Mercado Pago",
+    level: cancellation.outcome === "success" ? "info" : "warning",
+    metadata: { outcome: cancellation.outcome, successes: cancellation.successes, failed_subscription_ids: cancellation.failures.map(item => item.subscriptionId) },
+  });
+  if (logError) fail(logError.message);
+  return cancellation;
 }
 
 async function resolvePaymentContext(payment: MercadoPagoPayment) {
@@ -997,10 +1081,16 @@ async function processAuthorizedPaymentUpdate(resourceId: string) {
 
 async function processChargebackUpdate(resourceId: string) {
   const chargeback = await getChargeback(resourceId);
-  const paymentId = extractChargebackPaymentId(chargeback);
-  if (!paymentId) throw new Error("Chargeback sem payment_id oficial.");
-  const payment = await getPayment(paymentId);
-  return processApprovedPayment(payment);
+  const paymentIds = extractChargebackPaymentIds(chargeback);
+  if (!paymentIds.length) throw new Error("Chargeback sem payment_id oficial válido.");
+  const result = await processBatchIndependently(paymentIds, async paymentId => {
+    const payment = await getPayment(paymentId);
+    await processApprovedPayment(payment);
+  });
+  if (result.outcome !== "success") {
+    throw new Error(`Chargeback ${result.outcome}: ${result.results.filter(item => !item.ok).map(item => `${item.id}:${item.error}`).join(";")}`);
+  }
+  return result;
 }
 
 async function processClaimUpdate(resourceId: string) {

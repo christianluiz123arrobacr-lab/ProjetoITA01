@@ -15,6 +15,7 @@ import {
   createPixPayment,
   getBillingCapabilities,
   getMyPayments,
+  reconcileDuplicateMercadoPagoSubscriptions,
 } from "./billing/billingService.js";
 import {
   buildQuestionInsertPayload,
@@ -1328,6 +1329,8 @@ export const appRouter = router({
           last_gateway_status,
           gateway_reconciliation_status,
           gateway_reconciliation_error,
+          gateway_reconciliation_attempts,
+          gateway_reconciliation_last_attempt_at,
           recurring_state,
           recurring_slot_active,
           canonical_access_subscription_id,
@@ -1384,6 +1387,8 @@ export const appRouter = router({
           last_gateway_status: subscription.last_gateway_status ?? null,
           gateway_reconciliation_status: subscription.gateway_reconciliation_status ?? null,
           gateway_reconciliation_error: subscription.gateway_reconciliation_error ?? null,
+          gateway_reconciliation_attempts: Number(subscription.gateway_reconciliation_attempts ?? 0),
+          gateway_reconciliation_last_attempt_at: subscription.gateway_reconciliation_last_attempt_at ?? null,
           recurring_state: subscription.recurring_state ?? null,
           recurring_slot_active: subscription.recurring_slot_active ?? null,
           canonical_access_subscription_id: subscription.canonical_access_subscription_id ?? null,
@@ -1647,14 +1652,25 @@ export const appRouter = router({
           action: "billing_mercadopago_subscription_canceled_now",
           entity_type: "billing_subscription",
           entity_id: input.subscriptionId,
-          description: "Assinatura Mercado Pago cancelada imediatamente no ADM financeiro",
-          level: "warning",
-          metadata: input,
+          description: result.outcome === "success"
+            ? "Assinatura Mercado Pago cancelada imediatamente no ADM financeiro"
+            : "Cancelamento Mercado Pago incompleto; reconciliação necessária",
+          level: result.outcome === "success" ? "warning" : "error",
+          metadata: { ...input, outcome: result.outcome, failed_subscription_ids: result.failures.map(item => item.subscriptionId) },
         });
         if (logError) throw new TRPCError({ code: "BAD_REQUEST", message: logError.message });
 
         return result;
       }),
+
+    reconcileMercadoPagoDuplicates: adminProcedure
+      .input(z.object({ subscriptionId: z.string().uuid().optional(), confirm: z.literal(true) }))
+      .mutation(async ({ ctx, input }) =>
+        reconcileDuplicateMercadoPagoSubscriptions({
+          subscriptionId: input.subscriptionId,
+          adminUserId: ctx.user.id,
+        })
+      ),
 
     listBillingPayments: adminProcedure
       .input(z.object({ userId: z.string().uuid().optional(), subscriptionId: z.string().uuid().optional() }).optional())

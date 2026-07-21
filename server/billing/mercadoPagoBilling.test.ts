@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { centsToMercadoPagoAmount, mapMercadoPagoPaymentStatus, mapMercadoPagoPreapprovalStatus, mercadoPagoAmountToCents } from "./billingStatusMapper";
 import { buildMercadoPagoWebhookManifest, validateMercadoPagoWebhookSignature } from "./webhookSignature";
-import { extractChargebackPaymentId, mercadoPagoChargebackSchema } from "./mercadoPagoClient";
+import { extractChargebackPaymentId, extractChargebackPaymentIds, mercadoPagoChargebackSchema } from "./mercadoPagoClient";
 import {
   classifyExternalReference,
   extendPixAccess,
@@ -34,11 +34,17 @@ describe("Mercado Pago billing rules", () => {
     expect(mapMercadoPagoPaymentStatus("expired")).toBe("expired");
     expect(mapMercadoPagoPaymentStatus("refunded")).toBe("refunded");
     expect(mapMercadoPagoPaymentStatus("charged_back")).toBe("chargeback");
+    expect(mapMercadoPagoPaymentStatus("authorized")).toBe("pending");
   });
 
   it("extrai payment_id do array oficial de chargeback", () => {
     const chargeback = mercadoPagoChargebackSchema.parse({ id: 123, payments: [86439942806] });
     expect(extractChargebackPaymentId(chargeback)).toBe("86439942806");
+  });
+
+  it("extrai, valida e remove IDs repetidos de chargeback", () => {
+    const chargeback = mercadoPagoChargebackSchema.parse({ payment_id: 10, payments: [10, "20", "bad", 20, 30] });
+    expect(extractChargebackPaymentIds(chargeback)).toEqual(["10", "20", "30"]);
   });
 
   it("mapeia preapproval authorized sem liberar acesso", () => {
@@ -82,6 +88,7 @@ describe("Mercado Pago billing rules", () => {
 
   it("aprova pagamento aprovado", () => {
     expect(shouldGrantAccessFromPayment("approved")).toBe(true);
+    expect(shouldGrantAccessFromPayment("authorized")).toBe(false);
   });
 
   it("bloqueia pagamento recusado, Pix expirado, estorno e chargeback", () => {

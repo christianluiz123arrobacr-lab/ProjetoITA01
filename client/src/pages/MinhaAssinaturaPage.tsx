@@ -184,7 +184,10 @@ export default function MinhaAssinaturaPage() {
     if (!window.confirm("Cancelar próximas cobranças da assinatura? O acesso já pago será preservado até o fim do período.")) return;
     try {
       setCanceling(true);
-      await cancelMySubscription();
+      const result = await cancelMySubscription();
+      if (result.outcome !== "success") {
+        setErrorMessage(`Cancelamento ${result.outcome}: algumas cobranças ainda exigem reconciliação. Nossa equipe foi notificada; tente novamente em instantes.`);
+      }
       await loadSubscription(true);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Não foi possível cancelar a assinatura.");

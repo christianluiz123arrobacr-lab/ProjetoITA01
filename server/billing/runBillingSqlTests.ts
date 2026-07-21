@@ -26,6 +26,12 @@ begin;
 create function pg_temp.ok(value boolean, message text) returns void language plpgsql as $$ begin if not coalesce(value, false) then raise exception 'assertion failed: %', message; end if; end; $$;
 create function pg_temp.is(actual anyelement, expected anyelement, message text) returns void language plpgsql as $$ begin if actual is distinct from expected then raise exception 'assertion failed: % (actual %, expected %)', message, actual, expected; end if; end; $$;
 create function pg_temp.isnt(actual anyelement, expected anyelement, message text) returns void language plpgsql as $$ begin if actual is not distinct from expected then raise exception 'assertion failed: % (unexpected %)', message, actual; end if; end; $$;
+create function pg_temp.throws_authorized(payment_id uuid) returns void language plpgsql as $$ begin
+  perform public.apply_approved_mercadopago_payment(payment_id, 'mp-authorized', 'authorized', null, now(), 30);
+  raise exception 'assertion failed: authorized payment granted access';
+exception when others then
+  if sqlerrm = 'assertion failed: authorized payment granted access' then raise; end if;
+end; $$;
 
 create extension if not exists pgcrypto;
 
@@ -49,7 +55,11 @@ values
  ('00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000201', 'mercadopago', 'mp-pix-a', 'mercadopago_pix', 'pending', 1000, 'BRL', 30, 'days', timestamp with time zone '2026-07-01 00:00:00+00'),
  ('00000000-0000-4000-8000-000000000402', '00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000201', 'mercadopago', 'mp-pix-b', 'mercadopago_pix', 'pending', 1000, 'BRL', 30, 'days', timestamp with time zone '2026-07-02 00:00:00+00'),
  ('00000000-0000-4000-8000-000000000403', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000201', 'mercadopago', 'mp-card-a', 'mercadopago_card', 'pending', 1000, 'BRL', 1, 'months', timestamp with time zone '2026-08-01 00:00:00+00')
+ ,('00000000-0000-4000-8000-000000000404', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000201', 'mercadopago', 'mp-authorized', 'mercadopago_card', 'pending', 1000, 'BRL', 1, 'months', null)
 on conflict (id) do nothing;
+
+select pg_temp.throws_authorized('00000000-0000-4000-8000-000000000404');
+select ok((select access_applied_at is null and status = 'pending' from public.billing_payments where id='00000000-0000-4000-8000-000000000404'), 'Pagamento authorized não libera acesso');
 
 select * from public.apply_approved_mercadopago_payment('00000000-0000-4000-8000-000000000401', 'mp-pix-a', 'approved', null, '2026-07-01 00:00:00+00', 30);
 select ok((select status = 'active' from public.billing_subscriptions where id = '00000000-0000-4000-8000-000000000301'), 'Pix aprovado ativa acesso');
@@ -67,6 +77,9 @@ select ok((select current_period_end < timestamp with time zone '2026-10-01 00:0
 select * from public.recalculate_mercadopago_access_after_reversal('00000000-0000-4000-8000-000000000403', 'chargeback', 'charged_back', null);
 select isnt((select status from public.billing_subscriptions where id=(select applied_to_subscription_id from public.billing_payments where id='00000000-0000-4000-8000-000000000403')), 'chargeback', 'Chargeback não usa status inválido de assinatura');
 select ok((select metadata ? 'blocked_by_chargeback_payment_id' from public.billing_subscriptions where id=(select applied_to_subscription_id from public.billing_payments where id='00000000-0000-4000-8000-000000000403')), 'Chargeback fica auditável em metadata');
+select * from public.recalculate_mercadopago_access_after_reversal('00000000-0000-4000-8000-000000000402', 'chargeback', 'charged_back', null);
+select is((select count(*)::int from public.billing_payments where id in ('00000000-0000-4000-8000-000000000402','00000000-0000-4000-8000-000000000403') and status='chargeback'), 2, 'Chargeback com múltiplos pagamentos marca todos os itens');
+select is((select status from public.billing_subscriptions where id=(select applied_to_subscription_id from public.billing_payments where id='00000000-0000-4000-8000-000000000402')), 'expired', 'Ledger sem pagamentos válidos bloqueia acesso');
 
 insert into public.billing_webhook_events(provider, event_id, event_type, resource_id, status, attempts) values ('mercadopago','evt-sql','payment','mp-pix-a','processed',1) on conflict do nothing;
 select ok(exists(select 1 from public.billing_webhook_events where provider='mercadopago' and event_id='evt-sql'), 'Evento webhook possui idempotência por provider/event_id');
@@ -74,10 +87,13 @@ select ok((select count(*) = 1 from public.billing_webhook_events where provider
 select ok((select used_at is null from public.billing_plan_invites limit 1) is not false, 'Convites não são exigidos nem consumidos no checkout livre');
 select ok(exists(select 1 from public.billing_subscriptions where canonical_access_subscription_id is not null and user_id='00000000-0000-4000-8000-000000000101'), 'Backfill/canonicalização presente');
 select ok((select count(*) <= 1 from public.billing_subscriptions where user_id='00000000-0000-4000-8000-000000000101' and status='active'), 'Não há múltiplas raízes ativas no fixture');
-select ok(true, 'Webhook subscription_preapproval deve sincronizar sem conceder acesso (coberto no serviço)');
-select ok(true, 'Webhook subscription_authorized_payment roteia via authorized_payments (coberto no serviço)');
-select ok(true, 'Evento desconhecido é registrado e ignorado sem endpoint incorreto (coberto no serviço)');
-select ok(true, 'Preapproval local expirado deve ser reconsultado no gateway antes de nova criação (coberto no serviço)');
+update public.billing_subscriptions set recurring_state='authorized', recurring_slot_active=true, last_gateway_status='authorized' where id='00000000-0000-4000-8000-000000000303';
+select ok((select recurring_state='authorized' and status <> 'active' from public.billing_subscriptions where id='00000000-0000-4000-8000-000000000303'), 'Preapproval authorized não concede acesso sem pagamento');
+insert into public.billing_webhook_events(provider,event_id,event_type,resource_id,status,attempts) values ('mercadopago','evt-unknown','future_unknown','resource','processed',1) on conflict do nothing;
+select is((select status from public.billing_webhook_events where provider='mercadopago' and event_id='evt-unknown'), 'processed', 'Evento desconhecido é persistido e encerrado');
+update public.billing_subscriptions set recurring_state='creating', recurring_slot_active=true, gateway_subscription_id=null, checkout_creation_expires_at=now()-interval '1 minute' where id='00000000-0000-4000-8000-000000000303';
+select is(public.release_expired_mercadopago_recurring_slots(now()), 1, 'Reserva recorrente expirada é liberada');
+select ok((select not recurring_slot_active and recurring_state='failed' from public.billing_subscriptions where id='00000000-0000-4000-8000-000000000303'), 'Slot expirado fica inativo');
 
 rollback;
 `;
@@ -99,11 +115,29 @@ function runPsql(args: string[], input?: string) {
 
 try {
   await runPsql(["-v", "ON_ERROR_STOP=1", "-f", sqlFile]);
-  const lockKey = randomUUID();
+  const concurrencyUser = randomUUID();
+  const concurrencyPlan = randomUUID();
+  const ownerA = randomUUID();
+  const ownerB = randomUUID();
+  await runPsql(["-v", "ON_ERROR_STOP=1"], `
+    insert into public.profiles(id,email,nome) values ('${concurrencyUser}','slot-${concurrencyUser}@example.test','Slot Test');
+    insert into public.billing_plans(id,slug,name,price_cents,currency,is_active,invite_only)
+      values ('${concurrencyPlan}','slot-${concurrencyPlan}','Slot Test',1000,'BRL',true,false);
+  `);
   await Promise.all([
-    runPsql(["-v", "ON_ERROR_STOP=1"], `begin; select pg_advisory_lock(hashtextextended('${lockKey}', 0)); select pg_sleep(1); select pg_advisory_unlock(hashtextextended('${lockKey}', 0)); commit;`),
-    runPsql(["-v", "ON_ERROR_STOP=1"], `begin; select pg_advisory_lock(hashtextextended('${lockKey}', 0)); select pg_advisory_unlock(hashtextextended('${lockKey}', 0)); commit;`),
+    runPsql(["-v", "ON_ERROR_STOP=1"], `select * from public.reserve_mercadopago_recurring_checkout_slot('${concurrencyUser}', 'slot-${concurrencyUser}@example.test', '${concurrencyPlan}', '${ownerA}', now()+interval '5 minutes', '{"payment_method":"card"}');`),
+    runPsql(["-v", "ON_ERROR_STOP=1"], `select * from public.reserve_mercadopago_recurring_checkout_slot('${concurrencyUser}', 'slot-${concurrencyUser}@example.test', '${concurrencyPlan}', '${ownerB}', now()+interval '5 minutes', '{"payment_method":"card"}');`),
   ]);
+  await runPsql(["-v", "ON_ERROR_STOP=1"], `
+    do $$ begin
+      if (select count(*) from public.billing_subscriptions where user_id='${concurrencyUser}' and recurring_slot_active) <> 1 then
+        raise exception 'concurrent slot assertion failed';
+      end if;
+    end $$;
+    delete from public.billing_subscriptions where user_id='${concurrencyUser}';
+    delete from public.billing_plans where id='${concurrencyPlan}';
+    delete from public.profiles where id='${concurrencyUser}';
+  `);
   console.log("Testes SQL de faturamento concluídos; falhas SQL geram exit code não-zero.");
 } finally {
   await rm(tmp, { recursive: true, force: true });

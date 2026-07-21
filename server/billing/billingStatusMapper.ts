@@ -4,8 +4,8 @@ export function mapMercadoPagoPaymentStatus(status?: string | null, statusDetail
   const normalized = String(status ?? "").toLowerCase();
   const detail = String(statusDetail ?? "").toLowerCase();
 
-  if (normalized === "approved" || normalized === "authorized") return "approved";
-  if (["pending", "in_process", "in_mediation"].includes(normalized)) return "pending";
+  if (normalized === "approved") return "approved";
+  if (["authorized", "pending", "in_process", "in_mediation"].includes(normalized)) return "pending";
   if (["rejected", "cancelled", "canceled"].includes(normalized)) return "rejected";
   if (normalized === "refunded") return "refunded";
   if (normalized === "charged_back" || detail.includes("chargeback")) return "chargeback";

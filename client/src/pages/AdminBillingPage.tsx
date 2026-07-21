@@ -44,6 +44,8 @@ type AdminBillingSubscriptionRow = {
   last_gateway_status?: string | null;
   gateway_reconciliation_status?: string | null;
   gateway_reconciliation_error?: string | null;
+  gateway_reconciliation_attempts?: number;
+  gateway_reconciliation_last_attempt_at?: string | null;
   recurring_state?: string | null;
   recurring_slot_active?: boolean | null;
   canonical_access_subscription_id?: string | null;
@@ -183,6 +185,7 @@ export default function AdminBillingPage() {
   const renewBillingSubscriptionMutation = trpc.admin.renewBillingSubscription.useMutation();
   const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
   const cancelMercadoPagoSubscriptionNowMutation = trpc.admin.cancelMercadoPagoSubscriptionNow.useMutation();
+  const reconcileMercadoPagoDuplicatesMutation = trpc.admin.reconcileMercadoPagoDuplicates.useMutation();
   const updateBillingPlanMutation = trpc.admin.updateBillingPlan.useMutation();
   const createBillingPlanInviteMutation = trpc.admin.createBillingPlanInvite.useMutation();
   const deleteBillingPlanInviteMutation = trpc.admin.deleteBillingPlanInvite.useMutation();
@@ -387,7 +390,12 @@ export default function AdminBillingPage() {
       setSuccess("");
 
       if (recurringCard) {
-        await cancelMercadoPagoSubscriptionNowMutation.mutateAsync({ subscriptionId: subscription.subscription_id });
+        const result = await cancelMercadoPagoSubscriptionNowMutation.mutateAsync({ subscriptionId: subscription.subscription_id });
+        if (result.outcome !== "success") {
+          setError(`Cancelamento ${result.outcome}: ${result.failures.length} cobrança(s) ainda exigem reconciliação.`);
+          await loadSubscriptionsData();
+          return;
+        }
       } else {
         await cancelBillingSubscriptionMutation.mutateAsync({ subscriptionId: subscription.subscription_id });
       }
@@ -397,6 +405,26 @@ export default function AdminBillingPage() {
     } catch (err) {
       console.error("Erro inesperado ao cancelar assinatura:", err);
       setError(err instanceof Error ? err.message : "Ocorreu um erro inesperado ao cancelar a assinatura.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function reconcileSubscription(subscription: AdminBillingSubscriptionRow) {
+    if (!window.confirm("Consultar o Mercado Pago e cancelar esta recorrência duplicada? A ação é idempotente e não altera preços.")) return;
+    try {
+      setActionLoadingId(subscription.subscription_id);
+      setError("");
+      setSuccess("");
+      const result = await reconcileMercadoPagoDuplicatesMutation.mutateAsync({ subscriptionId: subscription.subscription_id, confirm: true });
+      if (result.outcome !== "success") {
+        setError(`Reconciliação ${result.outcome}: ${result.failures.length} recorrência(s) ainda exigem nova tentativa.`);
+      } else {
+        setSuccess("Reconciliação confirmada no Mercado Pago.");
+      }
+      await loadSubscriptionsData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao reconciliar recorrência.");
     } finally {
       setActionLoadingId(null);
     }
@@ -751,6 +779,7 @@ export default function AdminBillingPage() {
                               <p className="mt-1">Status: {subscription.gateway_reconciliation_status}</p>
                               <p className="mt-1 break-all">Mercado Pago: {subscription.gateway_subscription_id || subscription.gateway_payment_id || "Sem ID"}</p>
                               <p className="mt-1 line-clamp-2">Erro: {subscription.gateway_reconciliation_error || "Sem detalhe registrado"}</p>
+                              <p className="mt-1">Tentativas: {subscription.gateway_reconciliation_attempts ?? 0}</p>
                             </div>
                           ) : null}
                         </div>
@@ -778,6 +807,17 @@ export default function AdminBillingPage() {
                         </div>
 
                         <div className="flex flex-col gap-2 lg:w-52">
+                          {subscription.gateway_reconciliation_status ? (
+                            <Button
+                              variant="outline"
+                              onClick={() => reconcileSubscription(subscription)}
+                              disabled={isActionLoading}
+                              className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50"
+                            >
+                              {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                              Reconciliar gateway
+                            </Button>
+                          ) : null}
                           {isManualReview ? (
                             <Button
                               onClick={() =>
