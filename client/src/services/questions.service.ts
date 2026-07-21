@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { trpcClient } from "@/lib/trpcClient";
 import type { Question, QuestionSubtopicsByTopic } from "@/types/question";
 
 type QuestionDifficulty = Question["difficulty"];
@@ -319,111 +319,49 @@ function mapQuestao(row: QuestaoRow): Question {
 export async function getQuestions(
   filters?: QuestionFilters
 ): Promise<Question[]> {
-  let query = supabase.from("questoes").select(`
-    *,
-    resolucoes (
-      id,
-      tipo,
-      texto,
-      ordem,
-      url_imagem
-    )
-  `);
+  try {
+    const data = await trpcClient.questions.list.query({
+      subject: filters?.subject,
+      exam: filters?.exam,
+      year: filters?.year,
+      difficulty: filters?.difficulty,
+      institution: filters?.institution,
+    });
 
-  if (filters?.subject) {
-    query = query.or(
-      `disciplina.eq.${filters.subject},diciplina.eq.${filters.subject}`
-    );
-  }
+    let questions = (data as QuestaoRow[]).map(mapQuestao);
 
-  /*
-   * Conteúdo e assunto agora podem ser listas.
-   *
-   * Antes dava para filtrar direto no Supabase:
-   * conteudo.eq.cinemática
-   *
-   * Agora a questão pode ter:
-   * conteudos = ["cinemática", "dinâmica"]
-   *
-   * E também pode ter:
-   * assuntos_por_conteudo = [
-   *   { conteudo: "funções", assuntos: ["função modular"] },
-   *   { conteudo: "álgebra", assuntos: ["equação com módulo"] }
-   * ]
-   *
-   * Por isso, topic/subtopic são filtrados depois do mapQuestao.
-   */
+    if (filters?.topic) {
+      questions = questions.filter((question) =>
+        questionMatchesListFilter(question.topics, filters.topic)
+      );
+    }
 
-  if (filters?.exam) {
-    query = query.eq("banca", filters.exam);
-  }
+    if (filters?.subtopic) {
+      questions = questions.filter((question) =>
+        questionMatchesSubtopicFilter(
+          question,
+          filters.topic,
+          filters.subtopic
+        )
+      );
+    }
 
-  if (filters?.year) {
-    query = query.eq("ano", filters.year);
-  }
-
-  if (filters?.difficulty) {
-    query = query.eq("dificuldade", filters.difficulty);
-  }
-
-  if (filters?.institution) {
-    query = query.eq("instituição", filters.institution);
-  }
-
-  if (filters?.isPublished !== undefined) {
-    query = query.eq("publicada", filters.isPublished);
-  }
-
-  const { data, error } = await query.order("created_at", {
-    ascending: false,
-  });
-
-  if (error) {
+    return questions;
+  } catch (error) {
     console.error("Erro ao buscar questões:", error);
     return [];
   }
-
-  let questions = (data as QuestaoRow[]).map(mapQuestao);
-
-  if (filters?.topic) {
-    questions = questions.filter((question) =>
-      questionMatchesListFilter(question.topics, filters.topic)
-    );
-  }
-
-  if (filters?.subtopic) {
-    questions = questions.filter((question) =>
-      questionMatchesSubtopicFilter(
-        question,
-        filters.topic,
-        filters.subtopic
-      )
-    );
-  }
-
-  return questions;
 }
 
 export async function getQuestionById(id: string): Promise<Question | null> {
-  const { data, error } = await supabase
-    .from("questoes")
-    .select(`
-      *,
-      resolucoes (
-        id,
-        tipo,
-        texto,
-        ordem,
-        url_imagem
-      )
-    `)
-    .eq("id", id)
-    .single();
+  try {
+    const data = await trpcClient.questions.getById.query({ id });
 
-  if (error || !data) {
+    if (!data) return null;
+
+    return mapQuestao(data as QuestaoRow);
+  } catch (error) {
     console.error("Erro ao buscar questão por ID:", error);
     return null;
   }
-
-  return mapQuestao(data as QuestaoRow);
 }
