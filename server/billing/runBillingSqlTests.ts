@@ -32,6 +32,14 @@ create function pg_temp.throws_authorized(payment_id uuid) returns void language
 exception when others then
   if sqlerrm = 'assertion failed: authorized payment granted access' then raise; end if;
 end; $$;
+create function pg_temp.assert_reconciliation_blocks_slot(user_id uuid, plan_id uuid) returns void language plpgsql as $$ begin
+  perform public.reserve_mercadopago_recurring_checkout_slot(user_id, 'mp-ledger@example.test', plan_id,
+    '00000000-0000-4000-8000-000000000999', now()+interval '5 minutes', '{"payment_method":"card"}');
+  raise exception 'assertion failed: unresolved reconciliation allowed recurring slot';
+exception when others then
+  if sqlerrm = 'assertion failed: unresolved reconciliation allowed recurring slot'
+     or position('unresolved Mercado Pago reconciliation' in sqlerrm) = 0 then raise; end if;
+end; $$;
 
 create extension if not exists pgcrypto;
 
@@ -94,6 +102,16 @@ select is((select status from public.billing_webhook_events where provider='merc
 update public.billing_subscriptions set recurring_state='creating', recurring_slot_active=true, gateway_subscription_id=null, checkout_creation_expires_at=now()-interval '1 minute' where id='00000000-0000-4000-8000-000000000303';
 select is(public.release_expired_mercadopago_recurring_slots(now()), 1, 'Reserva recorrente expirada é liberada');
 select ok((select not recurring_slot_active and recurring_state='failed' from public.billing_subscriptions where id='00000000-0000-4000-8000-000000000303'), 'Slot expirado fica inativo');
+update public.billing_subscriptions set recurring_state='reconciliation_required', recurring_slot_active=false,
+  gateway_reconciliation_status='gateway_created_local_failed' where id='00000000-0000-4000-8000-000000000303';
+select pg_temp.assert_reconciliation_blocks_slot('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000201');
+select ok((select count(*)=1 from public.billing_subscriptions where user_id='00000000-0000-4000-8000-000000000101' and metadata->>'payment_method'='card'), 'Reconciliação pendente não cria segundo slot');
+update public.billing_subscriptions set recurring_state='canceled', gateway_reconciliation_status=null,
+  gateway_reconciliation_error=null where id='00000000-0000-4000-8000-000000000303';
+select ok((select should_create from public.reserve_mercadopago_recurring_checkout_slot(
+  '00000000-0000-4000-8000-000000000101', 'mp-ledger@example.test', '00000000-0000-4000-8000-000000000201',
+  '00000000-0000-4000-8000-000000000998', now()+interval '5 minutes', '{"payment_method":"card"}')),
+  'Checkout volta a ser permitido após reconciliação confirmada');
 
 rollback;
 `;

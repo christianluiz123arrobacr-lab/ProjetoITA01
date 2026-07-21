@@ -417,10 +417,19 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
       const result = await reconcileMercadoPagoDuplicatesMutation.mutateAsync({ subscriptionId: subscription.subscription_id, confirm: true });
-      if (result.outcome !== "success") {
-        setError(`Reconciliação ${result.outcome}: ${result.failures.length} recorrência(s) ainda exigem nova tentativa.`);
-      } else {
-        setSuccess("Reconciliação confirmada no Mercado Pago.");
+      switch (result.outcome) {
+        case "success":
+          setSuccess(`Reconciliação confirmada: ${result.processed} recorrência(s) processada(s).`);
+          break;
+        case "partial":
+          setError(`Reconciliação parcial: ${result.successes.length} sucesso(s) e ${result.failures.length} falha(s).`);
+          break;
+        case "failed":
+          setError(`Reconciliação falhou para ${result.failures.length} recorrência(s). Nenhuma confirmação foi removida.`);
+          break;
+        case "no_action":
+          setError(result.noActionReason || "Nenhuma ação de reconciliação foi realizada.");
+          break;
       }
       await loadSubscriptionsData();
     } catch (err) {

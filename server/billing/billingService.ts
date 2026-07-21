@@ -24,7 +24,14 @@ import {
   type MercadoPagoPayment,
   type MercadoPagoPreapproval,
 } from "./mercadoPagoClient.js";
-import { processBatchIndependently, sanitizeBillingError } from "./billingOrchestration.js";
+import {
+  isBlockingRecurringReconciliation,
+  processBatchIndependently,
+  runClaimedBillingWebhook,
+  runExclusiveRecurringCheckout,
+  sanitizeBillingError,
+  SUPPORTED_RECONCILIATION_STATUSES,
+} from "./billingOrchestration.js";
 import { validateMercadoPagoWebhookSignature } from "./webhookSignature.js";
 import type { BillingCapabilities, BillingPaymentStatus, MercadoPagoWebhookPayload } from "./billingTypes.js";
 
@@ -224,16 +231,23 @@ async function assertNoBlockingRecurringSubscription(userId: string) {
   const now = isoNow();
   const { data, error } = await supabaseAdmin
     .from("billing_subscriptions")
-    .select("id, status, current_period_end, gateway, metadata")
+    .select("id, status, current_period_end, gateway, metadata, recurring_state, gateway_reconciliation_status")
     .eq("user_id", userId)
     .eq("gateway", GATEWAY)
-    .in("status", ["active", "trialing", "overdue"])
-    .or(`current_period_end.is.null,current_period_end.gte.${now}`)
-    .limit(10);
+    .eq("metadata->>payment_method", "card")
+    .limit(100);
 
   if (error) fail(error.message);
+  const blockingReconciliation = (data ?? []).find((item: any) =>
+    item.metadata?.payment_method === "card" && isBlockingRecurringReconciliation(item)
+  );
+  if (blockingReconciliation) {
+    fail("Existe uma cobrança recorrente pendente de reconciliação. Resolva-a antes de criar outra assinatura.", "CONFLICT");
+  }
   const recurring = (data ?? []).find((item: any) => item.metadata?.payment_method === "card");
-  if (recurring) fail("Você já possui uma assinatura recorrente ativa.", "CONFLICT");
+  if (recurring && ["active", "trialing", "overdue"].includes(recurring.status) && (!recurring.current_period_end || recurring.current_period_end >= now)) {
+    fail("Você já possui uma assinatura recorrente ativa.", "CONFLICT");
+  }
 }
 
 async function reusePendingSubscription(userId: string, planId: string, paymentMethod: "card" | "pix") {
@@ -332,63 +346,95 @@ async function findReusableCardSubscriptionForUser(userId: string, planId: strin
 }
 
 type CancellationOutcome = {
-  outcome: "success" | "partial" | "failed";
+  outcome: "success" | "partial" | "failed" | "no_action";
+  found: number;
+  processed: number;
   successes: string[];
   failures: Array<{ subscriptionId: string; error: string }>;
+  noActionReason?: string;
 };
 
 function isTerminalPreapprovalStatus(status: unknown) {
   return ["cancelled", "canceled", "finished"].includes(String(status ?? "").toLowerCase());
 }
 
-async function cancelRelatedPreapprovals(origins: LocalSubscription[], actor: "user" | "admin" | "reconciliation"): Promise<CancellationOutcome> {
-  const candidates = origins.filter(origin => origin.gateway_subscription_id);
-  const results = await Promise.all(candidates.map(async origin => {
+type PreapprovalCancellationDependencies = {
+  get: typeof getPreapproval;
+  cancel: typeof cancelPreapproval;
+  update: typeof updateSubscriptionOrThrow;
+  isNotFound: typeof isMercadoPagoNotFound;
+  now: typeof isoNow;
+};
+
+const defaultCancellationDependencies: PreapprovalCancellationDependencies = {
+  get: getPreapproval,
+  cancel: cancelPreapproval,
+  update: updateSubscriptionOrThrow,
+  isNotFound: isMercadoPagoNotFound,
+  now: isoNow,
+};
+
+async function cancelSinglePreapproval(
+  origin: LocalSubscription,
+  actor: "user" | "admin" | "reconciliation",
+  dependencies: PreapprovalCancellationDependencies,
+) {
+  try {
+    let current: MercadoPagoPreapproval | null = null;
     try {
-      let current: MercadoPagoPreapproval | null = null;
-      try {
-        current = await getPreapproval(String(origin.gateway_subscription_id));
-      } catch (error) {
-        if (!isMercadoPagoNotFound(error)) throw error;
-      }
-      if (current && !isTerminalPreapprovalStatus(current.status)) {
-        await cancelPreapproval(String(origin.gateway_subscription_id), `mp-cancel-${actor}-${origin.id}`);
-        try {
-          current = await getPreapproval(String(origin.gateway_subscription_id));
-        } catch (error) {
-          if (!isMercadoPagoNotFound(error)) throw error;
-          current = null;
-        }
-      }
-      if (current && !isTerminalPreapprovalStatus(current.status)) throw new Error("Cancelamento não confirmado pelo Mercado Pago.");
-      await updateSubscriptionOrThrow(origin.id, {
-        recurring_state: current?.status === "finished" ? "finished" : "canceled",
-        recurring_slot_active: false,
-        last_gateway_status: current?.status ?? "not_found",
-        gateway_reconciliation_status: null,
-        gateway_reconciliation_error: null,
-      });
-      return { subscriptionId: origin.id, ok: true as const };
+      current = await dependencies.get(String(origin.gateway_subscription_id));
     } catch (error) {
-      const message = sanitizeBillingError(error);
-      await updateSubscriptionOrThrow(origin.id, {
-        recurring_state: "reconciliation_required",
-        recurring_slot_active: false,
-        gateway_reconciliation_status: `${actor}_cancel_gateway_failed`,
-        gateway_reconciliation_error: message,
-        gateway_reconciliation_last_attempt_at: isoNow(),
-        gateway_reconciliation_attempts: Number(origin.gateway_reconciliation_attempts ?? 0) + 1,
-      });
-      return { subscriptionId: origin.id, ok: false as const, error: message };
+      if (!dependencies.isNotFound(error)) throw error;
     }
-  }));
-  const successes = results.filter(result => result.ok).map(result => result.subscriptionId);
-  const failures = results.filter((result): result is { subscriptionId: string; ok: false; error: string } => !result.ok)
-    .map(({ subscriptionId, error }) => ({ subscriptionId, error }));
+    if (current && !isTerminalPreapprovalStatus(current.status)) {
+      await dependencies.cancel(String(origin.gateway_subscription_id), `mp-cancel-${actor}-${origin.id}`);
+      try {
+        current = await dependencies.get(String(origin.gateway_subscription_id));
+      } catch (error) {
+        if (!dependencies.isNotFound(error)) throw error;
+        current = null;
+      }
+    }
+    if (current && !isTerminalPreapprovalStatus(current.status)) throw new Error("Cancelamento não confirmado pelo Mercado Pago.");
+    await dependencies.update(origin.id, {
+      recurring_state: current?.status === "finished" ? "finished" : "canceled",
+      recurring_slot_active: false,
+      last_gateway_status: current?.status ?? "not_found",
+      gateway_reconciliation_status: null,
+      gateway_reconciliation_error: null,
+    });
+  } catch (error) {
+    const message = sanitizeBillingError(error);
+    await dependencies.update(origin.id, {
+      recurring_state: "reconciliation_required",
+      recurring_slot_active: false,
+      gateway_reconciliation_status: `${actor}_cancel_gateway_failed`,
+      gateway_reconciliation_error: message,
+      gateway_reconciliation_last_attempt_at: dependencies.now(),
+      gateway_reconciliation_attempts: Number(origin.gateway_reconciliation_attempts ?? 0) + 1,
+    });
+    throw new Error(message);
+  }
+}
+
+export async function cancelRelatedPreapprovals(
+  origins: LocalSubscription[],
+  actor: "user" | "admin" | "reconciliation",
+  dependencies = defaultCancellationDependencies,
+): Promise<CancellationOutcome> {
+  const candidates = origins.filter(origin => origin.gateway_subscription_id);
+  const batch = await processBatchIndependently(
+    candidates.map(origin => origin.id),
+    async id => cancelSinglePreapproval(candidates.find(origin => origin.id === id)!, actor, dependencies),
+    "Nenhuma preapproval relacionada exige cancelamento.",
+  );
   return {
-    outcome: failures.length === 0 ? "success" : successes.length ? "partial" : "failed",
-    successes,
-    failures,
+    outcome: batch.outcome,
+    found: candidates.length,
+    processed: batch.processed,
+    successes: batch.successes,
+    failures: batch.failures.map(failure => ({ subscriptionId: failure.id, error: failure.error })),
+    noActionReason: batch.noActionReason,
   };
 }
 
@@ -599,6 +645,121 @@ async function updateSubscriptionOrThrow(subscriptionId: string, patch: Record<s
   if (error) throw new Error(error.message);
 }
 
+type CardCheckoutResult = {
+  subscriptionId: string;
+  status: string;
+  checkoutUrl: string | null;
+  paymentUrl: string | null;
+  gateway: "mercadopago";
+  paymentMethod: "mercadopago_card";
+};
+
+type ReservedCardCheckoutDependencies = {
+  reserve: typeof reserveRecurringCheckoutSlot;
+  create: typeof createPreapprovalCheckout;
+  complete: (input: { reservation: Awaited<ReturnType<typeof reserveRecurringCheckoutSlot>>; owner: string; checkout: MercadoPagoPreapproval }) => Promise<void>;
+  reuse: (reservation: Awaited<ReturnType<typeof reserveRecurringCheckoutSlot>>) => Promise<CardCheckoutResult>;
+  compensate: (input: { reservation: Awaited<ReturnType<typeof reserveRecurringCheckoutSlot>>; checkout: MercadoPagoPreapproval | null; error: unknown }) => Promise<void>;
+  owner: () => string;
+};
+
+async function waitForRecurringCheckout(reservation: Awaited<ReturnType<typeof reserveRecurringCheckoutSlot>>, timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { data, error } = await supabaseAdmin
+      .from("billing_subscriptions")
+      .select("id, gateway_subscription_id, payment_url, recurring_state")
+      .eq("id", reservation.subscriptionId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data?.gateway_subscription_id) {
+      const preapproval = await getPreapproval(String(data.gateway_subscription_id));
+      const checkoutUrl = preapproval.init_point ?? preapproval.sandbox_init_point ?? data.payment_url ?? null;
+      return {
+        subscriptionId: reservation.subscriptionId,
+        status: mapMercadoPagoPreapprovalStatus(preapproval.status),
+        checkoutUrl,
+        paymentUrl: checkoutUrl,
+        gateway: "mercadopago" as const,
+        paymentMethod: "mercadopago_card" as const,
+      };
+    }
+    if (["failed", "reconciliation_required"].includes(String(data?.recurring_state))) {
+      fail("A criação anterior falhou ou exige reconciliação.", "CONFLICT");
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  fail("A criação da assinatura já está em andamento. Aguarde alguns instantes e tente novamente.", "CONFLICT");
+}
+
+const defaultReservedCardCheckoutDependencies: ReservedCardCheckoutDependencies = {
+  reserve: reserveRecurringCheckoutSlot,
+  create: createPreapprovalCheckout,
+  owner: randomUUID,
+  complete: async ({ reservation, owner, checkout }) => {
+    const checkoutUrl = checkout.init_point ?? checkout.sandbox_init_point ?? null;
+    const { error } = await supabaseAdmin.rpc("complete_mercadopago_recurring_checkout_slot", {
+      p_subscription_id: reservation.subscriptionId,
+      p_creation_owner: owner,
+      p_gateway_subscription_id: checkout.id ? String(checkout.id) : null,
+      p_gateway_status: checkout.status ?? null,
+      p_payment_url: checkoutUrl,
+    });
+    if (error) throw new Error(error.message);
+  },
+  reuse: waitForRecurringCheckout,
+  compensate: async ({ reservation, checkout, error }) => {
+    const message = sanitizeBillingError(error);
+    if (checkout?.id) {
+      try {
+        await cancelPreapproval(String(checkout.id), `mp-cancel-compensate-${reservation.subscriptionId}`);
+        await markSubscriptionFailed(reservation.subscriptionId, message, { gatewaySubscriptionId: String(checkout.id) });
+      } catch (cancelError) {
+        await markSubscriptionFailed(reservation.subscriptionId, message, {
+          reconciliationStatus: "gateway_created_local_failed",
+          reconciliationError: sanitizeBillingError(cancelError),
+          gatewaySubscriptionId: String(checkout.id),
+        });
+      }
+    } else {
+      await markSubscriptionFailed(reservation.subscriptionId, message);
+    }
+  },
+};
+
+export async function executeReservedCardCheckout(
+  input: { userId: string; payerEmail: string; plan: BillingPlanRow },
+  dependencies = defaultReservedCardCheckoutDependencies,
+): Promise<CardCheckoutResult> {
+  const owner = dependencies.owner();
+  return runExclusiveRecurringCheckout({
+    reserve: () => dependencies.reserve({ userId: input.userId, userEmail: input.payerEmail, plan: input.plan, owner }),
+    reuse: dependencies.reuse,
+    create: reservation => dependencies.create({
+      reason: `Rumo ao ITA - ${input.plan.name}`,
+      externalReference: reservation.subscriptionId,
+      payerEmail: input.payerEmail,
+      amount: centsToMercadoPagoAmount(Number(input.plan.price_cents)),
+      backUrl: getSubscriptionReturnUrl(),
+      notificationUrl: getMercadoPagoWebhookUrl(),
+      idempotencyKey: `mp-card-${reservation.subscriptionId}`,
+    }),
+    complete: async (reservation, checkout) => {
+      await dependencies.complete({ reservation, owner, checkout });
+      const checkoutUrl = checkout.init_point ?? checkout.sandbox_init_point ?? null;
+      return {
+        subscriptionId: reservation.subscriptionId,
+        status: "pending",
+        checkoutUrl,
+        paymentUrl: checkoutUrl,
+        gateway: "mercadopago",
+        paymentMethod: "mercadopago_card",
+      };
+    },
+    compensate: (reservation, checkout, error) => dependencies.compensate({ reservation, checkout, error }),
+  });
+}
+
 export async function createCardSubscriptionCheckout(input: { userId: string; userEmail: string | null; planSlug: string }) {
   const capabilities = getBillingCapabilities();
   if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
@@ -623,72 +784,7 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   }
 
   await assertNoBlockingRecurringSubscription(input.userId);
-  const creationOwner = randomUUID();
-  const reservation = await reserveRecurringCheckoutSlot({ userId: input.userId, userEmail: payerEmail, plan, owner: creationOwner });
-  if (!reservation.shouldCreate) {
-    if (reservation.gatewaySubscriptionId) {
-      const preapproval = await getPreapproval(reservation.gatewaySubscriptionId);
-      const mapped = mapMercadoPagoPreapprovalStatus(preapproval.status);
-      return {
-        subscriptionId: reservation.subscriptionId,
-        status: mapped,
-        checkoutUrl: preapproval.init_point ?? preapproval.sandbox_init_point ?? reservation.checkoutUrl,
-        paymentUrl: preapproval.init_point ?? preapproval.sandbox_init_point ?? reservation.checkoutUrl,
-        gateway: "mercadopago" as const,
-        paymentMethod: "mercadopago_card" as const,
-      };
-    }
-    fail("A criação da assinatura já está em andamento. Aguarde alguns instantes e tente novamente.", "CONFLICT");
-  }
-  let checkout: MercadoPagoPreapproval | null = null;
-
-  try {
-    checkout = await createPreapprovalCheckout({
-      reason: `Rumo ao ITA - ${plan.name}`,
-      externalReference: reservation.subscriptionId,
-      payerEmail,
-      amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
-      backUrl: getSubscriptionReturnUrl(),
-      notificationUrl: getMercadoPagoWebhookUrl(),
-      idempotencyKey: `mp-card-${reservation.subscriptionId}`,
-    });
-
-    const checkoutUrl = checkout.init_point ?? checkout.sandbox_init_point ?? null;
-    const { error: completionError } = await supabaseAdmin.rpc("complete_mercadopago_recurring_checkout_slot", {
-      p_subscription_id: reservation.subscriptionId,
-      p_creation_owner: creationOwner,
-      p_gateway_subscription_id: checkout.id ? String(checkout.id) : null,
-      p_gateway_status: checkout.status ?? null,
-      p_payment_url: checkoutUrl,
-    });
-    if (completionError) throw new Error(completionError.message);
-
-    return {
-      subscriptionId: reservation.subscriptionId,
-      status: "pending" as const,
-      checkoutUrl,
-      paymentUrl: checkoutUrl,
-      gateway: "mercadopago" as const,
-      paymentMethod: "mercadopago_card" as const,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Falha ao criar checkout Mercado Pago.";
-    if (checkout?.id) {
-      try {
-        await cancelPreapproval(String(checkout.id), `mp-cancel-compensate-${reservation.subscriptionId}`);
-        await markSubscriptionFailed(reservation.subscriptionId, message, { gatewaySubscriptionId: String(checkout.id) });
-      } catch (cancelError) {
-        await markSubscriptionFailed(reservation.subscriptionId, message, {
-          reconciliationStatus: "gateway_created_local_failed",
-          reconciliationError: cancelError instanceof Error ? cancelError.message : "Falha ao cancelar preapproval criado.",
-          gatewaySubscriptionId: String(checkout.id),
-        });
-      }
-    } else {
-      await markSubscriptionFailed(reservation.subscriptionId, message);
-    }
-    throw error;
-  }
+  return executeReservedCardCheckout({ userId: input.userId, payerEmail, plan });
 }
 
 export async function createPixPayment(input: { userId: string; userEmail: string | null; planSlug: string }) {
@@ -864,6 +960,60 @@ export async function cancelAdminMercadoPagoSubscription(input: { subscriptionId
   return { success: cancellation.outcome === "success", ...cancellation } as const;
 }
 
+export async function reconcileRecurringRecords(
+  found: LocalSubscription[],
+  noActionReason: string,
+  dependencies = defaultCancellationDependencies,
+): Promise<CancellationOutcome> {
+  const batch = await processBatchIndependently(
+    found.map(origin => origin.id),
+    async id => {
+      const origin = found.find(item => item.id === id)!;
+      const status = String(origin.gateway_reconciliation_status ?? "");
+      if (!SUPPORTED_RECONCILIATION_STATUSES.has(status)) {
+        const message = `Tipo de reconciliação não suportado: ${status || "ausente"}.`;
+        await dependencies.update(origin.id, {
+          gateway_reconciliation_error: message,
+          gateway_reconciliation_last_attempt_at: dependencies.now(),
+          gateway_reconciliation_attempts: Number(origin.gateway_reconciliation_attempts ?? 0) + 1,
+        });
+        throw new Error(message);
+      }
+      if (status.includes("duplicate")) {
+        const canonicalId = origin.canonical_access_subscription_id ?? origin.id;
+        if (origin.id === canonicalId || origin.recurring_slot_active) {
+          const message = "Recorrência duplicada coincide com a assinatura canônica ou com o slot principal; cancelamento automático bloqueado.";
+          await dependencies.update(origin.id, {
+            gateway_reconciliation_error: message,
+            gateway_reconciliation_last_attempt_at: dependencies.now(),
+            gateway_reconciliation_attempts: Number(origin.gateway_reconciliation_attempts ?? 0) + 1,
+          });
+          throw new Error(message);
+        }
+      }
+      if (!origin.gateway_subscription_id) {
+        const message = "Reconciliação sem gateway_subscription_id; cancelamento externo não pode ser confirmado.";
+        await dependencies.update(origin.id, {
+          gateway_reconciliation_error: message,
+          gateway_reconciliation_last_attempt_at: dependencies.now(),
+          gateway_reconciliation_attempts: Number(origin.gateway_reconciliation_attempts ?? 0) + 1,
+        });
+        throw new Error(message);
+      }
+      await cancelSinglePreapproval(origin, "reconciliation", dependencies);
+    },
+    noActionReason,
+  );
+  return {
+    outcome: batch.outcome,
+    found: batch.found,
+    processed: batch.processed,
+    successes: batch.successes,
+    failures: batch.failures.map(failure => ({ subscriptionId: failure.id, error: failure.error })),
+    noActionReason: batch.noActionReason,
+  };
+}
+
 export async function reconcileDuplicateMercadoPagoSubscriptions(input: { subscriptionId?: string; adminUserId: string }) {
   let query = supabaseAdmin
     .from("billing_subscriptions")
@@ -875,20 +1025,27 @@ export async function reconcileDuplicateMercadoPagoSubscriptions(input: { subscr
   const { data, error } = await query.order("created_at", { ascending: true }).limit(100);
   if (error) fail(error.message);
 
-  const candidates = ((data ?? []) as LocalSubscription[]).filter(origin =>
-    Boolean(origin.gateway_subscription_id) &&
-    String(origin.gateway_reconciliation_status ?? "").includes("duplicate") &&
-    !origin.recurring_slot_active
+  const cancellation = await reconcileRecurringRecords(
+    (data ?? []) as LocalSubscription[],
+    input.subscriptionId ? "A assinatura informada não possui reconciliação pendente." : "Nenhuma reconciliação pendente foi encontrada.",
   );
-  const cancellation = await cancelRelatedPreapprovals(candidates, "reconciliation");
   const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
     admin_user_id: input.adminUserId,
     action: "billing_mercadopago_duplicates_reconciled",
     entity_type: "billing_subscription",
     entity_id: input.subscriptionId ?? null,
-    description: "Reconciliação de recorrências duplicadas do Mercado Pago",
+    description: cancellation.outcome === "no_action"
+      ? "Reconciliação Mercado Pago sem itens elegíveis"
+      : "Reconciliação de recorrências do Mercado Pago",
     level: cancellation.outcome === "success" ? "info" : "warning",
-    metadata: { outcome: cancellation.outcome, successes: cancellation.successes, failed_subscription_ids: cancellation.failures.map(item => item.subscriptionId) },
+    metadata: {
+      outcome: cancellation.outcome,
+      found: cancellation.found,
+      processed: cancellation.processed,
+      successes: cancellation.successes,
+      failed_subscription_ids: cancellation.failures.map(item => item.subscriptionId),
+      no_action_reason: cancellation.noActionReason ?? null,
+    },
   });
   if (logError) fail(logError.message);
   return cancellation;
@@ -1079,13 +1236,28 @@ async function processAuthorizedPaymentUpdate(resourceId: string) {
   return processApprovedPayment(payment);
 }
 
-async function processChargebackUpdate(resourceId: string) {
-  const chargeback = await getChargeback(resourceId);
+type ChargebackProcessingDependencies = {
+  getChargeback: typeof getChargeback;
+  getPayment: typeof getPayment;
+  processPayment: typeof processApprovedPayment;
+};
+
+const defaultChargebackProcessingDependencies: ChargebackProcessingDependencies = {
+  getChargeback,
+  getPayment,
+  processPayment: processApprovedPayment,
+};
+
+export async function processChargebackUpdate(
+  resourceId: string,
+  dependencies = defaultChargebackProcessingDependencies,
+) {
+  const chargeback = await dependencies.getChargeback(resourceId);
   const paymentIds = extractChargebackPaymentIds(chargeback);
   if (!paymentIds.length) throw new Error("Chargeback sem payment_id oficial válido.");
   const result = await processBatchIndependently(paymentIds, async paymentId => {
-    const payment = await getPayment(paymentId);
-    await processApprovedPayment(payment);
+    const payment = await dependencies.getPayment(paymentId);
+    await dependencies.processPayment(payment);
   });
   if (result.outcome !== "success") {
     throw new Error(`Chargeback ${result.outcome}: ${result.results.filter(item => !item.ok).map(item => `${item.id}:${item.error}`).join(";")}`);
@@ -1142,24 +1314,23 @@ export async function processMercadoPagoWebhook(input: {
   if (claim.claimStatus === "already_processed") return { ok: true, status: 200 as const, duplicate: true };
   if (claim.claimStatus === "already_processing") return { ok: false, status: 409 as const, message: "already_processing" };
 
-  try {
-    await dispatchMercadoPagoWebhook(type, resourceId);
-
-    const { error } = await supabaseAdmin
-      .from("billing_webhook_events")
-      .update({ status: "processed", processed_at: isoNow(), error_message: null })
-      .eq("id", claim.row.id);
-    if (error) throw new Error(error.message);
-    return { ok: true, status: 200 as const };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido no webhook.";
-    const { error: updateError } = await supabaseAdmin
-      .from("billing_webhook_events")
-      .update({ status: "failed", error_message: message })
-      .eq("id", claim.row.id);
-    if (updateError) throw new Error(updateError.message);
-    return { ok: false, status: 500 as const, processingError: message };
-  }
+  return runClaimedBillingWebhook({
+    dispatch: () => dispatchMercadoPagoWebhook(type, resourceId),
+    markProcessed: async () => {
+      const { error } = await supabaseAdmin
+        .from("billing_webhook_events")
+        .update({ status: "processed", processed_at: isoNow(), error_message: null })
+        .eq("id", claim.row.id);
+      if (error) throw new Error(error.message);
+    },
+    markFailed: async message => {
+      const { error } = await supabaseAdmin
+        .from("billing_webhook_events")
+        .update({ status: "failed", error_message: message })
+        .eq("id", claim.row.id);
+      if (error) throw new Error(error.message);
+    },
+  });
 }
 
 export const __billingTestHooks = {
