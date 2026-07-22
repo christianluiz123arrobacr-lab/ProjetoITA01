@@ -90,6 +90,29 @@ describe("produção de billing orchestration", () => {
     expect(compensate).toHaveBeenCalledTimes(1);
   });
 
+  it("envia o payer de teste ao gateway sem trocar o proprietário local", async () => {
+    const reserve = vi.fn().mockResolvedValue({
+      subscriptionId: "subscription-1", shouldCreate: true, gatewaySubscriptionId: null, checkoutUrl: null,
+    });
+    const create = vi.fn().mockResolvedValue({ id: "preapproval-1", status: "pending", init_point: "https://checkout.test/1" });
+    await executeReservedCardCheckout({
+      userId: "user-1",
+      payerEmail: "account@example.com",
+      gatewayPayerEmail: "buyer.test@example.com",
+      plan,
+    }, {
+      reserve,
+      create,
+      owner: vi.fn().mockReturnValue("owner"),
+      complete: vi.fn(),
+      reuse: vi.fn(),
+      compensate: vi.fn(),
+    } as any);
+
+    expect(reserve).toHaveBeenCalledWith(expect.objectContaining({ userEmail: "account@example.com" }));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ payerEmail: "buyer.test@example.com" }));
+  });
+
   it("cancela duas preapprovals e limpa reconciliação somente após confirmação", async () => {
     const deps = cancellationDependencies();
     const result = await cancelRelatedPreapprovals([

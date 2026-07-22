@@ -13,6 +13,24 @@ export function validateBuyerEmailAddress(email: string | null | undefined): Fin
   return { ok: true };
 }
 
+type MercadoPagoPayerEnvironment = Pick<NodeJS.ProcessEnv, "MERCADO_PAGO_TEST_MODE" | "MERCADO_PAGO_TEST_PAYER_EMAIL">;
+
+/** Selects the gateway-only payer address without exposing test configuration to the client. */
+export function resolveMercadoPagoPayerEmail(
+  userEmail: string,
+  environment: MercadoPagoPayerEnvironment = process.env,
+) {
+  if (environment.MERCADO_PAGO_TEST_MODE !== "true") return userEmail;
+
+  const testPayerEmail = String(environment.MERCADO_PAGO_TEST_PAYER_EMAIL ?? "").trim().toLowerCase();
+  if (!validateBuyerEmailAddress(testPayerEmail).ok) {
+    throw new Error(
+      "MERCADO_PAGO_TEST_PAYER_EMAIL deve conter um e-mail válido quando MERCADO_PAGO_TEST_MODE=true.",
+    );
+  }
+  return testPayerEmail;
+}
+
 export function validateClientCheckoutInput(input: { planSlug?: unknown; amountCents?: unknown }, authenticated: boolean): FinancialValidationResult {
   if (!authenticated) return { ok: false, reason: "unauthenticated" };
   if (typeof input.planSlug !== "string" || input.planSlug.trim().length === 0) return { ok: false, reason: "invalid_plan" };

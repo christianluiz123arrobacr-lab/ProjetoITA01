@@ -34,6 +34,7 @@ import {
 } from "./billingOrchestration.js";
 import { validateMercadoPagoWebhookSignature } from "./webhookSignature.js";
 import type { BillingCapabilities, BillingPaymentStatus, MercadoPagoWebhookPayload } from "./billingTypes.js";
+import { resolveMercadoPagoPayerEmail } from "./financialRules.js";
 
 const RESERVATION_MINUTES = 30;
 const PIX_EXPIRATION_MINUTES = 60 * 24;
@@ -728,7 +729,7 @@ const defaultReservedCardCheckoutDependencies: ReservedCardCheckoutDependencies 
 };
 
 export async function executeReservedCardCheckout(
-  input: { userId: string; payerEmail: string; plan: BillingPlanRow },
+  input: { userId: string; payerEmail: string; gatewayPayerEmail?: string; plan: BillingPlanRow },
   dependencies = defaultReservedCardCheckoutDependencies,
 ): Promise<CardCheckoutResult> {
   const owner = dependencies.owner();
@@ -738,7 +739,7 @@ export async function executeReservedCardCheckout(
     create: reservation => dependencies.create({
       reason: `Rumo ao ITA - ${input.plan.name}`,
       externalReference: reservation.subscriptionId,
-      payerEmail: input.payerEmail,
+      payerEmail: input.gatewayPayerEmail ?? input.payerEmail,
       amount: centsToMercadoPagoAmount(Number(input.plan.price_cents)),
       backUrl: getSubscriptionReturnUrl(),
       notificationUrl: getMercadoPagoWebhookUrl(),
@@ -770,6 +771,7 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   const plan = await getPlanForCheckout(input.planSlug);
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
+  const gatewayPayerEmail = resolveMercadoPagoPayerEmail(payerEmail);
 
   const reusableCard = await findReusableCardSubscriptionForUser(input.userId, plan.id);
   if (reusableCard?.subscription?.id) {
@@ -784,7 +786,7 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   }
 
   await assertNoBlockingRecurringSubscription(input.userId);
-  return executeReservedCardCheckout({ userId: input.userId, payerEmail, plan });
+  return executeReservedCardCheckout({ userId: input.userId, payerEmail, gatewayPayerEmail, plan });
 }
 
 export async function createPixPayment(input: { userId: string; userEmail: string | null; planSlug: string }) {
@@ -822,6 +824,7 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
 
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
+  const gatewayPayerEmail = resolveMercadoPagoPayerEmail(payerEmail);
   const expiresAt = addMinutes(new Date(), PIX_EXPIRATION_MINUTES).toISOString();
   const reservation = await reserveCheckout({ userId: input.userId, userEmail: payerEmail, plan, paymentMethod: "pix" });
 
@@ -854,7 +857,7 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
   try {
     const mpPayment = await createMercadoPagoPixPayment({
       externalReference,
-      payerEmail,
+      payerEmail: gatewayPayerEmail,
       amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
       description: `Rumo ao ITA - ${plan.name}`,
       notificationUrl: getMercadoPagoWebhookUrl(),
