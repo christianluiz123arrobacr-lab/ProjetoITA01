@@ -115,7 +115,7 @@ describe("produção de billing orchestration", () => {
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ payerEmail: "buyer.test@example.com" }));
   });
 
-  it("registra erro estruturado e retorna mensagem segura para recusa do Mercado Pago", () => {
+  it("no modo teste retorna status e mensagem sanitizada da recusa do Mercado Pago", () => {
     const logger = vi.fn();
     const mapped = mapMercadoPagoCardCheckoutError(
       new MercadoPagoHttpError(400, "payer buyer@example.com rejected Authorization: Bearer secret-token"),
@@ -124,8 +124,11 @@ describe("produção de billing orchestration", () => {
     );
     expect(mapped).toMatchObject({
       code: "BAD_GATEWAY",
-      message: "O Mercado Pago recusou a criação da assinatura. Tente novamente mais tarde.",
     });
+    expect(mapped.message).toContain("Teste Mercado Pago (HTTP 400):");
+    expect(mapped.message).toContain("payer [EMAIL_REDACTED] rejected");
+    expect(mapped.message).not.toContain("buyer@example.com");
+    expect(mapped.message).not.toContain("secret-token");
     expect(logger).toHaveBeenCalledWith(expect.objectContaining({
       event: "mercadopago_card_checkout_failed",
       error_name: "MercadoPagoHttpError",
@@ -137,6 +140,33 @@ describe("produção de billing orchestration", () => {
     const logged = JSON.stringify(logger.mock.calls[0]);
     expect(logged).not.toContain("buyer@example.com");
     expect(logged).not.toContain("secret-token");
+  });
+
+  it("em produção mantém a mensagem genérica para a mesma recusa", () => {
+    const mapped = mapMercadoPagoCardCheckoutError(
+      new MercadoPagoHttpError(400, "payer buyer@example.com rejected Authorization: Bearer secret-token"),
+      { subscriptionId: "subscription-1", planSlug: "mensal", testMode: false },
+      vi.fn(),
+    );
+    expect(mapped.message).toBe("O Mercado Pago recusou a criação da assinatura. Tente novamente mais tarde.");
+    expect(mapped.message).not.toContain("HTTP 400");
+    expect(mapped.message).not.toContain("buyer@example.com");
+  });
+
+  it("remove token, segredo e e-mail da mensagem técnica de teste", () => {
+    const mapped = mapMercadoPagoCardCheckoutError(
+      new MercadoPagoHttpError(
+        422,
+        "payer=buyer@example.com Authorization: Bearer token-value secret=private-value access_token=access-value",
+      ),
+      { subscriptionId: null, planSlug: "mensal", testMode: true },
+      vi.fn(),
+    );
+    expect(mapped.message).toContain("Teste Mercado Pago (HTTP 422):");
+    expect(mapped.message).not.toContain("buyer@example.com");
+    expect(mapped.message).not.toContain("token-value");
+    expect(mapped.message).not.toContain("private-value");
+    expect(mapped.message).not.toContain("access-value");
   });
 
   it("mapeia falha de autenticação sem registrar credenciais", () => {

@@ -801,6 +801,12 @@ export function mapMercadoPagoCardCheckoutError(
   if (rawMessage.includes("MERCADO_PAGO_TEST_PAYER_EMAIL")) {
     return new TRPCError({ code: "PRECONDITION_FAILED", message: sanitizedMessage });
   }
+  if (context.testMode && error instanceof MercadoPagoHttpError) {
+    return new TRPCError({
+      code: "BAD_GATEWAY",
+      message: `Teste Mercado Pago (HTTP ${error.status}): ${sanitizedMessage}`,
+    });
+  }
   if (status === 401 || status === 403 || rawMessage.includes("MERCADO_PAGO_ACCESS_TOKEN")) {
     return new TRPCError({
       code: "PRECONDITION_FAILED",
