@@ -21,6 +21,7 @@ import {
   getPayment,
   getPreapproval,
   isMercadoPagoNotFound,
+  MercadoPagoHttpError,
   type MercadoPagoPayment,
   type MercadoPagoPreapproval,
 } from "./mercadoPagoClient.js";
@@ -729,12 +730,22 @@ const defaultReservedCardCheckoutDependencies: ReservedCardCheckoutDependencies 
 };
 
 export async function executeReservedCardCheckout(
-  input: { userId: string; payerEmail: string; gatewayPayerEmail?: string; plan: BillingPlanRow },
+  input: {
+    userId: string;
+    payerEmail: string;
+    gatewayPayerEmail?: string;
+    plan: BillingPlanRow;
+    onSubscriptionReserved?: (subscriptionId: string) => void;
+  },
   dependencies = defaultReservedCardCheckoutDependencies,
 ): Promise<CardCheckoutResult> {
   const owner = dependencies.owner();
   return runExclusiveRecurringCheckout({
-    reserve: () => dependencies.reserve({ userId: input.userId, userEmail: input.payerEmail, plan: input.plan, owner }),
+    reserve: async () => {
+      const reservation = await dependencies.reserve({ userId: input.userId, userEmail: input.payerEmail, plan: input.plan, owner });
+      input.onSubscriptionReserved?.(reservation.subscriptionId);
+      return reservation;
+    },
     reuse: dependencies.reuse,
     create: reservation => dependencies.create({
       reason: `Rumo ao ITA - ${input.plan.name}`,
@@ -761,9 +772,60 @@ export async function executeReservedCardCheckout(
   });
 }
 
+type CardCheckoutFailureContext = {
+  subscriptionId: string | null;
+  planSlug: string;
+  testMode: boolean;
+};
+
+export function mapMercadoPagoCardCheckoutError(
+  error: unknown,
+  context: CardCheckoutFailureContext,
+  logger: (entry: Record<string, unknown>) => void = console.error,
+) {
+  const sanitizedMessage = sanitizeBillingError(error);
+  const status = error instanceof MercadoPagoHttpError ? error.status : null;
+  const errorName = error instanceof Error ? error.name : typeof error;
+
+  logger({
+    event: "mercadopago_card_checkout_failed",
+    error_name: errorName,
+    mercado_pago_http_status: status,
+    message: sanitizedMessage,
+    subscription_id: context.subscriptionId,
+    plan_slug: context.planSlug,
+    test_mode: context.testMode,
+  });
+
+  const rawMessage = error instanceof Error ? error.message : "";
+  if (rawMessage.includes("MERCADO_PAGO_TEST_PAYER_EMAIL")) {
+    return new TRPCError({ code: "PRECONDITION_FAILED", message: sanitizedMessage });
+  }
+  if (status === 401 || status === 403 || rawMessage.includes("MERCADO_PAGO_ACCESS_TOKEN")) {
+    return new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Não foi possível autenticar a integração de pagamentos. Verifique as credenciais do Mercado Pago.",
+    });
+  }
+  if (error instanceof MercadoPagoHttpError) {
+    return new TRPCError({
+      code: "BAD_GATEWAY",
+      message: "O Mercado Pago recusou a criação da assinatura. Tente novamente mais tarde.",
+    });
+  }
+  return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível iniciar a assinatura." });
+}
+
 export async function createCardSubscriptionCheckout(input: { userId: string; userEmail: string | null; planSlug: string }) {
+  let subscriptionId: string | null = null;
+  const testMode = process.env.MERCADO_PAGO_TEST_MODE === "true";
   const capabilities = getBillingCapabilities();
-  if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
+  if (!capabilities.mercadoPagoEnabled) {
+    throw mapMercadoPagoCardCheckoutError(
+      new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado."),
+      { subscriptionId, planSlug: input.planSlug, testMode },
+    );
+  }
 
   await expireStaleReservations();
   const { error: slotExpiryError } = await supabaseAdmin.rpc("release_expired_mercadopago_recurring_slots", { p_now: isoNow() });
@@ -771,22 +833,42 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   const plan = await getPlanForCheckout(input.planSlug);
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
-  const gatewayPayerEmail = resolveMercadoPagoPayerEmail(payerEmail);
+  let gatewayPayerEmail: string;
+  try {
+    gatewayPayerEmail = resolveMercadoPagoPayerEmail(payerEmail);
+  } catch (error) {
+    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug, testMode });
+  }
 
-  const reusableCard = await findReusableCardSubscriptionForUser(input.userId, plan.id);
-  if (reusableCard?.subscription?.id) {
-    return {
-      subscriptionId: String(reusableCard.subscription.id),
-      status: reusableCard.status,
-      checkoutUrl: reusableCard.checkoutUrl,
-      paymentUrl: reusableCard.checkoutUrl,
-      gateway: "mercadopago" as const,
-      paymentMethod: "mercadopago_card" as const,
-    };
+  try {
+    const reusableCard = await findReusableCardSubscriptionForUser(input.userId, plan.id);
+    if (reusableCard?.subscription?.id) {
+      subscriptionId = String(reusableCard.subscription.id);
+      return {
+        subscriptionId,
+        status: reusableCard.status,
+        checkoutUrl: reusableCard.checkoutUrl,
+        paymentUrl: reusableCard.checkoutUrl,
+        gateway: "mercadopago" as const,
+        paymentMethod: "mercadopago_card" as const,
+      };
+    }
+  } catch (error) {
+    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug, testMode });
   }
 
   await assertNoBlockingRecurringSubscription(input.userId);
-  return executeReservedCardCheckout({ userId: input.userId, payerEmail, gatewayPayerEmail, plan });
+  try {
+    return await executeReservedCardCheckout({
+      userId: input.userId,
+      payerEmail,
+      gatewayPayerEmail,
+      plan,
+      onSubscriptionReserved: id => { subscriptionId = id; },
+    });
+  } catch (error) {
+    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug, testMode });
+  }
 }
 
 export async function createPixPayment(input: { userId: string; userEmail: string | null; planSlug: string }) {

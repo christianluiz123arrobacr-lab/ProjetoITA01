@@ -13,7 +13,7 @@ export function validateBuyerEmailAddress(email: string | null | undefined): Fin
   return { ok: true };
 }
 
-type MercadoPagoPayerEnvironment = Pick<NodeJS.ProcessEnv, "MERCADO_PAGO_TEST_MODE" | "MERCADO_PAGO_TEST_PAYER_EMAIL">;
+type MercadoPagoPayerEnvironment = Partial<Pick<NodeJS.ProcessEnv, "MERCADO_PAGO_TEST_MODE" | "MERCADO_PAGO_TEST_PAYER_EMAIL">>;
 
 /** Selects the gateway-only payer address without exposing test configuration to the client. */
 export function resolveMercadoPagoPayerEmail(

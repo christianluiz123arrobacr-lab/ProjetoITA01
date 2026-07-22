@@ -3,9 +3,11 @@ import { isBlockingRecurringReconciliation, processBatchIndependently, runClaime
 import {
   cancelRelatedPreapprovals,
   executeReservedCardCheckout,
+  mapMercadoPagoCardCheckoutError,
   processChargebackUpdate,
   reconcileRecurringRecords,
 } from "./billingService";
+import { MercadoPagoHttpError } from "./mercadoPagoClient";
 
 const plan = { id: "plan-1", slug: "mensal", name: "Mensal", price_cents: 1000, currency: "BRL" };
 const baseOrigin = {
@@ -111,6 +113,63 @@ describe("produção de billing orchestration", () => {
 
     expect(reserve).toHaveBeenCalledWith(expect.objectContaining({ userEmail: "account@example.com" }));
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ payerEmail: "buyer.test@example.com" }));
+  });
+
+  it("registra erro estruturado e retorna mensagem segura para recusa do Mercado Pago", () => {
+    const logger = vi.fn();
+    const mapped = mapMercadoPagoCardCheckoutError(
+      new MercadoPagoHttpError(400, "payer buyer@example.com rejected Authorization: Bearer secret-token"),
+      { subscriptionId: "subscription-1", planSlug: "mensal", testMode: true },
+      logger,
+    );
+    expect(mapped).toMatchObject({
+      code: "BAD_GATEWAY",
+      message: "O Mercado Pago recusou a criação da assinatura. Tente novamente mais tarde.",
+    });
+    expect(logger).toHaveBeenCalledWith(expect.objectContaining({
+      event: "mercadopago_card_checkout_failed",
+      error_name: "MercadoPagoHttpError",
+      mercado_pago_http_status: 400,
+      subscription_id: "subscription-1",
+      plan_slug: "mensal",
+      test_mode: true,
+    }));
+    const logged = JSON.stringify(logger.mock.calls[0]);
+    expect(logged).not.toContain("buyer@example.com");
+    expect(logged).not.toContain("secret-token");
+  });
+
+  it("mapeia falha de autenticação sem registrar credenciais", () => {
+    const logger = vi.fn();
+    const mapped = mapMercadoPagoCardCheckoutError(
+      new MercadoPagoHttpError(401, "invalid access_token=top-secret"),
+      { subscriptionId: null, planSlug: "mensal", testMode: false },
+      logger,
+    );
+    expect(mapped.message).toBe("Não foi possível autenticar a integração de pagamentos. Verifique as credenciais do Mercado Pago.");
+    expect(JSON.stringify(logger.mock.calls)).not.toContain("top-secret");
+  });
+
+  it("preserva a mensagem específica de configuração inválida do payer de teste", () => {
+    const logger = vi.fn();
+    const mapped = mapMercadoPagoCardCheckoutError(
+      new Error("MERCADO_PAGO_TEST_PAYER_EMAIL deve conter um e-mail válido quando MERCADO_PAGO_TEST_MODE=true."),
+      { subscriptionId: null, planSlug: "mensal", testMode: true },
+      logger,
+    );
+    expect(mapped).toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "MERCADO_PAGO_TEST_PAYER_EMAIL deve conter um e-mail válido quando MERCADO_PAGO_TEST_MODE=true.",
+    });
+  });
+
+  it("usa mensagem genérica para falhas internas desconhecidas", () => {
+    const mapped = mapMercadoPagoCardCheckoutError(
+      new Error("database details"),
+      { subscriptionId: null, planSlug: "mensal", testMode: false },
+      vi.fn(),
+    );
+    expect(mapped).toMatchObject({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível iniciar a assinatura." });
   });
 
   it("cancela duas preapprovals e limpa reconciliação somente após confirmação", async () => {

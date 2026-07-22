@@ -45,6 +45,7 @@ export function sanitizeBillingError(error: unknown) {
   return raw
     .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+/gi, "Bearer [REDACTED]")
     .replace(/(access[_ -]?token|authorization|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[EMAIL_REDACTED]")
     .slice(0, 500);
 }
 
