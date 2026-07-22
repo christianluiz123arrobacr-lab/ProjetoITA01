@@ -35,7 +35,6 @@ import {
 } from "./billingOrchestration.js";
 import { validateMercadoPagoWebhookSignature } from "./webhookSignature.js";
 import type { BillingCapabilities, BillingPaymentStatus, MercadoPagoWebhookPayload } from "./billingTypes.js";
-import { resolveMercadoPagoPayerEmail } from "./financialRules.js";
 
 const RESERVATION_MINUTES = 30;
 const PIX_EXPIRATION_MINUTES = 60 * 24;
@@ -733,7 +732,6 @@ export async function executeReservedCardCheckout(
   input: {
     userId: string;
     payerEmail: string;
-    gatewayPayerEmail?: string;
     plan: BillingPlanRow;
     onSubscriptionReserved?: (subscriptionId: string) => void;
   },
@@ -750,7 +748,7 @@ export async function executeReservedCardCheckout(
     create: reservation => dependencies.create({
       reason: `Rumo ao ITA - ${input.plan.name}`,
       externalReference: reservation.subscriptionId,
-      payerEmail: input.gatewayPayerEmail ?? input.payerEmail,
+      payerEmail: input.payerEmail,
       amount: centsToMercadoPagoAmount(Number(input.plan.price_cents)),
       backUrl: getSubscriptionReturnUrl(),
       notificationUrl: getMercadoPagoWebhookUrl(),
@@ -775,7 +773,6 @@ export async function executeReservedCardCheckout(
 type CardCheckoutFailureContext = {
   subscriptionId: string | null;
   planSlug: string;
-  testMode: boolean;
 };
 
 export function mapMercadoPagoCardCheckoutError(
@@ -794,19 +791,9 @@ export function mapMercadoPagoCardCheckoutError(
     message: sanitizedMessage,
     subscription_id: context.subscriptionId,
     plan_slug: context.planSlug,
-    test_mode: context.testMode,
   });
 
   const rawMessage = error instanceof Error ? error.message : "";
-  if (rawMessage.includes("MERCADO_PAGO_TEST_PAYER_EMAIL")) {
-    return new TRPCError({ code: "PRECONDITION_FAILED", message: sanitizedMessage });
-  }
-  if (context.testMode && error instanceof MercadoPagoHttpError) {
-    return new TRPCError({
-      code: "BAD_GATEWAY",
-      message: `Teste Mercado Pago (HTTP ${error.status}): ${sanitizedMessage}`,
-    });
-  }
   if (status === 401 || status === 403 || rawMessage.includes("MERCADO_PAGO_ACCESS_TOKEN")) {
     return new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -824,12 +811,11 @@ export function mapMercadoPagoCardCheckoutError(
 
 export async function createCardSubscriptionCheckout(input: { userId: string; userEmail: string | null; planSlug: string }) {
   let subscriptionId: string | null = null;
-  const testMode = process.env.MERCADO_PAGO_TEST_MODE === "true";
   const capabilities = getBillingCapabilities();
   if (!capabilities.mercadoPagoEnabled) {
     throw mapMercadoPagoCardCheckoutError(
       new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado."),
-      { subscriptionId, planSlug: input.planSlug, testMode },
+      { subscriptionId, planSlug: input.planSlug },
     );
   }
 
@@ -839,12 +825,6 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   const plan = await getPlanForCheckout(input.planSlug);
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
-  let gatewayPayerEmail: string;
-  try {
-    gatewayPayerEmail = resolveMercadoPagoPayerEmail(payerEmail);
-  } catch (error) {
-    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug, testMode });
-  }
 
   try {
     const reusableCard = await findReusableCardSubscriptionForUser(input.userId, plan.id);
@@ -860,7 +840,7 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
       };
     }
   } catch (error) {
-    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug, testMode });
+    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug });
   }
 
   await assertNoBlockingRecurringSubscription(input.userId);
@@ -868,12 +848,11 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
     return await executeReservedCardCheckout({
       userId: input.userId,
       payerEmail,
-      gatewayPayerEmail,
       plan,
       onSubscriptionReserved: id => { subscriptionId = id; },
     });
   } catch (error) {
-    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug, testMode });
+    throw mapMercadoPagoCardCheckoutError(error, { subscriptionId, planSlug: input.planSlug });
   }
 }
 
@@ -912,7 +891,6 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
 
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
-  const gatewayPayerEmail = resolveMercadoPagoPayerEmail(payerEmail);
   const expiresAt = addMinutes(new Date(), PIX_EXPIRATION_MINUTES).toISOString();
   const reservation = await reserveCheckout({ userId: input.userId, userEmail: payerEmail, plan, paymentMethod: "pix" });
 
@@ -945,7 +923,7 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
   try {
     const mpPayment = await createMercadoPagoPixPayment({
       externalReference,
-      payerEmail: gatewayPayerEmail,
+      payerEmail,
       amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
       description: `Rumo ao ITA - ${plan.name}`,
       notificationUrl: getMercadoPagoWebhookUrl(),

@@ -8,7 +8,6 @@ import {
   extendPixAccess,
   isDuplicateApprovedPayment,
   resolveCancellationAccess,
-  resolveMercadoPagoPayerEmail,
   shouldBlockFromPayment,
   shouldGrantAccessFromPayment,
   shouldPreserveAccessOnPreapprovalCancel,
@@ -126,35 +125,6 @@ describe("Mercado Pago billing rules", () => {
 
   it("rejeita usuário sem autenticação", () => {
     expect(validateClientCheckoutInput({ planSlug: "mensal-1099" }, false)).toEqual({ ok: false, reason: "unauthenticated" });
-  });
-
-  it("usa o payer configurado exclusivamente no modo de teste", () => {
-    expect(resolveMercadoPagoPayerEmail("account@example.com", {
-      MERCADO_PAGO_TEST_MODE: "true",
-      MERCADO_PAGO_TEST_PAYER_EMAIL: " Buyer.Test@Example.com ",
-    })).toBe("buyer.test@example.com");
-  });
-
-  it("usa o e-mail do usuário quando o modo de teste não está ativo", () => {
-    expect(resolveMercadoPagoPayerEmail("account@example.com", {
-      MERCADO_PAGO_TEST_MODE: "false",
-      MERCADO_PAGO_TEST_PAYER_EMAIL: "buyer.test@example.com",
-    })).toBe("account@example.com");
-    expect(resolveMercadoPagoPayerEmail("account@example.com", {
-      MERCADO_PAGO_TEST_MODE: undefined,
-      MERCADO_PAGO_TEST_PAYER_EMAIL: "buyer.test@example.com",
-    })).toBe("account@example.com");
-  });
-
-  it("falha no backend quando o modo de teste não possui payer válido", () => {
-    expect(() => resolveMercadoPagoPayerEmail("account@example.com", {
-      MERCADO_PAGO_TEST_MODE: "true",
-      MERCADO_PAGO_TEST_PAYER_EMAIL: undefined,
-    })).toThrow("MERCADO_PAGO_TEST_PAYER_EMAIL deve conter um e-mail válido");
-    expect(() => resolveMercadoPagoPayerEmail("account@example.com", {
-      MERCADO_PAGO_TEST_MODE: "true",
-      MERCADO_PAGO_TEST_PAYER_EMAIL: "invalid",
-    })).toThrow("MERCADO_PAGO_TEST_PAYER_EMAIL deve conter um e-mail válido");
   });
 
   it("rejeita e-mail ausente, inválido ou fictício antes de chamar o Mercado Pago", () => {
