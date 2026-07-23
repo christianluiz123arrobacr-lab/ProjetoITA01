@@ -21,7 +21,6 @@ type StudentNavItem = {
   label: string;
   href: string;
   icon: ComponentType<{ className?: string }>;
-  soon?: boolean;
 };
 
 const navItems: StudentNavItem[] = [
@@ -31,7 +30,7 @@ const navItems: StudentNavItem[] = [
   { label: "VET", href: "/vet", icon: BrainCircuit },
   { label: "Ranking", href: "/ranking", icon: Trophy },
   { label: "Progresso", href: "/progress", icon: BarChart3 },
-  { label: "Simuladores", href: "/simuladores", icon: Box, soon: true },
+  { label: "Simuladores", href: "/simuladores", icon: Box },
 ];
 
 function isActiveRoute(currentPath: string, targetPath: string) {
@@ -71,25 +70,23 @@ export default function StudentSidebar({
               Plataforma
             </p>
             <h2 className="truncate text-lg font-black text-slate-950">
-              Domine Exatas
+              Projeto Vetor
             </h2>
           </div>
         ) : null}
       </div>
 
       <nav className="flex flex-1 flex-col gap-2 px-3 py-5">
-        {navItems.map((item) => {
+        {navItems.map(item => {
           const Icon = item.icon;
-          const active = !item.soon && isActiveRoute(location, item.href);
+          const active = isActiveRoute(location, item.href);
 
           const className = [
             "group relative flex h-12 items-center rounded-2xl text-sm font-black transition-all",
             expanded ? "justify-start gap-3 px-3" : "justify-center px-0",
-            item.soon
-              ? "cursor-not-allowed bg-slate-50 text-slate-400"
-              : active
-                ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-lg shadow-blue-600/20"
-                : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
+            active
+              ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-lg shadow-blue-600/20"
+              : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
           ].join(" ");
 
           const content = (
@@ -98,46 +95,22 @@ export default function StudentSidebar({
                 className={`h-5 w-5 shrink-0 ${
                   active
                     ? "text-white"
-                    : item.soon
-                      ? "text-slate-300"
-                      : "text-slate-500 group-hover:text-blue-700"
+                    : "text-slate-500 group-hover:text-blue-700"
                 }`}
               />
 
               {expanded ? (
-                <>
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
-
-                  {item.soon ? (
-                    <span className="shrink-0 rounded-full bg-slate-200 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
-                      Em breve
-                    </span>
-                  ) : null}
-                </>
-              ) : item.soon ? (
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-slate-300" />
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
               ) : null}
             </>
           );
 
-          if (item.soon) {
-            return (
-              <button
-                key={item.href}
-                type="button"
-                disabled
-                className={className}
-                aria-label={`${item.label} em breve`}
-                title={`${item.label} - Em breve`}
-              >
-                {content}
-              </button>
-            );
-          }
-
           return (
             <Link key={item.href} href={item.href}>
-              <a className={className} title={!expanded ? item.label : undefined}>
+              <a
+                className={className}
+                title={!expanded ? item.label : undefined}
+              >
                 {content}
               </a>
             </Link>
@@ -146,7 +119,7 @@ export default function StudentSidebar({
       </nav>
 
       {expanded ? (
-        <div className="mx-4 mb-4 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-violet-50 p-4">
+        <div className="mx-4 mb-4 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-sky-50 p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
             Acesso rápido
           </p>
@@ -157,7 +130,7 @@ export default function StudentSidebar({
         </div>
       ) : (
         <div className="mb-4 flex justify-center">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600" />
+          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500" />
         </div>
       )}
     </aside>
