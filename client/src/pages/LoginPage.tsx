@@ -47,7 +47,7 @@ export default function LoginPage() {
       setSubmitting(true);
       setErrorMessage("");
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password,
       });
@@ -72,10 +72,6 @@ export default function LoginPage() {
 
         setErrorMessage(error.message || "Não foi possível acessar sua conta.");
         return;
-      }
-
-      if (data.session?.access_token) {
-        localStorage.setItem("supabase_access_token", data.session.access_token);
       }
 
       navigate("/plataforma");

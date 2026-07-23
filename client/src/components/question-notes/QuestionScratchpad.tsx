@@ -2362,6 +2362,19 @@ export function QuestionScratchpad({
       setStatus("");
       setError("");
 
+      function isLocalDraftNewer(
+        localDraft: LocalScratchpadDraft | null,
+        remoteUpdatedAt?: string | null
+      ) {
+        if (!localDraft?.updatedAt) return false;
+        if (!remoteUpdatedAt) return true;
+
+        const localTime = new Date(localDraft.updatedAt).getTime();
+        const remoteTime = new Date(remoteUpdatedAt).getTime();
+
+        return Number.isFinite(localTime) && (!Number.isFinite(remoteTime) || localTime > remoteTime);
+      }
+
       function loadPagesFromDraft(localDraft: LocalScratchpadDraft | null) {
         if (localDraft?.pages?.length) {
           const normalized = normalizePages(localDraft.pages, localDraft.backgroundType ?? "grid");
