@@ -4,8 +4,10 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
-import { getQuestions } from "@/services/questions.service";
-import { supabase } from "@/lib/supabase";
+import { exportQuestionsForPdf, getQuestions } from "@/services/questions.service";
+import { buildPdfFilterSummary } from "@/lib/questionPdfLayout";
+import type { QuestionPdfFilters } from "@shared/questionPdf";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
 import {
@@ -25,6 +27,8 @@ import {
   X,
   ListFilter,
   Search,
+  FileDown,
+  LoaderCircle,
 } from "lucide-react";
 
 function normalizeText(value?: string | null) {
@@ -440,6 +444,8 @@ export default function QuestionBankPage() {
     Record<string, UserQuestionAttemptStatus>
   >({});
   const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [pdfMessage, setPdfMessage] = useState("");
 
   const [vetTopics, setVetTopics] = useState<string[]>(initialVetFilters.topics);
   const [vetBlock, setVetBlock] = useState<string>(initialVetFilters.block);
@@ -840,6 +846,8 @@ export default function QuestionBankPage() {
     selectedPracticeStatus,
   ]);
 
+  const trpcUtils = trpc.useUtils();
+
   useEffect(() => {
     async function loadQuestions() {
       const data = await getQuestions();
@@ -862,22 +870,12 @@ export default function QuestionBankPage() {
 
       setAttemptsLoading(true);
 
-      const { data, error } = await supabase
-        .from("user_question_attempts")
-        .select("question_id, is_correct, answered_at")
-        .eq("user_id", user.id)
-        .order("answered_at", { ascending: false });
+      try {
+        const data = await trpcUtils.quiz.getMyAttempts.fetch({ summary: true });
 
-      if (error) {
-        console.error("Erro ao carregar tentativas do usuário:", error);
-        setUserQuestionStatus({});
-        setAttemptsLoading(false);
-        return;
-      }
+        const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
 
-      const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
-
-      ((data as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
+        ((data as unknown as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
         if (!attempt.question_id) return;
 
         const current = nextStatus[attempt.question_id];
@@ -895,12 +893,17 @@ export default function QuestionBankPage() {
         current.attempts += 1;
       });
 
-      setUserQuestionStatus(nextStatus);
-      setAttemptsLoading(false);
+        setUserQuestionStatus(nextStatus);
+      } catch (error) {
+        console.error("Erro ao carregar tentativas do usuário:", error);
+        setUserQuestionStatus({});
+      } finally {
+        setAttemptsLoading(false);
+      }
     }
 
     loadUserAttempts();
-  }, [authLoading, user?.id]);
+  }, [authLoading, trpcUtils, user?.id]);
 
   useEffect(() => {
     let filtered = questions;
@@ -976,6 +979,43 @@ export default function QuestionBankPage() {
   function clearVetFilterOnly() {
     setVetTopics([]);
     setVetBlock("");
+  }
+
+  async function handleExportPdf() {
+    if (pdfGenerating || filteredQuestions.length === 0) return;
+    const filters: QuestionPdfFilters = {
+      search: searchTerm.trim(),
+      institutions: selectedInstitutions,
+      years: selectedYears.map(Number).filter(Number.isFinite),
+      subjects: selectedSubjects,
+      topics: effectiveTopics,
+      subtopics: selectedSubtopics,
+      difficulties: selectedDifficulties,
+      practiceStatus: selectedPracticeStatus,
+    };
+    setPdfGenerating(true);
+    setPdfMessage("");
+    try {
+      const result = await exportQuestionsForPdf(filters);
+      if (!result.questions.length) {
+        setPdfMessage("Nenhuma questão disponível para os filtros e o seu acesso atual.");
+        return;
+      }
+      const summary = buildPdfFilterSummary(filters);
+      const { generateQuestionPdf } = await import("@/lib/questionPdfGenerator");
+      const generated = await generateQuestionPdf({ questions: result.questions, filterSummary: summary });
+      setPdfMessage(result.truncated
+        ? `PDF concluído com ${generated.questions} questões (limite seguro de ${result.limit} por arquivo).`
+        : `PDF concluído com ${generated.questions} questões.`);
+    } catch (error) {
+      console.error("Falha ao gerar lista de questões em PDF", { name: error instanceof Error ? error.name : "UnknownError" });
+      const message = error instanceof Error ? error.message : "";
+      setPdfMessage(message.includes("assinatura") || message.includes("acesso") || message.includes("sessão")
+        ? message
+        : "Não foi possível gerar o PDF. Tente novamente em instantes.");
+    } finally {
+      setPdfGenerating(false);
+    }
   }
 
   function handleQuestionAnswered(questionId: string, isCorrect: boolean) {
@@ -1259,14 +1299,26 @@ export default function QuestionBankPage() {
                   </div>
                 </div>
 
-                <Button
-                  variant="outline"
-                  onClick={clearAllFilters}
-                  className="rounded-xl h-9 px-4 text-sm"
-                >
-                  Limpar filtros
-                </Button>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                  <Button
+                    onClick={handleExportPdf}
+                    disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
+                    className="rounded-xl h-9 px-4 text-sm bg-cyan-600 hover:bg-cyan-700"
+                  >
+                    {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                    {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={clearAllFilters}
+                    className="rounded-xl h-9 px-4 text-sm"
+                  >
+                    Limpar filtros
+                  </Button>
+                </div>
               </div>
+
+              {pdfMessage ? <p role="status" className="mb-4 text-sm font-medium text-slate-600">{pdfMessage}</p> : null}
 
               <div className="mb-4">
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">

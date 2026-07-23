@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -23,40 +23,55 @@ import RegisterPage from "./pages/RegisterPage";
 import PricingPage from "./pages/PricingPage";
 import SubscriptionPendingPage from "./pages/SubscriptionPendingPage";
 
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-import AdminUsersPage from "./pages/AdminUsersPage";
-import AdminBillingPage from "./pages/AdminBillingPage";
-import AdminQuestionsPage from "./pages/AdminQuestionsPage";
-import AdminQuestionCreatePage from "./pages/AdminQuestionCreatePage";
-import AdminQuestionEditPage from "./pages/AdminQuestionEditPage";
-import AdminQuestionReportsPage from "./pages/AdminQuestionReportsPage";
-import AdminResolutionsPage from "./pages/AdminResolutionsPage";
-import AdminResolutionEditorPage from "./pages/AdminResolutionEditorPage";
-import AdminUploadsPage from "./pages/AdminUploadsPage";
-import AdminVetPage from "./pages/AdminVetPage";
-import AdminLogsPage from "./pages/AdminLogsPage";
-import AdminProfilesPage from "./pages/AdminProfilesPage";
-import AdminSpatialGeometryPrototypePage from "./pages/AdminSpatialGeometryPrototypePage";
-import AdminMolecularGeometryPrototypePage from "./pages/AdminMolecularGeometryPrototypePage";
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
+const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
+const AdminBillingPage = lazy(() => import("./pages/AdminBillingPage"));
+const AdminQuestionsPage = lazy(() => import("./pages/AdminQuestionsPage"));
+const AdminQuestionCreatePage = lazy(
+  () => import("./pages/AdminQuestionCreatePage")
+);
+const AdminQuestionBatchImportPage = lazy(
+  () => import("./pages/AdminQuestionBatchImportPage")
+);
+const AdminQuestionEditPage = lazy(
+  () => import("./pages/AdminQuestionEditPage")
+);
+const AdminQuestionReportsPage = lazy(
+  () => import("./pages/AdminQuestionReportsPage")
+);
+const AdminResolutionsPage = lazy(() => import("./pages/AdminResolutionsPage"));
+const AdminResolutionEditorPage = lazy(
+  () => import("./pages/AdminResolutionEditorPage")
+);
+const AdminUploadsPage = lazy(() => import("./pages/AdminUploadsPage"));
+const AdminVetPage = lazy(() => import("./pages/AdminVetPage"));
+const AdminLogsPage = lazy(() => import("./pages/AdminLogsPage"));
+const AdminProfilesPage = lazy(() => import("./pages/AdminProfilesPage"));
+const AdminSpatialGeometryPrototypePage = lazy(
+  () => import("./pages/AdminSpatialGeometryPrototypePage")
+);
+const AdminMolecularGeometryPrototypePage = lazy(
+  () => import("./pages/AdminMolecularGeometryPrototypePage")
+);
 
 import Home from "./pages/Home";
 import DinamicaHome from "./pages/DinamicaHome";
 import Calculator from "./pages/Calculator";
 import Formulas from "./pages/Formulas";
 import Learn from "./pages/Learn";
-import Quiz from "./pages/Quiz";
+const Quiz = lazy(() => import("./pages/Quiz"));
 import Graphs from "./pages/Graphs";
 
 import DynamicsLearn from "./pages/DynamicsLearn";
 import DynamicsCalculator from "./pages/DynamicsCalculator";
 import DynamicsFormulas from "./pages/DynamicsFormulas";
-import DynamicsQuiz from "./pages/DynamicsQuiz";
+const DynamicsQuiz = lazy(() => import("./pages/DynamicsQuiz"));
 import DynamicsGraphs from "./pages/DynamicsGraphs";
 import DynamicsSimulator from "./pages/DynamicsSimulator";
 
 import CinematicaSimulator from "./pages/CinematicaSimulator";
 import CinematicaGraphs from "./pages/CinematicaGraphs";
-import CinematicaQuiz from "./pages/CinematicaQuiz";
+const CinematicaQuiz = lazy(() => import("./pages/CinematicaQuiz"));
 import CinematicaTopicBases from "./pages/CinematicaTopicBases";
 import CinematicaTopicVelocidade from "./pages/CinematicaTopicVelocidade";
 import CinematicaTopicMRU from "./pages/CinematicaTopicMRU";
@@ -64,9 +79,16 @@ import CinematicaTopicMRUV from "./pages/CinematicaTopicMRUV";
 import CinematicaTopicCircular from "./pages/CinematicaTopicCircular";
 import CinematicaTopicQuedaLivre from "./pages/CinematicaTopicQuedaLivre";
 
-import Progress from "./pages/Progress";
-import IAResolver from "./pages/IAResolver";
-import QuestionBank from "./pages/QuestionBankPage";
+const Progress = lazy(() => import("./pages/Progress"));
+const IAResolver = lazy(() => import("./pages/IAResolver"));
+const QuestionBank = lazy(() => import("./pages/QuestionBankPage"));
+const SimulatorsPage = lazy(() => import("./pages/SimulatorsPage"));
+const SpatialGeometrySimulatorPage = lazy(
+  () => import("./pages/SpatialGeometrySimulatorPage")
+);
+const MolecularGeometrySimulatorPage = lazy(
+  () => import("./pages/MolecularGeometrySimulatorPage")
+);
 
 import ProfilePage from "./pages/ProfilePage";
 import PublicProfilePage from "./pages/PublicProfilePage";
@@ -74,16 +96,16 @@ import ErrorNotebook from "./pages/ErrorNotebook";
 import MinhaAssinaturaPage from "./pages/MinhaAssinaturaPage";
 import RankingPage from "./pages/RankingPage";
 
-import VetPage from "./pages/VetPage";
-import VetDiagnosisPage from "./pages/VetDiagnosisPage";
-import VetObjectivePage from "./pages/VetObjectivePage";
-import VetPlanPage from "./pages/VetPlanPage";
-import VetQuestionsPage from "./pages/VetQuestionsPage";
-import VetTrainingPage from "./pages/VetTrainingPage";
-import VetPrioritiesPage from "./pages/VetPrioritiesPage";
-import VetLevelPage from "./pages/VetLevelPage";
-import VetMockPage from "./pages/VetMockPage";
-import VetMockResultPage from "./pages/VetMockResultPage";
+const VetPage = lazy(() => import("./pages/VetPage"));
+const VetDiagnosisPage = lazy(() => import("./pages/VetDiagnosisPage"));
+const VetObjectivePage = lazy(() => import("./pages/VetObjectivePage"));
+const VetPlanPage = lazy(() => import("./pages/VetPlanPage"));
+const VetQuestionsPage = lazy(() => import("./pages/VetQuestionsPage"));
+const VetTrainingPage = lazy(() => import("./pages/VetTrainingPage"));
+const VetPrioritiesPage = lazy(() => import("./pages/VetPrioritiesPage"));
+const VetLevelPage = lazy(() => import("./pages/VetLevelPage"));
+const VetMockPage = lazy(() => import("./pages/VetMockPage"));
+const VetMockResultPage = lazy(() => import("./pages/VetMockResultPage"));
 
 import DynamicsTopicNewton from "./pages/DynamicsTopicNewton";
 import DynamicsTopicFriction from "./pages/DynamicsTopicFriction";
@@ -93,7 +115,7 @@ import DynamicsTopicPower from "./pages/DynamicsTopicPower";
 
 import EstaticaHome from "./pages/EstaticaHome";
 import EstaticaGraphs from "./pages/EstaticaGraphs";
-import EstaticaQuiz from "./pages/EstaticaQuiz";
+const EstaticaQuiz = lazy(() => import("./pages/EstaticaQuiz"));
 import EstaticaSimulator from "./pages/EstaticaSimulator";
 import EstaticaTopicEquilibrio from "./pages/EstaticaTopicEquilibrio";
 import EstaticaTopicTorque from "./pages/EstaticaTopicTorque";
@@ -128,7 +150,7 @@ import MagnetismoTopicForcaMagnetica from "./pages/MagnetismoTopicForcaMagnetica
 
 import TermologiaHome from "./pages/TermologiaHome";
 import TermologiaGraphs from "./pages/TermologiaGraphs";
-import TermologiaQuiz from "./pages/TermologiaQuiz";
+const TermologiaQuiz = lazy(() => import("./pages/TermologiaQuiz"));
 import TermologiaSimulator from "./pages/TermologiaSimulator";
 import TermologiaTopicTemperatura from "./pages/TermologiaTopicTemperatura";
 import TermologiaTopicCalor from "./pages/TermologiaTopicCalor";
@@ -149,7 +171,7 @@ import OndulatoriaTopicSom from "./pages/OndulatóriaTopicSom";
 import OndulatoriaTopicLuz from "./pages/OndulatóriaTopicLuz";
 import OndulatoriaSimulator from "./pages/OndulatoriaSimulator";
 import OndulatoriaGraphs from "./pages/OndulatoriaGraphs";
-import OndulatoriaQuiz from "./pages/OndulatoriaQuiz";
+const OndulatoriaQuiz = lazy(() => import("./pages/OndulatoriaQuiz"));
 
 import OpticaHome from "./pages/OpticaHome";
 import OpticaTopicConceitos from "./pages/OpticaTopicConceitos";
@@ -158,7 +180,7 @@ import OpticaTopicFisica from "./pages/OpticaTopicFisica";
 import OpticaTopicFenomenos from "./pages/OpticaTopicFenomenos";
 import OpticaSimulator from "./pages/OpticaSimulator";
 import OpticaGraphs from "./pages/OpticaGraphs";
-import OpticaQuiz from "./pages/OpticaQuiz";
+const OpticaQuiz = lazy(() => import("./pages/OpticaQuiz"));
 
 import FisicaModernaHome from "./pages/FisicaModernaHome";
 import FisicaModernaTopicRelatividade from "./pages/FisicaModernaTopicRelatividade";
@@ -201,7 +223,9 @@ function RootGate() {
         });
 
         if (!cancelled) {
-          setAccessState(freshAccess.status === "allowed" ? "allowed" : "blocked");
+          setAccessState(
+            freshAccess.status === "allowed" ? "allowed" : "blocked"
+          );
         }
       } catch (error) {
         console.warn("Erro inesperado na entrada do site:", error);
@@ -224,7 +248,7 @@ function RootGate() {
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
         <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-8 py-6 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-200">
-            Rumo ao ITA
+            Projeto Vetor
           </p>
 
           <p className="mt-2 text-sm text-slate-300">Verificando acesso...</p>
@@ -246,8 +270,21 @@ function RootGate() {
 
 function PrivateRouter() {
   const [location] = useLocation();
-  const isAdminRoute = location.startsWith("/admin");
+  const legacyAdminPrefix = "/plataforma/admin";
+  const isLegacyAdminRoute =
+    location === legacyAdminPrefix ||
+    location.startsWith(`${legacyAdminPrefix}/`);
+  const isAdminRoute = location.startsWith("/admin") || isLegacyAdminRoute;
   const [studentMenuOpen, setStudentMenuOpen] = useState(false);
+
+  if (isLegacyAdminRoute) {
+    const normalizedAdminPath = location.replace(
+      /^\/plataforma\/admin/,
+      "/admin"
+    );
+
+    return <Redirect to={normalizedAdminPath || "/admin"} />;
+  }
 
   return (
     <SubscriptionGuard>
@@ -267,308 +304,395 @@ function PrivateRouter() {
               : "min-h-screen transition-[padding] duration-200 md:pl-[76px]"
         }
       >
-        <Switch>
-        {/* Admin */}
-        <Route path="/admin" component={AdminDashboardPage} />
-        <Route path="/admin/usuarios" component={AdminUsersPage} />
-        <Route path="/admin/profiles" component={AdminProfilesPage} />
-        <Route path="/admin/assinaturas" component={AdminBillingPage} />
+        <Suspense
+          fallback={
+            <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
+              Carregando página...
+            </div>
+          }
+        >
+          <Switch>
+            {/* Admin */}
+            <Route path="/admin" component={AdminDashboardPage} />
+            <Route path="/admin/usuarios" component={AdminUsersPage} />
+            <Route path="/admin/profiles" component={AdminProfilesPage} />
+            <Route path="/admin/assinaturas" component={AdminBillingPage} />
 
-        <Route path="/admin/questoes" component={AdminQuestionsPage} />
-        <Route path="/admin/questoes/nova" component={AdminQuestionCreatePage} />
+            <Route path="/admin/questoes" component={AdminQuestionsPage} />
+            <Route
+              path="/admin/questoes/nova"
+              component={AdminQuestionCreatePage}
+            />
+            <Route
+              path="/admin/questoes/importar-lote"
+              component={AdminQuestionBatchImportPage}
+            />
 
-        <Route path="/admin/reports" component={AdminQuestionReportsPage} />
-        <Route
-          path="/admin/questoes/relatorios"
-          component={AdminQuestionReportsPage}
-        />
+            <Route path="/admin/reports" component={AdminQuestionReportsPage} />
+            <Route
+              path="/admin/questoes/relatorios"
+              component={AdminQuestionReportsPage}
+            />
 
-        <Route path="/admin/questoes/:id" component={AdminQuestionEditPage} />
+            <Route
+              path="/admin/questoes/:id"
+              component={AdminQuestionEditPage}
+            />
 
-        <Route path="/admin/resolucoes" component={AdminResolutionsPage} />
-        <Route
-          path="/admin/resolucoes/:questaoId"
-          component={AdminResolutionEditorPage}
-        />
+            <Route path="/admin/resolucoes" component={AdminResolutionsPage} />
+            <Route
+              path="/admin/resolucoes/:questaoId"
+              component={AdminResolutionEditorPage}
+            />
 
-        <Route path="/admin/uploads" component={AdminUploadsPage} />
-        <Route path="/admin/vet" component={AdminVetPage} />
-        <Route path="/admin/logs" component={AdminLogsPage} />
-        <Route
-          path="/admin/matematica/geometria-espacial"
-          component={AdminSpatialGeometryPrototypePage}
-        />
-        <Route
-          path="/admin/quimica/geometria-molecular"
-          component={AdminMolecularGeometryPrototypePage}
-        />
+            <Route path="/admin/uploads" component={AdminUploadsPage} />
+            <Route path="/admin/vet" component={AdminVetPage} />
+            <Route path="/admin/logs" component={AdminLogsPage} />
+            <Route
+              path="/admin/matematica/geometria-espacial"
+              component={AdminSpatialGeometryPrototypePage}
+            />
+            <Route
+              path="/admin/quimica/geometria-molecular"
+              component={AdminMolecularGeometryPrototypePage}
+            />
 
-        {/* Entrada geral da plataforma */}
-        <Route path="/plataforma" component={LandingPage} />
+            {/* Entrada geral da plataforma */}
+            <Route path="/plataforma" component={LandingPage} />
 
-        {/* Seletor de Física */}
-        <Route path="/fisica" component={FisicaSelector} />
+            {/* Seletor de Física */}
+            <Route path="/fisica" component={FisicaSelector} />
 
-        {/* Física por frentes */}
-        <Route path="/fisica-i" component={FisicaIHome} />
-        <Route path="/fisica-ii" component={FisicaIIHome} />
-        <Route path="/fisica-iii" component={FisicaIIIHome} />
+            {/* Física por frentes */}
+            <Route path="/fisica-i" component={FisicaIHome} />
+            <Route path="/fisica-ii" component={FisicaIIHome} />
+            <Route path="/fisica-iii" component={FisicaIIIHome} />
 
-        {/* Banco de questões */}
-        <Route path="/banco-questoes" component={QuestionBank} />
-        <Route path="/banco-de-questoes" component={QuestionBank} />
+            {/* Banco de questões */}
+            <Route path="/banco-questoes" component={QuestionBank} />
+            <Route path="/banco-de-questoes" component={QuestionBank} />
 
-                {/* Perfil, assinatura, ranking e caderno de erros */}
-        <Route path="/perfil" component={ProfilePage} />
-        <Route path="/perfil/:userId" component={PublicProfilePage} />
-        <Route path="/caderno-de-erros" component={ErrorNotebook} />
-        <Route path="/minha-assinatura" component={MinhaAssinaturaPage} />
-        <Route path="/ranking" component={RankingPage} />
+            {/* Central de simuladores */}
+            <Route path="/simuladores" component={SimulatorsPage} />
+            <Route
+              path="/simuladores/geometria-espacial"
+              component={SpatialGeometrySimulatorPage}
+            />
+            <Route
+              path="/simuladores/geometria-molecular"
+              component={MolecularGeometrySimulatorPage}
+            />
 
-        <Route path="/vet" component={VetPage} />
-        <Route path="/vet/diagnostico" component={VetDiagnosisPage} />
-        <Route path="/vet/objetivo" component={VetObjectivePage} />
-        <Route path="/vet/plano" component={VetPlanPage} />
-        <Route path="/vet/questoes" component={VetQuestionsPage} />
-        <Route path="/vet/treino" component={VetTrainingPage} />
-        <Route path="/vet/prioridades" component={VetPrioritiesPage} />
-        <Route path="/vet/nivelamento" component={VetLevelPage} />
-        <Route path="/vet/simulado" component={VetMockPage} />
-        <Route path="/vet/simulado/resultado" component={VetMockResultPage} />
+            {/* Perfil, assinatura, ranking e caderno de erros */}
+            <Route path="/perfil" component={ProfilePage} />
+            <Route path="/perfil/:userId" component={PublicProfilePage} />
+            <Route path="/caderno-de-erros" component={ErrorNotebook} />
+            <Route path="/minha-assinatura" component={MinhaAssinaturaPage} />
+            <Route path="/ranking" component={RankingPage} />
 
-        {/* Perfil, assinatura, ranking e caderno de erros */}
-        <Route path="/perfil" component={ProfilePage} />
-        <Route path="/perfil/:userId" component={PublicProfilePage} />
-        <Route path="/caderno-de-erros" component={ErrorNotebook} />
-        <Route path="/minha-assinatura" component={MinhaAssinaturaPage} />
-        <Route path="/ranking" component={RankingPage} />
-        
-        {/* Cinemática */}
-        <Route path="/cinematica" component={Home} />
-        <Route path="/cinematica/learn" component={Learn} />
-        <Route path="/cinematica/quiz" component={Quiz} />
-        <Route path="/cinematica/graphs" component={Graphs} />
-        <Route path="/cinematica/graphs-new" component={CinematicaGraphs} />
-        <Route path="/cinematica/calculator" component={Calculator} />
-        <Route path="/cinematica/formulas" component={Formulas} />
-        <Route path="/cinematica/quiz-new" component={CinematicaQuiz} />
-        <Route path="/cinematica/simulator" component={CinematicaSimulator} />
-        <Route path="/cinematica/topic/bases" component={CinematicaTopicBases} />
-        <Route
-          path="/cinematica/topic/velocidade"
-          component={CinematicaTopicVelocidade}
-        />
-        <Route path="/cinematica/topic/mru" component={CinematicaTopicMRU} />
-        <Route path="/cinematica/topic/mruv" component={CinematicaTopicMRUV} />
-        <Route
-          path="/cinematica/topic/circular"
-          component={CinematicaTopicCircular}
-        />
-        <Route
-          path="/cinematica/topic/queda-livre"
-          component={CinematicaTopicQuedaLivre}
-        />
+            <Route path="/vet" component={VetPage} />
+            <Route path="/vet/diagnostico" component={VetDiagnosisPage} />
+            <Route path="/vet/objetivo" component={VetObjectivePage} />
+            <Route path="/vet/plano" component={VetPlanPage} />
+            <Route path="/vet/questoes" component={VetQuestionsPage} />
+            <Route path="/vet/treino" component={VetTrainingPage} />
+            <Route path="/vet/prioridades" component={VetPrioritiesPage} />
+            <Route path="/vet/nivelamento" component={VetLevelPage} />
+            <Route path="/vet/simulado" component={VetMockPage} />
+            <Route
+              path="/vet/simulado/resultado"
+              component={VetMockResultPage}
+            />
 
-        {/* Dinâmica */}
-        <Route path="/dinamica" component={DinamicaHome} />
-        <Route path="/dinamica/learn" component={DynamicsLearn} />
-        <Route path="/dinamica/quiz" component={DynamicsQuiz} />
-        <Route path="/dinamica/calculator" component={DynamicsCalculator} />
-        <Route path="/dinamica/formulas" component={DynamicsFormulas} />
-        <Route path="/dinamica/graphs" component={DynamicsGraphs} />
-        <Route path="/dinamica/simulator" component={DynamicsSimulator} />
-        <Route path="/dinamica/topic/newton" component={DynamicsTopicNewton} />
-        <Route path="/dinamica/topic/atrito" component={DynamicsTopicFriction} />
-        <Route path="/dinamica/topic/energy" component={DynamicsTopicEnergy} />
-        <Route
-          path="/dinamica/topic/momentum"
-          component={DynamicsTopicMomentum}
-        />
-        <Route path="/dinamica/topic/power" component={DynamicsTopicPower} />
+            {/* Perfil, assinatura, ranking e caderno de erros */}
+            <Route path="/perfil" component={ProfilePage} />
+            <Route path="/perfil/:userId" component={PublicProfilePage} />
+            <Route path="/caderno-de-erros" component={ErrorNotebook} />
+            <Route path="/minha-assinatura" component={MinhaAssinaturaPage} />
+            <Route path="/ranking" component={RankingPage} />
 
-        {/* Estática */}
-        <Route path="/estatica" component={EstaticaHome} />
-        <Route path="/estatica/graphs" component={EstaticaGraphs} />
-        <Route path="/estatica/quiz" component={EstaticaQuiz} />
-        <Route path="/estatica/simulator" component={EstaticaSimulator} />
-        <Route
-          path="/estatica/topic/equilibrio"
-          component={EstaticaTopicEquilibrio}
-        />
-        <Route path="/estatica/topic/torque" component={EstaticaTopicTorque} />
-        <Route
-          path="/estatica/topic/maquinas"
-          component={EstaticaTopicMaquinas}
-        />
-        <Route
-          path="/estatica/topic/hidrostatica"
-          component={EstaticaTopicHidrostatica}
-        />
+            {/* Cinemática */}
+            <Route path="/cinematica" component={Home} />
+            <Route path="/cinematica/learn" component={Learn} />
+            <Route path="/cinematica/quiz" component={Quiz} />
+            <Route path="/cinematica/graphs" component={Graphs} />
+            <Route path="/cinematica/graphs-new" component={CinematicaGraphs} />
+            <Route path="/cinematica/calculator" component={Calculator} />
+            <Route path="/cinematica/formulas" component={Formulas} />
+            <Route path="/cinematica/quiz-new" component={CinematicaQuiz} />
+            <Route
+              path="/cinematica/simulator"
+              component={CinematicaSimulator}
+            />
+            <Route
+              path="/cinematica/topic/bases"
+              component={CinematicaTopicBases}
+            />
+            <Route
+              path="/cinematica/topic/velocidade"
+              component={CinematicaTopicVelocidade}
+            />
+            <Route
+              path="/cinematica/topic/mru"
+              component={CinematicaTopicMRU}
+            />
+            <Route
+              path="/cinematica/topic/mruv"
+              component={CinematicaTopicMRUV}
+            />
+            <Route
+              path="/cinematica/topic/mcu"
+              component={CinematicaTopicCircular}
+            />
+            <Route
+              path="/cinematica/topic/circular"
+              component={CinematicaTopicCircular}
+            />
+            <Route
+              path="/cinematica/topic/queda-livre"
+              component={CinematicaTopicQuedaLivre}
+            />
 
-        {/* Termologia */}
-        <Route path="/termologia" component={TermologiaHome} />
-        <Route path="/termologia/graphs" component={TermologiaGraphs} />
-        <Route path="/termologia/quiz" component={TermologiaQuiz} />
-        <Route path="/termologia/simulator" component={TermologiaSimulator} />
-        <Route
-          path="/termologia/topic/temperatura"
-          component={TermologiaTopicTemperatura}
-        />
-        <Route path="/termologia/topic/calor" component={TermologiaTopicCalor} />
-        <Route
-          path="/termologia/topic/calorimetria"
-          component={TermologiaTopicCalorimetria}
-        />
-        <Route
-          path="/termologia/topic/termodinamica"
-          component={TermologiaTopicTermodinamica}
-        />
-        <Route
-          path="/termologia/topic/dilatacao"
-          component={TermologiaTopicDilatacao}
-        />
+            {/* Dinâmica */}
+            <Route path="/dinamica" component={DinamicaHome} />
+            <Route path="/dinamica/learn" component={DynamicsLearn} />
+            <Route path="/dinamica/quiz" component={DynamicsQuiz} />
+            <Route path="/dinamica/calculator" component={DynamicsCalculator} />
+            <Route path="/dinamica/formulas" component={DynamicsFormulas} />
+            <Route path="/dinamica/graphs" component={DynamicsGraphs} />
+            <Route path="/dinamica/simulator" component={DynamicsSimulator} />
+            <Route
+              path="/dinamica/topic/newton"
+              component={DynamicsTopicNewton}
+            />
+            <Route
+              path="/dinamica/topic/atrito"
+              component={DynamicsTopicFriction}
+            />
+            <Route
+              path="/dinamica/topic/energy"
+              component={DynamicsTopicEnergy}
+            />
+            <Route
+              path="/dinamica/topic/momentum"
+              component={DynamicsTopicMomentum}
+            />
+            <Route
+              path="/dinamica/topic/power"
+              component={DynamicsTopicPower}
+            />
 
-        {/* Mecânica */}
-        <Route path="/mecanica" component={MecanicaHome} />
-        <Route
-          path="/mecanica/topic/cinematica"
-          component={MecanicaTopicCinematica}
-        />
-        <Route
-          path="/mecanica/topic/dinamica"
-          component={MecanicaTopicDinamica}
-        />
+            {/* Estática */}
+            <Route path="/estatica" component={EstaticaHome} />
+            <Route path="/estatica/graphs" component={EstaticaGraphs} />
+            <Route path="/estatica/quiz" component={EstaticaQuiz} />
+            <Route path="/estatica/simulator" component={EstaticaSimulator} />
+            <Route
+              path="/estatica/topic/equilibrio"
+              component={EstaticaTopicEquilibrio}
+            />
+            <Route
+              path="/estatica/topic/torque"
+              component={EstaticaTopicTorque}
+            />
+            <Route
+              path="/estatica/topic/maquinas"
+              component={EstaticaTopicMaquinas}
+            />
+            <Route
+              path="/estatica/topic/hidrostatica"
+              component={EstaticaTopicHidrostatica}
+            />
 
-        {/* Ondulatória */}
-        <Route path="/ondulatoria" component={OndulatoriaHome} />
-        <Route
-          path="/ondulatoria/topic/conceitos"
-          component={OndulatoriaTopicConceitos}
-        />
-        <Route path="/ondulatoria/topic/mhs" component={OndulatoriaTopicMHS} />
-        <Route
-          path="/ondulatoria/topic/equacao"
-          component={OndulatoriaTopicEquacao}
-        />
-        <Route
-          path="/ondulatoria/topic/fenomenos"
-          component={OndulatoriaTopicFenomenos}
-        />
-        <Route path="/ondulatoria/topic/som" component={OndulatoriaTopicSom} />
-        <Route path="/ondulatoria/topic/luz" component={OndulatoriaTopicLuz} />
-        <Route path="/ondulatoria/simulator" component={OndulatoriaSimulator} />
-        <Route path="/ondulatoria/quiz" component={OndulatoriaQuiz} />
-        <Route path="/ondulatoria/graphs" component={OndulatoriaGraphs} />
+            {/* Termologia */}
+            <Route path="/termologia" component={TermologiaHome} />
+            <Route path="/termologia/graphs" component={TermologiaGraphs} />
+            <Route path="/termologia/quiz" component={TermologiaQuiz} />
+            <Route
+              path="/termologia/simulator"
+              component={TermologiaSimulator}
+            />
+            <Route
+              path="/termologia/topic/temperatura"
+              component={TermologiaTopicTemperatura}
+            />
+            <Route
+              path="/termologia/topic/calor"
+              component={TermologiaTopicCalor}
+            />
+            <Route
+              path="/termologia/topic/calorimetria"
+              component={TermologiaTopicCalorimetria}
+            />
+            <Route
+              path="/termologia/topic/termodinamica"
+              component={TermologiaTopicTermodinamica}
+            />
+            <Route
+              path="/termologia/topic/dilatacao"
+              component={TermologiaTopicDilatacao}
+            />
 
-        {/* Óptica */}
-        <Route path="/optica" component={OpticaHome} />
-        <Route path="/optica/topic/conceitos" component={OpticaTopicConceitos} />
-        <Route path="/optica/topic/lentes" component={OpticaTopicLentes} />
-        <Route path="/optica/topic/fenomenos" component={OpticaTopicFenomenos} />
-        <Route path="/optica/topic/fisica" component={OpticaTopicFisica} />
-        <Route path="/optica/simulator" component={OpticaSimulator} />
-        <Route path="/optica/graphs" component={OpticaGraphs} />
-        <Route path="/optica/quiz" component={OpticaQuiz} />
+            {/* Mecânica */}
+            <Route path="/mecanica" component={MecanicaHome} />
+            <Route
+              path="/mecanica/topic/cinematica"
+              component={MecanicaTopicCinematica}
+            />
+            <Route
+              path="/mecanica/topic/dinamica"
+              component={MecanicaTopicDinamica}
+            />
 
-        {/* Eletricidade */}
-        <Route path="/eletricidade" component={EletricidadeHome} />
-        <Route
-          path="/eletricidade/topic/eletrostatica"
-          component={EletricidadeTopicEletrostatica}
-        />
-        <Route
-          path="/eletricidade/topic/eletrodinamica"
-          component={EletricidadeTopicEletrodinamica}
-        />
-        <Route
-          path="/eletricidade/topic/capacitores-indutores"
-          component={EletricidadeTopicCapacitoresIndutores}
-        />
-        <Route
-          path="/eletricidade/topic/magnetismo"
-          component={EletricidadeTopicMagnetismo}
-        />
-        <Route
-          path="/eletricidade/topic/potencial-eletrico"
-          component={EletricidadeTopicPotencialEletrico}
-        />
-        <Route
-          path="/eletricidade/topic/dieletricos"
-          component={EletricidadeTopicDieletricos}
-        />
-        <Route
-          path="/eletricidade/topic/circuitos-ac"
-          component={EletricidadeTopicCircuitosAC}
-        />
-        <Route
-          path="/eletricidade/topic/ondas-eletromagneticas"
-          component={EletricidadeTopicOndasEletromagneticas}
-        />
+            {/* Ondulatória */}
+            <Route path="/ondulatoria" component={OndulatoriaHome} />
+            <Route
+              path="/ondulatoria/topic/conceitos"
+              component={OndulatoriaTopicConceitos}
+            />
+            <Route
+              path="/ondulatoria/topic/mhs"
+              component={OndulatoriaTopicMHS}
+            />
+            <Route
+              path="/ondulatoria/topic/equacao"
+              component={OndulatoriaTopicEquacao}
+            />
+            <Route
+              path="/ondulatoria/topic/fenomenos"
+              component={OndulatoriaTopicFenomenos}
+            />
+            <Route
+              path="/ondulatoria/topic/som"
+              component={OndulatoriaTopicSom}
+            />
+            <Route
+              path="/ondulatoria/topic/luz"
+              component={OndulatoriaTopicLuz}
+            />
+            <Route
+              path="/ondulatoria/simulator"
+              component={OndulatoriaSimulator}
+            />
+            <Route path="/ondulatoria/quiz" component={OndulatoriaQuiz} />
+            <Route path="/ondulatoria/graphs" component={OndulatoriaGraphs} />
 
-        {/* Eletromagnetismo */}
-        <Route path="/eletromagnetismo" component={EletromagnetismoHome} />
-        <Route
-          path="/eletromagnetismo/topic/campos-magneticos"
-          component={EletromagnetismoTopicCamposMagneticos}
-        />
-        <Route
-          path="/eletromagnetismo/topic/inducao-eletromagnetica"
-          component={EletromagnetismoTopicInducaoEletromagnetica}
-        />
-        <Route
-          path="/eletromagnetismo/topic/equacoes-maxwell"
-          component={EletromagnetismoTopicEquacoesMacwell}
-        />
-        <Route
-          path="/eletromagnetismo/topic/ondas-eletromagneticas-avancado"
-          component={EletromagnetismoTopicOndasAvancado}
-        />
-        <Route
-          path="/eletromagnetismo/topic/aplicacoes-eletromagnetismo"
-          component={EletromagnetismoTopicAplicacoes}
-        />
-        <Route
-          path="/eletromagnetismo/topic/radiacao-eletromagnetica"
-          component={EletromagnetismoTopicRadiacao}
-        />
+            {/* Óptica */}
+            <Route path="/optica" component={OpticaHome} />
+            <Route
+              path="/optica/topic/conceitos"
+              component={OpticaTopicConceitos}
+            />
+            <Route path="/optica/topic/lentes" component={OpticaTopicLentes} />
+            <Route
+              path="/optica/topic/fenomenos"
+              component={OpticaTopicFenomenos}
+            />
+            <Route path="/optica/topic/fisica" component={OpticaTopicFisica} />
+            <Route path="/optica/simulator" component={OpticaSimulator} />
+            <Route path="/optica/graphs" component={OpticaGraphs} />
+            <Route path="/optica/quiz" component={OpticaQuiz} />
 
-        {/* Magnetismo */}
-        <Route path="/magnetismo" component={MagnetismoHome} />
-        <Route
-          path="/magnetismo/topic/forca-magnetica"
-          component={MagnetismoTopicForcaMagnetica}
-        />
+            {/* Eletricidade */}
+            <Route path="/eletricidade" component={EletricidadeHome} />
+            <Route
+              path="/eletricidade/topic/eletrostatica"
+              component={EletricidadeTopicEletrostatica}
+            />
+            <Route
+              path="/eletricidade/topic/eletrodinamica"
+              component={EletricidadeTopicEletrodinamica}
+            />
+            <Route
+              path="/eletricidade/topic/capacitores-indutores"
+              component={EletricidadeTopicCapacitoresIndutores}
+            />
+            <Route
+              path="/eletricidade/topic/magnetismo"
+              component={EletricidadeTopicMagnetismo}
+            />
+            <Route
+              path="/eletricidade/topic/potencial-eletrico"
+              component={EletricidadeTopicPotencialEletrico}
+            />
+            <Route
+              path="/eletricidade/topic/dieletricos"
+              component={EletricidadeTopicDieletricos}
+            />
+            <Route
+              path="/eletricidade/topic/circuitos-ac"
+              component={EletricidadeTopicCircuitosAC}
+            />
+            <Route
+              path="/eletricidade/topic/ondas-eletromagneticas"
+              component={EletricidadeTopicOndasEletromagneticas}
+            />
 
-        {/* Física moderna */}
-        <Route path="/fisica-moderna" component={FisicaModernaHome} />
-        <Route
-          path="/fisica-moderna/topic/relatividade"
-          component={FisicaModernaTopicRelatividade}
-        />
-        <Route
-          path="/fisica-moderna/topic/quantica"
-          component={FisicaModernaTopicQuantica}
-        />
-        <Route
-          path="/fisica-moderna/topic/atomo"
-          component={FisicaModernaTopicAtomo}
-        />
-        <Route
-          path="/fisica-moderna/topic/particulas"
-          component={FisicaModernaTopicParticulas}
-        />
-        <Route
-          path="/fisica-moderna/topic/aplicacoes"
-          component={FisicaModernaTopicAplicacoes}
-        />
+            {/* Eletromagnetismo */}
+            <Route path="/eletromagnetismo" component={EletromagnetismoHome} />
+            <Route
+              path="/eletromagnetismo/topic/campos-magneticos"
+              component={EletromagnetismoTopicCamposMagneticos}
+            />
+            <Route
+              path="/eletromagnetismo/topic/inducao-eletromagnetica"
+              component={EletromagnetismoTopicInducaoEletromagnetica}
+            />
+            <Route
+              path="/eletromagnetismo/topic/equacoes-maxwell"
+              component={EletromagnetismoTopicEquacoesMacwell}
+            />
+            <Route
+              path="/eletromagnetismo/topic/ondas-eletromagneticas-avancado"
+              component={EletromagnetismoTopicOndasAvancado}
+            />
+            <Route
+              path="/eletromagnetismo/topic/aplicacoes-eletromagnetismo"
+              component={EletromagnetismoTopicAplicacoes}
+            />
+            <Route
+              path="/eletromagnetismo/topic/radiacao-eletromagnetica"
+              component={EletromagnetismoTopicRadiacao}
+            />
 
-        {/* Área do aluno */}
-        <Route path="/progress" component={Progress} />
-        <Route path="/ia-resolver" component={IAResolver} />
+            {/* Magnetismo */}
+            <Route path="/magnetismo" component={MagnetismoHome} />
+            <Route
+              path="/magnetismo/topic/forca-magnetica"
+              component={MagnetismoTopicForcaMagnetica}
+            />
 
-        <Route path="/404" component={NotFound} />
-        <Route component={NotFound} />
-        </Switch>
+            {/* Física moderna */}
+            <Route path="/fisica-moderna" component={FisicaModernaHome} />
+            <Route
+              path="/fisica-moderna/topic/relatividade"
+              component={FisicaModernaTopicRelatividade}
+            />
+            <Route
+              path="/fisica-moderna/topic/quantica"
+              component={FisicaModernaTopicQuantica}
+            />
+            <Route
+              path="/fisica-moderna/topic/atomo"
+              component={FisicaModernaTopicAtomo}
+            />
+            <Route
+              path="/fisica-moderna/topic/particulas"
+              component={FisicaModernaTopicParticulas}
+            />
+            <Route
+              path="/fisica-moderna/topic/aplicacoes"
+              component={FisicaModernaTopicAplicacoes}
+            />
+
+            {/* Área do aluno */}
+            <Route path="/progress" component={Progress} />
+            <Route path="/ia-resolver" component={IAResolver} />
+
+            <Route path="/404" component={NotFound} />
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
       </div>
     </SubscriptionGuard>
   );
