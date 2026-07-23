@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { CSSProperties, useEffect, useRef, useState } from 'react';
 
 interface MathFormulaProps {
   children?: string;
@@ -98,7 +98,7 @@ export function MathFormula({
     mathJaxQueue.add(renderMath);
   }, [mathContent, isMounted]);
 
-  const style = {
+  const style: CSSProperties = {
     display: isDisplay ? 'block' : 'inline-block',
     textAlign: isDisplay ? 'center' : ('inherit' as const),
     padding: isDisplay ? '0.75rem 0' : '0',
