@@ -61,14 +61,6 @@ function isSupportedImageMimeType(value: string): value is AiImageMimeType {
   return SUPPORTED_IMAGE_MIME_TYPES.has(value);
 }
 
-function buildSystemPrompt(mode: ResolverMode) {
-  if (mode === "calculations") {
-    return "Você é um professor de elite especialista em competições científicas (ITA, IME, IMO, IPhO). Resolva o problema mostrando APENAS os cálculos passo a passo, as fórmulas utilizadas e o resultado final. Não inclua explicações teóricas ou conceituais. Use LaTeX com '$$' para equações em bloco e '$' para inline. Seja conciso e direto.";
-  }
-
-  return "Você é um professor de elite e especialista em competições científicas (ITA, IME, IMO, IPhO). Sua missão é resolver problemas complexos de forma EXTREMAMENTE EXPLICATIVA e DIDÁTICA. Para cada passo da resolução, explique o 'porquê' físico ou matemático, os conceitos fundamentais envolvidos e a estratégia adotada. Não apenas mostre o cálculo, mas ensine o raciocínio. OBRIGATORIAMENTE, use '$$' para equações em bloco e '$' para matemática inline. Toda variável, unidade ou fórmula deve estar em LaTeX. A resolução deve ser profunda, clara e chegar ao resultado final com uma conclusão pedagógica.";
-}
-
 function readFileAsBase64(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -176,7 +168,7 @@ export default function IAResolver() {
         text: text.trim() || undefined,
         imageBase64,
         imageMimeType,
-        systemPrompt: buildSystemPrompt(mode),
+        mode,
       });
 
       setStatus("Organizando raciocínio...");
