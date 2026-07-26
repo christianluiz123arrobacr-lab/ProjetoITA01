@@ -2,8 +2,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Redirect } from "wouter";
 import { Loader2 } from "lucide-react";
 
-import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { trpc } from "@/lib/trpc";
 
 type SubscriptionGuardProps = {
   children: ReactNode;
@@ -11,119 +11,62 @@ type SubscriptionGuardProps = {
 
 type AccessState = "checking" | "allowed" | "blocked" | "unauthenticated";
 
+const ACCESS_RECHECK_MS = 5 * 60 * 1000;
+const ACCESS_CACHE_MS = 30 * 60 * 1000;
+
 export default function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
 
   const [accessState, setAccessState] = useState<AccessState>("checking");
 
+  const accessStatusQuery = trpc.auth.getAccessStatus.useQuery(undefined, {
+    enabled: !authLoading && isAuthenticated,
+    retry: false,
+    staleTime: ACCESS_RECHECK_MS,
+    gcTime: ACCESS_CACHE_MS,
+    refetchOnMount: false,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: false,
+    refetchInterval: ACCESS_RECHECK_MS,
+    refetchIntervalInBackground: false,
+  });
+
   useEffect(() => {
-    let cancelled = false;
-
-    async function checkAccess() {
-      if (authLoading) return;
-
-      if (!isAuthenticated) {
-        if (!cancelled) {
-          setAccessState("unauthenticated");
-        }
-        return;
-      }
-
-      try {
-        setAccessState("checking");
-
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-          if (!cancelled) {
-            setAccessState("unauthenticated");
-          }
-          return;
-        }
-
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role, ativo")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.warn("Erro ao buscar perfil:", profileError);
-        }
-
-        if (profile?.role === "admin") {
-          if (!cancelled) {
-            setAccessState("allowed");
-          }
-          return;
-        }
-
-        if (profile?.ativo === false) {
-          if (!cancelled) {
-            setAccessState("blocked");
-          }
-          return;
-        }
-
-        const { data: hasActiveSubscription, error: rpcError } =
-          await supabase.rpc("user_has_active_subscription", {
-            target_user_id: user.id,
-          });
-
-        if (!rpcError && typeof hasActiveSubscription === "boolean") {
-          if (!cancelled) {
-            setAccessState(hasActiveSubscription ? "allowed" : "blocked");
-          }
-          return;
-        }
-
-        console.warn(
-          "RPC user_has_active_subscription falhou. Usando fallback em billing_subscriptions:",
-          rpcError
-        );
-
-        const now = new Date().toISOString();
-
-        const { data: subscription, error: subscriptionError } = await supabase
-          .from("billing_subscriptions")
-          .select("id, status, current_period_end, user_id")
-          .eq("user_id", user.id)
-          .in("status", ["active", "trialing"])
-          .or(`current_period_end.is.null,current_period_end.gte.${now}`)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (subscriptionError) {
-          console.error("Erro ao verificar assinatura:", subscriptionError);
-
-          if (!cancelled) {
-            setAccessState("blocked");
-          }
-          return;
-        }
-
-        if (!cancelled) {
-          setAccessState(subscription ? "allowed" : "blocked");
-        }
-      } catch (error) {
-        console.error("Erro inesperado ao verificar assinatura:", error);
-
-        if (!cancelled) {
-          setAccessState("blocked");
-        }
-      }
+    if (authLoading) {
+      setAccessState("checking");
+      return;
     }
 
-    checkAccess();
+    if (!isAuthenticated) {
+      setAccessState("unauthenticated");
+      return;
+    }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, isAuthenticated]);
+    if (
+      accessStatusQuery.isLoading ||
+      (accessStatusQuery.isFetching && !accessStatusQuery.data)
+    ) {
+      setAccessState("checking");
+      return;
+    }
+
+    if (accessStatusQuery.error) {
+      console.error("Erro ao verificar assinatura:", accessStatusQuery.error);
+      setAccessState("blocked");
+      return;
+    }
+
+    if (accessStatusQuery.data?.accessState) {
+      setAccessState(accessStatusQuery.data.accessState);
+    }
+  }, [
+    accessStatusQuery.data?.accessState,
+    accessStatusQuery.error,
+    accessStatusQuery.isFetching,
+    accessStatusQuery.isLoading,
+    authLoading,
+    isAuthenticated,
+  ]);
 
   if (authLoading || accessState === "checking") {
     return (
