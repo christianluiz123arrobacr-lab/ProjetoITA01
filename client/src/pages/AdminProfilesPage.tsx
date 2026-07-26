@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import {
   Loader2,
   AlertTriangle,
@@ -44,35 +44,27 @@ export default function AdminProfilesPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const trpcUtils = trpc.useUtils();
+  const updateProfileMutation = trpc.admin.updateProfile.useMutation();
 
-  async function loadProfiles() {
+  const loadProfiles = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Erro ao carregar profiles:", error);
-        setError("Não foi possível carregar os perfis.");
-        return;
-      }
-
-      setProfiles((data as ProfileRow[]) || []);
+      const data = await trpcUtils.admin.listProfiles.fetch();
+      setProfiles(data as ProfileRow[]);
     } catch (err) {
       console.error("Erro inesperado ao carregar perfis:", err);
       setError("Ocorreu um erro inesperado ao carregar os perfis.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [trpcUtils]);
 
   useEffect(() => {
     loadProfiles();
-  }, []);
+  }, [loadProfiles]);
 
   const filteredProfiles = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -111,23 +103,14 @@ export default function AdminProfilesPage() {
       setError("");
       setSuccessMessage("");
 
-      const payload = {
+      const updatedProfile = await updateProfileMutation.mutateAsync({
+        id: profile.id,
         nome: profile.nome,
-        role: profile.role,
+        role: profile.role as "student" | "admin" | "editor",
         ativo: profile.ativo,
-      };
+      });
 
-      const { error } = await supabase
-        .from("profiles")
-        .update(payload)
-        .eq("id", profile.id);
-
-      if (error) {
-        console.error("Erro ao salvar perfil:", error);
-        setError("Não foi possível salvar as alterações do perfil.");
-        return;
-      }
-
+      updateLocalProfile(profile.id, updatedProfile as ProfileRow);
       setSuccessMessage(`Perfil de ${profile.nome || profile.email} salvo com sucesso.`);
     } catch (err) {
       console.error("Erro inesperado ao salvar perfil:", err);
