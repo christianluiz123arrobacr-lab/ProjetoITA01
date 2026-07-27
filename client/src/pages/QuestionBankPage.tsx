@@ -4,8 +4,10 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
-import { getQuestions } from "@/services/questions.service";
-import { supabase } from "@/lib/supabase";
+import { exportQuestionsForPdf, getQuestions } from "@/services/questions.service";
+import { buildPdfFilterSummary } from "@/lib/questionPdfLayout";
+import type { QuestionPdfFilters } from "@shared/questionPdf";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
 import {
@@ -25,6 +27,9 @@ import {
   X,
   ListFilter,
   Search,
+  FileDown,
+  LoaderCircle,
+  NotebookPen,
 } from "lucide-react";
 
 function normalizeText(value?: string | null) {
@@ -440,6 +445,19 @@ export default function QuestionBankPage() {
     Record<string, UserQuestionAttemptStatus>
   >({});
   const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [pdfMessage, setPdfMessage] = useState("");
+  const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
+  const [notebookName, setNotebookName] = useState("Lista de exercícios");
+  const [notebookPaper, setNotebookPaper] = useState<"a5" | "a4" | "a3" | "infinite">("a4");
+  const createNotebook = trpc.notebooks.create.useMutation();
+
+  async function handleCreateLinkedNotebook() {
+    const name = notebookName.trim();
+    if (!name || filteredQuestions.length === 0) return;
+    const result = await createNotebook.mutateAsync({ name, paper: { size: notebookPaper, lined: false }, questionIds: filteredQuestions.slice(0, 100).map(question => question.id) });
+    window.location.assign(`/caderno/${result.id}`);
+  }
 
   const [vetTopics, setVetTopics] = useState<string[]>(initialVetFilters.topics);
   const [vetBlock, setVetBlock] = useState<string>(initialVetFilters.block);
@@ -840,6 +858,8 @@ export default function QuestionBankPage() {
     selectedPracticeStatus,
   ]);
 
+  const trpcUtils = trpc.useUtils();
+
   useEffect(() => {
     async function loadQuestions() {
       const data = await getQuestions();
@@ -862,22 +882,12 @@ export default function QuestionBankPage() {
 
       setAttemptsLoading(true);
 
-      const { data, error } = await supabase
-        .from("user_question_attempts")
-        .select("question_id, is_correct, answered_at")
-        .eq("user_id", user.id)
-        .order("answered_at", { ascending: false });
+      try {
+        const data = await trpcUtils.quiz.getMyAttempts.fetch({ summary: true });
 
-      if (error) {
-        console.error("Erro ao carregar tentativas do usuário:", error);
-        setUserQuestionStatus({});
-        setAttemptsLoading(false);
-        return;
-      }
+        const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
 
-      const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
-
-      ((data as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
+        ((data as unknown as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
         if (!attempt.question_id) return;
 
         const current = nextStatus[attempt.question_id];
@@ -895,12 +905,17 @@ export default function QuestionBankPage() {
         current.attempts += 1;
       });
 
-      setUserQuestionStatus(nextStatus);
-      setAttemptsLoading(false);
+        setUserQuestionStatus(nextStatus);
+      } catch (error) {
+        console.error("Erro ao carregar tentativas do usuário:", error);
+        setUserQuestionStatus({});
+      } finally {
+        setAttemptsLoading(false);
+      }
     }
 
     loadUserAttempts();
-  }, [authLoading, user?.id]);
+  }, [authLoading, trpcUtils, user?.id]);
 
   useEffect(() => {
     let filtered = questions;
@@ -976,6 +991,54 @@ export default function QuestionBankPage() {
   function clearVetFilterOnly() {
     setVetTopics([]);
     setVetBlock("");
+  }
+
+  async function handleExportPdf() {
+    if (pdfGenerating || filteredQuestions.length === 0) return;
+    const filters: QuestionPdfFilters = {
+      search: searchTerm.trim(),
+      institutions: selectedInstitutions,
+      years: selectedYears.map(Number).filter(Number.isFinite),
+      subjects: selectedSubjects,
+      topics: effectiveTopics,
+      subtopics: selectedSubtopics,
+      difficulties: selectedDifficulties,
+      practiceStatus: selectedPracticeStatus,
+    };
+    setPdfGenerating(true);
+    setPdfMessage("");
+    try {
+      const result = await exportQuestionsForPdf(filters);
+      if (!result.questions.length) {
+        setPdfMessage("Nenhuma questão disponível para os filtros e o seu acesso atual.");
+        return;
+      }
+      const summary = buildPdfFilterSummary(filters);
+      const { generateQuestionPdf } = await import("@/lib/questionPdfGenerator");
+      const generated = await generateQuestionPdf({ questions: result.questions, filterSummary: summary });
+      setPdfMessage(result.truncated
+        ? `PDF concluído com ${generated.questions} questões (limite seguro de ${result.limit} por arquivo).`
+        : `PDF concluído com ${generated.questions} questões.`);
+    } catch (error) {
+      console.error("Falha ao gerar lista de questões em PDF", { name: error instanceof Error ? error.name : "UnknownError" });
+      const message = error instanceof Error ? error.message : "";
+      const safeMessage = [
+        "assinatura",
+        "acesso",
+        "sessão",
+        "limite de requisições",
+        "Muitas tentativas",
+        "buscar as questões",
+        "aplicar o filtro",
+        "navegador não conseguiu preparar",
+        "Nenhuma questão",
+      ].some(fragment => message.includes(fragment));
+      setPdfMessage(safeMessage
+        ? message
+        : "Não foi possível gerar o PDF neste navegador. Atualize a página e tente novamente.");
+    } finally {
+      setPdfGenerating(false);
+    }
   }
 
   function handleQuestionAnswered(questionId: string, isCorrect: boolean) {
@@ -1259,14 +1322,34 @@ export default function QuestionBankPage() {
                   </div>
                 </div>
 
-                <Button
-                  variant="outline"
-                  onClick={clearAllFilters}
-                  className="rounded-xl h-9 px-4 text-sm"
-                >
-                  Limpar filtros
-                </Button>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                  <Button
+                    variant="outline"
+                    disabled
+                    title="Caderno em desenvolvimento"
+                    className="rounded-xl h-9 px-4 text-sm"
+                  >
+                    <NotebookPen className="mr-2 h-4 w-4" />Caderno — em desenvolvimento
+                  </Button>
+                  <Button
+                    onClick={handleExportPdf}
+                    disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
+                    className="rounded-xl h-9 px-4 text-sm bg-cyan-600 hover:bg-cyan-700"
+                  >
+                    {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                    {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={clearAllFilters}
+                    className="rounded-xl h-9 px-4 text-sm"
+                  >
+                    Limpar filtros
+                  </Button>
+                </div>
               </div>
+
+              {pdfMessage ? <p role="status" className="mb-4 text-sm font-medium text-slate-600">{pdfMessage}</p> : null}
 
               <div className="mb-4">
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
@@ -1644,6 +1727,19 @@ export default function QuestionBankPage() {
           )}
         </section>
       </main>
+
+      {notebookDialogOpen ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="linked-notebook-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="linked-notebook-title" className="text-xl font-bold text-slate-900">Resolver no Caderno</h2>
+            <p className="mt-1 text-sm text-slate-500">Crie um arquivo ligado às {Math.min(filteredQuestions.length, 100)} questões desta lista.</p>
+            <label className="mt-5 block text-sm font-semibold">Nome<input autoFocus maxLength={80} value={notebookName} onChange={event => setNotebookName(event.target.value)} className="mt-1 w-full rounded-xl border px-3 py-2" /></label>
+            <label className="mt-4 block text-sm font-semibold">Papel<select value={notebookPaper} onChange={event => setNotebookPaper(event.target.value as typeof notebookPaper)} className="mt-1 w-full rounded-xl border px-3 py-2"><option value="a5">A5</option><option value="a4">A4</option><option value="a3">A3</option><option value="infinite">Folha infinita</option></select></label>
+            {createNotebook.error ? <p className="mt-3 text-sm text-red-600">Não foi possível criar o caderno. Confirme a conexão com o Google Drive.</p> : null}
+            <div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setNotebookDialogOpen(false)}>Cancelar</Button><Button onClick={() => void handleCreateLinkedNotebook()} disabled={!notebookName.trim() || createNotebook.isPending}>{createNotebook.isPending ? "Criando..." : "Criar caderno"}</Button></div>
+          </div>
+        </div>
+      ) : null}
 
       <footer className="bg-slate-900 text-slate-300 py-12 mt-20">
         <div className="container text-center">
