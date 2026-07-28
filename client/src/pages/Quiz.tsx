@@ -152,7 +152,7 @@ export default function Quiz() {
 
     // Assinatura
     ctx.font = 'italic 18px Arial';
-    ctx.fillText('Projeto ITA - Do Zero a Aprovação', canvas.width / 2, 700);
+    ctx.fillText('Projeto Vetor', canvas.width / 2, 700);
 
     // Download
     const link = document.createElement('a');
@@ -163,7 +163,7 @@ export default function Quiz() {
 
   const shareResults = () => {
     const percentage = Math.round((score / filteredQuestions.length) * 100);
-    const text = `Acabei de completar o Quiz de ${selectedTopic} no Projeto ITA - Do Zero a Aprovação! Acertei ${percentage}% das questões. Venha testar seus conhecimentos também! 🎓`;
+    const text = `Acabei de completar o Quiz de ${selectedTopic} no Projeto Vetor! Acertei ${percentage}% das questões. Venha testar seus conhecimentos também! 🎓`;
     const whatsappUrl = `https://chat.whatsapp.com/Grwi9hUFvFbA91gShvZGqI`;
     window.open(whatsappUrl, '_blank');
   };
