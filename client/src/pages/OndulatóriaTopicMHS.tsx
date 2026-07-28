@@ -356,7 +356,7 @@ const formulas: FormulaSummary[] = [
       "A frequência angular diminui.",
       "O período aumenta.",
     ],
-  },,
+  },
 
   {
     title: "Potencial perto do equilíbrio",

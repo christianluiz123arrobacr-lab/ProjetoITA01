@@ -145,7 +145,7 @@ export default function CinematicaQuiz() {
     // Footer
     ctx.fillStyle = "#64748b";
     ctx.font = "16px Arial";
-    ctx.fillText("Projeto ITA - Do Zero a Aprovação", width / 2, 700);
+    ctx.fillText("Projeto Vetor", width / 2, 700);
     ctx.fillText(new Date().toLocaleDateString("pt-BR"), width / 2, 750);
 
     // Download
@@ -157,7 +157,7 @@ export default function CinematicaQuiz() {
 
   const handleShare = () => {
     const percentage = Math.round((score / quizQuestions.length) * 100);
-    const message = `🎓 Consegui ${percentage}% de acerto no Quiz de Cinemática do Projeto ITA! Vem estudar comigo: https://chat.whatsapp.com/Grwi9hUFvFbA91gShvZGqI`;
+    const message = `🎓 Consegui ${percentage}% de acerto no Quiz de Cinemática do Projeto Vetor! Vem estudar comigo: https://chat.whatsapp.com/Grwi9hUFvFbA91gShvZGqI`;
     window.open(`https://chat.whatsapp.com/Grwi9hUFvFbA91gShvZGqI`, "_blank");
   };
 
