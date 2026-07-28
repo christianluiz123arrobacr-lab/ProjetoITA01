@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { QUESTION_PDF_EXPORT_LIMIT, questionPdfFiltersSchema, questionRowMatchesPdfFilters } from "../shared/questionPdf";
 import { buildPdfFileName, buildPdfFilterSummary, chunkAnswers, fitPdfImage, getQuestionPdfTags, planQuestionPages, QUESTION_PDF_LAYOUT } from "../client/src/lib/questionPdfLayout";
-import { latexToPdfText, shouldRenderStandaloneFormula } from "../client/src/lib/questionPdfGenerator";
+import { latexToPdfText, shouldRenderStandaloneFormula, splitPdfMathSegments } from "../client/src/lib/questionPdfGenerator";
 import { KATEX_RENDER_OPTIONS, MATH_MACROS, normalizeMathSource, renderMathToMathMl } from "../client/src/lib/mathRendering";
 import type { Question } from "../client/src/types/question";
 
@@ -60,6 +60,22 @@ describe("exportação de questões em PDF", () => {
     const rendered = latexToPdfText(String.raw`A função $f(x)=x^2$ é simples. $$\frac{1}{e}$$ Fim.`);
     expect(rendered).toContain("A função f(x)=x² é simples.");
     expect(rendered).toContain("\n(1)/(e)\n");
+  });
+
+  it("separa fórmulas para composição matemática visual no canvas", () => {
+    expect(splitPdfMathSegments(String.raw`Como $\tan x=\frac{\sen x}{\cos x}$, determine x.`)).toEqual([
+      { kind: "text", value: "Como ", display: false },
+      { kind: "math", value: String.raw`\tan x=\frac{\sen x}{\cos x}`, display: false },
+      { kind: "text", value: ", determine x.", display: false },
+    ]);
+  });
+
+  it("marca fórmulas de bloco para ocupar uma linha própria", () => {
+    expect(splitPdfMathSegments(String.raw`Antes $$\frac{a}{b}$$ depois`)[1]).toEqual({
+      kind: "math",
+      value: String.raw`\frac{a}{b}`,
+      display: true,
+    });
   });
 
   it("não duplica a anotação LaTeX incluída no MathML do KaTeX", () => {

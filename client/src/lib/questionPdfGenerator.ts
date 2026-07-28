@@ -12,6 +12,69 @@ const CYAN = "#16b8cf";
 const IVORY = "#fffdf4";
 
 type PdfPage = { jpeg: Uint8Array };
+type PdfTextSegment = { kind: "text" | "math"; value: string; display: boolean };
+
+const PDF_MATH_IMAGE_CACHE = new Map<string, Promise<HTMLImageElement | null>>();
+
+/** Keeps prose and TeX separate so formulas can be typeset instead of flattened to ASCII. */
+export function splitPdfMathSegments(value: string, formulaOnly = false): PdfTextSegment[] {
+  const normalized = normalizeMathSource(value);
+  if (formulaOnly) {
+    return [{
+      kind: "math",
+      value: normalized.replace(/^\s*(?:\$\$?|\\\[|\\\()/, "").replace(/(?:\$\$?|\\\]|\\\))\s*$/, ""),
+      display: true,
+    }];
+  }
+
+  const segments: PdfTextSegment[] = [];
+  const expression = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\[[\s\S]+?\\\]|\\\(.+?\\\))/g;
+  let cursor = 0;
+  for (const match of normalized.matchAll(expression)) {
+    const index = match.index ?? 0;
+    if (index > cursor) segments.push({ kind: "text", value: normalized.slice(cursor, index), display: false });
+    const source = match[0];
+    const display = source.startsWith("$$") || source.startsWith("\\[");
+    segments.push({
+      kind: "math",
+      value: source.replace(/^\s*(?:\$\$?|\\\[|\\\()/, "").replace(/(?:\$\$?|\\\]|\\\))\s*$/, ""),
+      display,
+    });
+    cursor = index + source.length;
+  }
+  if (cursor < normalized.length) segments.push({ kind: "text", value: normalized.slice(cursor), display: false });
+  return segments.length ? segments : [{ kind: "text", value: normalized, display: false }];
+}
+
+async function renderMathImage(formula: string, fontSize: number, color: string) {
+  const key = `${fontSize}|${color}|${formula}`;
+  const cached = PDF_MATH_IMAGE_CACHE.get(key);
+  if (cached) return cached;
+
+  const pending = new Promise<HTMLImageElement | null>(resolve => {
+    try {
+      const mathMl = renderMathToMathMl(formula);
+      const measure = document.createElement("span");
+      measure.style.cssText = `position:fixed;left:-10000px;top:-10000px;visibility:hidden;white-space:nowrap;font-size:${fontSize}px;color:${color}`;
+      measure.innerHTML = mathMl;
+      document.body.appendChild(measure);
+      const bounds = measure.getBoundingClientRect();
+      measure.remove();
+      const width = Math.max(2, Math.ceil(bounds.width) + 6);
+      const height = Math.max(fontSize + 8, Math.ceil(bounds.height) + 6);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;align-items:center;height:100%;font-size:${fontSize}px;color:${color};white-space:nowrap">${mathMl}</div></foreignObject></svg>`;
+      const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+      const image = new Image();
+      image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+      image.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      image.src = url;
+    } catch {
+      resolve(null);
+    }
+  });
+  PDF_MATH_IMAGE_CACHE.set(key, pending);
+  return pending;
+}
 
 function decodeDataUrl(dataUrl: string) {
   const binary = atob(dataUrl.split(",")[1] ?? "");
@@ -225,10 +288,64 @@ export async function generateQuestionPdf(input: { questions: Question[]; filter
   };
 
   const ensure = (height: number) => { if (y + height > CONTENT_BOTTOM) { finishPage(); startPage(); } };
-  const drawLines = (text: string, x: number, width: number, lineHeight = 25, font = "19px Arial", color = "#172033", formulaOnly = false) => {
+  const drawLines = async (text: string, x: number, width: number, lineHeight = 25, font = "19px Arial", color = "#172033", formulaOnly = false) => {
     context.font = font; context.fillStyle = color;
-    const lines = wrapText(context, latexToPdfText(text, formulaOnly), width);
-    lines.forEach(line => { ensure(lineHeight); context.fillText(line, x, y); y += lineHeight; });
+    const fontSize = Number.parseFloat(font) || 19;
+    const segments = splitPdfMathSegments(text, formulaOnly);
+    let cursorX = x;
+    let hasContent = false;
+    const nextLine = () => { ensure(lineHeight); y += lineHeight; cursorX = x; hasContent = false; };
+
+    for (const segment of segments) {
+      if (segment.kind === "text") {
+        const paragraphs = segment.value.split("\n");
+        for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex += 1) {
+          const words = paragraphs[paragraphIndex].split(/\s+/).filter(Boolean);
+          for (const word of words) {
+            const label = hasContent ? ` ${word}` : word;
+            const wordWidth = context.measureText(label).width;
+            if (hasContent && cursorX + wordWidth > x + width) nextLine();
+            ensure(lineHeight);
+            context.fillText(hasContent ? ` ${word}` : word, cursorX, y);
+            cursorX += context.measureText(hasContent ? ` ${word}` : word).width;
+            hasContent = true;
+          }
+          if (paragraphIndex < paragraphs.length - 1) nextLine();
+        }
+        continue;
+      }
+
+      const image = await renderMathImage(segment.value, fontSize, color);
+      if (!image) {
+        const fallback = latexToPdfText(segment.value, true);
+        const fallbackWidth = context.measureText(fallback).width;
+        if (hasContent && cursorX + fallbackWidth > x + width) nextLine();
+        ensure(lineHeight);
+        context.fillText(fallback, cursorX, y);
+        cursorX += fallbackWidth;
+        hasContent = true;
+        continue;
+      }
+
+      const display = segment.display || formulaOnly;
+      const availableWidth = display ? width : x + width - cursorX;
+      const scale = Math.min(1, availableWidth / image.naturalWidth);
+      const imageWidth = image.naturalWidth * scale;
+      const imageHeight = image.naturalHeight * scale;
+      if (display && hasContent) nextLine();
+      if (!display && hasContent && cursorX + imageWidth > x + width) nextLine();
+      ensure(Math.max(lineHeight, imageHeight + 4));
+      context.drawImage(image, display ? x + 20 : cursorX, y - imageHeight * 0.78, imageWidth, imageHeight);
+      if (display) {
+        y += Math.max(lineHeight, imageHeight + 4);
+        cursorX = x;
+        hasContent = false;
+      } else {
+        cursorX += imageWidth;
+        hasContent = true;
+      }
+    }
+    if (hasContent) y += lineHeight;
   };
   const drawImage = async (url: string | undefined, maxWidth: number, maxHeight: number, x: number) => {
     const image = await loadImage(url);
@@ -242,7 +359,7 @@ export async function generateQuestionPdf(input: { questions: Question[]; filter
   startPage();
   context.fillStyle = "#e8f7f8"; context.fillRect(MARGIN, y - 8, PAGE_WIDTH - MARGIN * 2, 92);
   context.fillStyle = NAVY; context.font = "bold 17px Arial"; context.fillText("Filtros aplicados", MARGIN + 20, y + 20);
-  y += 46; drawLines(input.filterSummary, MARGIN + 20, PAGE_WIDTH - MARGIN * 2 - 40, 22, "17px Arial", "#29465e"); y += 22;
+  y += 46; await drawLines(input.filterSummary, MARGIN + 20, PAGE_WIDTH - MARGIN * 2 - 40, 22, "17px Arial", "#29465e"); y += 22;
 
   for (let index = 0; index < input.questions.length; index += 1) {
     const question = input.questions[index];
@@ -260,18 +377,18 @@ export async function generateQuestionPdf(input: { questions: Question[]; filter
       context.fillStyle = "#dff5f7"; context.fillRect(tagX, y - 18, width, 25); context.fillStyle = NAVY; context.fillText(label, tagX + 10, y); tagX += width + 8;
     }
     y += 35;
-    drawLines(question.statement, MARGIN, PAGE_WIDTH - MARGIN * 2);
+    await drawLines(question.statement, MARGIN, PAGE_WIDTH - MARGIN * 2);
     if (question.imageUrl) await drawImage(question.imageUrl, QUESTION_PDF_LAYOUT.statementImageMaxWidth, QUESTION_PDF_LAYOUT.statementImageMaxHeight, MARGIN);
-    if (question.statementAfterImage) drawLines(question.statementAfterImage, MARGIN, PAGE_WIDTH - MARGIN * 2);
+    if (question.statementAfterImage) await drawLines(question.statementAfterImage, MARGIN, PAGE_WIDTH - MARGIN * 2);
     if (shouldRenderStandaloneFormula(question.statement, question.formula)) {
       y += 6;
-      drawLines(question.formula ?? "", MARGIN + 24, PAGE_WIDTH - MARGIN * 2 - 48, 27, "20px Georgia", NAVY, true);
+      await drawLines(question.formula ?? "", MARGIN + 24, PAGE_WIDTH - MARGIN * 2 - 48, 27, "20px Georgia", NAVY, true);
     }
     y += 10;
     for (const option of question.options) {
       ensure(option.imageUrl ? 180 : 38);
       context.fillStyle = NAVY; context.font = "bold 18px Arial"; context.fillText(`${option.label})`, MARGIN + 18, y);
-      if (option.text) drawLines(option.text, MARGIN + 55, PAGE_WIDTH - MARGIN * 2 - 55, 24, "18px Arial");
+      if (option.text) await drawLines(option.text, MARGIN + 55, PAGE_WIDTH - MARGIN * 2 - 55, 24, "18px Arial");
       else y += 25;
       if (option.imageUrl) await drawImage(option.imageUrl, QUESTION_PDF_LAYOUT.optionImageMaxWidth, QUESTION_PDF_LAYOUT.optionImageMaxHeight, MARGIN + 55);
       y += 5;
