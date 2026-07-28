@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { getQuestions } from "@/services/questions.service";
 import {
@@ -218,6 +218,7 @@ function PriorityCard({
 
 export default function VetPrioritiesPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -236,19 +237,12 @@ export default function VetPrioritiesPage() {
       setError("");
 
       try {
-        const { data: profileData, error: profileError } = await supabase
-          .from("user_vet_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const [vetData, questions] = await Promise.all([
+          trpcUtils.vet.getLearningData.fetch(),
+          getQuestions(),
+        ]);
 
-        if (profileError) {
-          console.error(profileError);
-          setError("Não foi possível carregar seu objetivo do VET.");
-          return;
-        }
-
-        const currentProfile = (profileData as VetProfileRow | null) ?? null;
+        const currentProfile = (vetData.profile as VetProfileRow | null) ?? null;
         setProfile(currentProfile);
 
         if (!currentProfile) {
@@ -256,44 +250,10 @@ export default function VetPrioritiesPage() {
           return;
         }
 
-        const [attemptsResponse, weightsResponse, collectiveResponse, questions] =
-          await Promise.all([
-            supabase
-              .from("user_question_attempts")
-              .select("*")
-              .eq("user_id", user.id)
-              .order("answered_at", { ascending: false }),
-            supabase
-              .from("vet_exam_content_weights")
-              .select("*")
-              .eq("exam", currentProfile.target_exam),
-            supabase
-              .from("vet_content_collective_stats")
-              .select("*")
-              .eq("exam", currentProfile.target_exam),
-            getQuestions(),
-          ]);
-
-        if (attemptsResponse.error) {
-          console.error(attemptsResponse.error);
-          setError("Não foi possível carregar suas tentativas.");
-          return;
-        }
-
-        if (weightsResponse.error) {
-          console.error(weightsResponse.error);
-          setError("Não foi possível carregar os pesos da prova.");
-          return;
-        }
-
-        if (collectiveResponse.error) {
-          console.error(collectiveResponse.error);
-          setError("Não foi possível carregar a média coletiva.");
-          return;
-        }
-
+        const loadedAttempts = (vetData.attempts as unknown as VetAttempt[]) ?? [];
+        const loadedWeights = (vetData.weights as unknown as VetWeight[]) ?? [];
         const loadedCollective =
-          ((collectiveResponse.data as VetCollectiveContentStat[]) ?? []).map(
+          ((vetData.collectiveStats as unknown as VetCollectiveContentStat[]) ?? []).map(
             item => ({
               ...item,
               total_attempts: Number(item.total_attempts ?? 0),
@@ -310,9 +270,9 @@ export default function VetPrioritiesPage() {
         setEngine(
           buildVetEngineResult({
             profile: currentProfile,
-            attempts: (attemptsResponse.data as VetAttempt[]) ?? [],
+            attempts: loadedAttempts,
             questions,
-            weights: (weightsResponse.data as VetWeight[]) ?? [],
+            weights: loadedWeights,
             collectiveStats: loadedCollective,
             yearsBack: 5,
           })
@@ -328,7 +288,7 @@ export default function VetPrioritiesPage() {
     if (!authLoading) {
       loadData();
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, trpcUtils]);
 
   const filteredContents = useMemo(() => {
     if (!engine) return [];
