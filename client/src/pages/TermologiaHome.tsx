@@ -20,7 +20,7 @@ export default function TermologiaHome() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Termologia</h1>
-              <p className="text-xs text-slate-500">Projeto ITA - Do Zero a Aprovação</p>
+              <p className="text-xs text-slate-500">Projeto Vetor</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
