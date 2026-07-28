@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 type AttemptRow = {
@@ -140,6 +140,8 @@ function buildNotebookItems(
 
 export default function ErrorNotebook() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
+  const upsertReviewStatusMutation = trpc.quiz.upsertErrorReviewStatus.useMutation();
 
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [reviewStatuses, setReviewStatuses] = useState<ReviewStatusRow[]>([]);
@@ -170,54 +172,31 @@ export default function ErrorNotebook() {
       setLoading(true);
       setError("");
 
-      const [attemptsRes, reviewRes] = await Promise.all([
-        supabase
-          .from("user_question_attempts")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("is_correct", false)
-          .order("answered_at", { ascending: false }),
+      try {
+        const data = await trpcUtils.quiz.getErrorNotebook.fetch();
+        const reviewData = (data.reviewStatuses as ReviewStatusRow[]) ?? [];
 
-        supabase
-          .from("user_error_review_status")
-          .select("*")
-          .eq("user_id", user.id),
-      ]);
-
-      if (attemptsRes.error) {
-        console.error("Erro ao buscar caderno de erros:", attemptsRes.error);
+        setAttempts((data.attempts as AttemptRow[]) ?? []);
+        setReviewStatuses(reviewData);
+        setNoteDrafts(
+          Object.fromEntries(
+            reviewData.map((row) => [row.question_id, row.note ?? ""])
+          )
+        );
+      } catch (error) {
+        console.error("Erro ao buscar caderno de erros:", error);
         setError("Não foi possível carregar o caderno de erros.");
         setAttempts([]);
         setReviewStatuses([]);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      if (reviewRes.error) {
-        console.error("Erro ao buscar status de revisão:", reviewRes.error);
-        setError("Não foi possível carregar o status de revisão.");
-        setAttempts([]);
-        setReviewStatuses([]);
-        setLoading(false);
-        return;
-      }
-
-      const reviewData = (reviewRes.data as ReviewStatusRow[]) ?? [];
-
-      setAttempts((attemptsRes.data as AttemptRow[]) ?? []);
-      setReviewStatuses(reviewData);
-      setNoteDrafts(
-        Object.fromEntries(
-          reviewData.map((row) => [row.question_id, row.note ?? ""])
-        )
-      );
-      setLoading(false);
     }
 
     if (!authLoading) {
       loadData();
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, trpcUtils]);
 
   const reviewStatusMap = useMemo(() => {
     const map = new Map<string, ReviewStatusRow>();
@@ -432,22 +411,23 @@ export default function ErrorNotebook() {
       updated_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
-      .from("user_error_review_status")
-      .upsert(payload, { onConflict: "user_id,question_id" })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Erro ao atualizar status de revisão:", error);
-      return;
-    }
-
-    if (data) {
-      setReviewStatuses((prev) => {
-        const filtered = prev.filter((item) => item.question_id !== questionId);
-        return [...filtered, data as ReviewStatusRow];
+    try {
+      const data = await upsertReviewStatusMutation.mutateAsync({
+        questionId,
+        reviewed: payload.reviewed,
+        reviewedAt: payload.reviewed_at,
+        errorType: payload.error_type,
+        note: payload.note,
       });
+
+      if (data) {
+        setReviewStatuses((prev) => {
+          const filtered = prev.filter((item) => item.question_id !== questionId);
+          return [...filtered, data as ReviewStatusRow];
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar status de revisão:", error);
     }
   }
 

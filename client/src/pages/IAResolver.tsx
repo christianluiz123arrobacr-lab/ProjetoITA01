@@ -26,6 +26,7 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import { trpc } from "@/lib/trpc";
 
 type AiImageMimeType = "image/png" | "image/jpeg" | "image/webp";
@@ -59,14 +60,6 @@ const modeOptions: Array<{
 
 function isSupportedImageMimeType(value: string): value is AiImageMimeType {
   return SUPPORTED_IMAGE_MIME_TYPES.has(value);
-}
-
-function buildSystemPrompt(mode: ResolverMode) {
-  if (mode === "calculations") {
-    return "Você é um professor de elite especialista em competições científicas (ITA, IME, IMO, IPhO). Resolva o problema mostrando APENAS os cálculos passo a passo, as fórmulas utilizadas e o resultado final. Não inclua explicações teóricas ou conceituais. Use LaTeX com '$$' para equações em bloco e '$' para inline. Seja conciso e direto.";
-  }
-
-  return "Você é um professor de elite e especialista em competições científicas (ITA, IME, IMO, IPhO). Sua missão é resolver problemas complexos de forma EXTREMAMENTE EXPLICATIVA e DIDÁTICA. Para cada passo da resolução, explique o 'porquê' físico ou matemático, os conceitos fundamentais envolvidos e a estratégia adotada. Não apenas mostre o cálculo, mas ensine o raciocínio. OBRIGATORIAMENTE, use '$$' para equações em bloco e '$' para matemática inline. Toda variável, unidade ou fórmula deve estar em LaTeX. A resolução deve ser profunda, clara e chegar ao resultado final com uma conclusão pedagógica.";
 }
 
 function readFileAsBase64(file: File) {
@@ -176,7 +169,7 @@ export default function IAResolver() {
         text: text.trim() || undefined,
         imageBase64,
         imageMimeType,
-        systemPrompt: buildSystemPrompt(mode),
+        mode,
       });
 
       setStatus("Organizando raciocínio...");
@@ -380,7 +373,7 @@ export default function IAResolver() {
                   <div className="space-y-8 text-slate-800">
                     <ReactMarkdown
                       remarkPlugins={[remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
+                      rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}
                       components={{
                         h1: ({ children, ...props }) => (
                           <h1
@@ -464,7 +457,7 @@ export default function IAResolver() {
                         ),
                       }}
                     >
-                      {result}
+                      {normalizeMathSource(result)}
                     </ReactMarkdown>
                   </div>
 
