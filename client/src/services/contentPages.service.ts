@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { trpcClient } from "@/lib/trpcClient";
 
 export type ContentPageRow = {
   id: string;
@@ -51,41 +51,20 @@ export type ContentBlockRow = {
 };
 
 export async function getContentPageBySlug(slug: string) {
-  const { data, error } = await supabase
-    .from("content_pages")
-    .select("*")
-    .eq("slug", slug)
-    .eq("is_published", true)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as ContentPageRow;
+  return trpcClient.contentPages.getBySlug.query({
+    slug,
+  }) as Promise<ContentPageRow>;
 }
 
 export async function getContentBlocksByPageId(pageId: string) {
-  const { data, error } = await supabase
-    .from("content_blocks")
-    .select("*")
-    .eq("page_id", pageId)
-    .eq("is_visible", true)
-    .order("order_index", { ascending: true });
-
-  if (error) {
-    throw error;
-  }
-
-  return (data || []) as ContentBlockRow[];
+  return trpcClient.contentPages.getBlocksByPageId.query({
+    pageId,
+  }) as Promise<ContentBlockRow[]>;
 }
 
 export async function getContentPageWithBlocks(slug: string) {
-  const page = await getContentPageBySlug(slug);
-  const blocks = await getContentBlocksByPageId(page.id);
-
-  return {
-    page,
-    blocks,
-  };
+  return trpcClient.contentPages.getWithBlocks.query({ slug }) as Promise<{
+    page: ContentPageRow;
+    blocks: ContentBlockRow[];
+  }>;
 }
