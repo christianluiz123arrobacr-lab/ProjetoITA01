@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -39,6 +39,18 @@ type AdminBillingSubscriptionRow = {
 
   status: string;
   gateway: string;
+  gateway_subscription_id?: string | null;
+  gateway_payment_id?: string | null;
+  last_gateway_status?: string | null;
+  gateway_reconciliation_status?: string | null;
+  gateway_reconciliation_error?: string | null;
+  gateway_reconciliation_attempts?: number;
+  gateway_reconciliation_last_attempt_at?: string | null;
+  recurring_state?: string | null;
+  recurring_slot_active?: boolean | null;
+  canonical_access_subscription_id?: string | null;
+  cancel_at_period_end?: boolean | null;
+  metadata?: Record<string, unknown> | null;
   payment_url: string | null;
 
   started_at: string | null;
@@ -72,6 +84,9 @@ type AdminBillingPlanRow = {
   currency: string | null;
   billing_cycle: string | null;
   is_active: boolean;
+  is_public: boolean;
+  requires_legacy_founder_eligibility: boolean;
+  display_order: number;
   max_active_subscriptions: number | null;
   active_subscriptions_count: number;
   manual_review_count: number;
@@ -80,23 +95,46 @@ type AdminBillingPlanRow = {
   has_available_slots: boolean;
 };
 
+type AdminBillingPaymentRow = {
+  id: string;
+  subscription_id: string | null;
+  user_id: string;
+  gateway: string;
+  gateway_payment_id: string | null;
+  payment_method: string;
+  status: string;
+  amount_cents: number;
+  currency: string;
+  access_applied_at: string | null;
+  gateway_reconciliation_error: string | null;
+  created_at: string;
+};
+
 type PlanFormState = {
   name: string;
   description: string;
   price: string;
   maxActiveSubscriptions: string;
   isActive: boolean;
+  isPublic: boolean;
+  displayOrder: string;
 };
+
+function isMercadoPagoCardSubscription(subscription: Pick<AdminBillingSubscriptionRow, "gateway" | "metadata">) {
+  return subscription.gateway === "mercadopago" && subscription.metadata?.payment_method === "card";
+}
 
 type StatusFilter =
   | "all"
+  | "pending"
   | "manual_review"
   | "active"
   | "overdue"
   | "expired"
   | "canceled"
-  | "failed";
-type AdminBillingTab = "subscriptions" | "plans" | "invites";
+  | "failed"
+  | "reconciliation";
+type AdminBillingTab = "subscriptions" | "payments" | "plans" | "invites";
 
 function formatDate(date?: string | null) {
   if (!date) return "Sem data";
@@ -118,6 +156,8 @@ function getStatusBadge(status: string) {
   switch (status) {
     case "manual_review":
       return "bg-yellow-50 text-yellow-700 border-yellow-200";
+    case "pending":
+      return "bg-amber-50 text-amber-700 border-amber-200";
     case "active":
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "overdue":
@@ -158,10 +198,25 @@ function buildPlanForm(plan: AdminBillingPlanRow): PlanFormState {
         ? ""
         : String(plan.max_active_subscriptions),
     isActive: Boolean(plan.is_active),
+    isPublic: Boolean(plan.is_public),
+    displayOrder: String(plan.display_order ?? 100),
   };
 }
 
 export default function AdminBillingPage() {
+  const listBillingSubscriptionsQuery = trpc.admin.listBillingSubscriptions.useQuery(undefined, { enabled: false });
+  const listBillingPlansQuery = trpc.admin.listBillingPlans.useQuery(undefined, { enabled: false });
+  const listBillingPlanInvitesQuery = trpc.admin.listBillingPlanInvites.useQuery(undefined, { enabled: false });
+  const listBillingPaymentsQuery = trpc.admin.listBillingPayments.useQuery(undefined, { enabled: false });
+  const renewBillingSubscriptionMutation = trpc.admin.renewBillingSubscription.useMutation();
+  const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
+  const cancelMercadoPagoSubscriptionNowMutation = trpc.admin.cancelMercadoPagoSubscriptionNow.useMutation();
+  const reconcileMercadoPagoDuplicatesMutation = trpc.admin.reconcileMercadoPagoDuplicates.useMutation();
+  const reconcileMercadoPagoPaymentMutation = trpc.admin.reconcileMercadoPagoPayment.useMutation();
+  const updateBillingPlanMutation = trpc.admin.updateBillingPlan.useMutation();
+  const createBillingPlanInviteMutation = trpc.admin.createBillingPlanInvite.useMutation();
+  const deleteBillingPlanInviteMutation = trpc.admin.deleteBillingPlanInvite.useMutation();
+
   const [activeTab, setActiveTab] = useState<AdminBillingTab>("subscriptions");
 
   const [subscriptions, setSubscriptions] = useState<
@@ -169,6 +224,7 @@ export default function AdminBillingPage() {
   >([]);
 
   const [invites, setInvites] = useState<InviteRow[]>([]);
+  const [payments, setPayments] = useState<AdminBillingPaymentRow[]>([]);
   const [plans, setPlans] = useState<AdminBillingPlanRow[]>([]);
   const [planForms, setPlanForms] = useState<Record<string, PlanFormState>>({});
 
@@ -189,6 +245,9 @@ export default function AdminBillingPage() {
 
   const filteredSubscriptions = useMemo(() => {
     if (statusFilter === "all") return subscriptions;
+    if (statusFilter === "reconciliation") {
+      return subscriptions.filter((subscription) => Boolean(subscription.gateway_reconciliation_status));
+    }
 
     return subscriptions.filter(
       (subscription) => subscription.status === statusFilter
@@ -198,11 +257,13 @@ export default function AdminBillingPage() {
   const subscriptionStats = useMemo(() => {
     return {
       total: subscriptions.length,
+      pending: subscriptions.filter((item) => item.status === "pending").length,
       manualReview: subscriptions.filter((item) => item.status === "manual_review")
         .length,
       active: subscriptions.filter((item) => item.status === "active").length,
       expired: subscriptions.filter((item) => item.status === "expired").length,
       canceled: subscriptions.filter((item) => item.status === "canceled").length,
+      reconciliation: subscriptions.filter((item) => Boolean(item.gateway_reconciliation_status)).length,
     };
   }, [subscriptions]);
 
@@ -223,63 +284,23 @@ export default function AdminBillingPage() {
   }, [plans]);
 
   async function loadSubscriptionsData() {
-    const { data, error: rpcError } = await supabase.rpc(
-      "admin_list_billing_subscriptions"
-    );
+    const result = await listBillingSubscriptionsQuery.refetch();
 
-    if (rpcError) {
-      console.error("Erro ao carregar assinaturas:", rpcError);
-      throw new Error(rpcError.message || "Não foi possível carregar as assinaturas.");
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar as assinaturas.");
     }
 
-    setSubscriptions((data ?? []) as AdminBillingSubscriptionRow[]);
+    setSubscriptions((result.data ?? []) as AdminBillingSubscriptionRow[]);
   }
 
   async function loadPlansData() {
-    const { data, error: rpcError } = await supabase.rpc(
-      "admin_list_billing_plans"
-    );
+    const result = await listBillingPlansQuery.refetch();
 
-    if (rpcError) {
-      console.warn("RPC admin_list_billing_plans falhou. Usando fallback:", rpcError);
-
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from("billing_plans")
-        .select(
-          "id, slug, name, description, price_cents, currency, billing_cycle, is_active, max_active_subscriptions"
-        )
-        .order("price_cents", { ascending: true });
-
-      if (fallbackError) {
-        throw new Error(fallbackError.message || "Não foi possível carregar os planos.");
-      }
-
-      const mapped = (fallbackData ?? []).map((plan: any) => ({
-        id: String(plan.id),
-        slug: plan.slug,
-        name: plan.name,
-        description: plan.description,
-        price_cents: plan.price_cents,
-        currency: plan.currency,
-        billing_cycle: plan.billing_cycle,
-        is_active: plan.is_active,
-        max_active_subscriptions: plan.max_active_subscriptions ?? null,
-        active_subscriptions_count: 0,
-        manual_review_count: 0,
-        used_slots: 0,
-        remaining_slots: plan.max_active_subscriptions ?? null,
-        has_available_slots: true,
-      })) as AdminBillingPlanRow[];
-
-      setPlans(mapped);
-      setPlanForms(
-        Object.fromEntries(mapped.map((plan) => [plan.id, buildPlanForm(plan)]))
-      );
-      setSelectedPlanSlug((current) => current || mapped[0]?.slug || "");
-      return;
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar os planos.");
     }
 
-    const mapped = (data ?? []) as AdminBillingPlanRow[];
+    const mapped = (result.data ?? []) as AdminBillingPlanRow[];
     setPlans(mapped);
     setPlanForms(
       Object.fromEntries(mapped.map((plan) => [plan.id, buildPlanForm(plan)]))
@@ -288,18 +309,19 @@ export default function AdminBillingPage() {
   }
 
   async function loadInvitesData() {
-    const { data, error: rpcError } = await supabase.rpc(
-      "admin_list_billing_plan_invites"
-    );
+    const result = await listBillingPlanInvitesQuery.refetch();
 
-    if (rpcError) {
-      console.error("Erro ao carregar convites:", rpcError);
-      throw new Error(
-        rpcError.message || "Não foi possível carregar os convites."
-      );
+    if (result.error) {
+      throw new Error(result.error.message || "Não foi possível carregar os convites.");
     }
 
-    setInvites((data ?? []) as InviteRow[]);
+    setInvites((result.data ?? []) as InviteRow[]);
+  }
+
+  async function loadPaymentsData() {
+    const result = await listBillingPaymentsQuery.refetch();
+    if (result.error) throw new Error(result.error.message || "Não foi possível carregar os pagamentos.");
+    setPayments((result.data ?? []) as AdminBillingPaymentRow[]);
   }
 
   async function loadAllData() {
@@ -311,6 +333,7 @@ export default function AdminBillingPage() {
         loadSubscriptionsData(),
         loadPlansData(),
         loadInvitesData(),
+        loadPaymentsData(),
       ]);
     } catch (err) {
       console.error("Erro ao carregar dados de assinaturas:", err);
@@ -332,6 +355,8 @@ export default function AdminBillingPage() {
 
       if (activeTab === "subscriptions") {
         await loadSubscriptionsData();
+      } else if (activeTab === "payments") {
+        await Promise.all([loadPaymentsData(), loadSubscriptionsData()]);
       } else if (activeTab === "plans") {
         await loadPlansData();
       } else {
@@ -368,19 +393,10 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_renew_billing_subscription",
-        {
-          target_subscription_id: subscriptionId,
-          access_months: 1,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao renovar assinatura:", rpcError);
-        setError(rpcError.message || "Não foi possível renovar a assinatura.");
-        return;
-      }
+      await renewBillingSubscriptionMutation.mutateAsync({
+        subscriptionId,
+        months: 1,
+      });
 
       setSuccess(
         label === "aprovar"
@@ -396,34 +412,85 @@ export default function AdminBillingPage() {
     }
   }
 
-  async function cancelSubscription(subscriptionId: string) {
-    const confirmed = window.confirm("Cancelar esta assinatura?");
+  async function cancelSubscription(subscription: AdminBillingSubscriptionRow) {
+    const recurringCard = isMercadoPagoCardSubscription(subscription);
+    const confirmed = window.confirm(
+      recurringCard
+        ? "Cancelar agora a recorrência no Mercado Pago? Esta ação administrativa é imediata e impede novas cobranças."
+        : "Cancelar esta assinatura agora? O acesso pago será bloqueado imediatamente."
+    );
 
     if (!confirmed) return;
 
     try {
-      setActionLoadingId(subscriptionId);
+      setActionLoadingId(subscription.subscription_id);
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_cancel_billing_subscription",
-        {
-          target_subscription_id: subscriptionId,
+      if (recurringCard) {
+        const result = await cancelMercadoPagoSubscriptionNowMutation.mutateAsync({ subscriptionId: subscription.subscription_id });
+        if (result.outcome !== "success") {
+          setError(`Cancelamento ${result.outcome}: ${result.failures.length} cobrança(s) ainda exigem reconciliação.`);
+          await loadSubscriptionsData();
+          return;
         }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao cancelar assinatura:", rpcError);
-        setError(rpcError.message || "Não foi possível cancelar a assinatura.");
-        return;
+      } else {
+        await cancelBillingSubscriptionMutation.mutateAsync({ subscriptionId: subscription.subscription_id });
       }
 
-      setSuccess("Assinatura cancelada com sucesso.");
+      setSuccess(recurringCard ? "Recorrência Mercado Pago cancelada no gateway e no sistema." : "Assinatura cancelada com sucesso.");
       await loadSubscriptionsData();
     } catch (err) {
       console.error("Erro inesperado ao cancelar assinatura:", err);
-      setError("Ocorreu um erro inesperado ao cancelar a assinatura.");
+      setError(err instanceof Error ? err.message : "Ocorreu um erro inesperado ao cancelar a assinatura.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function reconcileSubscription(subscription: AdminBillingSubscriptionRow) {
+    if (!window.confirm("Consultar o Mercado Pago e cancelar esta recorrência duplicada? A ação é idempotente e não altera preços.")) return;
+    try {
+      setActionLoadingId(subscription.subscription_id);
+      setError("");
+      setSuccess("");
+      const result = await reconcileMercadoPagoDuplicatesMutation.mutateAsync({ subscriptionId: subscription.subscription_id, confirm: true });
+      switch (result.outcome) {
+        case "success":
+          setSuccess(`Reconciliação confirmada: ${result.processed} recorrência(s) processada(s).`);
+          break;
+        case "partial":
+          setError(`Reconciliação parcial: ${result.successes.length} sucesso(s) e ${result.failures.length} falha(s).`);
+          break;
+        case "failed":
+          setError(`Reconciliação falhou para ${result.failures.length} recorrência(s). Nenhuma confirmação foi removida.`);
+          break;
+        case "no_action":
+          setError(result.noActionReason || "Nenhuma ação de reconciliação foi realizada.");
+          break;
+      }
+      await loadSubscriptionsData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao reconciliar recorrência.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function reconcilePayment(payment: AdminBillingPaymentRow) {
+    if (!window.confirm("Consultar o status oficial deste pagamento no Mercado Pago? O acesso só será liberado se o gateway confirmar a aprovação.")) return;
+    try {
+      setActionLoadingId(payment.id);
+      setError("");
+      setSuccess("");
+      const result = await reconcileMercadoPagoPaymentMutation.mutateAsync({ billingPaymentId: payment.id });
+      if (result.paymentStatus === "approved" && result.accessApplied) setSuccess("Pagamento confirmado e acesso liberado.");
+      else if (result.paymentStatus === "pending") setError("O Mercado Pago ainda não confirmou este pagamento.");
+      else setError(result.message);
+      await Promise.all([loadPaymentsData(), loadSubscriptionsData()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível verificar o pagamento no Mercado Pago.");
+      await Promise.all([loadPaymentsData(), loadSubscriptionsData()]).catch(() => undefined);
     } finally {
       setActionLoadingId(null);
     }
@@ -468,23 +535,17 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_update_billing_plan",
-        {
-          target_plan_id: plan.id,
-          new_name: form.name.trim() || plan.name,
-          new_description: form.description.trim() || null,
-          new_price_cents: priceCents,
-          new_max_active_subscriptions: maxActiveSubscriptions,
-          new_is_active: form.isActive,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao salvar plano:", rpcError);
-        setError(rpcError.message || "Não foi possível salvar o plano.");
-        return;
-      }
+      await updateBillingPlanMutation.mutateAsync({
+        planId: plan.id,
+        name: form.name.trim() || plan.name,
+        description: form.description.trim() || null,
+        priceCents,
+        maxActiveSubscriptions,
+        isActive: form.isActive,
+        isPublic: form.isPublic,
+        displayOrder: Math.max(0, Number.parseInt(form.displayOrder || "100", 10)),
+        requiresLegacyFounderEligibility: plan.requires_legacy_founder_eligibility,
+      });
 
       setSuccess("Plano atualizado com sucesso.");
       await loadPlansData();
@@ -516,20 +577,11 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_create_billing_plan_invite",
-        {
-          target_plan_slug: selectedPlanSlug,
-          target_email: normalizedEmail,
-          target_expires_at: null,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao criar convite:", rpcError);
-        setError(rpcError.message || "Não foi possível criar o convite.");
-        return;
-      }
+      await createBillingPlanInviteMutation.mutateAsync({
+        planSlug: selectedPlanSlug,
+        email: normalizedEmail,
+        expiresAt: null,
+      });
 
       setInviteEmail("");
       setSuccess("Convite criado com sucesso.");
@@ -552,18 +604,7 @@ export default function AdminBillingPage() {
       setError("");
       setSuccess("");
 
-      const { error: rpcError } = await supabase.rpc(
-        "admin_delete_billing_plan_invite",
-        {
-          target_invite_id: inviteId,
-        }
-      );
-
-      if (rpcError) {
-        console.error("Erro ao remover convite:", rpcError);
-        setError(rpcError.message || "Não foi possível remover o convite.");
-        return;
-      }
+      await deleteBillingPlanInviteMutation.mutateAsync({ inviteId });
 
       setSuccess("Convite removido com sucesso.");
       await loadInvitesData();
@@ -661,6 +702,20 @@ export default function AdminBillingPage() {
 
             <button
               type="button"
+              onClick={() => setActiveTab("payments")}
+              className={[
+                "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
+                activeTab === "payments"
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+              ].join(" ")}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Pagamentos Mercado Pago
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab("plans")}
               className={[
                 "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
@@ -670,7 +725,7 @@ export default function AdminBillingPage() {
               ].join(" ")}
             >
               <Settings2 className="h-4 w-4" />
-              Planos e preços
+              Configuração de planos
             </button>
 
             <button
@@ -709,11 +764,13 @@ export default function AdminBillingPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {[
                   ["all", "Todas"],
+                  ["pending", `Pendentes (${subscriptionStats.pending})`],
                   ["manual_review", "Em análise"],
                   ["active", "Ativas"],
                   ["overdue", "Em atraso"],
                   ["expired", "Expiradas"],
                   ["canceled", "Canceladas"],
+                  ["reconciliation", `Reconciliação necessária (${subscriptionStats.reconciliation})`],
                 ].map(([value, label]) => (
                   <button
                     key={value}
@@ -780,6 +837,12 @@ export default function AdminBillingPage() {
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
                               {subscription.gateway}
                             </span>
+
+                            {subscription.gateway_reconciliation_status ? (
+                              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                                Reconciliação necessária
+                              </span>
+                            ) : null}
                           </div>
 
                           <h3 className="mt-3 text-lg font-black text-slate-900">
@@ -793,6 +856,16 @@ export default function AdminBillingPage() {
                           <p className="mt-2 text-xs text-slate-400">
                             Solicitada em {formatDate(subscription.created_at)}
                           </p>
+
+                          {subscription.gateway_reconciliation_status ? (
+                            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                              <p className="font-black uppercase tracking-wide">Reconciliação financeira</p>
+                              <p className="mt-1">Status: {subscription.gateway_reconciliation_status}</p>
+                              <p className="mt-1 break-all">Mercado Pago: {subscription.gateway_subscription_id || subscription.gateway_payment_id || "Sem ID"}</p>
+                              <p className="mt-1 line-clamp-2">Erro: {subscription.gateway_reconciliation_error || "Sem detalhe registrado"}</p>
+                              <p className="mt-1">Tentativas: {subscription.gateway_reconciliation_attempts ?? 0}</p>
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -818,6 +891,17 @@ export default function AdminBillingPage() {
                         </div>
 
                         <div className="flex flex-col gap-2 lg:w-52">
+                          {subscription.gateway_reconciliation_status ? (
+                            <Button
+                              variant="outline"
+                              onClick={() => reconcileSubscription(subscription)}
+                              disabled={isActionLoading}
+                              className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50"
+                            >
+                              {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                              Reconciliar gateway
+                            </Button>
+                          ) : null}
                           {isManualReview ? (
                             <Button
                               onClick={() =>
@@ -857,7 +941,7 @@ export default function AdminBillingPage() {
                             <Button
                               variant="outline"
                               onClick={() =>
-                                cancelSubscription(subscription.subscription_id)
+                                cancelSubscription(subscription)
                               }
                               disabled={isActionLoading}
                               className="gap-2 border-red-200 text-red-700 hover:bg-red-50"
@@ -878,6 +962,49 @@ export default function AdminBillingPage() {
               </div>
             )}
           </>
+        )}
+
+        {activeTab === "payments" && (
+          <Card className="overflow-hidden border-slate-200">
+            <div className="border-b border-slate-200 p-5">
+              <h2 className="text-lg font-black text-slate-900">Pagamentos registrados</h2>
+              <p className="mt-1 text-sm text-slate-500">A verificação consulta o Mercado Pago e nunca ativa uma assinatura manualmente.</p>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center gap-3 p-10 text-slate-600"><Loader2 className="h-5 w-5 animate-spin" />Carregando pagamentos...</div>
+            ) : payments.length === 0 ? (
+              <p className="p-10 text-center text-sm text-slate-500">Nenhum pagamento encontrado.</p>
+            ) : (
+              <div className="divide-y divide-slate-200">
+                {payments.map(payment => {
+                  const canReconcile = payment.gateway === "mercadopago"
+                    && (["pending", "failed"].includes(payment.status) || Boolean(payment.gateway_reconciliation_error));
+                  const isActionLoading = actionLoadingId === payment.id;
+                  return (
+                    <div key={payment.id} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={["rounded-full border px-3 py-1 text-xs font-bold", getStatusBadge(payment.status)].join(" ")}>{payment.status}</span>
+                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">{payment.payment_method}</span>
+                        </div>
+                        <p className="mt-3 font-bold text-slate-900">{formatPriceFromCents(payment.amount_cents)} {payment.currency}</p>
+                        <p className="mt-1 break-all text-xs text-slate-500">Pagamento local: {payment.id}</p>
+                        <p className="mt-1 break-all text-xs text-slate-500">Mercado Pago: {payment.gateway_payment_id || "ID não registrado"}</p>
+                        <p className="mt-1 text-xs text-slate-500">Criado em {formatDate(payment.created_at)} · Acesso {payment.access_applied_at ? "aplicado" : "não aplicado"}</p>
+                        {payment.gateway_reconciliation_error ? <p className="mt-2 text-xs text-red-700">Falha anterior: {payment.gateway_reconciliation_error}</p> : null}
+                      </div>
+                      {canReconcile ? (
+                        <Button variant="outline" onClick={() => reconcilePayment(payment)} disabled={isActionLoading || !payment.gateway_payment_id} className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50">
+                          {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                          Verificar pagamento no Mercado Pago
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
         )}
 
         {activeTab === "plans" && (
@@ -909,10 +1036,10 @@ export default function AdminBillingPage() {
               <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                 <p>
-                  Alterações de preço e limite entram na tela pública de planos
-                  assim que o banco atualizar. O limite conta assinaturas ativas
-                  e solicitações em análise, para evitar vender mais vagas do que
-                  você quer liberar.
+                  Alterações de preço valem somente para novos checkouts e não
+                  modificam cobranças ou pagamentos já criados. A elegibilidade
+                  do Plano Fundador é permanente, validada pelo servidor e não
+                  pode ser concedida por esta tela.
                 </p>
               </div>
             </Card>
@@ -967,6 +1094,17 @@ export default function AdminBillingPage() {
                             onChange={(event) =>
                               updatePlanForm(plan.id, { name: event.target.value })
                             }
+                            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Ordem de exibição</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={form.displayOrder}
+                            onChange={(event) => updatePlanForm(plan.id, { displayOrder: event.target.value })}
                             className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
                           />
                         </label>
@@ -1033,8 +1171,26 @@ export default function AdminBillingPage() {
                               })
                             }
                           />
+                          Plano ativo para novos checkouts
+                        </label>
+
+                        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={form.isPublic}
+                            onChange={(event) => updatePlanForm(plan.id, { isPublic: event.target.checked })}
+                          />
                           Mostrar plano na tela pública
                         </label>
+
+                        <div className={`rounded-2xl border p-4 text-sm ${plan.requires_legacy_founder_eligibility ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                          <p className="font-bold">Elegibilidade de fundador</p>
+                          <p className="mt-1 text-xs leading-5">
+                            {plan.requires_legacy_founder_eligibility
+                              ? "Obrigatória. Apenas usuários com permissão histórica permanente podem comprar este plano."
+                              : "Não exigida para este plano."}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
