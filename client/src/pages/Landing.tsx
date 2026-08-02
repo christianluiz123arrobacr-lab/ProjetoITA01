@@ -120,7 +120,7 @@ export default function Landing() {
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
-              O Rumo ao ITA reúne explicações didáticas, simuladores, banco de
+              O Projeto Vetor reúne explicações didáticas, simuladores, banco de
               questões e ferramentas de acompanhamento para alunos que desejam
               estudar com mais organização e profundidade. A proposta é oferecer
               um ambiente estruturado para preparação em vestibulares exigentes,
@@ -158,7 +158,7 @@ export default function Landing() {
             <div className="mb-6 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-200">
-                  Rumo ao ITA
+                  Projeto Vetor
                 </p>
 
                 <h2 className="mt-2 text-3xl font-black">
