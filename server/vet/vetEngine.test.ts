@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildVetEngineResult, normalizeVetText, type VetAttempt, type VetProfile } from "../../shared/vet/vetEngine";
 import { filterVetQuestionPool, matchesVetExam, matchesVetSubject, prioritizeVetCandidates } from "./vetQuestionSelection";
+import { isMissingVetSchemaError } from "./vetService";
 
 const profile: VetProfile = { target_exam: "AFA", months_until_exam: 3, hours_per_day: 3, focus_subject: "fisica" };
 const question = (id: string, topic: string, year: number, difficulty = "medio") => ({
@@ -154,5 +155,18 @@ describe("VET canônico", () => {
     const facade = readFileSync(new URL("../../client/src/lib/vetEngine.ts", import.meta.url), "utf8");
     expect(service).toContain('../../shared/vet/vetEngine.js');
     expect(facade).toContain('export * from "../../../shared/vet/vetEngine";');
+  });
+
+  it("trata rollout incompleto do schema VET sem derrubar o diagnóstico", () => {
+    expect(isMissingVetSchemaError({ code: "PGRST205" })).toBe(true);
+    expect(isMissingVetSchemaError({ code: "PGRST204" })).toBe(true);
+    expect(isMissingVetSchemaError({ code: "42P01" })).toBe(true);
+    expect(isMissingVetSchemaError({ code: "42703" })).toBe(true);
+    expect(isMissingVetSchemaError({ code: "42501" })).toBe(false);
+
+    const service = readFileSync(new URL("./vetService.ts", import.meta.url), "utf8");
+    expect(service).toContain("Compatibility with the historical attempts table");
+    expect(service).toContain("weightsResult.error ? []");
+    expect(service).toContain("collectiveResult.error ? []");
   });
 });
