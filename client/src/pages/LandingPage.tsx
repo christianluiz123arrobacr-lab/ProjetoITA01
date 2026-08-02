@@ -267,7 +267,7 @@ export default function LandingPage() {
                 <div className="flex items-center gap-3 mb-6">
                   <div className="text-4xl">⭐</div>
                   <h3 className="text-3xl font-bold">
-                    Banco de Questões Premium
+                    Banco de Questões
                   </h3>
                 </div>
 
