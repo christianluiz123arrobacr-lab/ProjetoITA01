@@ -66,7 +66,7 @@ function BlockRenderer({ block, index }: { block: ContentBlock; index: number })
       return <AlertBlockRenderer block={block} index={index} />;
     
     case 'divider':
-      return <DividerBlockRenderer block={block} index={index} />;
+      return <DividerBlockRenderer />;
     
     case 'interactive':
       // Placeholder para blocos interativos futuros

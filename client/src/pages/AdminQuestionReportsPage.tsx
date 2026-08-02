@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { supabase } from "@/lib/supabase";
-import { logAdminAction } from "@/lib/adminLogs";
+import { trpc } from "@/lib/trpc";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card } from "@/components/ui/card";
@@ -193,6 +192,8 @@ function getReporterName(profile?: ProfileRow) {
 }
 
 export default function AdminQuestionReportsPage() {
+  const trpcUtils = trpc.useUtils();
+  const updateQuestionReportMutation = trpc.admin.updateQuestionReport.useMutation();
   const [reports, setReports] = useState<QuestionReportRow[]>([]);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
@@ -212,71 +213,11 @@ export default function AdminQuestionReportsPage() {
       setError("");
       setSuccessMessage("");
 
-      const { data: reportsData, error: reportsError } = await supabase
-        .from("question_reports")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await trpcUtils.admin.listQuestionReports.fetch();
 
-      if (reportsError) {
-        console.error("Erro ao carregar reports:", reportsError);
-        setError("Não foi possível carregar os erros reportados.");
-        return;
-      }
-
-      const loadedReports = (reportsData as QuestionReportRow[]) ?? [];
-      setReports(loadedReports);
-
-      const questionIds = Array.from(
-        new Set(
-          loadedReports
-            .map((report) => report.question_id)
-            .filter(Boolean)
-        )
-      );
-
-      const userIds = Array.from(
-        new Set(
-          loadedReports
-            .map((report) => report.user_id)
-            .filter(Boolean) as string[]
-        )
-      );
-
-      if (questionIds.length > 0) {
-        const { data: questionsData, error: questionsError } = await supabase
-          .from("questoes")
-          .select(
-            "id, codigo, disciplina, diciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição, enunciado"
-          )
-          .in("id", questionIds);
-
-        if (questionsError) {
-          console.error("Erro ao carregar questões dos reports:", questionsError);
-          setError("Os reports foram carregados, mas não foi possível carregar as questões.");
-          return;
-        }
-
-        setQuestions((questionsData as QuestionRow[]) ?? []);
-      } else {
-        setQuestions([]);
-      }
-
-      if (userIds.length > 0) {
-        const { data: profilesData, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, nome, email")
-          .in("id", userIds);
-
-        if (profilesError) {
-          console.error("Erro ao carregar usuários dos reports:", profilesError);
-          setProfiles([]);
-          return;
-        }
-
-        setProfiles((profilesData as ProfileRow[]) ?? []);
-      } else {
-        setProfiles([]);
-      }
+      setReports((data.reports as QuestionReportRow[]) ?? []);
+      setQuestions((data.questions as QuestionRow[]) ?? []);
+      setProfiles((data.profiles as ProfileRow[]) ?? []);
     } catch (err) {
       console.error("Erro inesperado ao carregar reports:", err);
       setError("Ocorreu um erro inesperado ao carregar os erros reportados.");
@@ -375,47 +316,17 @@ export default function AdminQuestionReportsPage() {
       setError("");
       setSuccessMessage("");
 
-      const payload = {
-        ...updates,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error: updateError } = await supabase
-        .from("question_reports")
-        .update(payload)
-        .eq("id", report.id);
-
-      if (updateError) {
-        console.error("Erro ao atualizar report:", updateError);
-        setError("Não foi possível atualizar o erro reportado.");
-        return;
-      }
+      const updatedReport = await updateQuestionReportMutation.mutateAsync({
+        id: report.id,
+        status: updates.status as ReportStatus | undefined,
+        adminNote: updates.admin_note,
+      });
 
       setReports((prev) =>
         prev.map((item) =>
-          item.id === report.id
-            ? {
-                ...item,
-                ...updates,
-                updated_at: payload.updated_at,
-              }
-            : item
+          item.id === report.id ? (updatedReport as QuestionReportRow) : item
         )
       );
-
-      await logAdminAction({
-        action: "question_report_updated",
-        entityType: "question_report",
-        entityId: report.id,
-        description: `Report de erro atualizado para status ${updates.status || report.status}`,
-        level: "info",
-        metadata: {
-          reportId: report.id,
-          questionId: report.question_id,
-          status: updates.status || report.status,
-          adminNote: updates.admin_note ?? report.admin_note ?? null,
-        },
-      });
 
       setSuccessMessage("Erro reportado atualizado com sucesso.");
     } catch (err) {
