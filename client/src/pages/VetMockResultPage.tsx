@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { trpcClient } from "@/lib/trpcClient";
 import { Link } from "wouter";
 import type { ComponentType } from "react";
 import {
@@ -326,6 +327,23 @@ export default function VetMockResultPage() {
   const [result, setResult] = useState<VetMockResultPayload | null>(null);
 
   useEffect(() => {
+    const sessionId = new URLSearchParams(window.location.search).get("sessionId");
+    if (sessionId) {
+      void trpcClient.vet.getMockResult.query({ sessionId }).then((saved) => {
+        setResult({
+          mode: saved.mode as VetMockResultPayload["mode"],
+          targetExam: saved.target_exam,
+          focusSubject: saved.focus_subject,
+          totalQuestions: saved.total_questions,
+          totalAnswered: saved.total_answered,
+          score: saved.correct_answers,
+          accuracy: Number(saved.accuracy ?? 0),
+          wrongTopics: [], wrongDifficulties: [],
+          engineSummary: (saved.engine_snapshot as VetMockResultPayload["engineSummary"]) ?? undefined,
+        });
+      }).catch(error => { console.error("Erro ao carregar resultado persistido:", error); setResult(null); });
+      return;
+    }
     const raw = window.sessionStorage.getItem("vet_mock_result");
 
     if (!raw) {

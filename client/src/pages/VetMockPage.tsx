@@ -28,9 +28,10 @@ import {
   InteractiveQuiz,
   type QuizCompletionData,
 } from "@/components/InteractiveQuiz";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
+import { trpcClient } from "@/lib/trpcClient";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { getQuestions } from "@/services/questions.service";
+import { mapQuestao } from "@/services/questions.service";
 import type { Question } from "@/types/question";
 import {
   buildVetEngineResult,
@@ -384,6 +385,7 @@ function MockQuestionPreviewCard({ item }: { item: MockQuestionItem }) {
 
 export default function VetMockPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
   const [, setLocation] = useLocation();
 
   const [loading, setLoading] = useState(true);
@@ -394,6 +396,7 @@ export default function VetMockPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [attempts, setAttempts] = useState<VetAttempt[]>([]);
   const [mode, setMode] = useState<SimuladoMode>("misto");
+  const [mockSessionId, setMockSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadMock() {
@@ -406,20 +409,8 @@ export default function VetMockPage() {
       setError("");
 
       try {
-        const { data: profileData, error: profileError } = await supabase
-          .from("user_vet_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error(profileError);
-          setError("Não foi possível carregar seu objetivo do VET.");
-          setLoading(false);
-          return;
-        }
-
-        const currentProfile = (profileData as VetProfileRow | null) ?? null;
+        const analysis = await trpcUtils.vet.getAnalysis.fetch();
+        const currentProfile = (analysis?.profile as VetProfileRow | null) ?? null;
         setProfile(currentProfile);
 
         if (!currentProfile) {
@@ -428,83 +419,8 @@ export default function VetMockPage() {
           return;
         }
 
-        const [
-          attemptsResponse,
-          weightsResponse,
-          collectiveResponse,
-          loadedQuestions,
-        ] = await Promise.all([
-          supabase
-            .from("user_question_attempts")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("answered_at", { ascending: false }),
-
-          supabase
-            .from("vet_exam_content_weights")
-            .select("*")
-            .eq("exam", currentProfile.target_exam),
-
-          supabase
-            .from("vet_content_collective_stats")
-            .select("*")
-            .eq("exam", currentProfile.target_exam),
-
-          getQuestions(),
-        ]);
-
-        if (attemptsResponse.error) {
-          console.error(attemptsResponse.error);
-          setError("Não foi possível carregar suas tentativas.");
-          setLoading(false);
-          return;
-        }
-
-        if (weightsResponse.error) {
-          console.error(weightsResponse.error);
-          setError("Não foi possível carregar os pesos da prova.");
-          setLoading(false);
-          return;
-        }
-
-        if (collectiveResponse.error) {
-          console.error(collectiveResponse.error);
-          setError("Não foi possível carregar a média coletiva dos alunos.");
-          setLoading(false);
-          return;
-        }
-
-        const loadedAttempts = (attemptsResponse.data as VetAttempt[]) ?? [];
-        const loadedWeights = (weightsResponse.data as VetWeight[]) ?? [];
-
-        const loadedCollective =
-          ((collectiveResponse.data as VetCollectiveContentStat[]) ?? []).map(
-            (item) => ({
-              ...item,
-              total_attempts: Number(item.total_attempts ?? 0),
-              correct_attempts: Number(item.correct_attempts ?? 0),
-              wrong_attempts: Number(item.wrong_attempts ?? 0),
-              collective_accuracy: Number(item.collective_accuracy ?? 0),
-              avg_time_seconds:
-                item.avg_time_seconds === null ||
-                item.avg_time_seconds === undefined
-                  ? null
-                  : Number(item.avg_time_seconds),
-            })
-          );
-
-        const result = buildVetEngineResult({
-          profile: currentProfile,
-          attempts: loadedAttempts,
-          questions: loadedQuestions,
-          weights: loadedWeights,
-          collectiveStats: loadedCollective,
-          yearsBack: 5,
-        });
-
-        setAttempts(loadedAttempts);
-        setQuestions(loadedQuestions);
-        setEngine(result);
+        setAttempts([]);
+        setEngine(analysis as VetEngineResult);
       } catch (err) {
         console.error(err);
         setError("Ocorreu um erro inesperado ao carregar o Simulado VET.");
@@ -516,7 +432,24 @@ export default function VetMockPage() {
     if (!authLoading) {
       loadMock();
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, trpcUtils]);
+
+  useEffect(() => {
+    if (!profile || !engine) return;
+    let active = true;
+    void (async () => {
+      try {
+        const created = await trpcClient.vet.createMockSession.mutate({ mode });
+        const persisted = await trpcUtils.vet.getMockSession.fetch({ sessionId: created.id });
+        if (!active) return;
+        setMockSessionId(created.id);
+        setQuestions((persisted.items as any[]).map(item => mapQuestao(item.question)));
+      } catch (error) {
+        console.error("Erro ao persistir o Simulado VET:", error);
+      }
+    })();
+    return () => { active = false; };
+  }, [mode, profile?.id, engine?.generatedAt, trpcUtils]);
 
   const attemptedQuestionIds = useMemo(() => {
     return new Set(attempts.map((attempt) => attempt.question_id));
@@ -624,7 +557,7 @@ export default function VetMockPage() {
           ? "Simulado de manutenção"
           : "Simulado misto VET";
 
-  function handleSimuladoComplete(data: QuizCompletionData) {
+  async function handleSimuladoComplete(data: QuizCompletionData) {
     if (!profile) return;
 
     const payload = {
@@ -649,6 +582,11 @@ export default function VetMockPage() {
     };
 
     window.sessionStorage.setItem("vet_mock_result", JSON.stringify(payload));
+    if (mockSessionId) {
+      await trpcClient.vet.completeMockSession.mutate({ sessionId: mockSessionId });
+      setLocation(`/vet/simulado/resultado?sessionId=${mockSessionId}`);
+      return;
+    }
     setLocation("/vet/simulado/resultado");
   }
 
@@ -942,6 +880,7 @@ export default function VetMockPage() {
                       .map((question) => question.id)
                       .join("-")}`}
                     questions={currentQuestions}
+                    vetMockSessionId={mockSessionId}
                     onComplete={handleSimuladoComplete}
                   />
                 ) : (

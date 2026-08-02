@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import { MathFormula } from "./MathFormula";
 import { QuestionScratchpad } from "@/components/question-notes/QuestionScratchpad";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,8 +21,10 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Question } from "@/types/question";
-import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { trpc } from "@/lib/trpc";
+import { KATEX_RENDER_OPTIONS } from "@/lib/mathRendering";
+import { buildQuestionRichContent, groupRichQuestionContent, parseRichQuestionText, serializeRichQuestionText } from "@/lib/richQuestionContent";
 
 export type QuizCompletionData = {
   totalQuestions: number;
@@ -38,6 +39,7 @@ export type QuizCompletionData = {
 
 type InteractiveQuizProps = {
   questions: Question[];
+  vetMockSessionId?: string | null;
   onComplete?: (data: QuizCompletionData) => void;
   onQuestionAnswered?: (questionId: string, isCorrect: boolean) => void;
 };
@@ -133,27 +135,6 @@ function buildAnswerStatsFromRows(rows: AnswerStatsRow[]): AnswerStats {
   return { total, counts, percentages };
 }
 
-function buildAnswerStatsFromAttempts(
-  rows: { selected_option?: string | null }[]
-): AnswerStats {
-  const counts: Record<string, number> = {};
-
-  rows.forEach((row) => {
-    const optionId = normalizeOptionId(row.selected_option);
-    if (!optionId) return;
-    counts[optionId] = (counts[optionId] ?? 0) + 1;
-  });
-
-  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
-  const percentages: Record<string, number> = {};
-
-  Object.entries(counts).forEach(([optionId, count]) => {
-    percentages[optionId] = total > 0 ? Math.round((count / total) * 100) : 0;
-  });
-
-  return { total, counts, percentages };
-}
-
 function getDifficultyClasses(value?: string | null) {
   const normalized = (value || "").trim().toLowerCase();
 
@@ -217,7 +198,7 @@ function MarkdownContent({
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}
         components={{
           p: ({ children }) => <p className="mb-3 leading-relaxed">{children}</p>,
           strong: ({ children }) => (
@@ -230,7 +211,7 @@ function MarkdownContent({
           li: ({ children }) => <li className="mb-1">{children}</li>,
         }}
       >
-        {children}
+        {serializeRichQuestionText(parseRichQuestionText(children))}
       </ReactMarkdown>
     </div>
   );
@@ -238,13 +219,21 @@ function MarkdownContent({
 
 export function InteractiveQuiz({
   questions,
+  vetMockSessionId,
   onComplete,
   onQuestionAnswered,
 }: InteractiveQuizProps) {
   const { user } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
+  const recordAttemptMutation = trpc.quiz.recordAttempt.useMutation();
+  const createQuestionReportMutation = trpc.quiz.createQuestionReport.useMutation();
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answersByQuestion, setAnswersByQuestion] = useState<Record<number, string>>({});
+  const [answerResultsByQuestion, setAnswerResultsByQuestion] = useState<
+    Record<number, { isCorrect: boolean; correctOption: string }>
+  >({});
+  const [resolutionByQuestion, setResolutionByQuestion] = useState<Record<number, any[]>>({});
   const [showExplanationByQuestion, setShowExplanationByQuestion] =
     useState<Record<number, boolean>>({});
   const [questionStartedAt, setQuestionStartedAt] = useState<number>(Date.now());
@@ -265,11 +254,13 @@ export function InteractiveQuiz({
   const [reportError, setReportError] = useState("");
 
   const question = questions[currentQuestion] ?? null;
+  const questionContent = question ? groupRichQuestionContent(buildQuestionRichContent(question)) : [];
 
   const selectedAnswer = answersByQuestion[currentQuestion] ?? null;
   const answered = selectedAnswer !== null;
   const showExplanation = showExplanationByQuestion[currentQuestion] ?? false;
-  const isCorrect = question ? selectedAnswer === question.correctOptionId : false;
+  const currentAnswerResult = answerResultsByQuestion[currentQuestion];
+  const isCorrect = currentAnswerResult?.isCorrect ?? false;
   const resolutionAuthor = question
     ? resolutionAuthorsByQuestionId[question.id] ?? ""
     : "";
@@ -284,9 +275,9 @@ export function InteractiveQuiz({
 
   const score = useMemo(() => {
     return questions.reduce((total, q, index) => {
-      return answersByQuestion[index] === q.correctOptionId ? total + 1 : total;
+      return answerResultsByQuestion[index]?.isCorrect ? total + 1 : total;
     }, 0);
-  }, [answersByQuestion, questions]);
+  }, [answerResultsByQuestion, questions]);
 
   const totalAnswered = useMemo(() => {
     return Object.keys(answersByQuestion).length;
@@ -308,7 +299,7 @@ export function InteractiveQuiz({
 
     questions.forEach((q, index) => {
       const selected = answersByQuestion[index];
-      const correct = selected === q.correctOptionId;
+      const correct = answerResultsByQuestion[index]?.isCorrect === true;
 
       if (correct) {
         correctQuestionIds.push(q.id);
@@ -346,7 +337,7 @@ export function InteractiveQuiz({
         .map(([difficulty, count]) => ({ difficulty, count }))
         .sort((a, b) => b.count - a.count),
     };
-  }, [answersByQuestion, isQuizComplete, questions, score, totalAnswered]);
+  }, [answerResultsByQuestion, answersByQuestion, isQuizComplete, questions, score, totalAnswered]);
 
   useEffect(() => {
     if (!questions.length) {
@@ -386,15 +377,9 @@ export function InteractiveQuiz({
           return;
         }
 
-        const { data, error } = await supabase
-          .from("resolucoes_meta")
-          .select("questao_id, autor_nome")
-          .in("questao_id", uniqueQuestionIds);
-
-        if (error) {
-          console.error("Erro ao carregar autores das resoluções:", error);
-          return;
-        }
+        const data = await trpcUtils.quiz.getResolutionAuthors.fetch({
+          questionIds: uniqueQuestionIds,
+        });
 
         const authorMap: Record<string, string> = {};
 
@@ -411,7 +396,7 @@ export function InteractiveQuiz({
     }
 
     loadResolutionAuthors();
-  }, [questions]);
+  }, [questions, trpcUtils]);
 
   useEffect(() => {
     if (isQuizComplete && completionData && onComplete && !hasSentCompletion) {
@@ -433,40 +418,11 @@ export function InteractiveQuiz({
     setAnswerStatsLoadingQuestionId(questionId);
 
     try {
-      const rpcResponse = await supabase.rpc("get_question_option_stats", {
-        p_question_id: questionId,
-      });
-
-      if (!rpcResponse.error && Array.isArray(rpcResponse.data)) {
-        setAnswerStatsByQuestionId((prev) => ({
-          ...prev,
-          [questionId]: buildAnswerStatsFromRows(
-            rpcResponse.data as AnswerStatsRow[]
-          ),
-        }));
-        return;
-      }
-
-      if (rpcResponse.error) {
-        console.warn(
-          "RPC get_question_option_stats indisponível. Usando fallback direto.",
-          rpcResponse.error
-        );
-      }
-
-      const { data, error } = await supabase
-        .from("user_question_attempts")
-        .select("selected_option")
-        .eq("question_id", questionId);
-
-      if (error) {
-        console.error("Erro ao carregar estatísticas da questão:", error);
-        return;
-      }
+      const data = await trpcUtils.quiz.getQuestionOptionStats.fetch({ questionId });
 
       setAnswerStatsByQuestionId((prev) => ({
         ...prev,
-        [questionId]: buildAnswerStatsFromAttempts(data || []),
+        [questionId]: buildAnswerStatsFromRows(data as AnswerStatsRow[]),
       }));
     } catch (error) {
       console.error("Erro inesperado ao carregar estatísticas:", error);
@@ -478,7 +434,7 @@ export function InteractiveQuiz({
   };
 
   const saveAttempt = async (optionId: string) => {
-    if (!user?.id || !question) return;
+    if (!user?.id || !question) return null;
 
     try {
       const elapsedSeconds = Math.max(
@@ -486,63 +442,32 @@ export function InteractiveQuiz({
         Math.round((Date.now() - questionStartedAt) / 1000)
       );
 
-      const { count, error: countError } = await supabase
-        .from("user_question_attempts")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("question_id", question.id);
-
-      if (countError) {
-        console.error("Erro ao contar tentativas:", countError);
-        return;
-      }
-
-      const attemptNumber = (count ?? 0) + 1;
-      const correct = optionId === question.correctOptionId;
-
-      const { error: insertError } = await supabase
-        .from("user_question_attempts")
-        .insert({
-          user_id: user.id,
-          question_id: question.id,
-          selected_option: optionId,
-          is_correct: correct,
-          time_spent_seconds: elapsedSeconds,
-          attempt_number: attemptNumber,
-          subject: question.subject,
-          conteudo: getQuestionTopics(question)[0] ?? null,
-          assunto: getQuestionSubtopics(question)[0] ?? null,
-          banca: question.exam,
-          ano: question.year,
-          difficulty: question.difficulty,
-        });
-
-      if (insertError) {
-        console.error("Erro ao salvar tentativa:", insertError);
-      }
+      return await recordAttemptMutation.mutateAsync({
+        questionId: question.id,
+        selectedOption: optionId as "a" | "b" | "c" | "d" | "e",
+        timeSpentSeconds: elapsedSeconds,
+        vetMockSessionId: vetMockSessionId ?? null,
+      });
     } catch (error) {
       console.error("Erro inesperado ao salvar tentativa:", error);
+      return null;
     }
   };
 
   const handleAnswer = async (optionId: string) => {
     if (answered || !question) return;
 
-    setAnswersByQuestion((prev) => ({
+    const result = await saveAttempt(optionId);
+    if (!result) return;
+    setAnswersByQuestion((prev) => ({ ...prev, [currentQuestion]: optionId }));
+    setAnswerResultsByQuestion((prev) => ({
       ...prev,
-      [currentQuestion]: optionId,
+      [currentQuestion]: { isCorrect: result.isCorrect, correctOption: result.correctOption },
     }));
-
-    setShowExplanationByQuestion((prev) => ({
-      ...prev,
-      [currentQuestion]: true,
-    }));
-
-    const correct = optionId === question.correctOptionId;
-
-    await saveAttempt(optionId);
+    setResolutionByQuestion(prev => ({ ...prev, [currentQuestion]: Array.isArray(result.resolution) ? result.resolution : [] }));
+    setShowExplanationByQuestion((prev) => ({ ...prev, [currentQuestion]: true }));
     await loadAnswerStats(question.id);
-    onQuestionAnswered?.(question.id, correct);
+    onQuestionAnswered?.(question.id, result.isCorrect);
   };
 
   const handleSubmitReport = async () => {
@@ -564,32 +489,29 @@ export function InteractiveQuiz({
     try {
       setReportSending(true);
 
-      const { error } = await supabase.from("question_reports").insert({
-        question_id: question.id,
-        user_id: user.id,
-        report_type: reportType,
+      await createQuestionReportMutation.mutateAsync({
+        questionId: question.id,
+        reportType: reportType as
+          | "enunciado"
+          | "alternativa"
+          | "gabarito"
+          | "resolucao"
+          | "imagem"
+          | "latex"
+          | "outro",
         comment: reportComment.trim() || null,
-        status: "pendente",
       });
-
-      if (error) {
-        console.error("Erro ao enviar report:", error);
-
-        setReportError(
-          error.message
-            ? `Não foi possível enviar o report: ${error.message}`
-            : "Não foi possível enviar o report."
-        );
-
-        return;
-      }
 
       setReportSuccess("Erro reportado com sucesso. Obrigado pelo aviso.");
       setReportComment("");
       setReportType("enunciado");
     } catch (error) {
       console.error("Erro inesperado ao enviar report:", error);
-      setReportError("Ocorreu um erro inesperado ao enviar o report.");
+      setReportError(
+        error instanceof Error && error.message
+          ? error.message
+          : "Ocorreu um erro inesperado ao enviar o report."
+      );
     } finally {
       setReportSending(false);
     }
@@ -732,35 +654,15 @@ export function InteractiveQuiz({
             <p className="font-bold text-slate-900">Enunciado</p>
           </div>
 
-          <MarkdownContent large>{question.statement}</MarkdownContent>
-
-          {question.imageUrl ? (
-            <div className="mt-5">
-              <img
-                src={question.imageUrl}
-                alt="Imagem da questão"
-                className="max-w-full rounded-2xl border border-slate-200 bg-white"
-              />
+          {questionContent.map((group, index) => group.type === "image" ? (
+            <div className="mt-5" key={`statement-image-${index}`}>
+              <img src={group.url} alt="Imagem da questão" className="max-w-full rounded-2xl border border-slate-200 bg-white" />
             </div>
-          ) : null}
-
-          {question.statementAfterImage ? (
-            <div className="mt-5">
-              <MarkdownContent large>{question.statementAfterImage}</MarkdownContent>
+          ) : (
+            <div className={index ? "mt-5" : ""} key={`statement-content-${index}`}>
+              <MarkdownContent large>{serializeRichQuestionText(group.nodes)}</MarkdownContent>
             </div>
-          ) : null}
-
-          {question.formula ? (
-            <div className="mt-5 p-4 bg-white rounded-2xl border border-slate-200">
-              <p className="text-xs font-semibold text-slate-500 mb-2">
-                Fórmula útil
-              </p>
-              <MathFormula
-                formula={question.formula.replace(/^\$\$?|\$\$?$/g, "").trim()}
-                display={true}
-              />
-            </div>
-          ) : null}
+          ))}
         </div>
 
         <QuestionScratchpad
@@ -772,7 +674,7 @@ export function InteractiveQuiz({
         <div className="space-y-3 mb-6">
           {question.options.map((option) => {
             const isSelected = selectedAnswer === option.id;
-            const isCorrectOption = option.id === question.correctOptionId;
+            const isCorrectOption = option.id === currentAnswerResult?.correctOption;
             const optionCount = currentAnswerStats?.counts[option.id] ?? 0;
             const optionPercentage =
               currentAnswerStats?.percentages[option.id] ?? 0;
@@ -927,9 +829,9 @@ export function InteractiveQuiz({
                 <p className="font-bold text-slate-900">Resolução</p>
               </div>
 
-              {question.explanationBlocks && question.explanationBlocks.length > 0 ? (
+              {(resolutionByQuestion[currentQuestion]?.length || question.explanationBlocks?.length) ? (
                 <div className="space-y-4">
-                  {question.explanationBlocks
+                  {(resolutionByQuestion[currentQuestion]?.map(block => ({ type: block.tipo, content: block.texto, imageUrl: block.url_imagem, order: block.ordem ?? 0 })) ?? question.explanationBlocks ?? [])
                     .sort((a, b) => a.order - b.order)
                     .map((block, index) => {
                       if (block.type === "imagem" && block.imageUrl) {

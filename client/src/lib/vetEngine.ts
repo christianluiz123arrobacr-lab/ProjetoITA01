@@ -68,6 +68,7 @@ export type VetHistoricalMetric = {
   historicalScore: number;
   lastYearAppeared?: number;
   yearlyCounts: Record<number, number>;
+  confidence: "low" | "medium" | "high";
 };
 
 export type VetPersonalMetric = {
@@ -114,6 +115,21 @@ export type VetStrategicContent = {
   noAttemptPenalty: number;
 
   explanation: string[];
+  hasAdministrativeWeight: boolean;
+  scoreBreakdown: {
+    historicalImportance: number;
+    administrativeWeight: number;
+    weakness: number;
+    wrongVolume: number;
+    recentErrors: number;
+    recurringErrors: number;
+    noPractice: number;
+    urgency: number;
+    collectiveGap: number;
+    timeSignal: number;
+    confidenceAdjustment: number;
+    finalScore: number;
+  };
 };
 
 export type VetEngineResult = {
@@ -141,14 +157,31 @@ export type VetEngineResult = {
   repeatedWrongQuestionCount: number;
   neverCorrectQuestionCount: number;
   reviewContents: VetStrategicContent[];
+  engineVersion: string;
+  generatedAt: string;
+  diagnosticConfidence: {
+    level: "initial" | "forming" | "intermediate" | "reliable";
+    score: number;
+    totalAttempts: number;
+    distinctContents: number;
+    reason: string;
+  };
 };
 
 export function normalizeVetText(value?: string | number | null) {
-  return String(value ?? "")
+  const normalized = String(value ?? "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+  const aliases: Record<string, string> = {
+    "academia da forca aerea": "afa", "colegio naval": "cn",
+    "epcar": "epcar", "escola preparatoria de cadetes do ar": "epcar",
+    "espcex": "espcex", "escola preparatoria de cadetes do exercito": "espcex",
+    "funcao do segundo grau": "funcao quadratica",
+  };
+  return aliases[normalized] ?? normalized;
 }
 
 export function prettifyVetText(value?: string | null) {
@@ -260,7 +293,7 @@ function getWeightForContent(
     return sameExam && sameSubject && sameContent;
   });
 
-  return found?.weight ?? 3;
+  return { weight: found?.weight ?? 3, configured: Boolean(found) };
 }
 
 function getUrgencyTimeScore(monthsUntilExam: number) {
@@ -573,7 +606,7 @@ export function buildHistoricalMetrics(params: {
     new Set(recentQuestions.map((question) => question.year).filter(Boolean))
   ).sort((a, b) => b - a);
 
-  const totalYearsAnalyzed = Math.max(years.length, 1);
+  const totalYearsAnalyzed = yearsBack;
 
   const map = new Map<
     string,
@@ -644,7 +677,9 @@ export function buildHistoricalMetrics(params: {
       );
 
       const trendScore =
-        newestCount > oldestCount
+        years.length <= 1
+          ? 5
+          : newestCount > oldestCount
           ? 10
           : newestCount === oldestCount
             ? 5
@@ -679,6 +714,7 @@ export function buildHistoricalMetrics(params: {
         historicalScore,
         lastYearAppeared,
         yearlyCounts: item.yearlyCounts,
+        confidence: years.length >= 4 ? "high" as const : years.length >= 2 ? "medium" as const : "low" as const,
       };
     })
     .sort((a, b) => b.historicalScore - a.historicalScore);
@@ -801,9 +837,10 @@ function createStrategicExplanation(content: VetStrategicContent) {
     }
   }
 
-  explanations.push(
-    `Peso manual para sua prova: ${content.weight}. Tempo até a prova: esse fator adicionou ${content.urgencyTimeScore} ponto(s) de urgência.`
-  );
+  explanations.push(content.hasAdministrativeWeight
+    ? `Peso editorial configurado para sua prova: ${content.weight}.`
+    : `Peso padrão aplicado: ${content.weight}; não há ajuste editorial específico para este conteúdo.`);
+  explanations.push(`A urgência pelo tempo até a prova contribuiu com ${content.scoreBreakdown.urgency.toFixed(1)} ponto(s) no score.`);
 
   return explanations;
 }
@@ -936,9 +973,14 @@ export function buildVetEngineResult(params: {
         conteudo
       );
 
-      const weight = getWeightForContent(weights, profile, subject, conteudo);
+      const weightResult = getWeightForContent(weights, profile, subject, conteudo);
+      const weight = Math.max(0, Math.min(10, Number(weightResult.weight)));
 
-      const weaknessScore = getWeaknessScore(personal.accuracy, personal.hasData);
+      // Beta(2,2) smoothing prevents 1/1 and 0/1 from becoming definitive mastery/failure.
+      const smoothedAccuracy = personal.hasData
+        ? ((personal.correct + 2) / (personal.total + 4)) * 100
+        : 0;
+      const weaknessScore = getWeaknessScore(smoothedAccuracy, personal.hasData);
       const wrongVolumeScore = getWrongVolumeScore(personal.wrong);
       const historicalImportanceScore = historical?.historicalScore ?? 0;
       const collectiveGapScore = getCollectiveGapScore(
@@ -962,16 +1004,29 @@ export function buildVetEngineResult(params: {
         historicalImportanceScore
       );
 
-      const priorityScore =
-        weight * 2.1 +
-        historicalImportanceScore * 2.2 +
-        weaknessScore * 2.0 +
-        wrongVolumeScore * 1.3 +
-        recentErrorScore * 1.6 +
-        recurringErrorScore * 1.8 +
-        urgencyTimeScore * 1.2 +
-        collectiveGapScore * 1.4 +
-        noAttemptPenalty;
+      const sampleConfidence = Math.min(1, personal.total / 12);
+      const confidenceAdjustment = personal.hasData ? (sampleConfidence - 1) * weaknessScore * 0.8 : 0;
+      const timeSignal = personal.total >= 5 && collective?.avg_time_seconds && personal.avgTimeSeconds > collective.avg_time_seconds * 1.25
+        ? Math.min(6, ((personal.avgTimeSeconds / collective.avg_time_seconds) - 1) * 8)
+        : 0;
+      const scoreBreakdown = {
+        historicalImportance: historicalImportanceScore * 2.2,
+        administrativeWeight: weightResult.configured ? weight * 1.2 : 0,
+        weakness: weaknessScore * 2.0,
+        wrongVolume: wrongVolumeScore * 1.1,
+        recentErrors: recentErrorScore * 1.4,
+        recurringErrors: recurringErrorScore * 1.5,
+        noPractice: noAttemptPenalty,
+        urgency: urgencyTimeScore,
+        collectiveGap: collectiveGapScore * 1.1,
+        timeSignal,
+        confidenceAdjustment,
+        finalScore: 0,
+      };
+      const priorityScore = Math.max(0, Math.min(100, Object.entries(scoreBreakdown)
+        .filter(([key]) => key !== "finalScore")
+        .reduce((sum, [, value]) => sum + value, 0)));
+      scoreBreakdown.finalScore = priorityScore;
 
       const block = classifyTrainingBlock(priorityScore, personal);
 
@@ -993,6 +1048,8 @@ export function buildVetEngineResult(params: {
         recurringErrorScore,
         noAttemptPenalty,
         explanation: [],
+        hasAdministrativeWeight: weightResult.configured,
+        scoreBreakdown,
       };
 
       content.explanation = createStrategicExplanation(content);
@@ -1029,6 +1086,9 @@ export function buildVetEngineResult(params: {
         b.priorityScore - a.priorityScore
     );
 
+  const distinctContents = strategicContents.filter((content) => content.personal.hasData).length;
+  const confidenceLevel = totalAttempts < 5 ? "initial" : totalAttempts < 30 ? "forming" : totalAttempts < 100 || distinctContents < 5 ? "intermediate" : "reliable";
+  const confidenceScore = Math.min(100, Math.round(Math.min(1, totalAttempts / 100) * 75 + Math.min(1, distinctContents / 10) * 25));
   return {
     profile,
     totalAttempts,
@@ -1058,5 +1118,14 @@ export function buildVetEngineResult(params: {
     repeatedWrongQuestionCount,
     neverCorrectQuestionCount,
     reviewContents,
+    engineVersion: "vet-2.0",
+    generatedAt: new Date().toISOString(),
+    diagnosticConfidence: {
+      level: confidenceLevel,
+      score: confidenceScore,
+      totalAttempts,
+      distinctContents,
+      reason: totalAttempts < 5 ? "Poucas tentativas; recomendações iniciais dependem mais do histórico da prova." : `${totalAttempts} tentativas distribuídas em ${distinctContents} conteúdo(s).`,
+    },
   };
 }
