@@ -18,6 +18,8 @@ export type QuestionSubtopicsByTopic = {
   subtopics: string[];
 };
 
+export type QuestionSubject = "fisica" | "matematica" | "quimica" | string;
+
 export type QuestionDifficulty =
   | "facil"
   | "medio"
