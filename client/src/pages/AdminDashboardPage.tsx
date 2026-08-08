@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import {
   Users,
   FileText,
@@ -168,124 +168,23 @@ export default function AdminDashboardPage() {
   const [latestQuestionsWithoutResolution, setLatestQuestionsWithoutResolution] =
     useState<QuestionWithoutResolution[]>([]);
 
+  const trpcUtils = trpc.useUtils();
+
   useEffect(() => {
     async function loadDashboard() {
       try {
         setLoading(true);
         setError("");
 
-        const [
-          usersCountResult,
-          adminsCountResult,
-          questionsCountResult,
-          unpublishedQuestionsCountResult,
-          resolutionsCountResult,
-          resolutionImagesResult,
-          latestQuestionsResult,
-          latestResolutionsResult,
-          latestUsersResult,
-          questionsWithoutResolutionRaw,
-          latestQuestionsWithoutResolutionRaw,
-        ] = await Promise.all([
-          supabase.from("profiles").select("*", { count: "exact", head: true }),
+        const dashboard = await trpcUtils.admin.getDashboardStats.fetch();
 
-          supabase.from("admin_users").select("*", { count: "exact", head: true }),
-
-          supabase.from("questoes").select("*", { count: "exact", head: true }),
-
-          supabase
-            .from("questoes")
-            .select("*", { count: "exact", head: true })
-            .eq("publicada", false),
-
-          supabase.from("resolucoes").select("*", { count: "exact", head: true }),
-
-          supabase
-            .from("resolucoes")
-            .select("*", { count: "exact", head: true })
-            .not("url_imagem", "is", null),
-
-          supabase
-            .from("questoes")
-            .select("id, codigo, enunciado, banca, ano, created_at, publicada")
-            .order("created_at", { ascending: false })
-            .limit(5),
-
-          supabase
-            .from("resolucoes")
-            .select("id, questao_id, tipo, ordem, codigo_resolucao, created_at")
-            .order("created_at", { ascending: false })
-            .limit(5),
-
-          supabase
-            .from("profiles")
-            .select("id, nome, email, role, ativo, created_at")
-            .order("created_at", { ascending: false })
-            .limit(5),
-
-          supabase.from("questoes").select("id"),
-
-          supabase
-            .from("questoes")
-            .select("id, codigo, enunciado, banca, ano, created_at")
-            .order("created_at", { ascending: false }),
-        ]);
-
-        const possibleError =
-          usersCountResult.error ||
-          adminsCountResult.error ||
-          questionsCountResult.error ||
-          unpublishedQuestionsCountResult.error ||
-          resolutionsCountResult.error ||
-          resolutionImagesResult.error ||
-          latestQuestionsResult.error ||
-          latestResolutionsResult.error ||
-          latestUsersResult.error ||
-          questionsWithoutResolutionRaw.error ||
-          latestQuestionsWithoutResolutionRaw.error;
-
-        if (possibleError) {
-          console.error("Erro ao carregar dashboard ADM:", possibleError);
-          setError("Não foi possível carregar os dados reais do dashboard.");
-          return;
-        }
-
-        const { data: allResolutionQuestionIdsData, error: allResolutionIdsError } =
-          await supabase.from("resolucoes").select("questao_id");
-
-        if (allResolutionIdsError) {
-          console.error("Erro ao carregar questao_id das resoluções:", allResolutionIdsError);
-          setError("Não foi possível calcular as questões sem resolução.");
-          return;
-        }
-
-        const resolutionQuestionIds = new Set(
-          ((allResolutionQuestionIdsData as Array<{ questao_id: string }> | null) || [])
-            .map((item) => item.questao_id)
-            .filter(Boolean)
+        setStats(dashboard.stats);
+        setLatestQuestions(dashboard.latestQuestions as LatestQuestion[]);
+        setLatestResolutions(dashboard.latestResolutions as LatestResolution[]);
+        setLatestUsers(dashboard.latestUsers as LatestUser[]);
+        setLatestQuestionsWithoutResolution(
+          dashboard.latestQuestionsWithoutResolution as QuestionWithoutResolution[]
         );
-
-        const allQuestions =
-          (latestQuestionsWithoutResolutionRaw.data as QuestionWithoutResolution[]) || [];
-
-        const questionsWithoutResolution = allQuestions.filter(
-          (question) => !resolutionQuestionIds.has(question.id)
-        );
-
-        setStats({
-          totalUsers: usersCountResult.count ?? 0,
-          totalAdmins: adminsCountResult.count ?? 0,
-          totalQuestions: questionsCountResult.count ?? 0,
-          totalQuestionsWithoutResolution: questionsWithoutResolution.length,
-          totalUnpublishedQuestions: unpublishedQuestionsCountResult.count ?? 0,
-          totalResolutions: resolutionsCountResult.count ?? 0,
-          totalResolutionImages: resolutionImagesResult.count ?? 0,
-        });
-
-        setLatestQuestions((latestQuestionsResult.data as LatestQuestion[]) ?? []);
-        setLatestResolutions((latestResolutionsResult.data as LatestResolution[]) ?? []);
-        setLatestUsers((latestUsersResult.data as LatestUser[]) ?? []);
-        setLatestQuestionsWithoutResolution(questionsWithoutResolution.slice(0, 5));
       } catch (err) {
         console.error("Erro inesperado no dashboard ADM:", err);
         setError("Ocorreu um erro inesperado ao carregar o dashboard.");
@@ -295,7 +194,7 @@ export default function AdminDashboardPage() {
     }
 
     loadDashboard();
-  }, []);
+  }, [trpcUtils]);
 
   return (
     <AdminGuard>

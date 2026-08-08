@@ -1643,7 +1643,7 @@ export default function CinematicaTopicVelocidade() {
 
       <footer className="bg-slate-900 text-white py-12 mt-12">
         <div className="container text-center">
-          <p className="text-slate-400 mb-4">Projeto ITA - Do Zero a Aprovação</p>
+          <p className="text-slate-400 mb-4">Projeto Vetor</p>
           <div className="flex justify-center gap-6">
             <Link href="/cinematica/topic/bases" className="text-blue-400 hover:text-blue-300 transition-colors">Bases da Cinemática</Link>
             <span className="text-slate-700">|</span>

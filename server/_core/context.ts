@@ -4,7 +4,7 @@ import { supabaseAdmin } from "./supabaseAdmin.js";
 export type AuthUser = {
   id: string;
   email: string | null;
-  role: "admin" | "student";
+  role: "admin" | "editor" | "student";
 };
 
 export type CreateContextOptions = {
@@ -37,20 +37,39 @@ export async function createContext(
       if (!error && data.user) {
         const email = data.user.email ?? null;
 
-        const { data: profile, error: profileError } = await supabaseAdmin
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .maybeSingle();
+        const [{ data: adminUser, error: adminUserError }, { data: profile, error: profileError }] =
+          await Promise.all([
+            supabaseAdmin
+              .from("admin_users")
+              .select("role")
+              .eq("user_id", data.user.id)
+              .maybeSingle(),
+            supabaseAdmin
+              .from("profiles")
+              .select("role")
+              .eq("id", data.user.id)
+              .maybeSingle(),
+          ]);
+
+        if (adminUserError) {
+          console.error("[createContext] erro ao buscar admin_user:", adminUserError);
+        }
 
         if (profileError) {
           console.error("[createContext] erro ao buscar profile:", profileError);
         }
 
+        const resolvedRole =
+          adminUser?.role === "admin" || adminUser?.role === "editor"
+            ? adminUser.role
+            : profile?.role === "admin"
+              ? "admin"
+              : "student";
+
         user = {
           id: data.user.id,
           email,
-          role: profile?.role === "admin" ? "admin" : "student",
+          role: resolvedRole,
         };
       }
     }
