@@ -14,7 +14,7 @@ export default function FisicaSelector() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900">Física Educacional</h1>
-              <p className="text-xs text-slate-600">Projeto ITA - Do Zero a Aprovação</p>
+              <p className="text-xs text-slate-600">Projeto Vetor</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -261,7 +261,7 @@ export default function FisicaSelector() {
       {/* Footer */}
       <footer className="bg-slate-900 text-slate-400 py-8 border-t border-slate-800 mt-20">
         <div className="container mx-auto px-4 text-center">
-          <p>© 2026 Projeto ITA - Do Zero a Aprovação. Todos os direitos reservados.</p>
+          <p>© 2026 Projeto Vetor. Todos os direitos reservados.</p>
         </div>
       </footer>
     </div>
