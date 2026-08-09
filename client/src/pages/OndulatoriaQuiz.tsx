@@ -139,7 +139,7 @@ export default function OndulatoriaQuiz() {
     // Footer
     ctx.fillStyle = "#64748b";
     ctx.font = "16px Arial";
-    ctx.fillText("Projeto ITA - Do Zero a Aprovação", width / 2, 700);
+    ctx.fillText("Projeto Vetor", width / 2, 700);
     ctx.fillText(new Date().toLocaleDateString("pt-BR"), width / 2, 750);
 
     // Download
@@ -151,7 +151,7 @@ export default function OndulatoriaQuiz() {
 
   const handleShare = () => {
     const percentage = Math.round((score / quizQuestions.length) * 100);
-    window.open(`https://wa.me/?text=Consegui ${percentage}% de acerto no Quiz de Ondulatória do Projeto ITA!`, "_blank");
+    window.open(`https://wa.me/?text=Consegui ${percentage}% de acerto no Quiz de Ondulatória do Projeto Vetor!`, "_blank");
   };
 
   const resetQuiz = () => {
