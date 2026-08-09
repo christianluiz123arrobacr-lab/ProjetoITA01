@@ -110,6 +110,7 @@ const initialForm: QuestionFormData = {
   alternativa_e_imagem: "",
 
   alternativa_correta: "",
+};
 const STORAGE_BUCKET = "resolucoes-imagens";
 const AUTORES_RESOLUCAO = ["Christian", "Maurício"];
 const RESOLUTION_IMPORT_STORAGE_PREFIX = "pending-resolution-import:";
