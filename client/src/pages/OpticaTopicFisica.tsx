@@ -563,7 +563,6 @@ const theorySections: TheorySection[] = [
       "A maior armadilha é usar uma fórmula parecida no fenômeno errado. d senθ = mλ pode aparecer em Young e em rede de difração como máximo. Já a senθ = mλ na fenda única representa mínimo. O símbolo parecido não perdoa falta de interpretação.",
       "O método seguro é identificar o fenômeno antes da fórmula: há duas fendas? uma fenda? muitas fendas? abertura circular? polarizadores? Só depois escolha a relação matemática.",
     ],
-    numbered: undefined,
     bullets: [
       "Interferência: superposição de ondas coerentes.",
       "Difração: espalhamento por abertura ou obstáculo.",
@@ -571,7 +570,7 @@ const theorySections: TheorySection[] = [
       "Polarização: direção de oscilação do campo elétrico.",
       "Malus: intensidade transmitida por analisador.",
     ],
-  },,
+  },
 
   {
     id: 14,
@@ -731,7 +730,7 @@ const examples: ExampleItem[] = [
       "A intensidade transmitida é I0/4.",
     test:
       "A questão queria testar a aplicação direta de Malus. Se a luz fosse natural antes do primeiro polarizador, haveria o fator I0/2 antes.",
-  },,
+  },
 
   {
     title: "Luz natural atravessando dois polarizadores",

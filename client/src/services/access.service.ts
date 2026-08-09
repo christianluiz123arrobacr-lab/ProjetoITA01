@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { trpcClient } from "@/lib/trpcClient";
 
 export type PlatformAccessStatus = "allowed" | "blocked" | "unauthenticated";
 
@@ -12,6 +12,21 @@ const ACCESS_CACHE_VERSION = "v1";
 const ACCESS_CACHE_PREFIX = `${ACCESS_CACHE_VERSION}:platform-access`;
 const ALLOWED_CACHE_TTL_MS = 5 * 60 * 1000;
 const BLOCKED_CACHE_TTL_MS = 25 * 1000;
+
+export const ACCESS_STILL_PROCESSING_MESSAGE =
+  "O pagamento ou a assinatura aparece como confirmado, mas a liberação de acesso ainda está sendo processada. Atualize o status em alguns instantes.";
+
+export function getPendingAccessMessage(
+  localSubscriptionStatus: string | null | undefined,
+  canonicalAccessStatus: PlatformAccessStatus
+) {
+  const localSubscriptionLooksActive =
+    localSubscriptionStatus === "active" || localSubscriptionStatus === "trialing";
+
+  return canonicalAccessStatus === "blocked" && localSubscriptionLooksActive
+    ? ACCESS_STILL_PROCESSING_MESSAGE
+    : "";
+}
 
 function getAccessCacheKey(userId: string) {
   return `${ACCESS_CACHE_PREFIX}:${userId}`;
@@ -90,87 +105,31 @@ export async function checkPlatformAccess(
     }
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role, ativo")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (profileError) {
-    console.warn("Erro ao buscar perfil:", profileError);
-  }
-
-  if (profile?.role === "admin") {
-    const result: PlatformAccessResult = {
-      status: "allowed",
-      reason: "admin",
-    };
-
-    setCachedPlatformAccess(userId, result);
-    return result;
-  }
-
-  if (profile?.ativo === false) {
-    const result: PlatformAccessResult = {
-      status: "blocked",
-      reason: "profile_inactive",
-    };
-
-    setCachedPlatformAccess(userId, result);
-    return result;
-  }
-
-  const { data: hasActiveSubscription, error: rpcError } = await supabase.rpc(
-    "user_has_active_subscription",
-    {
-      target_user_id: userId,
-    }
-  );
-
-  if (!rpcError && typeof hasActiveSubscription === "boolean") {
-    const result: PlatformAccessResult = {
-      status: hasActiveSubscription ? "allowed" : "blocked",
-      reason: "rpc",
-    };
-
-    setCachedPlatformAccess(userId, result);
-    return result;
-  }
-
-  console.warn(
-    "RPC user_has_active_subscription falhou. Usando fallback em billing_subscriptions:",
-    rpcError
-  );
-
-  const now = new Date().toISOString();
-
-  const { data: subscription, error: subscriptionError } = await supabase
-    .from("billing_subscriptions")
-    .select("id")
-    .eq("user_id", userId)
-    .in("status", ["active", "trialing"])
-    .or(`current_period_end.is.null,current_period_end.gte.${now}`)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (subscriptionError) {
-    console.error("Erro ao verificar assinatura:", subscriptionError);
-
-    const result: PlatformAccessResult = {
-      status: "blocked",
-      reason: "subscription_error",
-    };
-
-    setCachedPlatformAccess(userId, result);
-    return result;
-  }
-
+  const access = await trpcClient.auth.getAccessStatus.query();
+  const accessDetails = access as {
+    accessState: PlatformAccessStatus;
+    blockReason?: string | null;
+    source?: string | null;
+    role?: string | null;
+  };
   const result: PlatformAccessResult = {
-    status: subscription ? "allowed" : "blocked",
-    reason: "fallback",
+    status: accessDetails.accessState,
+    reason: accessDetails.blockReason ?? accessDetails.source ?? accessDetails.role ?? undefined,
   };
 
   setCachedPlatformAccess(userId, result);
   return result;
+}
+
+export async function redirectToPlatformIfAccessAllowed(
+  userId: string,
+  replace: (path: string) => void = path => window.location.replace(path)
+): Promise<boolean> {
+  clearCachedPlatformAccess(userId);
+
+  const access = await checkPlatformAccess(userId, { forceRefresh: true });
+  if (access.status !== "allowed") return false;
+
+  replace("/plataforma");
+  return true;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
@@ -19,12 +19,17 @@ import {
 import PublicHeader from "@/components/layout/PublicHeader";
 import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { getBillingCapabilities, getMyLatestSubscriptionRequest, getMyPayments, syncMyMercadoPagoPaymentStatus } from "@/services/billing.service";
+import {
+  getPendingAccessMessage,
+  redirectToPlatformIfAccessAllowed,
+} from "@/services/access.service";
 
 const MANUAL_PIX = {
   key: "66997227099",
   displayKey: "(66) 99722-7099",
   whatsapp: "5566997227099",
-  receiver: "Rumo ao ITA",
+  receiver: "Projeto Vetor",
 };
 
 type LatestSubscription = {
@@ -111,26 +116,38 @@ function shouldShowPix(subscription?: LatestSubscription | null) {
 
 export default function SubscriptionPendingPage() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
+  const { user, isAuthenticated, loading: authLoading } = useSupabaseAuth();
   const [subscription, setSubscription] = useState<LatestSubscription | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [accessCheckError, setAccessCheckError] = useState("");
+  const [accessProcessingMessage, setAccessProcessingMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
+  const [manualPixEnabled, setManualPixEnabled] = useState(false);
+  const [latestPayment, setLatestPayment] = useState<any | null>(null);
+  const redirectStarted = useRef(false);
 
   const whatsappUrl = useMemo(() => {
     const planName = subscription?.plan_name || "plano da plataforma";
     const price = subscription?.plan_price_cents
       ? formatMoney(subscription.plan_price_cents)
       : "valor do plano";
-    const message = `Olá! Fiz ou vou fazer o pagamento da assinatura ${planName} (${price}) da plataforma Rumo ao ITA. Segue meu comprovante.`;
+    const message = `Olá! Fiz ou vou fazer o pagamento da assinatura ${planName} (${price}) da plataforma Projeto Vetor. Segue meu comprovante.`;
 
     return `https://wa.me/${MANUAL_PIX.whatsapp}?text=${encodeURIComponent(message)}`;
   }, [subscription]);
 
+  useEffect(() => {
+    if (!subscription || ["active", "expired", "failed", "refunded", "canceled"].includes(subscription.status)) return;
+    const timer = window.setInterval(() => {
+      void loadLatestSubscription(false);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [subscription?.subscription_id, subscription?.status]);
+
   async function handleLogout() {
     await supabase.auth.signOut();
-    localStorage.removeItem("supabase_access_token");
     navigate("/");
   }
 
@@ -141,6 +158,32 @@ export default function SubscriptionPendingPage() {
     } catch (error) {
       console.error("Erro ao copiar Pix:", error);
       setCopyMessage("Não foi possível copiar a chave Pix.");
+    }
+  }
+
+  async function confirmCanonicalAccess(latestSubscription: LatestSubscription | null) {
+    if (!user?.id || redirectStarted.current) return false;
+
+    setAccessCheckError("");
+
+    try {
+      const redirected = await redirectToPlatformIfAccessAllowed(user.id, path => {
+        if (redirectStarted.current) return;
+        redirectStarted.current = true;
+        window.location.replace(path);
+      });
+      if (redirected) return true;
+
+      setAccessProcessingMessage(
+        getPendingAccessMessage(latestSubscription?.status, "blocked")
+      );
+      return false;
+    } catch (error) {
+      console.error("Erro ao confirmar acesso canônico:", error);
+      setAccessCheckError(
+        "Não foi possível confirmar sua liberação de acesso agora. Tente novamente em alguns instantes."
+      );
+      return false;
     }
   }
 
@@ -155,60 +198,38 @@ export default function SubscriptionPendingPage() {
       setErrorMessage("");
       setCopyMessage("");
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      const refreshed = showRefreshing
+        ? await syncMyMercadoPagoPaymentStatus()
+        : null;
 
-      if (userError || !user) {
-        setSubscription(null);
-        return;
+      const failedSync = refreshed?.sync?.results?.find((result) => !result.ok);
+      if (failedSync) {
+        throw new Error(
+          failedSync.error ||
+            "O Mercado Pago confirmou a consulta, mas não foi possível aplicar o pagamento à assinatura."
+        );
       }
 
-      const { data, error } = await supabase
-        .from("billing_subscriptions")
-        .select(
-          `
-          id,
-          status,
-          gateway,
-          payment_url,
-          started_at,
-          current_period_start,
-          current_period_end,
-          next_due_date,
-          created_at,
-          billing_plans (
-            id,
-            slug,
-            name,
-            description,
-            price_cents
-          )
-        `
-        )
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Erro ao carregar assinatura:", error);
-        setErrorMessage("Não foi possível carregar sua assinatura.");
-        return;
-      }
+      const [data, capabilities, storedPayments] = await Promise.all([
+        refreshed?.subscription
+          ? Promise.resolve(refreshed.subscription)
+          : getMyLatestSubscriptionRequest(),
+        getBillingCapabilities(),
+        refreshed ? Promise.resolve(refreshed.payments) : getMyPayments().catch(() => []),
+      ]);
+      setManualPixEnabled(Boolean(capabilities.manualPixFallbackEnabled));
+      const payments = Array.isArray(storedPayments) ? storedPayments : [];
+      setLatestPayment(payments[0] ?? null);
 
       if (!data) {
         setSubscription(null);
+        setAccessProcessingMessage("");
+        await confirmCanonicalAccess(null);
         return;
       }
 
-      const plan = Array.isArray(data.billing_plans)
-        ? data.billing_plans[0]
-        : data.billing_plans;
-
-      setSubscription({
-        subscription_id: data.id,
+      const normalizedSubscription: LatestSubscription = {
+        subscription_id: data.subscription_id,
         status: data.status,
         gateway: data.gateway,
         payment_url: data.payment_url,
@@ -217,15 +238,21 @@ export default function SubscriptionPendingPage() {
         current_period_end: data.current_period_end,
         next_due_date: data.next_due_date,
         created_at: data.created_at,
-        plan_id: plan?.id || "",
-        plan_slug: plan?.slug || "",
-        plan_name: plan?.name || "Plano da plataforma",
-        plan_description: plan?.description || null,
-        plan_price_cents: Number(plan?.price_cents || 0),
-      });
+        plan_id: data.plan_id || "",
+        plan_slug: data.plan_slug || "",
+        plan_name: data.plan_name || "Plano da plataforma",
+        plan_description: data.plan_description || null,
+        plan_price_cents: Number(data.plan_price_cents || 0),
+      };
+      setSubscription(normalizedSubscription);
+      await confirmCanonicalAccess(normalizedSubscription);
     } catch (error) {
       console.error("Erro inesperado ao carregar assinatura:", error);
-      setErrorMessage("Ocorreu um erro inesperado ao carregar sua assinatura.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Ocorreu um erro inesperado ao carregar sua assinatura."
+      );
     } finally {
       setLoadingSubscription(false);
       setRefreshing(false);
@@ -233,8 +260,10 @@ export default function SubscriptionPendingPage() {
   }
 
   useEffect(() => {
-    loadLatestSubscription();
-  }, []);
+    if (!authLoading && user?.id) {
+      void loadLatestSubscription();
+    }
+  }, [authLoading, user?.id]);
 
   const statusLabel = getStatusLabel(subscription?.status);
   const showPix = shouldShowPix(subscription);
@@ -256,7 +285,7 @@ export default function SubscriptionPendingPage() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
-              O acesso aos conteúdos pagos é liberado após a confirmação da assinatura. Nesta fase inicial, a conferência pode ser manual, então envie o comprovante pelo WhatsApp depois de fazer o Pix.
+              O acesso aos conteúdos pagos é liberado somente depois da confirmação do pagamento. Pagamentos Mercado Pago são confirmados automaticamente pelo webhook; comprovante por WhatsApp aparece apenas no Pix manual emergencial.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -276,7 +305,7 @@ export default function SubscriptionPendingPage() {
                 </div>
                 <p className="font-black text-white">Pagamento</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Faça o Pix do plano escolhido e envie o comprovante.
+                  Para Mercado Pago, conclua o checkout e use “Atualizar status”; para Pix manual, siga as instruções exibidas abaixo.
                 </p>
               </div>
 
@@ -302,7 +331,7 @@ export default function SubscriptionPendingPage() {
               <button
                 type="button"
                 onClick={() => loadLatestSubscription(true)}
-                disabled={refreshing}
+                disabled={refreshing || loadingSubscription}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-6 py-3 text-sm font-black text-white transition hover:bg-white/[0.1]"
               >
                 {refreshing ? (
@@ -346,6 +375,18 @@ export default function SubscriptionPendingPage() {
               </div>
             ) : null}
 
+            {!loadingSubscription && accessCheckError ? (
+              <div className="mt-6 rounded-2xl border border-red-300/20 bg-red-500/10 p-4 text-sm text-red-100">
+                {accessCheckError}
+              </div>
+            ) : null}
+
+            {!loadingSubscription && accessProcessingMessage ? (
+              <div className="mt-6 rounded-2xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
+                {accessProcessingMessage}
+              </div>
+            ) : null}
+
             {!loadingSubscription && !subscription ? (
               <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
                 <p className="font-black text-cyan-100">Nenhum plano solicitado ainda</p>
@@ -379,7 +420,7 @@ export default function SubscriptionPendingPage() {
               </div>
             ) : null}
 
-            {showPix ? (
+            {manualPixEnabled && showPix ? (
               <div className="mt-6 rounded-3xl border border-cyan-300/25 bg-cyan-300/10 p-5">
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950">
@@ -387,8 +428,8 @@ export default function SubscriptionPendingPage() {
                   </div>
 
                   <div>
-                    <p className="font-black text-cyan-100">Pagamento via Pix</p>
-                    <p className="text-xs text-cyan-50/70">Envie o comprovante após o pagamento.</p>
+                    <p className="font-black text-cyan-100">Pix manual emergencial</p>
+                    <p className="text-xs text-cyan-50/70">Use somente quando o fallback manual estiver habilitado.</p>
                   </div>
                 </div>
 
@@ -431,7 +472,9 @@ export default function SubscriptionPendingPage() {
                 <div>
                   <p className="font-black text-amber-100">Já pagou?</p>
                   <p className="mt-2 text-sm leading-6 text-amber-50/80">
-                    Envie o comprovante pelo WhatsApp. A liberação pode levar alguns instantes porque a confirmação ainda é manual nesta fase.
+                    {manualPixEnabled && showPix
+                      ? "Se você usou o Pix manual emergencial, envie o comprovante pelo WhatsApp. Se pagou pelo Mercado Pago, aguarde a confirmação automática e clique em Atualizar status."
+                      : "Se o pagamento foi feito pelo Mercado Pago, a confirmação é automática. Use Atualizar status; não envie comprovante manual para Pix automático."}
                   </p>
                 </div>
               </div>
