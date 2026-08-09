@@ -1,4 +1,12 @@
-import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type {
+  ChangeEvent,
+  InputHTMLAttributes,
+  KeyboardEvent,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { trpc } from "@/lib/trpc";
@@ -115,6 +123,65 @@ type ImportedResolutionBlock = {
   ordem?: unknown;
 };
 
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <label className="block text-sm font-semibold text-slate-700 mb-2">
+      {children}
+    </label>
+  );
+}
+
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+        props.className || ""
+      }`}
+    />
+  );
+}
+
+function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+        props.className || ""
+      }`}
+    />
+  );
+}
+
+function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+        props.className || ""
+      }`}
+    />
+  );
+}
+
+function valorLimpo(texto: string) {
+  const valor = texto.trim();
+  return valor.length > 0 ? valor : null;
+}
+
+function normalizarLista(valores: string[]) {
+  return Array.from(
+    new Set(
+      valores
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function listaDoBanco(valor: unknown, fallback?: string | null) {
+  const itens = Array.isArray(valor) ? valor : [];
+  const base = itens.length > 0 ? itens : fallback ? [fallback] : [];
 function textoCurto(texto?: string | null, limite = 140) {
   const valor = (texto || "").trim();
   if (!valor) return "Sem enunciado";
@@ -430,6 +497,15 @@ function validarImagemUpload(file: File) {
 }
       const targetIndex = direction === "up" ? index - 1 : index + 1;
 
+function validarImagemUpload(file: File) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error("A imagem deve ter no máximo 3 MB.");
+  }
+}
       [sorted[index], sorted[targetIndex]] = [sorted[targetIndex], sorted[index]];
 
       return normalizarOrdens(sorted);
@@ -580,6 +656,14 @@ export default function AdminQuestionEditPage() {
 
     loadSuggestions();
   }, [trpcUtils]);
+
+  useEffect(() => {
+    async function loadQuestion() {
+      if (!questionId) {
+        setError("ID da questão não encontrado.");
+        setLoading(false);
+        return;
+      }
     const { data, error } = await supabase
       .from("resolucoes")
       .insert(payload)
@@ -779,6 +863,14 @@ export default function AdminQuestionEditPage() {
         file,
         contentType: file.type,
       });
+
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
       setUploadingBlockId(localId);
       setError("");
       setSuccessMessage("");
@@ -800,6 +892,10 @@ export default function AdminQuestionEditPage() {
 
       if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem da alternativa.");
+        return;
+      }
+
+      updateField(field, upload.publicUrl);
         return;
       }
 
