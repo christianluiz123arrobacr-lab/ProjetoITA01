@@ -68,6 +68,50 @@ type QuestionFormData = {
   alternativa_correta: string;
 };
 
+type ImportedResolutionBlock = {
+  tipo?: unknown;
+  texto?: unknown;
+  content?: unknown;
+  url_imagem?: unknown;
+  imageUrl?: unknown;
+  ordem?: unknown;
+};
+
+type NormalizedImportedResolutionBlock = {
+  tipo: "texto" | "latex" | "imagem";
+  texto: string;
+  url_imagem: string;
+  ordem: number;
+};
+
+type ImportedQuestionFile = {
+  codigo?: unknown;
+  disciplina?: unknown;
+  subject?: unknown;
+  dificuldade?: unknown;
+  difficulty?: unknown;
+  conteudo?: unknown;
+  conteudos?: unknown;
+  assunto?: unknown;
+  assuntos?: unknown;
+  assuntos_por_conteudo?: unknown;
+  assuntosPorConteudo?: unknown;
+  enunciado?: unknown;
+  statement?: unknown;
+  enunciado_pos_imagem?: unknown;
+  statementAfterImage?: unknown;
+  formula?: unknown;
+  url_imagem?: unknown;
+  imageUrl?: unknown;
+  alternativas?: unknown;
+  options?: unknown;
+  alternativa_correta?: unknown;
+  correctOptionId?: unknown;
+  resolucao_blocos?: unknown;
+  resolutionBlocks?: unknown;
+  resolucao?: unknown;
+};
+
 const QUESTION_IMAGES_BUCKET = "questoes-imagens";
 const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -495,6 +539,219 @@ function normalizarLista(valores: string[]) {
         .filter(Boolean)
     )
   );
+}
+
+function textFromUnknown(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function listFromUnknown(value: unknown) {
+  if (Array.isArray(value)) {
+    return normalizarLista(value.map((item) => String(item ?? "")));
+  }
+
+  if (typeof value === "string") {
+    return normalizarLista(value.split(","));
+  }
+
+  return [];
+}
+
+function normalizeDisciplina(value: unknown) {
+  const normalized = normalizeForSearch(textFromUnknown(value));
+
+  if (["fisica", "física", "physics"].includes(normalized)) return "fisica";
+  if (["matematica", "matemática", "math", "mathematics"].includes(normalized)) {
+    return "matematica";
+  }
+  if (["quimica", "química", "chemistry"].includes(normalized)) return "quimica";
+
+  return textFromUnknown(value).toLowerCase();
+}
+
+function normalizeDificuldade(value: unknown) {
+  const normalized = normalizeForSearch(textFromUnknown(value)).replace(/\s+/g, "_");
+
+  if (["facil", "easy"].includes(normalized)) return "facil";
+  if (["medio", "media", "normal", "medium"].includes(normalized)) return "medio";
+  if (["dificil", "hard"].includes(normalized)) return "dificil";
+  if (
+    ["muito_dificil", "muitodificil", "dificuldade_alta", "very_hard"].includes(
+      normalized
+    )
+  ) {
+    return "muito_dificil";
+  }
+
+  return "";
+}
+
+function normalizeCorrectOption(value: unknown) {
+  const normalized = textFromUnknown(value).toLowerCase().trim();
+  const firstLetter = normalized.replace(/[^a-e]/g, "").charAt(0);
+
+  return ["a", "b", "c", "d", "e"].includes(firstLetter) ? firstLetter : "";
+}
+
+function getAlternativeText(source: unknown, letter: "a" | "b" | "c" | "d" | "e") {
+  if (!source) return "";
+
+  if (Array.isArray(source)) {
+    const index = ["a", "b", "c", "d", "e"].indexOf(letter);
+    const item = source[index];
+
+    if (typeof item === "string") return item.trim();
+    if (item && typeof item === "object") {
+      const raw = item as { text?: unknown; texto?: unknown; value?: unknown };
+      return textFromUnknown(raw.text ?? raw.texto ?? raw.value);
+    }
+
+    return "";
+  }
+
+  if (typeof source === "object") {
+    const raw = source as Record<string, unknown>;
+    const value = raw[letter] ?? raw[letter.toUpperCase()];
+
+    if (typeof value === "string") return value.trim();
+    if (value && typeof value === "object") {
+      const rawValue = value as { text?: unknown; texto?: unknown; value?: unknown };
+      return textFromUnknown(rawValue.text ?? rawValue.texto ?? rawValue.value);
+    }
+  }
+
+  return "";
+}
+
+function normalizeImportedGroupedSubtopics(
+  rawValue: unknown,
+  fallbackConteudos: string[],
+  fallbackAssuntos: string[]
+) {
+  const normalizedItems =
+    Array.isArray(rawValue)
+      ? rawValue
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+
+            const rawItem = item as {
+              conteudo?: unknown;
+              topic?: unknown;
+              assuntos?: unknown;
+              subtopics?: unknown;
+            };
+
+            const conteudo = textFromUnknown(rawItem.conteudo ?? rawItem.topic);
+            const assuntos = listFromUnknown(rawItem.assuntos ?? rawItem.subtopics);
+
+            if (!conteudo) return null;
+
+            return {
+              conteudo,
+              assuntos,
+            };
+          })
+          .filter((item): item is AssuntosPorConteudoItem => !!item)
+      : [];
+
+  if (normalizedItems.length > 0) {
+    return normalizarAssuntosPorConteudo(normalizedItems);
+  }
+
+  if (fallbackConteudos.length === 0) return [];
+
+  return normalizarAssuntosPorConteudo([
+    {
+      conteudo: fallbackConteudos[0],
+      assuntos: fallbackAssuntos,
+    },
+  ]);
+}
+
+function normalizeImportedResolutionBlocks(rawValue: unknown) {
+  const blocks = Array.isArray(rawValue) ? rawValue : [];
+
+  return blocks
+    .map((block, index) => {
+      if (!block || typeof block !== "object") return null;
+
+      const rawBlock = block as ImportedResolutionBlock;
+      const rawTipo = normalizeForSearch(textFromUnknown(rawBlock.tipo));
+      const tipo: NormalizedImportedResolutionBlock["tipo"] =
+        rawTipo === "imagem" || rawTipo === "image"
+          ? "imagem"
+          : rawTipo === "latex"
+            ? "latex"
+            : "texto";
+      const texto = textFromUnknown(rawBlock.texto ?? rawBlock.content);
+      const urlImagem = textFromUnknown(rawBlock.url_imagem ?? rawBlock.imageUrl);
+
+      if (tipo === "imagem" && !urlImagem) return null;
+      if (tipo !== "imagem" && !texto) return null;
+
+      return {
+        tipo,
+        texto,
+        url_imagem: urlImagem,
+        ordem: Number(rawBlock.ordem) || index + 1,
+      };
+    })
+    .filter((block): block is NormalizedImportedResolutionBlock => !!block)
+    .map((block, index) => ({
+      ...block,
+      ordem: index + 1,
+    }));
+}
+
+function normalizeImportedQuestion(rawData: unknown) {
+  if (!rawData || typeof rawData !== "object") {
+    throw new Error("O arquivo precisa ser um JSON de questão.");
+  }
+
+  const raw = rawData as ImportedQuestionFile;
+  const conteudos = listFromUnknown(raw.conteudos ?? raw.conteudo);
+  const assuntos = listFromUnknown(raw.assuntos ?? raw.assunto);
+  const assuntosPorConteudo = normalizeImportedGroupedSubtopics(
+    raw.assuntos_por_conteudo ?? raw.assuntosPorConteudo,
+    conteudos,
+    assuntos
+  );
+  const assuntosNormalizados = flattenAssuntosPorConteudo(assuntosPorConteudo);
+  const alternativas = raw.alternativas ?? raw.options;
+  const rawResolucao =
+    raw.resolucao && typeof raw.resolucao === "object"
+      ? (raw.resolucao as { blocos?: unknown; blocks?: unknown })
+      : null;
+
+  return {
+    formPatch: {
+      codigo: textFromUnknown(raw.codigo),
+      disciplina: normalizeDisciplina(raw.disciplina ?? raw.subject),
+      dificuldade: normalizeDificuldade(raw.dificuldade ?? raw.difficulty),
+      conteudos,
+      conteudo: primeiroValorDaLista(conteudos),
+      assuntos: assuntosNormalizados,
+      assunto: primeiroValorDaLista(assuntosNormalizados),
+      assuntosPorConteudo,
+      enunciado: textFromUnknown(raw.enunciado ?? raw.statement),
+      enunciado_pos_imagem: textFromUnknown(
+        raw.enunciado_pos_imagem ?? raw.statementAfterImage
+      ),
+      formula: textFromUnknown(raw.formula),
+      url_imagem: textFromUnknown(raw.url_imagem ?? raw.imageUrl),
+      alternativa_a: getAlternativeText(alternativas, "a"),
+      alternativa_b: getAlternativeText(alternativas, "b"),
+      alternativa_c: getAlternativeText(alternativas, "c"),
+      alternativa_d: getAlternativeText(alternativas, "d"),
+      alternativa_e: getAlternativeText(alternativas, "e"),
+      alternativa_correta: normalizeCorrectOption(
+        raw.alternativa_correta ?? raw.correctOptionId
+      ),
+    },
+    resolutionBlocks: normalizeImportedResolutionBlocks(
+      raw.resolucao_blocos ?? raw.resolutionBlocks ?? rawResolucao?.blocos ?? rawResolucao?.blocks
+    ),
+  };
 }
 
 function normalizeForSearch(value: string) {
@@ -1007,6 +1264,9 @@ export default function AdminQuestionCreatePage() {
   const [resolutionDraftBlocks, setResolutionDraftBlocks] = useState<ResolutionDraftBlock[]>([]);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [pendingResolutionBlocks, setPendingResolutionBlocks] = useState<
+    NormalizedImportedResolutionBlock[]
+  >([]);
 
   useEffect(() => {
     async function loadSuggestions() {
@@ -1114,6 +1374,67 @@ export default function AdminQuestionCreatePage() {
     setJsonInput(QUESTION_JSON_EXAMPLE);
     setError("");
     setSuccessMessage("Exemplo carregado. Edite o JSON e clique em importar.");
+  }
+
+  async function handleQuestionJsonImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    try {
+      setError("");
+      setSuccessMessage("");
+
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const { formPatch, resolutionBlocks } = normalizeImportedQuestion(parsed);
+
+      setForm((prev) => ({
+        ...prev,
+        ...formPatch,
+        banca: prev.banca,
+        ano: prev.ano,
+        instituicao: prev.instituicao,
+        publicada: prev.publicada,
+      }));
+      setPendingResolutionBlocks(resolutionBlocks);
+
+      setSuccessMessage(
+        resolutionBlocks.length > 0
+          ? `Arquivo importado. O formulário foi preenchido e ${resolutionBlocks.length} bloco(s) de resolução serão levados para a próxima tela.`
+          : "Arquivo importado. Revise os campos antes de criar a questão."
+      );
+    } catch (err) {
+      console.error("Erro ao importar JSON da questão:", err);
+      setPendingResolutionBlocks([]);
+      setError(
+        err instanceof Error
+          ? `Não foi possível importar o arquivo: ${err.message}`
+          : "Não foi possível importar o arquivo JSON da questão."
+      );
+    }
+  }
+
+  async function saveImportedResolutionBlocks(
+    questaoId: string,
+    blocks: NormalizedImportedResolutionBlock[]
+  ) {
+    if (blocks.length === 0) return;
+
+    const payload = blocks.map((block, index) => ({
+      questao_id: questaoId,
+      tipo: block.tipo,
+      texto: block.tipo === "imagem" ? null : block.texto,
+      url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
+      ordem: index + 1,
+    }));
+
+    const { error } = await supabase.from("resolucoes").insert(payload);
+
+    if (error) {
+      throw error;
+    }
   }
 
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -1240,7 +1561,7 @@ export default function AdminQuestionCreatePage() {
       setError("");
       setSuccessMessage("");
 
-      const anoNumero = Number(form.ano);
+      const anoNumero = form.ano.trim() ? Number(form.ano) : null;
 
       if (!form.disciplina.trim()) {
         setError("Preencha a disciplina.");
@@ -1270,12 +1591,7 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
-      if (!form.instituicao.trim()) {
-        setError("Preencha a instituição.");
-        return;
-      }
-
-      if (!form.ano.trim() || Number.isNaN(anoNumero)) {
+      if (form.ano.trim() && Number.isNaN(anoNumero)) {
         setError("Preencha um ano válido.");
         return;
       }
@@ -1352,6 +1668,61 @@ export default function AdminQuestionCreatePage() {
 
       setSuccessMessage(
         resolutionDraftBlocks.length > 0
+      try {
+        await saveImportedResolutionBlocks(data.id, pendingResolutionBlocks);
+      } catch (resolutionError) {
+        console.error("Erro ao salvar resolução importada:", resolutionError);
+        setError(
+          "A questão foi criada, mas não foi possível salvar a resolução importada. Abra a tela de resoluções e adicione os blocos manualmente ou tente importar novamente."
+        );
+        return;
+      }
+
+      if (resolutionDraftBlocks.length > 0) {
+        await saveResolutionBlocksMutation.mutateAsync({
+          questaoId: data.id,
+          blocks: resolutionDraftBlocks.map((block, index) => ({
+            tipo: block.tipo,
+            texto: block.tipo === "imagem" ? null : block.texto ?? null,
+            url_imagem: block.tipo === "imagem" ? block.url_imagem ?? null : null,
+            ordem: index + 1,
+          })),
+        });
+      }
+
+      setSuccessMessage(
+        resolutionDraftBlocks.length > 0
+      await logAdminAction({
+        action: "question_created",
+        entityType: "questao",
+        entityId: data.id,
+        description: `Questão ${form.codigo || data.id} criada no ADM`,
+        level: "info",
+        metadata: {
+          codigo: form.codigo || null,
+          disciplina: form.disciplina || null,
+          conteudo: primeiroValorDaLista(form.conteudos) || null,
+          conteudos: normalizarLista(form.conteudos),
+          assunto: primeiroValorDaLista(form.assuntos) || null,
+          assuntos: normalizarLista(form.assuntos),
+          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
+          banca: form.banca || null,
+          ano: anoNumero,
+          dificuldade: form.dificuldade || null,
+          instituicao: form.instituicao || null,
+          publicada: form.publicada,
+          urlImagem: form.url_imagem || null,
+          alternativaAImagem: form.alternativa_a_imagem || null,
+          alternativaBImagem: form.alternativa_b_imagem || null,
+          alternativaCImagem: form.alternativa_c_imagem || null,
+          alternativaDImagem: form.alternativa_d_imagem || null,
+          alternativaEImagem: form.alternativa_e_imagem || null,
+          resolucaoImportadaBlocos: pendingResolutionBlocks.length,
+        },
+      });
+
+      setSuccessMessage(
+        pendingResolutionBlocks.length > 0
           ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
           : "Questão criada com sucesso. Indo para a resolução..."
       );
@@ -1434,7 +1805,7 @@ export default function AdminQuestionCreatePage() {
             <div>
               <p className="text-sm text-slate-500 mb-1">Criação de questão</p>
               <p className="text-sm text-slate-800">
-                Preencha os campos e salve para inserir direto no Supabase.
+                Importe um JSON gerado pela IA ou preencha os campos manualmente.
               </p>
             </div>
 
@@ -1444,6 +1815,58 @@ export default function AdminQuestionCreatePage() {
                 Voltar para questões
               </Button>
             </Link>
+          </div>
+        </Card>
+
+        <Card className="p-5 bg-slate-950 border-slate-900 text-white">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/10 text-blue-200 flex items-center justify-center shrink-0">
+                <FileJson className="w-5 h-5" />
+              </div>
+
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold">Importação por JSON</h2>
+
+                  {pendingResolutionBlocks.length > 0 ? (
+                    <span className="rounded-full bg-emerald-400/15 border border-emerald-300/30 px-3 py-1 text-[11px] font-bold text-emerald-100">
+                      {pendingResolutionBlocks.length} bloco(s) de resolução
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-bold text-slate-200">
+                      opcional
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  Use o arquivo gerado pela IA para preencher a questão. Ano,
+                  banca e instituição continuam manuais quando forem necessários.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {pendingResolutionBlocks.length > 0 ? (
+                <p className="text-xs font-medium text-emerald-100">
+                  Ao criar, a resolução será salva automaticamente.
+                </p>
+              ) : null}
+
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleQuestionJsonImport}
+                />
+                <span className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 shadow-sm cursor-pointer hover:bg-blue-50">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar JSON
+                </span>
+              </label>
+            </div>
           </div>
         </Card>
 

@@ -10,6 +10,10 @@ import type {
 import { useRoute, useLocation, Link } from "wouter";
 import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { trpc } from "@/lib/trpc";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { Link, useRoute } from "wouter";
+import { supabase } from "@/lib/supabase";
+import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -20,77 +24,55 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import {
-  Loader2,
-  AlertTriangle,
-  Save,
   ArrowLeft,
-  CheckCircle2,
+  ArrowDown,
+  ArrowUp,
   Blocks,
+  Copy,
+  Image,
+  Loader2,
+  Plus,
+  Save,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
   Upload,
-  Image as ImageIcon,
-  Eye,
+  UserSquare2,
 } from "lucide-react";
 
-type AssuntosPorConteudoItem = {
-  conteudo: string;
-  assuntos: string[];
+type QuestionInfo = {
+  id: string;
+  codigo?: string | null;
+  enunciado?: string | null;
 };
 
-type QuestionFormData = {
-  codigo: string;
-  disciplina: string;
-  conteudo: string;
-  conteudos: string[];
-  assunto: string;
-  assuntos: string[];
-  assuntosPorConteudo: AssuntosPorConteudoItem[];
-  banca: string;
-  ano: string;
-  dificuldade: string;
-  instituicao: string;
-  publicada: boolean;
-  enunciado: string;
-  enunciado_pos_imagem: string;
-  formula: string;
+type ResolutionMeta = {
+  id: string;
+  questao_id: string;
+  autor_nome?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type ResolutionBlock = {
+  id: string;
+  questao_id: string;
+  tipo: string;
+  texto?: string | null;
+  ordem?: number | null;
+  url_imagem?: string | null;
+  codigo_resolucao?: string | null;
+  created_at?: string | null;
+};
+
+type EditableBlock = {
+  id?: string;
+  localId: string;
+  tipo: "texto" | "latex" | "imagem";
+  texto: string;
   url_imagem: string;
-
-  alternativa_a: string;
-  alternativa_b: string;
-  alternativa_c: string;
-  alternativa_d: string;
-  alternativa_e: string;
-
-  alternativa_a_imagem: string;
-  alternativa_b_imagem: string;
-  alternativa_c_imagem: string;
-  alternativa_d_imagem: string;
-  alternativa_e_imagem: string;
-
-  alternativa_correta: string;
-};
-
-type SuggestionRow = {
-  conteudo?: string | null;
-  conteudos?: string[] | null;
-  assunto?: string | null;
-  assuntos?: string[] | null;
-  assuntos_por_conteudo?: unknown;
-  banca?: string | null;
-  instituição?: string | null;
-};
-
-type SuggestionsState = {
-  conteudos: string[];
-  assuntos: string[];
-  bancas: string[];
-  instituicoes: string[];
-};
-
-const EMPTY_SUGGESTIONS: SuggestionsState = {
-  conteudos: [],
-  assuntos: [],
-  bancas: [],
-  instituicoes: [],
+  ordem: number;
+  isNew?: boolean;
 };
 
 const QUESTION_IMAGES_BUCKET = "questoes-imagens";
@@ -128,6 +110,17 @@ const initialForm: QuestionFormData = {
   alternativa_e_imagem: "",
 
   alternativa_correta: "",
+const STORAGE_BUCKET = "resolucoes-imagens";
+const AUTORES_RESOLUCAO = ["Christian", "Maurício"];
+const RESOLUTION_IMPORT_STORAGE_PREFIX = "pending-resolution-import:";
+
+type ImportedResolutionBlock = {
+  tipo?: unknown;
+  texto?: unknown;
+  content?: unknown;
+  url_imagem?: unknown;
+  imageUrl?: unknown;
+  ordem?: unknown;
 };
 
 function FieldLabel({ children }: { children: ReactNode }) {
@@ -189,325 +182,309 @@ function normalizarLista(valores: string[]) {
 function listaDoBanco(valor: unknown, fallback?: string | null) {
   const itens = Array.isArray(valor) ? valor : [];
   const base = itens.length > 0 ? itens : fallback ? [fallback] : [];
-
-  return normalizarLista(base.map((item) => String(item)));
+function textoCurto(texto?: string | null, limite = 140) {
+  const valor = (texto || "").trim();
+  if (!valor) return "Sem enunciado";
+  if (valor.length <= limite) return valor;
+  return `${valor.slice(0, limite)}...`;
 }
 
-function primeiroValorDaLista(valores: string[]) {
-  return normalizarLista(valores)[0] ?? "";
+function gerarLocalId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function normalizeForSearch(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+function criarBlocoVazio(ordem: number): EditableBlock {
+  return {
+    localId: gerarLocalId(),
+    tipo: "texto",
+    texto: "",
+    url_imagem: "",
+    ordem,
+    isNew: true,
+  };
 }
 
-function addTextToSet(set: Set<string>, value?: string | null) {
-  const cleanValue = value?.trim();
+function gerarNomeArquivo(originalName: string) {
+  const extensao = originalName.includes(".")
+    ? originalName.split(".").pop()
+    : "png";
 
-  if (cleanValue) {
-    set.add(cleanValue);
-  }
+  return `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}.${extensao}`;
 }
 
-function addTextArrayToSet(set: Set<string>, values?: string[] | null) {
-  if (!Array.isArray(values)) return;
-
-  values.forEach((value) => addTextToSet(set, value));
-}
-
-function sortTextValues(values: Set<string>) {
-  return Array.from(values).sort((a, b) => a.localeCompare(b, "pt-BR"));
-}
-
-function normalizarAssuntosPorConteudo(
-  valores: AssuntosPorConteudoItem[]
-): AssuntosPorConteudoItem[] {
-  return valores
-    .map((item) => ({
-      conteudo: item.conteudo.trim(),
-      assuntos: normalizarLista(item.assuntos),
-    }))
-    .filter((item) => item.conteudo.length > 0);
-}
-
-function sincronizarAssuntosPorConteudo(
-  conteudos: string[],
-  atuais: AssuntosPorConteudoItem[]
-): AssuntosPorConteudoItem[] {
-  const conteudosLimpos = normalizarLista(conteudos);
-
-  return conteudosLimpos.map((conteudo) => {
-    const atual = atuais.find(
-      (item) => normalizeForSearch(item.conteudo) === normalizeForSearch(conteudo)
-    );
-
-    return {
-      conteudo,
-      assuntos: atual?.assuntos ?? [],
-    };
-  });
-}
-
-function flattenAssuntosPorConteudo(valores: AssuntosPorConteudoItem[]) {
-  return normalizarLista(valores.flatMap((item) => item.assuntos));
-}
-
-function normalizarAssuntosPorConteudoDoBanco(
-  valor: unknown,
-  conteudos: string[],
-  assuntosLegados: string[]
-): AssuntosPorConteudoItem[] {
-  if (Array.isArray(valor)) {
-    const normalizados = normalizarAssuntosPorConteudo(
-      valor
-        .map((item) => {
-          if (!item || typeof item !== "object") return null;
-
-          const rawItem = item as {
-            conteudo?: unknown;
-            topic?: unknown;
-            assuntos?: unknown;
-            subtopics?: unknown;
-          };
-
-          const conteudo = String(rawItem.conteudo ?? rawItem.topic ?? "").trim();
-          const assuntos = Array.isArray(rawItem.assuntos)
-            ? rawItem.assuntos.map((assunto) => String(assunto ?? ""))
-            : Array.isArray(rawItem.subtopics)
-              ? rawItem.subtopics.map((assunto) => String(assunto ?? ""))
-              : [];
-
-          return conteudo ? { conteudo, assuntos } : null;
-        })
-        .filter((item): item is AssuntosPorConteudoItem => !!item)
-    );
-
-    if (normalizados.length > 0) {
-      return sincronizarAssuntosPorConteudo(conteudos, normalizados);
-    }
-  }
-
-  return conteudos.map((conteudo, index) => ({
-    conteudo,
-    assuntos: index === 0 ? assuntosLegados : [],
+function normalizarOrdens(lista: EditableBlock[]) {
+  return lista.map((block, index) => ({
+    ...block,
+    ordem: index + 1,
   }));
 }
 
-function addGroupedAssuntosToSet(set: Set<string>, value: unknown) {
-  if (!Array.isArray(value)) return;
-
-  value.forEach((item) => {
-    if (!item || typeof item !== "object") return;
-
-    const rawItem = item as { assuntos?: unknown; subtopics?: unknown };
-    const assuntos = Array.isArray(rawItem.assuntos)
-      ? rawItem.assuntos
-      : Array.isArray(rawItem.subtopics)
-        ? rawItem.subtopics
-        : [];
-
-    assuntos.forEach((assunto) => addTextToSet(set, String(assunto ?? "")));
-  });
+function textFromUnknown(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-type MultiTagInputProps = {
-  label: string;
-  values: string[];
-  suggestions?: string[];
-  onChange: (values: string[]) => void;
-  placeholder: string;
-  helper?: string;
-};
+function normalizeImportedResolutionBlocks(rawValue: unknown) {
+  const blocks = Array.isArray(rawValue) ? rawValue : [];
 
-function MultiTagInput({
-  label,
-  values,
-  suggestions = [],
-  onChange,
-  placeholder,
-  helper,
-}: MultiTagInputProps) {
-  const [draft, setDraft] = useState("");
+  return blocks
+    .map((block, index) => {
+      if (!block || typeof block !== "object") return null;
 
-  const filteredSuggestions = suggestions
-    .filter((suggestion) => {
-      const normalizedSuggestion = normalizeForSearch(suggestion);
-      const normalizedDraft = normalizeForSearch(draft);
-      const alreadySelected = values.some(
-        (value) => normalizeForSearch(value) === normalizedSuggestion
-      );
+      const rawBlock = block as ImportedResolutionBlock;
+      const rawTipo = textFromUnknown(rawBlock.tipo).toLowerCase();
+      const tipo: EditableBlock["tipo"] =
+        rawTipo === "imagem" || rawTipo === "image"
+          ? "imagem"
+          : rawTipo === "latex"
+            ? "latex"
+            : "texto";
+      const texto = textFromUnknown(rawBlock.texto ?? rawBlock.content);
+      const urlImagem = textFromUnknown(rawBlock.url_imagem ?? rawBlock.imageUrl);
 
-      if (alreadySelected) return false;
-      if (!normalizedDraft) return false;
+      if (tipo === "imagem" && !urlImagem) return null;
+      if (tipo !== "imagem" && !texto) return null;
 
-      return normalizedSuggestion.includes(normalizedDraft);
+      return {
+        localId: gerarLocalId(),
+        tipo,
+        texto,
+        url_imagem: urlImagem,
+        ordem: Number(rawBlock.ordem) || index + 1,
+        isNew: true,
+      };
     })
-    .slice(0, 8);
+    .filter((block): block is EditableBlock => !!block);
+}
 
-  function addValues(rawValue: string) {
-    const novosValores = rawValue
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+export default function AdminResolutionEditorPage() {
+  const [match, params] = useRoute("/admin/resolucoes/:questaoId");
+  const questaoId = match ? params.questaoId : null;
 
-    if (novosValores.length === 0) {
-      setDraft("");
-      return;
+  const [question, setQuestion] = useState<QuestionInfo | null>(null);
+  const [resolutionMeta, setResolutionMeta] = useState<ResolutionMeta | null>(null);
+  const [authorName, setAuthorName] = useState("");
+  const [savingAuthor, setSavingAuthor] = useState(false);
+
+  const [blocks, setBlocks] = useState<EditableBlock[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingAll, setSavingAll] = useState(false);
+  const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    async function loadData() {
+      if (!questaoId) {
+        setError("Questão não encontrada.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError("");
+        setSuccessMessage("");
+
+        const [questionResult, resolutionsResult, metaResult] = await Promise.all([
+          supabase
+            .from("questoes")
+            .select("id, codigo, enunciado")
+            .eq("id", questaoId)
+            .single(),
+
+          supabase
+            .from("resolucoes")
+            .select(
+              "id, questao_id, tipo, texto, ordem, url_imagem, codigo_resolucao, created_at"
+            )
+            .eq("questao_id", questaoId)
+            .order("ordem", { ascending: true }),
+
+          supabase
+            .from("resolucoes_meta")
+            .select("*")
+            .eq("questao_id", questaoId)
+            .maybeSingle(),
+        ]);
+
+        if (questionResult.error || !questionResult.data) {
+          console.error(
+            "Erro ao carregar questão da resolução:",
+            questionResult.error
+          );
+          setError("Não foi possível carregar a questão.");
+          return;
+        }
+
+        if (resolutionsResult.error) {
+          console.error(
+            "Erro ao carregar blocos da resolução:",
+            resolutionsResult.error
+          );
+          setError("Não foi possível carregar os blocos da resolução.");
+          return;
+        }
+
+        if (metaResult.error) {
+          console.error(
+            "Erro ao carregar metadados da resolução:",
+            metaResult.error
+          );
+          setError("Não foi possível carregar os dados gerais da resolução.");
+          return;
+        }
+
+        setQuestion(questionResult.data as QuestionInfo);
+
+        const meta = (metaResult.data as ResolutionMeta | null) ?? null;
+        setResolutionMeta(meta);
+        setAuthorName(meta?.autor_nome || "");
+
+        const mappedBlocks: EditableBlock[] = (
+          (resolutionsResult.data as ResolutionBlock[]) || []
+        ).map((block, index) => ({
+          id: block.id,
+          localId: block.id || `${index}-${gerarLocalId()}`,
+          tipo: ((block.tipo || "texto").toLowerCase() as
+            | "texto"
+            | "latex"
+            | "imagem"),
+          texto: block.texto || "",
+          url_imagem: block.url_imagem || "",
+          ordem: block.ordem ?? index + 1,
+          isNew: false,
+        }));
+
+        if (mappedBlocks.length > 0) {
+          setBlocks(normalizarOrdens(mappedBlocks));
+          return;
+        }
+
+        const pendingImportKey = `${RESOLUTION_IMPORT_STORAGE_PREFIX}${questaoId}`;
+        const pendingImport = window.localStorage.getItem(pendingImportKey);
+
+        if (pendingImport) {
+          const importedBlocks = normalizeImportedResolutionBlocks(
+            JSON.parse(pendingImport)
+          );
+
+          if (importedBlocks.length > 0) {
+            setBlocks(normalizarOrdens(importedBlocks));
+            setSuccessMessage(
+              "Blocos importados do arquivo da questão. Revise e clique em Salvar tudo para gravar no Supabase."
+            );
+          } else {
+            setBlocks([]);
+          }
+
+          window.localStorage.removeItem(pendingImportKey);
+          return;
+        }
+
+        setBlocks([]);
+      } catch (err) {
+        console.error(
+          "Erro inesperado ao carregar editor de resolução:",
+          err
+        );
+        setError("Ocorreu um erro inesperado ao carregar a resolução.");
+      } finally {
+        setLoading(false);
+      }
     }
 
-    onChange(normalizarLista([...values, ...novosValores]));
-    setDraft("");
-  }
+    loadData();
+  }, [questaoId]);
 
-  function addSingleValue(value: string) {
-    onChange(normalizarLista([...values, value]));
-    setDraft("");
-  }
-
-  function removeValue(value: string) {
-    onChange(values.filter((item) => item !== value));
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter" && event.key !== ",") return;
-
-    event.preventDefault();
-    addValues(draft);
-  }
-
-  return (
-    <div>
-      <FieldLabel>{label}</FieldLabel>
-
-      <div className="rounded-2xl border border-slate-300 bg-white p-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900">
-        {values.length > 0 ? (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {values.map((value) => (
-              <span
-                key={value}
-                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white"
-              >
-                {value}
-                <button
-                  type="button"
-                  onClick={() => removeValue(value)}
-                  className="text-white/80 hover:text-white"
-                  aria-label={`Remover ${value}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={() => addValues(draft)}
-          placeholder={placeholder}
-          className="w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-        />
-
-        {filteredSuggestions.length > 0 ? (
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-2">
-            <p className="px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-              Sugestões já cadastradas
-            </p>
-
-            {filteredSuggestions.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  addSingleValue(suggestion);
-                }}
-                className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-white"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
-    </div>
+  const orderedBlocks = useMemo(
+    () => [...blocks].sort((a, b) => a.ordem - b.ordem),
+    [blocks]
   );
-}
 
-type AssuntosPorConteudoEditorProps = {
-  items: AssuntosPorConteudoItem[];
-  suggestions: string[];
-  onChange: (items: AssuntosPorConteudoItem[]) => void;
-};
-
-function AssuntosPorConteudoEditor({
-  items,
-  suggestions,
-  onChange,
-}: AssuntosPorConteudoEditorProps) {
-  function updateAssuntos(conteudo: string, assuntos: string[]) {
-    onChange(
-      normalizarAssuntosPorConteudo(
-        items.map((item) =>
-          normalizeForSearch(item.conteudo) === normalizeForSearch(conteudo)
-            ? { ...item, assuntos }
-            : item
-        )
+  function updateBlock(localId: string, patch: Partial<EditableBlock>) {
+    setBlocks((prev) =>
+      prev.map((block) =>
+        block.localId === localId ? { ...block, ...patch } : block
       )
     );
   }
 
-  return (
-    <div className="md:col-span-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-      <div className="mb-4">
-        <h3 className="text-base font-bold text-slate-900">
-          Assuntos por conteúdo
-        </h3>
-        <p className="text-sm text-slate-500">
-          Cada conteúdo selecionado tem sua própria caixa de assuntos. Assim o filtro deixa de misturar função modular com Álgebra, porque até o ADM merece alguma dignidade.
-        </p>
-      </div>
+  function addNewBlock() {
+    const nextOrder =
+      blocks.length > 0 ? Math.max(...blocks.map((b) => b.ordem)) + 1 : 1;
 
-      {items.length > 0 ? (
-        <div className="grid md:grid-cols-2 gap-4">
-          {items.map((item) => (
-            <div
-              key={item.conteudo}
-              className="rounded-2xl border border-slate-200 bg-white p-4"
-            >
-              <div className="mb-3">
-                <span className="inline-flex rounded-full bg-purple-50 border border-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
-                  {item.conteudo}
-                </span>
-              </div>
+    setBlocks((prev) => [...prev, criarBlocoVazio(nextOrder)]);
+    setSuccessMessage("");
+    setError("");
+  }
 
-              <MultiTagInput
-                label={`Assuntos de ${item.conteudo}`}
-                values={item.assuntos}
-                suggestions={suggestions}
-                onChange={(values) => updateAssuntos(item.conteudo, values)}
-                placeholder={`Digite um assunto de ${item.conteudo}`}
-                helper="Esses assuntos ficarão ligados somente a este conteúdo."
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-slate-500">
-          Adicione pelo menos um conteúdo para liberar as caixas de assuntos.
-        </p>
-      )}
-    </div>
-  );
-}
+  function insertBlockAt(index: number, block?: Partial<EditableBlock>) {
+    setBlocks((prev) => {
+      const sorted = [...prev].sort((a, b) => a.ordem - b.ordem);
+
+      const novoBloco: EditableBlock = {
+        localId: gerarLocalId(),
+        tipo: block?.tipo || "texto",
+        texto: block?.texto || "",
+        url_imagem: block?.url_imagem || "",
+        ordem: 0,
+        isNew: true,
+      };
+
+      sorted.splice(index, 0, novoBloco);
+      return normalizarOrdens(sorted);
+    });
+
+    setSuccessMessage("");
+    setError("");
+  }
+
+  function addBlockAbove(localId: string) {
+    const sorted = [...blocks].sort((a, b) => a.ordem - b.ordem);
+    const index = sorted.findIndex((block) => block.localId === localId);
+    if (index === -1) return;
+    insertBlockAt(index);
+  }
+
+  function addBlockBelow(localId: string) {
+    const sorted = [...blocks].sort((a, b) => a.ordem - b.ordem);
+    const index = sorted.findIndex((block) => block.localId === localId);
+    if (index === -1) return;
+    insertBlockAt(index + 1);
+  }
+
+  function duplicateBlock(localId: string) {
+    const sorted = [...blocks].sort((a, b) => a.ordem - b.ordem);
+    const index = sorted.findIndex((block) => block.localId === localId);
+    if (index === -1) return;
+
+    const original = sorted[index];
+
+    insertBlockAt(index + 1, {
+      tipo: original.tipo,
+      texto: original.texto,
+      url_imagem: original.url_imagem,
+    });
+  }
+
+  function removeLocalBlock(localId: string) {
+    setBlocks((prev) =>
+      normalizarOrdens(prev.filter((block) => block.localId !== localId))
+    );
+    setSuccessMessage("");
+    setError("");
+  }
+
+  function moveBlock(localId: string, direction: "up" | "down") {
+    setBlocks((prev) => {
+      const sorted = [...prev].sort((a, b) => a.ordem - b.ordem);
+      const index = sorted.findIndex((block) => block.localId === localId);
+
+      if (index === -1) return prev;
+      if (direction === "up" && index === 0) return prev;
+      if (direction === "down" && index === sorted.length - 1) return prev;
 
 function validarImagemUpload(file: File) {
   if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
@@ -518,18 +495,24 @@ function validarImagemUpload(file: File) {
     throw new Error("A imagem deve ter no máximo 3 MB.");
   }
 }
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
 
-function MarkdownPreview({
-  value,
-  emptyMessage = "Nada para visualizar ainda.",
-}: {
-  value: string;
-  emptyMessage?: string;
-}) {
-  const content = value.trim();
+function validarImagemUpload(file: File) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  }
 
-  if (!content) {
-    return <p className="text-sm text-slate-500">{emptyMessage}</p>;
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error("A imagem deve ter no máximo 3 MB.");
+  }
+}
+      [sorted[index], sorted[targetIndex]] = [sorted[targetIndex], sorted[index]];
+
+      return normalizarOrdens(sorted);
+    });
+
+    setSuccessMessage("");
+    setError("");
   }
 
   return (
@@ -540,192 +523,63 @@ function MarkdownPreview({
     </div>
   );
 }
+  async function handleSaveAuthor() {
+    if (!questaoId) return;
 
-function QuestionPreview({ form }: { form: QuestionFormData }) {
-  const alternatives = [
-    {
-      letter: "A",
-      text: form.alternativa_a,
-      image: form.alternativa_a_imagem,
-      value: "a",
-    },
-    {
-      letter: "B",
-      text: form.alternativa_b,
-      image: form.alternativa_b_imagem,
-      value: "b",
-    },
-    {
-      letter: "C",
-      text: form.alternativa_c,
-      image: form.alternativa_c_imagem,
-      value: "c",
-    },
-    {
-      letter: "D",
-      text: form.alternativa_d,
-      image: form.alternativa_d_imagem,
-      value: "d",
-    },
-    {
-      letter: "E",
-      text: form.alternativa_e,
-      image: form.alternativa_e_imagem,
-      value: "e",
-    },
-  ];
+    try {
+      setSavingAuthor(true);
+      setError("");
+      setSuccessMessage("");
 
-  const hasAnyAlternative = alternatives.some(
-    (alternative) => alternative.text.trim() || alternative.image.trim()
-  );
+      const autor = authorName.trim();
 
-  return (
-    <Card className="p-6 bg-white border-slate-200">
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Eye className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-bold text-slate-900">Prévia da questão</h2>
-          </div>
-          <p className="text-sm text-slate-500">
-            Veja como o enunciado, a imagem, as fórmulas e as alternativas vão aparecer para o aluno.
-          </p>
-        </div>
-      </div>
+      if (!autor) {
+        setError("Selecione um autor da resolução.");
+        return;
+      }
 
-      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 md:p-6 space-y-5">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-          {form.codigo.trim() ? (
-            <span className="rounded-full bg-white border border-slate-200 px-3 py-1 font-semibold">
-              {form.codigo.trim()}
-            </span>
-          ) : null}
+      const payload = {
+        questao_id: questaoId,
+        autor_nome: autor,
+      };
 
-          {form.disciplina.trim() ? (
-            <span className="rounded-full bg-blue-50 border border-blue-100 px-3 py-1 font-semibold text-blue-700">
-              {form.disciplina.trim()}
-            </span>
-          ) : null}
-          {normalizarLista(form.conteudos).map((conteudo) => (
-            <span
-              key={conteudo}
-              className="rounded-full bg-purple-50 border border-purple-100 px-3 py-1 font-semibold text-purple-700"
-            >
-              {conteudo}
-            </span>
-          ))}
+      const { data, error } = await supabase
+        .from("resolucoes_meta")
+        .upsert(payload, { onConflict: "questao_id" })
+        .select("*")
+        .single();
 
-          {normalizarLista(form.assuntos).map((assunto) => (
-            <span
-              key={assunto}
-              className="rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 font-semibold text-emerald-700"
-            >
-              {assunto}
-            </span>
-          ))}
+      if (error) {
+        console.error("Erro ao salvar autor da resolução:", error);
+        setError("Não foi possível salvar o autor da resolução.");
+        return;
+      }
 
-          {form.banca.trim() || form.ano.trim() ? (
-            <span className="rounded-full bg-amber-50 border border-amber-100 px-3 py-1 font-semibold text-amber-700">
-              {[form.banca.trim(), form.ano.trim()].filter(Boolean).join(" • ")}
-            </span>
-          ) : null}
-        </div>
+      setResolutionMeta((data as ResolutionMeta) || null);
 
-        <div className="rounded-2xl bg-white border border-slate-200 p-5">
-          <p className="text-sm font-semibold text-slate-500 mb-3">Enunciado</p>
-          <MarkdownPreview
-            value={form.enunciado}
-            emptyMessage="Digite o enunciado para ver a prévia renderizada aqui."
-          />
-        </div>
+      await logAdminAction({
+        action: "resolution_author_saved",
+        entityType: "resolucao_meta",
+        entityId: questaoId,
+        description: `Autor da resolução da questão ${
+          question?.codigo || questaoId
+        } definido como ${autor}`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          autorNome: autor,
+        },
+      });
 
-        {form.url_imagem.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">Imagem</p>
-            <img
-              src={form.url_imagem.trim()}
-              alt="Imagem da questão"
-              className="max-w-full rounded-xl border border-slate-200 bg-white"
-            />
-          </div>
-        ) : null}
-
-        {form.enunciado_pos_imagem.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">
-              Continuação do enunciado
-            </p>
-            <MarkdownPreview value={form.enunciado_pos_imagem} />
-          </div>
-        ) : null}
-
-        {form.formula.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">Fórmula</p>
-            <MarkdownPreview value={form.formula} />
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl bg-white border border-slate-200 p-5">
-          <p className="text-sm font-semibold text-slate-500 mb-4">Alternativas</p>
-
-          {hasAnyAlternative ? (
-            <div className="space-y-3">
-              {alternatives.map((alternative) => {
-                const isCorrect = form.alternativa_correta === alternative.value;
-
-                if (!alternative.text.trim() && !alternative.image.trim()) {
-                  return null;
-                }
-
-                return (
-                  <div
-                    key={alternative.value}
-                    className={`rounded-2xl border p-4 ${
-                      isCorrect
-                        ? "border-emerald-300 bg-emerald-50"
-                        : "border-slate-200 bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                          isCorrect
-                            ? "bg-emerald-600 text-white"
-                            : "bg-white text-slate-700 border border-slate-200"
-                        }`}
-                      >
-                        {alternative.letter}
-                      </div>
-
-                      <div className="flex-1 min-w-0 space-y-3">
-                        {alternative.text.trim() ? (
-                          <MarkdownPreview value={alternative.text} />
-                        ) : null}
-
-                        {alternative.image.trim() ? (
-                          <img
-                            src={alternative.image.trim()}
-                            alt={`Imagem da alternativa ${alternative.letter}`}
-                            className="max-h-56 rounded-xl border border-slate-200 bg-white"
-                          />
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">
-              Preencha as alternativas para visualizar como elas aparecerão.
-            </p>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
+      setSuccessMessage("Autor da resolução salvo com sucesso.");
+    } catch (err) {
+      console.error("Erro inesperado ao salvar autor:", err);
+      setError("Ocorreu um erro inesperado ao salvar o autor.");
+    } finally {
+      setSavingAuthor(false);
+    }
+  }
 
 export default function AdminQuestionEditPage() {
   const trpcUtils = trpc.useUtils();
@@ -734,46 +588,70 @@ export default function AdminQuestionEditPage() {
   const [match, params] = useRoute("/admin/questoes/:id");
   const [, setLocation] = useLocation();
   const questionId = match ? params.id : null;
+  async function deletePersistedBlock(localId: string, id?: string) {
+    if (!id) {
+      removeLocalBlock(localId);
+      return;
+    }
 
-  const [form, setForm] = useState<QuestionFormData>(initialForm);
-  const [suggestions, setSuggestions] =
-    useState<SuggestionsState>(EMPTY_SUGGESTIONS);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [uploadingAlternative, setUploadingAlternative] = useState<string | null>(
-    null
-  );
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+    try {
+      setError("");
+      setSuccessMessage("");
 
   useEffect(() => {
     async function loadSuggestions() {
       const data = await trpcUtils.admin.getQuestionSuggestions.fetch();
+      const { error } = await supabase.from("resolucoes").delete().eq("id", id);
 
-      const conteudosSet = new Set<string>();
-      const assuntosSet = new Set<string>();
-      const bancasSet = new Set<string>();
-      const instituicoesSet = new Set<string>();
+      if (error) {
+        console.error("Erro ao excluir bloco:", error);
+        setError("Não foi possível excluir o bloco.");
+        return;
+      }
 
-      ((data as SuggestionRow[]) || []).forEach((row) => {
-        addTextToSet(conteudosSet, row.conteudo);
-        addTextArrayToSet(conteudosSet, row.conteudos);
-
-        addTextToSet(assuntosSet, row.assunto);
-        addTextArrayToSet(assuntosSet, row.assuntos);
-        addGroupedAssuntosToSet(assuntosSet, row.assuntos_por_conteudo);
-
-        addTextToSet(bancasSet, row.banca);
-        addTextToSet(instituicoesSet, row.instituição);
+      await logAdminAction({
+        action: "resolution_block_deleted",
+        entityType: "resolucao",
+        entityId: id,
+        description: `Bloco de resolução excluído da questão ${
+          question?.codigo || questaoId
+        }`,
+        level: "warning",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          blocoId: id,
+          localId,
+        },
       });
 
-      setSuggestions({
-        conteudos: sortTextValues(conteudosSet),
-        assuntos: sortTextValues(assuntosSet),
-        bancas: sortTextValues(bancasSet),
-        instituicoes: sortTextValues(instituicoesSet),
-      });
+      removeLocalBlock(localId);
+      setSuccessMessage("Bloco excluído com sucesso.");
+    } catch (err) {
+      console.error("Erro inesperado ao excluir bloco:", err);
+      setError("Ocorreu um erro inesperado ao excluir o bloco.");
+    }
+  }
+
+  async function saveBlock(block: EditableBlock) {
+    if (!questaoId) return;
+
+    const payload = {
+      questao_id: questaoId,
+      tipo: block.tipo,
+      texto: block.tipo === "imagem" ? null : block.texto || null,
+      url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
+      ordem: block.ordem,
+    };
+
+    if (block.id) {
+      const { error } = await supabase
+        .from("resolucoes")
+        .update(payload)
+        .eq("id", block.id);
+
+      if (error) throw error;
+      return block.id;
     }
 
     loadSuggestions();
@@ -786,81 +664,82 @@ export default function AdminQuestionEditPage() {
         setLoading(false);
         return;
       }
+    const { data, error } = await supabase
+      .from("resolucoes")
+      .insert(payload)
+      .select("id")
+      .single();
 
-      try {
-        setLoading(true);
-        setError("");
-        setSuccessMessage("");
+    if (error) throw error;
+    return data?.id as string;
+  }
+
+  async function handleSaveSingle(localId: string) {
+    const block = blocks.find((item) => item.localId === localId);
+    if (!block || !questaoId) return;
 
         const data = await trpcUtils.admin.getQuestionById.fetch({
           id: questionId,
         });
+    try {
+      setError("");
+      setSuccessMessage("");
 
-        const conteudos = listaDoBanco(data.conteudos, data.conteudo);
-        const assuntos = listaDoBanco(data.assuntos, data.assunto);
-        const assuntosPorConteudo = normalizarAssuntosPorConteudoDoBanco(
-          data.assuntos_por_conteudo,
-          conteudos,
-          assuntos
-        );
-        const assuntosAjustados = flattenAssuntosPorConteudo(assuntosPorConteudo);
-
-        setForm({
-          codigo: data.codigo ?? "",
-          disciplina: data.disciplina ?? data.diciplina ?? "",
-          conteudo: data.conteudo ?? "",
-          conteudos,
-          assunto: primeiroValorDaLista(assuntosAjustados),
-          assuntos: assuntosAjustados,
-          assuntosPorConteudo,
-          banca: data.banca ?? "",
-          ano: data.ano ? String(data.ano) : "",
-          dificuldade: data.dificuldade ?? "",
-          instituicao: data["instituição"] ?? "",
-          publicada: data.publicada ?? true,
-          enunciado: data.enunciado ?? "",
-          enunciado_pos_imagem: data.enunciado_pos_imagem ?? "",
-          formula: data.formula ?? "",
-          url_imagem: data.url_imagem ?? "",
-
-          alternativa_a: data.a ?? data.A ?? "",
-          alternativa_b: data.b ?? data.B ?? "",
-          alternativa_c: data.c ?? data.C ?? "",
-          alternativa_d: data.d ?? data.D ?? "",
-          alternativa_e: data.e ?? data.E ?? "",
-
-          alternativa_a_imagem: data.a_url_imagem ?? "",
-          alternativa_b_imagem: data.b_url_imagem ?? "",
-          alternativa_c_imagem: data.c_url_imagem ?? "",
-          alternativa_d_imagem: data.d_url_imagem ?? "",
-          alternativa_e_imagem: data.e_url_imagem ?? "",
-
-          alternativa_correta: data.alternativa_correta ?? "",
-        });
-      } catch (err) {
-        console.error("Erro inesperado ao carregar questão:", err);
-        setError("Ocorreu um erro inesperado ao carregar a questão.");
-      } finally {
-        setLoading(false);
+      if (block.tipo === "imagem" && !block.url_imagem.trim()) {
+        setError("Bloco de imagem precisa ter uma URL de imagem.");
+        return;
       }
-    }
+
+      if (
+        (block.tipo === "texto" || block.tipo === "latex") &&
+        !block.texto.trim()
+      ) {
+        setError("Bloco de texto/latex precisa ter conteúdo.");
+        return;
+      }
 
     loadQuestion();
   }, [questionId, trpcUtils]);
+      const wasExisting = !!block.id;
+      const savedId = await saveBlock(block);
 
-  function updateField<K extends keyof QuestionFormData>(
-    field: K,
-    value: QuestionFormData[K]
-  ) {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+      await logAdminAction({
+        action: "resolution_block_saved",
+        entityType: "resolucao",
+        entityId: savedId,
+        description: `Bloco ${
+          wasExisting ? "atualizado" : "criado"
+        } na resolução da questão ${question?.codigo || questaoId}`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          blocoId: savedId,
+          tipo: block.tipo,
+          ordem: block.ordem,
+          isNew: !wasExisting,
+          hasImage: block.tipo === "imagem",
+          autorNome: authorName || null,
+        },
+      });
+
+      setBlocks((prev) =>
+        prev.map((item) =>
+          item.localId === localId
+            ? { ...item, id: savedId, isNew: false }
+            : item
+        )
+      );
+
+      setSuccessMessage("Bloco salvo com sucesso.");
+    } catch (err) {
+      console.error("Erro ao salvar bloco:", err);
+      setError("Não foi possível salvar o bloco.");
+    }
   }
 
-  async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || !questionId) return;
+  async function handleSaveAll() {
+    if (!questaoId) return;
 
     try {
       validarImagemUpload(file);
@@ -884,15 +763,23 @@ export default function AdminQuestionEditPage() {
         file,
         contentType: file.type,
       });
+      setSavingAll(true);
+      setError("");
+      setSuccessMessage("");
 
-      if (uploadError) {
-        console.error("Erro ao enviar imagem da questão:", uploadError);
-        setError(
-          uploadError.message
-            ? `Não foi possível enviar a imagem da questão: ${uploadError.message}`
-            : "Não foi possível enviar a imagem da questão."
-        );
-        return;
+      for (const block of orderedBlocks) {
+        if (block.tipo === "imagem" && !block.url_imagem.trim()) {
+          setError(`O bloco de ordem ${block.ordem} precisa de URL da imagem.`);
+          return;
+        }
+
+        if (
+          (block.tipo === "texto" || block.tipo === "latex") &&
+          !block.texto.trim()
+        ) {
+          setError(`O bloco de ordem ${block.ordem} precisa de conteúdo.`);
+          return;
+        }
       }
 
       if (!upload.publicUrl) {
@@ -901,28 +788,58 @@ export default function AdminQuestionEditPage() {
       }
 
       updateField("url_imagem", upload.publicUrl);
+      const updatedBlocks: EditableBlock[] = [];
+      let createdCount = 0;
+      let updatedCount = 0;
 
-      setSuccessMessage("Imagem da questão enviada com sucesso.");
+      for (const block of orderedBlocks) {
+        const wasExisting = !!block.id;
+        const savedId = await saveBlock(block);
+
+        if (wasExisting) updatedCount += 1;
+        else createdCount += 1;
+
+        updatedBlocks.push({
+          ...block,
+          id: savedId,
+          isNew: false,
+        });
+      }
+
+      await logAdminAction({
+        action: "resolution_blocks_saved",
+        entityType: "resolucao",
+        entityId: questaoId,
+        description: `Todos os blocos da resolução da questão ${
+          question?.codigo || questaoId
+        } foram salvos`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          totalBlocos: updatedBlocks.length,
+          criados: createdCount,
+          atualizados: updatedCount,
+          autorNome: authorName || null,
+        },
+      });
+
+      setBlocks(updatedBlocks);
+      setSuccessMessage("Todos os blocos foram salvos com sucesso.");
     } catch (err) {
-      console.error("Erro inesperado ao enviar imagem da questão:", err);
-      setError("Ocorreu um erro inesperado ao enviar a imagem.");
+      console.error("Erro ao salvar todos os blocos:", err);
+      setError("Não foi possível salvar todos os blocos.");
     } finally {
-      setUploadingImage(false);
-      event.target.value = "";
+      setSavingAll(false);
     }
   }
 
-  async function handleAlternativeImageUpload(
-    field:
-      | "alternativa_a_imagem"
-      | "alternativa_b_imagem"
-      | "alternativa_c_imagem"
-      | "alternativa_d_imagem"
-      | "alternativa_e_imagem",
+  async function handleImageUpload(
+    localId: string,
     event: ChangeEvent<HTMLInputElement>
   ) {
     const file = event.target.files?.[0];
-    if (!file || !questionId) return;
+    if (!file || !questaoId) return;
 
     try {
       validarImagemUpload(file);
@@ -947,13 +864,29 @@ export default function AdminQuestionEditPage() {
         contentType: file.type,
       });
 
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
+      setUploadingBlockId(localId);
+      setError("");
+      setSuccessMessage("");
+
+      const fileName = gerarNomeArquivo(file.name);
+      const path = `${questaoId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(path, file, {
+          upsert: true,
+        });
+
       if (uploadError) {
-        console.error("Erro ao enviar imagem da alternativa:", uploadError);
-        setError(
-          uploadError.message
-            ? `Não foi possível enviar a imagem da alternativa: ${uploadError.message}`
-            : "Não foi possível enviar a imagem da alternativa."
-        );
+        console.error("Erro ao enviar imagem:", uploadError);
+        setError("Não foi possível enviar a imagem para o bucket.");
         return;
       }
 
@@ -963,13 +896,50 @@ export default function AdminQuestionEditPage() {
       }
 
       updateField(field, upload.publicUrl);
+        return;
+      }
 
-      setSuccessMessage("Imagem da alternativa enviada com sucesso.");
+      updateField(field, upload.publicUrl);
+      const { data } = supabase.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(path);
+
+      if (!data?.publicUrl) {
+        setError("Não foi possível gerar a URL pública da imagem.");
+        return;
+      }
+
+      updateBlock(localId, {
+        tipo: "imagem",
+        url_imagem: data.publicUrl,
+      });
+
+      await logAdminAction({
+        action: "resolution_image_uploaded",
+        entityType: "resolucao",
+        entityId: questaoId,
+        description: `Imagem enviada para a resolução da questão ${
+          question?.codigo || questaoId
+        }`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          localId,
+          bucket: STORAGE_BUCKET,
+          path,
+          fileName: file.name,
+          publicUrl: data.publicUrl,
+          autorNome: authorName || null,
+        },
+      });
+
+      setSuccessMessage("Imagem enviada com sucesso.");
     } catch (err) {
-      console.error("Erro inesperado ao enviar imagem da alternativa:", err);
-      setError("Ocorreu um erro inesperado ao enviar a imagem da alternativa.");
+      console.error("Erro inesperado no upload da imagem:", err);
+      setError("Ocorreu um erro inesperado ao enviar a imagem.");
     } finally {
-      setUploadingAlternative(null);
+      setUploadingBlockId(null);
       event.target.value = "";
     }
   }
@@ -1095,28 +1065,86 @@ export default function AdminQuestionEditPage() {
       setSaving(false);
     }
   }
+  return (
+    <AdminGuard>
+      <AdminLayout
+        title="Editar resolução"
+        subtitle="Monte a resolução por blocos de texto, latex e imagem, na ordem que quiser."
+      >
+        <Card className="p-6 bg-white border-slate-200">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            <div>
+              <p className="text-sm text-slate-500 mb-1">Questão</p>
+              <p className="font-semibold text-slate-900">
+                {question?.codigo || "Sem código"}
+              </p>
+              <p className="text-sm text-slate-600 mt-1">
+                {textoCurto(question?.enunciado)}
+              </p>
+              <p className="text-xs text-slate-500 mt-2 break-all">
+                ID: {questaoId || "—"}
+              </p>
+            </div>
 
-  async function handleSaveAndGoToResolution() {
-    if (saving || !questionId) return;
+            <div className="w-full lg:max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <UserSquare2 className="w-4 h-4 text-slate-600" />
+                <p className="text-sm font-semibold text-slate-800">
+                  Autor da resolução
+                </p>
+              </div>
 
-    try {
-      setSaving(true);
-      setError("");
-      setSuccessMessage("");
+              <div className="flex flex-col sm:flex-row gap-3">
+                <select
+                  value={authorName}
+                  onChange={(e) => setAuthorName(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="">Selecione o autor</option>
+                  {AUTORES_RESOLUCAO.map((autor) => (
+                    <option key={autor} value={autor}>
+                      {autor}
+                    </option>
+                  ))}
+                </select>
 
-      const result = await saveQuestion();
+                <Button
+                  onClick={handleSaveAuthor}
+                  disabled={savingAuthor || !questaoId}
+                  className="rounded-2xl whitespace-nowrap"
+                >
+                  {savingAuthor ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Salvar autor
+                    </>
+                  )}
+                </Button>
+              </div>
 
-      if (!result.ok) return;
+              <p className="text-xs text-slate-500 mt-3">
+                Atual: {resolutionMeta?.autor_nome || "Nenhum autor definido"}
+              </p>
+            </div>
+          </div>
 
-      setSuccessMessage("Questão salva com sucesso. Indo para a resolução...");
-      setLocation(`/admin/resolucoes/${questionId}`);
-    } catch (err) {
-      console.error("Erro inesperado ao salvar e ir para resolução:", err);
-      setError("Ocorreu um erro inesperado ao salvar e abrir a resolução.");
-    } finally {
-      setSaving(false);
-    }
-  }
+          <div className="flex flex-wrap gap-3 mt-6">
+            <Link href="/admin/resolucoes">
+              <Button variant="outline" className="rounded-2xl">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Voltar
+              </Button>
+            </Link>
+
+            <Button onClick={addNewBlock} className="rounded-2xl">
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar bloco
+            </Button>
 
   function AlternativeImageField({
     label,
@@ -1146,280 +1174,211 @@ export default function AdminQuestionEditPage() {
             />
             <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
               {uploadingAlternative === imageField ? (
+            <Button
+              onClick={handleSaveAll}
+              disabled={savingAll || orderedBlocks.length === 0}
+              className="rounded-2xl"
+            >
+              {savingAll ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Enviando imagem...
+                  Salvando tudo...
                 </>
               ) : (
                 <>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Enviar imagem
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar tudo
                 </>
               )}
-            </span>
-          </label>
-        </div>
-
-        <TextInput
-          value={imageValue}
-          onChange={(e) => updateField(imageField, e.target.value)}
-          placeholder="https://..."
-        />
-
-        {imageValue ? (
-          <img
-            src={imageValue}
-            alt={`Preview ${label}`}
-            className="mt-3 max-h-40 rounded-xl border border-slate-200 bg-white"
-          />
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <AdminGuard>
-      <AdminLayout
-        title="Editar questão"
-        subtitle="Edite os dados estruturais da questão diretamente no banco."
-      >
-        <Card className="p-6 bg-white border-slate-200">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <p className="text-sm text-slate-500 mb-1">ID da questão</p>
-              <p className="text-sm font-mono text-slate-800 break-all">
-                {questionId || "—"}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link href="/admin/questoes">
-                <Button variant="outline" className="rounded-2xl">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Voltar para questões
-                </Button>
-              </Link>
-
-              {questionId ? (
-                <Link href={`/admin/resolucoes/${questionId}`}>
-                  <Button variant="outline" className="rounded-2xl">
-                    <Blocks className="w-4 h-4 mr-2" />
-                    Ir para resolução
-                  </Button>
-                </Link>
-              ) : null}
-            </div>
+            </Button>
           </div>
         </Card>
 
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
             <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando dados da questão...</p>
+            <p className="text-slate-600">Carregando blocos da resolução...</p>
           </Card>
         ) : error ? (
-          <Card className="p-8 border-red-200 bg-red-50">
+          <Card className="p-6 border-red-200 bg-red-50">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
               <div>
                 <h2 className="text-lg font-bold text-red-700 mb-1">
-                  Erro na edição
+                  Erro no editor de resolução
                 </h2>
                 <p className="text-red-600">{error}</p>
               </div>
             </div>
           </Card>
-        ) : (
-          <>
-            {successMessage ? (
-              <Card className="p-5 border-emerald-200 bg-emerald-50">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  <p className="text-emerald-700 font-medium">
-                    {successMessage}
+        ) : null}
+
+        {successMessage ? (
+          <Card className="p-5 border-emerald-200 bg-emerald-50">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <p className="text-emerald-700 font-medium">{successMessage}</p>
+            </div>
+          </Card>
+        ) : null}
+
+        {!loading && orderedBlocks.length === 0 ? (
+          <Card className="p-10 text-center">
+            <Blocks className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-slate-900 mb-2">
+              Nenhum bloco de resolução cadastrado
+            </h2>
+            <p className="text-slate-500 mb-4">
+              Comece adicionando um bloco de texto, latex ou imagem.
+            </p>
+            <Button onClick={addNewBlock} className="rounded-2xl">
+              <Plus className="w-4 h-4 mr-2" />
+              Criar primeiro bloco
+            </Button>
+          </Card>
+        ) : null}
+
+        <div className="space-y-5">
+          {orderedBlocks.map((block, index) => (
+            <Card key={block.localId} className="p-6 bg-white border-slate-200">
+              <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-5">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">
+                      Bloco {index + 1}
+                    </span>
+
+                    <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+                      Ordem {block.ordem}
+                    </span>
+
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                        block.tipo === "imagem"
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                          : block.tipo === "latex"
+                          ? "bg-purple-100 text-purple-700 border-purple-200"
+                          : "bg-blue-100 text-blue-700 border-blue-200"
+                      }`}
+                    >
+                      {block.tipo}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-slate-500">
+                    {block.id ? `ID: ${block.id}` : "Bloco ainda não salvo"}
                   </p>
-                </div>
-              </Card>
-            ) : null}
-
-            <Card className="p-6 bg-white border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">
-                Dados principais
-              </h2>
-
-              <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div>
-                  <FieldLabel>Código</FieldLabel>
-                  <TextInput
-                    value={form.codigo}
-                    onChange={(e) => updateField("codigo", e.target.value)}
-                    placeholder="Q00001"
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>Disciplina</FieldLabel>
-                  <Select
-                    value={form.disciplina}
-                    onChange={(e) => updateField("disciplina", e.target.value)}
-                  >
-                    <option value="">Selecione</option>
-                    <option value="fisica">Física</option>
-                    <option value="matematica">Matemática</option>
-                    <option value="quimica">Química</option>
-                  </Select>
-                </div>
-
-                <div>
-                  <FieldLabel>Ano</FieldLabel>
-                  <TextInput
-                    value={form.ano}
-                    onChange={(e) => updateField("ano", e.target.value)}
-                    placeholder="2024"
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>Dificuldade</FieldLabel>
-                  <Select
-                    value={form.dificuldade}
-                    onChange={(e) => updateField("dificuldade", e.target.value)}
-                  >
-                    <option value="">Selecione</option>
-                    <option value="facil">Fácil</option>
-                    <option value="medio">Médio</option>
-                    <option value="dificil">Difícil</option>
-                    <option value="muito_dificil">Muito difícil</option>
-                  </Select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <MultiTagInput
-                    label="Conteúdos"
-                    values={form.conteudos}
-                    suggestions={suggestions.conteudos}
-                    onChange={(values) =>
-                      setForm((prev) => {
-                        const conteudos = normalizarLista(values);
-                        const assuntosPorConteudo =
-                          sincronizarAssuntosPorConteudo(
-                            conteudos,
-                            prev.assuntosPorConteudo
-                          );
-                        const assuntos =
-                          flattenAssuntosPorConteudo(assuntosPorConteudo);
-
-                        return {
-                          ...prev,
-                          conteudos,
-                          conteudo: primeiroValorDaLista(conteudos),
-                          assuntosPorConteudo,
-                          assuntos,
-                          assunto: primeiroValorDaLista(assuntos),
-                        };
-                      })
-                    }
-                    placeholder="Digite um conteúdo e pressione Enter. Ex.: cinemática"
-                    helper="Você pode adicionar vários conteúdos. Também dá para colar separados por vírgula."
-                  />
-                </div>
-
-                <AssuntosPorConteudoEditor
-                  items={form.assuntosPorConteudo}
-                  suggestions={suggestions.assuntos}
-                  onChange={(items) =>
-                    setForm((prev) => {
-                      const assuntosPorConteudo =
-                        normalizarAssuntosPorConteudo(items);
-                      const assuntos =
-                        flattenAssuntosPorConteudo(assuntosPorConteudo);
-
-                      return {
-                        ...prev,
-                        assuntosPorConteudo,
-                        assuntos,
-                        assunto: primeiroValorDaLista(assuntos),
-                      };
-                    })
-                  }
-                />
-
-                <div>
-                  <FieldLabel>Banca</FieldLabel>
-                  <TextInput
-                    value={form.banca}
-                    onChange={(e) => updateField("banca", e.target.value)}
-                    placeholder="eear"
-                    list="edit-bancas-suggestions"
-                  />
-                  <datalist id="edit-bancas-suggestions">
-                    {suggestions.bancas.map((banca) => (
-                      <option key={banca} value={banca} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <div>
-                  <FieldLabel>Instituição</FieldLabel>
-                  <TextInput
-                    value={form.instituicao}
-                    onChange={(e) => updateField("instituicao", e.target.value)}
-                    placeholder="eear"
-                    list="edit-instituicoes-suggestions"
-                  />
-                  <datalist id="edit-instituicoes-suggestions">
-                    {suggestions.instituicoes.map((instituicao) => (
-                      <option key={instituicao} value={instituicao} />
-                    ))}
-                  </datalist>
-                </div>
-              </div>
-
-              <div className="mt-5">
-                <label className="inline-flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.publicada}
-                    onChange={(e) => updateField("publicada", e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm font-medium text-slate-700">
-                    Questão publicada
-                  </span>
-                </label>
-              </div>
-            </Card>
-
-            <Card className="p-6 bg-white border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">
-                Enunciado e imagem
-              </h2>
-
-              <div className="space-y-5">
-                <div>
-                  <FieldLabel>Enunciado</FieldLabel>
-                  <TextArea
-                    rows={6}
-                    value={form.enunciado}
-                    onChange={(e) => updateField("enunciado", e.target.value)}
-                    placeholder="Digite o enunciado da questão"
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>Enunciado pós-imagem</FieldLabel>
-                  <TextArea
-                    rows={4}
-                    value={form.enunciado_pos_imagem}
-                    onChange={(e) =>
-                      updateField("enunciado_pos_imagem", e.target.value)
-                    }
-                    placeholder="Texto que aparece depois da imagem da questão"
-                  />
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <label className="inline-flex">
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => addBlockAbove(block.localId)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Acima
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => addBlockBelow(block.localId)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Abaixo
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => duplicateBlock(block.localId)}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Duplicar
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => moveBlock(block.localId, "up")}
+                    disabled={index === 0}
+                  >
+                    <ArrowUp className="w-4 h-4 mr-2" />
+                    Subir
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => moveBlock(block.localId, "down")}
+                    disabled={index === orderedBlocks.length - 1}
+                  >
+                    <ArrowDown className="w-4 h-4 mr-2" />
+                    Descer
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => handleSaveSingle(block.localId)}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar bloco
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl border-red-200 text-red-600 hover:bg-red-50"
+                    onClick={() => deletePersistedBlock(block.localId, block.id)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Excluir
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mb-5">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Tipo do bloco
+                  </label>
+                  <select
+                    value={block.tipo}
+                    onChange={(e) =>
+                      updateBlock(block.localId, {
+                        tipo: e.target.value as "texto" | "latex" | "imagem",
+                      })
+                    }
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  >
+                    <option value="texto">Texto</option>
+                    <option value="latex">Latex</option>
+                    <option value="imagem">Imagem</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Ordem
+                  </label>
+                  <input
+                    type="number"
+                    value={block.ordem}
+                    onChange={(e) =>
+                      updateBlock(block.localId, {
+                        ordem: Number(e.target.value) || 1,
+                      })
+                    }
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+
+                {block.tipo === "imagem" ? (
+                  <div className="md:col-span-2 xl:col-span-1">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      URL da imagem
+                    </label>
                     <input
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
@@ -1496,153 +1455,117 @@ export default function AdminQuestionEditPage() {
                     <TextArea
                       rows={3}
                       value={form.alternativa_a}
+                      type="text"
+                      value={block.url_imagem}
                       onChange={(e) =>
-                        updateField("alternativa_a", e.target.value)
+                        updateBlock(block.localId, {
+                          url_imagem: e.target.value,
+                        })
                       }
+                      placeholder="https://..."
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                     />
                   </div>
-
-                  <AlternativeImageField
-                    label="Imagem da alternativa A"
-                    imageField="alternativa_a_imagem"
-                  />
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <FieldLabel>Alternativa B</FieldLabel>
-                    <TextArea
-                      rows={3}
-                      value={form.alternativa_b}
-                      onChange={(e) =>
-                        updateField("alternativa_b", e.target.value)
-                      }
-                    />
-                  </div>
-
-                  <AlternativeImageField
-                    label="Imagem da alternativa B"
-                    imageField="alternativa_b_imagem"
-                  />
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <FieldLabel>Alternativa C</FieldLabel>
-                    <TextArea
-                      rows={3}
-                      value={form.alternativa_c}
-                      onChange={(e) =>
-                        updateField("alternativa_c", e.target.value)
-                      }
-                    />
-                  </div>
-
-                  <AlternativeImageField
-                    label="Imagem da alternativa C"
-                    imageField="alternativa_c_imagem"
-                  />
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <FieldLabel>Alternativa D</FieldLabel>
-                    <TextArea
-                      rows={3}
-                      value={form.alternativa_d}
-                      onChange={(e) =>
-                        updateField("alternativa_d", e.target.value)
-                      }
-                    />
-                  </div>
-
-                  <AlternativeImageField
-                    label="Imagem da alternativa D"
-                    imageField="alternativa_d_imagem"
-                  />
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <FieldLabel>Alternativa E</FieldLabel>
-                    <TextArea
-                      rows={3}
-                      value={form.alternativa_e}
-                      onChange={(e) =>
-                        updateField("alternativa_e", e.target.value)
-                      }
-                    />
-                  </div>
-
-                  <AlternativeImageField
-                    label="Imagem da alternativa E"
-                    imageField="alternativa_e_imagem"
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>Alternativa correta</FieldLabel>
-                  <Select
-                    value={form.alternativa_correta}
-                    onChange={(e) =>
-                      updateField("alternativa_correta", e.target.value)
-                    }
-                  >
-                    <option value="">Selecione</option>
-                    <option value="a">A</option>
-                    <option value="b">B</option>
-                    <option value="c">C</option>
-                    <option value="d">D</option>
-                    <option value="e">E</option>
-                  </Select>
-                </div>
+                ) : null}
               </div>
+
+              {block.tipo === "imagem" ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-3">
+                    <label className="inline-flex">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleImageUpload(block.localId, e)}
+                      />
+                      <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                        {uploadingBlockId === block.localId ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Enviando imagem...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Enviar imagem
+                          </>
+                        )}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Image className="w-4 h-4 text-emerald-600" />
+                      <p className="text-sm font-semibold text-slate-700">
+                        Preview da imagem
+                      </p>
+                    </div>
+
+                    {block.url_imagem ? (
+                      <img
+                        src={block.url_imagem}
+                        alt="Preview do bloco de imagem"
+                        className="max-w-full rounded-xl border border-slate-200 bg-white"
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-500">
+                        Envie uma imagem ou cole uma URL para visualizar o preview.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Conteúdo do bloco
+                    </label>
+                    <textarea
+                      rows={block.tipo === "latex" ? 5 : 7}
+                      value={block.texto}
+                      onChange={(e) =>
+                        updateBlock(block.localId, { texto: e.target.value })
+                      }
+                      placeholder={
+                        block.tipo === "latex"
+                          ? "Ex.: $$ v = \\frac{\\Delta s}{\\Delta t} $$"
+                          : "Digite o texto do bloco..."
+                      }
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                  </div>
+
+                  {block.tipo === "latex" ? (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-700 mb-3">
+                        Preview do LaTeX
+                      </p>
+
+                      <div className="prose prose-slate max-w-none text-slate-800">
+                        {block.texto.trim() ? (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                          >
+                            {block.texto}
+                          </ReactMarkdown>
+                        ) : (
+                          <p className="text-sm text-slate-500">
+                            Digite o conteúdo em LaTeX para ver o preview aqui.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </Card>
-
-            <QuestionPreview form={form} />
-
-            <div className="flex flex-wrap justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={handleSaveAndGoToResolution}
-                disabled={saving}
-                className="rounded-2xl min-w-[220px]"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Blocks className="w-4 h-4 mr-2" />
-                    Salvar e ir para resolução
-                  </>
-                )}
-              </Button>
-
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-2xl min-w-[180px]"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Salvar alterações
-                  </>
-                )}
-              </Button>
-            </div>
-          </>
-        )}
+          ))}
+        </div>
       </AdminLayout>
     </AdminGuard>
   );
-}
-          
+                      }
+                    

@@ -67,6 +67,16 @@ const STORAGE_BUCKET = "resolucoes-imagens";
 const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const AUTORES_RESOLUCAO = ["Christian", "Maurício"];
+const RESOLUTION_IMPORT_STORAGE_PREFIX = "pending-resolution-import:";
+
+type ImportedResolutionBlock = {
+  tipo?: unknown;
+  texto?: unknown;
+  content?: unknown;
+  url_imagem?: unknown;
+  imageUrl?: unknown;
+  ordem?: unknown;
+};
 
 function textoCurto(texto?: string | null, limite = 140) {
   const valor = (texto || "").trim();
@@ -105,6 +115,43 @@ function normalizarOrdens(lista: EditableBlock[]) {
     ...block,
     ordem: index + 1,
   }));
+}
+
+function textFromUnknown(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeImportedResolutionBlocks(rawValue: unknown) {
+  const blocks = Array.isArray(rawValue) ? rawValue : [];
+
+  return blocks
+    .map((block, index) => {
+      if (!block || typeof block !== "object") return null;
+
+      const rawBlock = block as ImportedResolutionBlock;
+      const rawTipo = textFromUnknown(rawBlock.tipo).toLowerCase();
+      const tipo: EditableBlock["tipo"] =
+        rawTipo === "imagem" || rawTipo === "image"
+          ? "imagem"
+          : rawTipo === "latex"
+            ? "latex"
+            : "texto";
+      const texto = textFromUnknown(rawBlock.texto ?? rawBlock.content);
+      const urlImagem = textFromUnknown(rawBlock.url_imagem ?? rawBlock.imageUrl);
+
+      if (tipo === "imagem" && !urlImagem) return null;
+      if (tipo !== "imagem" && !texto) return null;
+
+      return {
+        localId: gerarLocalId(),
+        tipo,
+        texto,
+        url_imagem: urlImagem,
+        ordem: Number(rawBlock.ordem) || index + 1,
+        isNew: true,
+      };
+    })
+    .filter((block): block is EditableBlock => !!block);
 }
 
 export default function AdminResolutionEditorPage() {
@@ -149,6 +196,57 @@ export default function AdminResolutionEditorPage() {
       setError(resolutionEditorQuery.error.message || "Não foi possível carregar a resolução.");
       setLoading(false);
       return;
+        const mappedBlocks: EditableBlock[] = (
+          (resolutionsResult.data as ResolutionBlock[]) || []
+        ).map((block, index) => ({
+          id: block.id,
+          localId: block.id || `${index}-${gerarLocalId()}`,
+          tipo: ((block.tipo || "texto").toLowerCase() as
+            | "texto"
+            | "latex"
+            | "imagem"),
+          texto: block.texto || "",
+          url_imagem: block.url_imagem || "",
+          ordem: block.ordem ?? index + 1,
+          isNew: false,
+        }));
+
+        if (mappedBlocks.length > 0) {
+          setBlocks(normalizarOrdens(mappedBlocks));
+          return;
+        }
+
+        const pendingImportKey = `${RESOLUTION_IMPORT_STORAGE_PREFIX}${questaoId}`;
+        const pendingImport = window.localStorage.getItem(pendingImportKey);
+
+        if (pendingImport) {
+          const importedBlocks = normalizeImportedResolutionBlocks(
+            JSON.parse(pendingImport)
+          );
+
+          if (importedBlocks.length > 0) {
+            setBlocks(normalizarOrdens(importedBlocks));
+            setSuccessMessage(
+              "Blocos importados do arquivo da questão. Revise e clique em Salvar tudo para gravar no Supabase."
+            );
+          } else {
+            setBlocks([]);
+          }
+
+          window.localStorage.removeItem(pendingImportKey);
+          return;
+        }
+
+        setBlocks([]);
+      } catch (err) {
+        console.error(
+          "Erro inesperado ao carregar editor de resolução:",
+          err
+        );
+        setError("Ocorreu um erro inesperado ao carregar a resolução.");
+      } finally {
+        setLoading(false);
+      }
     }
 
     if (!resolutionEditorQuery.data) return;
