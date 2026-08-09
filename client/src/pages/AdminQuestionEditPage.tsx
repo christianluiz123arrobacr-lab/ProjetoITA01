@@ -1,3 +1,7 @@
+import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
+import { useRoute, useLocation, Link } from "wouter";
+import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
+import { trpc } from "@/lib/trpc";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { supabase } from "@/lib/supabase";
@@ -10,6 +14,7 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import {
   ArrowLeft,
   ArrowDown,
@@ -62,6 +67,41 @@ type EditableBlock = {
   isNew?: boolean;
 };
 
+const QUESTION_IMAGES_BUCKET = "questoes-imagens";
+const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+const initialForm: QuestionFormData = {
+  codigo: "",
+  disciplina: "",
+  conteudo: "",
+  conteudos: [],
+  assunto: "",
+  assuntos: [],
+  assuntosPorConteudo: [],
+  banca: "",
+  ano: "",
+  dificuldade: "",
+  instituicao: "",
+  publicada: true,
+  enunciado: "",
+  enunciado_pos_imagem: "",
+  formula: "",
+  url_imagem: "",
+
+  alternativa_a: "",
+  alternativa_b: "",
+  alternativa_c: "",
+  alternativa_d: "",
+  alternativa_e: "",
+
+  alternativa_a_imagem: "",
+  alternativa_b_imagem: "",
+  alternativa_c_imagem: "",
+  alternativa_d_imagem: "",
+  alternativa_e_imagem: "",
+
+  alternativa_correta: "",
 const STORAGE_BUCKET = "resolucoes-imagens";
 const AUTORES_RESOLUCAO = ["Christian", "Maurício"];
 const RESOLUTION_IMPORT_STORAGE_PREFIX = "pending-resolution-import:";
@@ -379,6 +419,15 @@ export default function AdminResolutionEditorPage() {
       if (direction === "up" && index === 0) return prev;
       if (direction === "down" && index === sorted.length - 1) return prev;
 
+function validarImagemUpload(file: File) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error("A imagem deve ter no máximo 3 MB.");
+  }
+}
       const targetIndex = direction === "up" ? index - 1 : index + 1;
 
       [sorted[index], sorted[targetIndex]] = [sorted[targetIndex], sorted[index]];
@@ -390,6 +439,14 @@ export default function AdminResolutionEditorPage() {
     setError("");
   }
 
+  return (
+    <div className="prose prose-slate max-w-none text-slate-800 prose-p:my-2 prose-img:rounded-xl prose-img:border prose-img:border-slate-200">
+      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}>
+        {normalizeMathSource(content)}
+      </ReactMarkdown>
+    </div>
+  );
+}
   async function handleSaveAuthor() {
     if (!questaoId) return;
 
@@ -448,6 +505,13 @@ export default function AdminResolutionEditorPage() {
     }
   }
 
+export default function AdminQuestionEditPage() {
+  const trpcUtils = trpc.useUtils();
+  const updateQuestionMutation = trpc.admin.updateQuestion.useMutation();
+  const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
+  const [match, params] = useRoute("/admin/questoes/:id");
+  const [, setLocation] = useLocation();
+  const questionId = match ? params.id : null;
   async function deletePersistedBlock(localId: string, id?: string) {
     if (!id) {
       removeLocalBlock(localId);
@@ -458,6 +522,9 @@ export default function AdminResolutionEditorPage() {
       setError("");
       setSuccessMessage("");
 
+  useEffect(() => {
+    async function loadSuggestions() {
+      const data = await trpcUtils.admin.getQuestionSuggestions.fetch();
       const { error } = await supabase.from("resolucoes").delete().eq("id", id);
 
       if (error) {
@@ -511,6 +578,8 @@ export default function AdminResolutionEditorPage() {
       return block.id;
     }
 
+    loadSuggestions();
+  }, [trpcUtils]);
     const { data, error } = await supabase
       .from("resolucoes")
       .insert(payload)
@@ -525,6 +594,9 @@ export default function AdminResolutionEditorPage() {
     const block = blocks.find((item) => item.localId === localId);
     if (!block || !questaoId) return;
 
+        const data = await trpcUtils.admin.getQuestionById.fetch({
+          id: questionId,
+        });
     try {
       setError("");
       setSuccessMessage("");
@@ -542,6 +614,8 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
+    loadQuestion();
+  }, [questionId, trpcUtils]);
       const wasExisting = !!block.id;
       const savedId = await saveBlock(block);
 
@@ -584,6 +658,27 @@ export default function AdminResolutionEditorPage() {
     if (!questaoId) return;
 
     try {
+      validarImagemUpload(file);
+      setUploadingImage(true);
+      setError("");
+      setSuccessMessage("");
+
+      const pastaBase =
+        form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/enunciado`,
+      });
+
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
       setSavingAll(true);
       setError("");
       setSuccessMessage("");
@@ -603,6 +698,12 @@ export default function AdminResolutionEditorPage() {
         }
       }
 
+      if (!upload.publicUrl) {
+        setError("Não foi possível gerar a URL pública da imagem.");
+        return;
+      }
+
+      updateField("url_imagem", upload.publicUrl);
       const updatedBlocks: EditableBlock[] = [];
       let createdCount = 0;
       let updatedCount = 0;
@@ -657,6 +758,27 @@ export default function AdminResolutionEditorPage() {
     if (!file || !questaoId) return;
 
     try {
+      validarImagemUpload(file);
+      setUploadingAlternative(field);
+      setError("");
+      setSuccessMessage("");
+
+      const pastaBase =
+        form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/alternativas/${field}`,
+      });
+
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
       setUploadingBlockId(localId);
       setError("");
       setSuccessMessage("");
@@ -676,6 +798,12 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
+      if (!upload.publicUrl) {
+        setError("Não foi possível gerar a URL pública da imagem da alternativa.");
+        return;
+      }
+
+      updateField(field, upload.publicUrl);
       const { data } = supabase.storage
         .from(STORAGE_BUCKET)
         .getPublicUrl(path);
@@ -720,6 +848,127 @@ export default function AdminResolutionEditorPage() {
     }
   }
 
+  async function saveQuestion() {
+    if (!questionId) {
+      return { ok: false };
+    }
+
+    const anoNumero = Number(form.ano);
+
+    if (!form.disciplina.trim()) {
+      setError("Preencha a disciplina.");
+      return { ok: false };
+    }
+
+    const conteudosSelecionados = normalizarLista(form.conteudos);
+    const assuntosPorConteudoSelecionados = normalizarAssuntosPorConteudo(
+      form.assuntosPorConteudo
+    );
+    const assuntosSelecionados = flattenAssuntosPorConteudo(
+      assuntosPorConteudoSelecionados
+    );
+
+    if (conteudosSelecionados.length === 0) {
+      setError("Adicione pelo menos um conteúdo.");
+      return { ok: false };
+    }
+
+    if (assuntosSelecionados.length === 0) {
+      setError("Adicione pelo menos um assunto.");
+      return { ok: false };
+    }
+
+    if (!form.dificuldade.trim()) {
+      setError("Preencha a dificuldade.");
+      return { ok: false };
+    }
+
+    if (!form.instituicao.trim()) {
+      setError("Preencha a instituição.");
+      return { ok: false };
+    }
+
+    if (!form.ano.trim() || Number.isNaN(anoNumero)) {
+      setError("Preencha um ano válido.");
+      return { ok: false };
+    }
+
+    const temA = form.alternativa_a.trim() || form.alternativa_a_imagem.trim();
+    const temB = form.alternativa_b.trim() || form.alternativa_b_imagem.trim();
+
+    if (!temA) {
+      setError("Preencha a alternativa A com texto ou imagem.");
+      return { ok: false };
+    }
+
+    if (!temB) {
+      setError("Preencha a alternativa B com texto ou imagem.");
+      return { ok: false };
+    }
+
+    if (!form.alternativa_correta.trim()) {
+      setError("Selecione a alternativa correta.");
+      return { ok: false };
+    }
+
+    const payload = {
+      codigo: valorLimpo(form.codigo),
+      disciplina: valorLimpo(form.disciplina),
+      conteudo: valorLimpo(primeiroValorDaLista(conteudosSelecionados)),
+      conteudos: conteudosSelecionados,
+      assunto: valorLimpo(primeiroValorDaLista(assuntosSelecionados)),
+      assuntos: assuntosSelecionados,
+      assuntos_por_conteudo: assuntosPorConteudoSelecionados,
+      banca: valorLimpo(form.banca),
+      ano: anoNumero,
+      dificuldade: valorLimpo(form.dificuldade),
+      instituição: valorLimpo(form.instituicao),
+      publicada: form.publicada,
+      enunciado: valorLimpo(form.enunciado),
+      enunciado_pos_imagem: valorLimpo(form.enunciado_pos_imagem),
+      formula: valorLimpo(form.formula),
+      url_imagem: valorLimpo(form.url_imagem),
+
+      A: valorLimpo(form.alternativa_a),
+      B: valorLimpo(form.alternativa_b),
+      C: valorLimpo(form.alternativa_c),
+      D: valorLimpo(form.alternativa_d),
+      E: valorLimpo(form.alternativa_e),
+
+      a_url_imagem: valorLimpo(form.alternativa_a_imagem),
+      b_url_imagem: valorLimpo(form.alternativa_b_imagem),
+      c_url_imagem: valorLimpo(form.alternativa_c_imagem),
+      d_url_imagem: valorLimpo(form.alternativa_d_imagem),
+      e_url_imagem: valorLimpo(form.alternativa_e_imagem),
+
+      alternativa_correta: valorLimpo(form.alternativa_correta),
+    };
+
+    await updateQuestionMutation.mutateAsync({ id: questionId, payload });
+
+    return { ok: true };
+  }
+
+  async function handleSave() {
+    if (saving) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccessMessage("");
+
+      const result = await saveQuestion();
+
+      if (!result.ok) return;
+
+      setSuccessMessage("Questão salva com sucesso.");
+    } catch (err) {
+      console.error("Erro inesperado ao salvar questão:", err);
+      setError("Ocorreu um erro inesperado ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
     <AdminGuard>
       <AdminLayout
@@ -801,6 +1050,34 @@ export default function AdminResolutionEditorPage() {
               Adicionar bloco
             </Button>
 
+  function AlternativeImageField({
+    label,
+    imageField,
+  }: {
+    label: string;
+    imageField:
+      | "alternativa_a_imagem"
+      | "alternativa_b_imagem"
+      | "alternativa_c_imagem"
+      | "alternativa_d_imagem"
+      | "alternativa_e_imagem";
+  }) {
+    const imageValue = form[imageField];
+
+    return (
+      <div>
+        <FieldLabel>{label}</FieldLabel>
+
+        <div className="flex flex-wrap gap-3 mb-3">
+          <label className="inline-flex">
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => handleAlternativeImageUpload(imageField, e)}
+            />
+            <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+              {uploadingAlternative === imageField ? (
             <Button
               onClick={handleSaveAll}
               disabled={savingAll || orderedBlocks.length === 0}
@@ -1007,6 +1284,81 @@ export default function AdminResolutionEditorPage() {
                       URL da imagem
                     </label>
                     <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                    <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                      {uploadingImage ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Enviando imagem...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Enviar imagem da questão
+                        </>
+                      )}
+                    </span>
+                  </label>
+                </div>
+
+                <div>
+                  <FieldLabel>URL da imagem</FieldLabel>
+                  <TextInput
+                    value={form.url_imagem}
+                    onChange={(e) => updateField("url_imagem", e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ImageIcon className="w-4 h-4 text-emerald-600" />
+                    <p className="text-sm font-semibold text-slate-700">
+                      Preview da imagem da questão
+                    </p>
+                  </div>
+
+                  {form.url_imagem ? (
+                    <img
+                      src={form.url_imagem}
+                      alt="Preview da imagem da questão"
+                      className="max-w-full rounded-xl border border-slate-200 bg-white"
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      Envie uma imagem ou cole uma URL para visualizar o preview.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <FieldLabel>Fórmula</FieldLabel>
+                  <TextArea
+                    rows={4}
+                    value={form.formula}
+                    onChange={(e) => updateField("formula", e.target.value)}
+                    placeholder="Ex.: $$ v = \\frac{\\Delta s}{\\Delta t} $$"
+                  />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6 bg-white border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900 mb-6">
+                Alternativas
+              </h2>
+
+              <div className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <FieldLabel>Alternativa A</FieldLabel>
+                    <TextArea
+                      rows={3}
+                      value={form.alternativa_a}
                       type="text"
                       value={block.url_imagem}
                       onChange={(e) =>
