@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -261,7 +261,10 @@ export function InteractiveQuiz({
   const [reportError, setReportError] = useState("");
 
   const question = questions[currentQuestion] ?? null;
-  const questionContent = question ? groupRichQuestionContent(buildQuestionRichContent(question)) : [];
+  const questionContent = useMemo(
+    () => question ? groupRichQuestionContent(buildQuestionRichContent(question)) : [],
+    [question]
+  );
 
   const selectedAnswer = answersByQuestion[currentQuestion] ?? null;
   const answered = selectedAnswer !== null;
@@ -305,7 +308,6 @@ export function InteractiveQuiz({
     const wrongDifficultyMap = new Map<string, number>();
 
     questions.forEach((q, index) => {
-      const selected = answersByQuestion[index];
       const correct = answerResultsByQuestion[index]?.isCorrect === true;
 
       if (correct) {
@@ -344,7 +346,7 @@ export function InteractiveQuiz({
         .map(([difficulty, count]) => ({ difficulty, count }))
         .sort((a, b) => b.count - a.count),
     };
-  }, [answerResultsByQuestion, answersByQuestion, isQuizComplete, questions, score, totalAnswered]);
+  }, [answerResultsByQuestion, isQuizComplete, questions, score, totalAnswered]);
 
   useEffect(() => {
     if (!questions.length) {
@@ -412,14 +414,7 @@ export function InteractiveQuiz({
     }
   }, [completionData, hasSentCompletion, isQuizComplete, onComplete]);
 
-  useEffect(() => {
-    if (!question?.id || !answered) return;
-    if (answerStatsByQuestionId[question.id]) return;
-
-    loadAnswerStats(question.id);
-  }, [answered, answerStatsByQuestionId, question?.id]);
-
-  const loadAnswerStats = async (questionId: string) => {
+  const loadAnswerStats = useCallback(async (questionId: string) => {
     if (!questionId) return;
 
     setAnswerStatsLoadingQuestionId(questionId);
@@ -438,7 +433,14 @@ export function InteractiveQuiz({
         current === questionId ? null : current
       );
     }
-  };
+  }, [trpcUtils]);
+
+  useEffect(() => {
+    if (!question?.id || !answered) return;
+    if (answerStatsByQuestionId[question.id]) return;
+
+    loadAnswerStats(question.id);
+  }, [answered, answerStatsByQuestionId, loadAnswerStats, question?.id]);
 
   const saveAttempt = async (optionId: string) => {
     if (!user?.id || !question) {
@@ -550,9 +552,14 @@ export function InteractiveQuiz({
   const handleRestart = () => {
     setCurrentQuestion(0);
     setAnswersByQuestion({});
+    setAnswerResultsByQuestion({});
+    setResolutionByQuestion({});
     setShowExplanationByQuestion({});
     setQuestionStartedAt(Date.now());
     setHasSentCompletion(false);
+    setSubmittingOptionId(null);
+    setAnswerStatsLoadingQuestionId(null);
+    setAnswerError("");
     setReportOpen(false);
     setReportType("enunciado");
     setReportComment("");
