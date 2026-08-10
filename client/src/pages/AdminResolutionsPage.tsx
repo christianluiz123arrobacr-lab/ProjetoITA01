@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -56,6 +56,7 @@ export default function AdminResolutionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const trpcUtils = trpc.useUtils();
 
   useEffect(() => {
     async function loadData() {
@@ -63,37 +64,10 @@ export default function AdminResolutionsPage() {
         setLoading(true);
         setError("");
 
-        const [questionsResult, resolutionsResult] = await Promise.all([
-          supabase
-            .from("questoes")
-            .select("*")
-            .order("created_at", { ascending: false }),
+        const data = await trpcUtils.admin.listResolutionOverview.fetch();
 
-          supabase
-            .from("resolucoes")
-            .select("*"),
-        ]);
-
-        if (questionsResult.error) {
-          console.error(
-            "Erro ao carregar questões para resoluções:",
-            questionsResult.error
-          );
-          setError("Não foi possível carregar as questões.");
-          return;
-        }
-
-        if (resolutionsResult.error) {
-          console.error(
-            "Erro ao carregar resoluções:",
-            resolutionsResult.error
-          );
-          setError("Não foi possível carregar os blocos de resolução.");
-          return;
-        }
-
-        setQuestions((questionsResult.data as QuestionRow[]) || []);
-        setResolutions((resolutionsResult.data as ResolutionRow[]) || []);
+        setQuestions(data.questions as QuestionRow[]);
+        setResolutions(data.resolutions as ResolutionRow[]);
       } catch (err) {
         console.error(
           "Erro inesperado ao carregar módulo de resoluções:",
@@ -106,7 +80,7 @@ export default function AdminResolutionsPage() {
     }
 
     loadData();
-  }, []);
+  }, [trpcUtils]);
 
   const resolutionMap = useMemo(() => {
     const map = new Map<string, ResolutionSummary>();

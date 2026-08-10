@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -475,7 +475,7 @@ function buildRankingRows(
 
   const rows: Array<Omit<RankingEntry, "positionDelta" | "badges">> = [];
 
-  for (const [userId, userAttempts] of byUser.entries()) {
+  for (const [userId, userAttempts] of Array.from(byUser.entries())) {
     const profile = profilesMap.get(userId);
 
     if (!profile) continue;
@@ -507,7 +507,7 @@ function buildRankingRows(
     let hardCorrect = 0;
     let veryHardCorrect = 0;
 
-    for (const attempt of uniqueCorrectByQuestion.values()) {
+    for (const attempt of Array.from(uniqueCorrectByQuestion.values())) {
       const bucket = getDifficultyBucket(attempt.difficulty);
       const points = getDifficultyPoints(attempt.difficulty);
 
@@ -652,6 +652,7 @@ function HighlightCard({
 
 export default function RankingPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
 
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
@@ -670,35 +671,10 @@ export default function RankingPage() {
         setLoading(true);
         setError("");
 
-        const [attemptsResult, profilesResult] = await Promise.all([
-          supabase
-            .from("user_question_attempts")
-            .select("*")
-            .order("answered_at", { ascending: false }),
+        const data = await trpcUtils.publicStats.getRankingData.fetch();
 
-          supabase.from("profiles").select("id, nome, avatar_key, ativo"),
-        ]);
-
-        if (attemptsResult.error) {
-          console.error(
-            "Erro ao carregar tentativas do ranking:",
-            attemptsResult.error
-          );
-          setError("Não foi possível carregar os dados do ranking.");
-          return;
-        }
-
-        if (profilesResult.error) {
-          console.error(
-            "Erro ao carregar perfis do ranking:",
-            profilesResult.error
-          );
-          setError("Não foi possível carregar os perfis do ranking.");
-          return;
-        }
-
-        setAttempts((attemptsResult.data as AttemptRow[]) ?? []);
-        setProfiles((profilesResult.data as ProfileRow[]) ?? []);
+        setAttempts((data.attempts as unknown as AttemptRow[]) ?? []);
+        setProfiles((data.profiles as unknown as ProfileRow[]) ?? []);
       } catch (err) {
         console.error("Erro inesperado ao carregar ranking:", err);
         setError("Ocorreu um erro inesperado ao carregar o ranking.");
@@ -710,7 +686,7 @@ export default function RankingPage() {
     if (!authLoading) {
       loadData();
     }
-  }, [authLoading]);
+  }, [authLoading, trpcUtils]);
 
   const currentRange = useMemo(() => getPeriodRange(period), [period]);
   const seasonRange = useMemo(() => getPeriodRange("season"), []);
