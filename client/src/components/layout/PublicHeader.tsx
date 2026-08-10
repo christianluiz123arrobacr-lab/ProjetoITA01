@@ -7,7 +7,6 @@ import {
   Home,
   LogIn,
   Menu,
-  Rocket,
   UserCircle2,
   X,
 } from "lucide-react";
@@ -28,13 +27,11 @@ export default function PublicHeader() {
             onClick={closeMenu}
             className="flex items-center gap-3 transition hover:opacity-90"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950 shadow-lg shadow-cyan-950/30">
-              <Rocket className="h-5 w-5" />
-            </div>
+            <img src="/brand/projeto-vetor-logo.svg" alt="Projeto Vetor" className="h-10 w-10 object-contain drop-shadow-lg" />
 
             <div className="leading-tight">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">
-                Rumo ao ITA
+                Projeto Vetor
               </p>
               <p className="text-xs font-semibold text-slate-400">
                 Plataforma beta
