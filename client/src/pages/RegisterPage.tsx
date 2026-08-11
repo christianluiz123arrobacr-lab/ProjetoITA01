@@ -83,7 +83,7 @@ export default function RegisterPage() {
         senha: senhaTrimmed,
       });
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: emailTrimmed,
         password: senhaTrimmed,
       });
@@ -92,10 +92,6 @@ export default function RegisterPage() {
         setSuccess("Conta criada. Agora faça login para escolher seu plano.");
         navigate("/login");
         return;
-      }
-
-      if (data.session?.access_token) {
-        localStorage.setItem("supabase_access_token", data.session.access_token);
       }
 
       navigate("/planos");
