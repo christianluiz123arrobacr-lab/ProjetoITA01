@@ -269,13 +269,13 @@ function DashboardLayoutContent({
                 <button className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <Avatar className="h-10 w-10 border shrink-0">
                     <AvatarFallback className="text-sm font-semibold">
-                      {user?.name?.charAt(0).toUpperCase() || "U"}
+                      {user?.email?.charAt(0).toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
 
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
                     <p className="text-sm font-medium truncate leading-none text-slate-900">
-                      {user?.name || "-"}
+                      {user?.email || "-"}
                     </p>
                     <p className="text-xs text-muted-foreground truncate mt-1.5">
                       {user?.email || "-"}

@@ -1,7 +1,15 @@
-import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type {
+  ChangeEvent,
+  InputHTMLAttributes,
+  KeyboardEvent,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 import { Link, useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
-import { logAdminAction } from "@/lib/adminLogs";
+import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
+import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -10,6 +18,7 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import {
   Loader2,
   AlertTriangle,
@@ -19,12 +28,26 @@ import {
   Upload,
   Image as ImageIcon,
   Eye,
+  FileJson,
 } from "lucide-react";
 
 type AssuntosPorConteudoItem = {
   conteudo: string;
   assuntos: string[];
 };
+
+type ResolutionDraftBlock = {
+  tipo: "texto" | "latex" | "imagem";
+  texto?: string | null;
+  url_imagem?: string | null;
+  ordem: number;
+};
+
+function getQuestionCreationSuccessMessage(resolutionBlockCount: number) {
+  return resolutionBlockCount > 0
+    ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
+    : "Questão criada com sucesso. Indo para a resolução...";
+}
 
 type QuestionFormData = {
   codigo: string;
@@ -60,6 +83,8 @@ type QuestionFormData = {
 };
 
 const QUESTION_IMAGES_BUCKET = "questoes-imagens";
+const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 const initialForm: QuestionFormData = {
   codigo: "",
@@ -118,7 +143,315 @@ const EMPTY_SUGGESTIONS: SuggestionsState = {
   instituicoes: [],
 };
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+const QUESTION_JSON_EXAMPLE = JSON.stringify(
+  {
+    codigo: "Q00001",
+    disciplina: "fisica",
+    conteudos: ["Cinemática"],
+    assuntos_por_conteudo: [
+      {
+        conteudo: "Cinemática",
+        assuntos: ["Movimento Uniforme"],
+      },
+    ],
+    banca: "eear",
+    ano: 2024,
+    dificuldade: "medio",
+    instituição: "eear",
+    publicada: true,
+    enunciado: "Texto do enunciado em Markdown/LaTeX.",
+    enunciado_pos_imagem: "Texto opcional depois da imagem.",
+    formula: "$$ v = \\frac{\\Delta s}{\\Delta t} $$",
+    url_imagem: "",
+    alternativas: {
+      A: "Alternativa A",
+      B: "Alternativa B",
+      C: "Alternativa C",
+      D: "Alternativa D",
+      E: "Alternativa E",
+    },
+    alternativa_correta: "a",
+    resolucao: {
+      blocos: [
+        {
+          tipo: "texto",
+          texto: "Primeiro passo da resolução.",
+        },
+        {
+          tipo: "latex",
+          texto: "$$ v = \\frac{\\Delta s}{\\Delta t} $$",
+        },
+      ],
+    },
+  },
+  null,
+  2
+);
+
+type JsonRecord = Record<string, unknown>;
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readJsonValue(record: JsonRecord, keys: string[]) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      return record[key];
+    }
+  }
+
+  return undefined;
+}
+
+function readJsonString(record: JsonRecord, keys: string[]) {
+  const value = readJsonValue(record, keys);
+
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  return "";
+}
+
+function readJsonBoolean(record: JsonRecord, keys: string[], fallback: boolean) {
+  const value = readJsonValue(record, keys);
+
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "sim", "publicada"].includes(normalized)) return true;
+    if (["false", "0", "nao", "não", "rascunho"].includes(normalized)) return false;
+  }
+
+  return fallback;
+}
+
+function readJsonStringArray(record: JsonRecord, keys: string[]) {
+  const value = readJsonValue(record, keys);
+
+  if (Array.isArray(value)) {
+    return normalizarLista(
+      value
+        .map((item) => (typeof item === "string" || typeof item === "number" ? String(item) : ""))
+        .filter(Boolean)
+    );
+  }
+
+  if (typeof value === "string") {
+    return normalizarLista(value.split(/[;,\n]/g));
+  }
+
+  return [];
+}
+
+function normalizeCorrectAlternative(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  if (["a", "b", "c", "d", "e"].includes(normalized)) return normalized;
+
+  return "";
+}
+
+function readAlternativeText(record: JsonRecord, letter: "A" | "B" | "C" | "D" | "E") {
+  const lower = letter.toLowerCase();
+  const alternatives = readJsonValue(record, ["alternativas", "alternatives", "opcoes", "opções"]);
+
+  if (isJsonRecord(alternatives)) {
+    const rawValue = readJsonValue(alternatives, [letter, lower]);
+
+    if (typeof rawValue === "string" || typeof rawValue === "number") return String(rawValue);
+
+    if (isJsonRecord(rawValue)) {
+      return readJsonString(rawValue, ["texto", "text", "valor", "value", "conteudo"]);
+    }
+  }
+
+  if (Array.isArray(alternatives)) {
+    const item = alternatives.find((alternative) => {
+      if (!isJsonRecord(alternative)) return false;
+      return readJsonString(alternative, ["letra", "letter", "alternativa"]).trim().toLowerCase() === lower;
+    });
+
+    if (isJsonRecord(item)) {
+      return readJsonString(item, ["texto", "text", "valor", "value", "conteudo"]);
+    }
+  }
+
+  return readJsonString(record, [letter, lower, `alternativa_${lower}`, `alternativa_${letter}`]);
+}
+
+function readAlternativeImage(record: JsonRecord, letter: "A" | "B" | "C" | "D" | "E") {
+  const lower = letter.toLowerCase();
+  const alternatives = readJsonValue(record, ["alternativas", "alternatives", "opcoes", "opções"]);
+
+  if (isJsonRecord(alternatives)) {
+    const rawValue = readJsonValue(alternatives, [letter, lower]);
+
+    if (isJsonRecord(rawValue)) {
+      return readJsonString(rawValue, ["url_imagem", "image", "imagem", "imageUrl"]);
+    }
+  }
+
+  if (Array.isArray(alternatives)) {
+    const item = alternatives.find((alternative) => {
+      if (!isJsonRecord(alternative)) return false;
+      return readJsonString(alternative, ["letra", "letter", "alternativa"]).trim().toLowerCase() === lower;
+    });
+
+    if (isJsonRecord(item)) {
+      return readJsonString(item, ["url_imagem", "image", "imagem", "imageUrl"]);
+    }
+  }
+
+  return readJsonString(record, [
+    `${lower}_url_imagem`,
+    `${letter}_url_imagem`,
+    `alternativa_${lower}_imagem`,
+    `alternativa_${letter}_imagem`,
+  ]);
+}
+
+function normalizeResolutionBlockType(value: string, urlImagem: string): "texto" | "latex" | "imagem" {
+  const normalized = value.trim().toLowerCase();
+
+  if (["imagem", "image"].includes(normalized) || urlImagem.trim()) return "imagem";
+  if (["latex", "formula", "fórmula", "math"].includes(normalized)) return "latex";
+
+  return "texto";
+}
+
+function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
+  const directBlocksValue = readJsonValue(record, [
+    "resolucao_blocos",
+    "resolução_blocos",
+    "blocos_resolucao",
+    "blocos_resolução",
+    "resolution_blocks",
+    "resolutionBlocks",
+  ]);
+  const resolutionValue = readJsonValue(record, [
+    "resolucao",
+    "resolução",
+    "resolution",
+    "resolucoes",
+    "resoluções",
+  ]);
+  const blocksValue = Array.isArray(directBlocksValue)
+    ? directBlocksValue
+    : isJsonRecord(resolutionValue)
+    ? readJsonValue(resolutionValue, ["blocos", "blocks", "passos", "steps"])
+    : resolutionValue;
+
+  if (!Array.isArray(blocksValue)) return [];
+
+  const parsedBlocks: ResolutionDraftBlock[] = [];
+
+  blocksValue.forEach((item, index) => {
+    let block: ResolutionDraftBlock | null = null;
+
+    if (typeof item === "string") {
+      block = {
+        tipo: "texto",
+        texto: item,
+        url_imagem: null,
+        ordem: index + 1,
+      };
+    } else if (isJsonRecord(item)) {
+      const texto = readJsonString(item, ["texto", "text", "conteudo", "content", "latex"]);
+      const urlImagem = readJsonString(item, ["url_imagem", "imagem", "image", "imageUrl"]);
+      const tipo = normalizeResolutionBlockType(readJsonString(item, ["tipo", "type"]), urlImagem);
+
+      block = {
+        tipo,
+        texto: tipo === "imagem" ? null : texto,
+        url_imagem: tipo === "imagem" ? urlImagem : null,
+        ordem: Number(readJsonString(item, ["ordem", "order"])) || index + 1,
+      };
+    }
+
+    if (!block) return;
+    if (block.tipo === "imagem" && !block.url_imagem?.trim()) return;
+    if (block.tipo !== "imagem" && !block.texto?.trim()) return;
+
+    parsedBlocks.push(block);
+  });
+
+  return parsedBlocks
+    .sort((a, b) => a.ordem - b.ordem)
+    .map((item, index) => ({ ...item, ordem: index + 1 }));
+}
+
+function readAssuntosPorConteudo(record: JsonRecord, conteudos: string[]) {
+  const value = readJsonValue(record, ["assuntos_por_conteudo", "assuntosPorConteudo"]);
+
+  if (!Array.isArray(value)) return sincronizarAssuntosPorConteudo(conteudos, []);
+
+  return normalizarAssuntosPorConteudo(
+    value
+      .map((item) => {
+        if (!isJsonRecord(item)) return null;
+
+        return {
+          conteudo: readJsonString(item, ["conteudo", "content"]),
+          assuntos: readJsonStringArray(item, ["assuntos", "subtopics"]),
+        };
+      })
+      .filter((item): item is AssuntosPorConteudoItem => item !== null)
+  );
+}
+
+function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
+  const conteudos = normalizarLista([
+    ...readJsonStringArray(record, ["conteudos", "contents"]),
+    readJsonString(record, ["conteudo", "content"]),
+  ]);
+  const assuntosPorConteudo = readAssuntosPorConteudo(record, conteudos);
+  const assuntosFromGroups = flattenAssuntosPorConteudo(assuntosPorConteudo);
+  const assuntos = normalizarLista([
+    ...assuntosFromGroups,
+    ...readJsonStringArray(record, ["assuntos", "subtopics"]),
+    readJsonString(record, ["assunto", "subtopic"]),
+  ]);
+
+  return {
+    ...currentForm,
+    codigo: readJsonString(record, ["codigo", "código", "code"]) || currentForm.codigo,
+    disciplina: readJsonString(record, ["disciplina", "subject"]) || currentForm.disciplina,
+    conteudo: primeiroValorDaLista(conteudos) || currentForm.conteudo,
+    conteudos: conteudos.length ? conteudos : currentForm.conteudos,
+    assunto: primeiroValorDaLista(assuntos) || currentForm.assunto,
+    assuntos: assuntos.length ? assuntos : currentForm.assuntos,
+    assuntosPorConteudo: assuntosPorConteudo.length ? assuntosPorConteudo : currentForm.assuntosPorConteudo,
+    banca: readJsonString(record, ["banca", "examBoard"]) || currentForm.banca,
+    ano: readJsonString(record, ["ano", "year"]) || currentForm.ano,
+    dificuldade: readJsonString(record, ["dificuldade", "difficulty"]) || currentForm.dificuldade,
+    instituicao:
+      readJsonString(record, ["instituição", "instituicao", "institution"]) || currentForm.instituicao,
+    publicada: readJsonBoolean(record, ["publicada", "published"], currentForm.publicada),
+    enunciado: readJsonString(record, ["enunciado", "statement", "pergunta"]) || currentForm.enunciado,
+    enunciado_pos_imagem:
+      readJsonString(record, ["enunciado_pos_imagem", "enunciadoPosImagem", "postImageStatement"]) ||
+      currentForm.enunciado_pos_imagem,
+    formula: readJsonString(record, ["formula", "fórmula", "latex"]) || currentForm.formula,
+    url_imagem: readJsonString(record, ["url_imagem", "imagem", "imageUrl"]) || currentForm.url_imagem,
+    alternativa_a: readAlternativeText(record, "A") || currentForm.alternativa_a,
+    alternativa_b: readAlternativeText(record, "B") || currentForm.alternativa_b,
+    alternativa_c: readAlternativeText(record, "C") || currentForm.alternativa_c,
+    alternativa_d: readAlternativeText(record, "D") || currentForm.alternativa_d,
+    alternativa_e: readAlternativeText(record, "E") || currentForm.alternativa_e,
+    alternativa_a_imagem: readAlternativeImage(record, "A") || currentForm.alternativa_a_imagem,
+    alternativa_b_imagem: readAlternativeImage(record, "B") || currentForm.alternativa_b_imagem,
+    alternativa_c_imagem: readAlternativeImage(record, "C") || currentForm.alternativa_c_imagem,
+    alternativa_d_imagem: readAlternativeImage(record, "D") || currentForm.alternativa_d_imagem,
+    alternativa_e_imagem: readAlternativeImage(record, "E") || currentForm.alternativa_e_imagem,
+    alternativa_correta:
+      normalizeCorrectAlternative(readJsonString(record, ["alternativa_correta", "correta", "answer"])) ||
+      currentForm.alternativa_correta,
+  };
+}
+
+
+function FieldLabel({ children }: { children: ReactNode }) {
   return (
     <label className="block text-sm font-semibold text-slate-700 mb-2">
       {children}
@@ -126,7 +459,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
@@ -137,7 +470,7 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
@@ -148,7 +481,7 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   );
 }
 
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
@@ -453,14 +786,14 @@ function AssuntosPorConteudoEditor({
   );
 }
 
-function gerarNomeArquivo(originalName: string) {
-  const extensao = originalName.includes(".")
-    ? originalName.split(".").pop()
-    : "png";
+function validarImagemUpload(file: File) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  }
 
-  return `${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}.${extensao}`;
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error("A imagem deve ter no máximo 3 MB.");
+  }
 }
 
 function MarkdownPreview({
@@ -478,8 +811,8 @@ function MarkdownPreview({
 
   return (
     <div className="prose prose-slate max-w-none text-slate-800 prose-p:my-2 prose-img:rounded-xl prose-img:border prose-img:border-slate-200">
-      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-        {content}
+      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}>
+        {normalizeMathSource(content)}
       </ReactMarkdown>
     </div>
   );
@@ -673,6 +1006,10 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
 }
 
 export default function AdminQuestionCreatePage() {
+  const trpcUtils = trpc.useUtils();
+  const createQuestionMutation = trpc.admin.createQuestion.useMutation();
+  const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
+  const saveResolutionBlocksMutation = trpc.admin.saveResolutionBlocks.useMutation();
   const [, setLocation] = useLocation();
 
   const [form, setForm] = useState<QuestionFormData>(initialForm);
@@ -680,19 +1017,14 @@ export default function AdminQuestionCreatePage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAlternative, setUploadingAlternative] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionsState>(EMPTY_SUGGESTIONS);
+  const [jsonInput, setJsonInput] = useState("");
+  const [resolutionDraftBlocks, setResolutionDraftBlocks] = useState<ResolutionDraftBlock[]>([]);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     async function loadSuggestions() {
-      const { data, error } = await supabase
-        .from("questoes")
-        .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição");
-
-      if (error) {
-        console.error("Erro ao carregar sugestões da questão:", error);
-        return;
-      }
+      const data = await trpcUtils.admin.getQuestionSuggestions.fetch();
 
       const conteudosSet = new Set<string>();
       const assuntosSet = new Set<string>();
@@ -720,7 +1052,7 @@ export default function AdminQuestionCreatePage() {
     }
 
     loadSuggestions();
-  }, []);
+  }, [trpcUtils]);
 
   function updateField<K extends keyof QuestionFormData>(
     field: K,
@@ -732,25 +1064,98 @@ export default function AdminQuestionCreatePage() {
     }));
   }
 
+  function applyQuestionJsonText(rawJson: string) {
+    if (!rawJson.trim()) {
+      setError("Cole ou importe um arquivo JSON de questão antes de importar.");
+      return;
+    }
+
+    const parsed = JSON.parse(rawJson) as unknown;
+    const questionRecord = Array.isArray(parsed) ? parsed[0] : parsed;
+
+    if (!isJsonRecord(questionRecord)) {
+      setError("O JSON precisa ser um objeto de questão ou uma lista com uma questão.");
+      return;
+    }
+
+    const importedResolutionBlocks = readResolutionBlocks(questionRecord);
+
+    setForm((prev) => mapQuestionJsonToForm(questionRecord, prev));
+    setResolutionDraftBlocks(importedResolutionBlocks);
+    setSuccessMessage(
+      importedResolutionBlocks.length > 0
+        ? `JSON importado com ${importedResolutionBlocks.length} bloco(s) de resolução. Revise a prévia antes de salvar.`
+        : "JSON importado para o formulário. Revise a prévia antes de salvar."
+    );
+  }
+
+  function handleApplyQuestionJson() {
+    try {
+      setError("");
+      setSuccessMessage("");
+      applyQuestionJsonText(jsonInput);
+    } catch (err) {
+      console.error("Erro ao importar JSON da questão:", err);
+      setError("JSON inválido. Verifique vírgulas, aspas e chaves antes de importar.");
+    }
+  }
+
+  async function handleQuestionJsonFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setError("");
+      setSuccessMessage("");
+
+      if (!file.name.toLowerCase().endsWith(".json") && file.type !== "application/json") {
+        setError("Envie um arquivo .json válido.");
+        return;
+      }
+
+      const text = await file.text();
+      setJsonInput(text);
+      applyQuestionJsonText(text);
+    } catch (err) {
+      console.error("Erro ao importar arquivo JSON da questão:", err);
+      setError("Não foi possível ler o arquivo JSON. Verifique o conteúdo e tente novamente.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function handleUseJsonExample() {
+    setJsonInput(QUESTION_JSON_EXAMPLE);
+    setError("");
+    setSuccessMessage("Exemplo carregado. Edite o JSON e clique em importar.");
+  }
+
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
+      validarImagemUpload(file);
       setUploadingImage(true);
       setError("");
       setSuccessMessage("");
 
       const pastaBase =
         form.codigo.trim() || `questao-${Date.now().toString()}`;
-      const fileName = gerarNomeArquivo(file.name);
-      const path = `${pastaBase}/enunciado/${fileName}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/enunciado`,
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .upload(path, file, {
-          upsert: true,
-        });
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem da questão:", uploadError);
@@ -762,38 +1167,12 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
-      const { data } = supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .getPublicUrl(path);
-
-      if (!data?.publicUrl) {
+      if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem.");
         return;
       }
 
-      updateField("url_imagem", data.publicUrl);
-
-      await logAdminAction({
-        action: "question_image_uploaded",
-        entityType: "questao_imagem",
-        entityId: null,
-        description: `Imagem principal enviada para nova questão ${form.codigo || "sem código"}`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          bucket: QUESTION_IMAGES_BUCKET,
-          path,
-          fileName: file.name,
-          publicUrl: data.publicUrl,
-          tipoImagem: "enunciado",
-        },
-      });
+      updateField("url_imagem", upload.publicUrl);
 
       setSuccessMessage("Imagem da questão enviada com sucesso.");
     } catch (err) {
@@ -818,20 +1197,27 @@ export default function AdminQuestionCreatePage() {
     if (!file) return;
 
     try {
+      validarImagemUpload(file);
       setUploadingAlternative(field);
       setError("");
       setSuccessMessage("");
 
       const pastaBase =
         form.codigo.trim() || `questao-${Date.now().toString()}`;
-      const fileName = gerarNomeArquivo(file.name);
-      const path = `${pastaBase}/alternativas/${field}/${fileName}`;
+      const upload = await createImageUploadMutation.mutateAsync({
+        bucket: QUESTION_IMAGES_BUCKET,
+        originalName: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        context: `${pastaBase}/alternativas/${field}`,
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .upload(path, file, {
-          upsert: true,
-        });
+      const { error: uploadError } = await uploadToSignedStorageUrl({
+        bucket: upload.bucket,
+        path: upload.path,
+        token: upload.token,
+        file,
+        contentType: file.type,
+      });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem da alternativa:", uploadError);
@@ -843,51 +1229,12 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
-      const { data } = supabase.storage
-        .from(QUESTION_IMAGES_BUCKET)
-        .getPublicUrl(path);
-
-      if (!data?.publicUrl) {
+      if (!upload.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem da alternativa.");
         return;
       }
 
-      updateField(field, data.publicUrl);
-
-      const letraAlternativa =
-        field === "alternativa_a_imagem"
-          ? "A"
-          : field === "alternativa_b_imagem"
-            ? "B"
-            : field === "alternativa_c_imagem"
-              ? "C"
-              : field === "alternativa_d_imagem"
-                ? "D"
-                : "E";
-
-      await logAdminAction({
-        action: "question_alternative_image_uploaded",
-        entityType: "questao_alternativa_imagem",
-        entityId: null,
-        description: `Imagem enviada para a alternativa ${letraAlternativa} da nova questão ${form.codigo || "sem código"}`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          alternativa: letraAlternativa,
-          field,
-          bucket: QUESTION_IMAGES_BUCKET,
-          path,
-          fileName: file.name,
-          publicUrl: data.publicUrl,
-          tipoImagem: "alternativa",
-        },
-      });
+      updateField(field, upload.publicUrl);
 
       setSuccessMessage("Imagem da alternativa enviada com sucesso.");
     } catch (err) {
@@ -998,56 +1345,28 @@ export default function AdminQuestionCreatePage() {
         alternativa_correta: valorLimpo(form.alternativa_correta),
       };
 
-      const { data, error } = await supabase
-        .from("questoes")
-        .insert([payload])
-        .select("id")
-        .single();
-
-      if (error) {
-        console.error("Erro ao criar questão:", error);
-        setError(
-          error.message
-            ? `Não foi possível criar a questão: ${error.message}`
-            : "Não foi possível criar a questão."
-        );
-        return;
-      }
+      const data = await createQuestionMutation.mutateAsync({ payload });
 
       if (!data?.id) {
         setError("A questão foi criada, mas o ID não retornou como esperado.");
         return;
       }
 
-      await logAdminAction({
-        action: "question_created",
-        entityType: "questao",
-        entityId: data.id,
-        description: `Questão ${form.codigo || data.id} criada no ADM`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          banca: form.banca || null,
-          ano: form.ano ? Number(form.ano) : null,
-          dificuldade: form.dificuldade || null,
-          instituicao: form.instituicao || null,
-          publicada: form.publicada,
-          urlImagem: form.url_imagem || null,
-          alternativaAImagem: form.alternativa_a_imagem || null,
-          alternativaBImagem: form.alternativa_b_imagem || null,
-          alternativaCImagem: form.alternativa_c_imagem || null,
-          alternativaDImagem: form.alternativa_d_imagem || null,
-          alternativaEImagem: form.alternativa_e_imagem || null,
-        },
-      });
+      if (resolutionDraftBlocks.length > 0) {
+        await saveResolutionBlocksMutation.mutateAsync({
+          questaoId: data.id,
+          blocks: resolutionDraftBlocks.map((block, index) => ({
+            tipo: block.tipo,
+            texto: block.tipo === "imagem" ? null : block.texto ?? null,
+            url_imagem: block.tipo === "imagem" ? block.url_imagem ?? null : null,
+            ordem: index + 1,
+          })),
+        });
+      }
 
-      setSuccessMessage("Questão criada com sucesso. Indo para a resolução...");
+      setSuccessMessage(
+        getQuestionCreationSuccessMessage(resolutionDraftBlocks.length)
+      );
       setLocation(`/admin/resolucoes/${data.id}`);
     } catch (err) {
       console.error("Erro inesperado ao criar questão:", err);
@@ -1079,7 +1398,7 @@ export default function AdminQuestionCreatePage() {
           <label className="inline-flex">
             <input
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={(e) => handleAlternativeImageUpload(imageField, e)}
             />
@@ -1162,6 +1481,83 @@ export default function AdminQuestionCreatePage() {
             </div>
           </Card>
         ) : null}
+
+        <Card className="p-6 bg-white border-slate-200">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <FileJson className="w-5 h-5 text-slate-700" />
+                <h2 className="text-xl font-bold text-slate-900">Importar questão por JSON</h2>
+              </div>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Cole o JSON antigo da questão para preencher automaticamente o formulário. A resolução pode vir em
+                <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">resolucao_blocos</code>
+                ou em <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">resolucao.blocos</code>.
+                Depois revise a prévia e salve normalmente pelo backend.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleQuestionJsonFileUpload}
+                />
+                <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar arquivo .json
+                </span>
+              </label>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-2xl shrink-0"
+                onClick={handleUseJsonExample}
+              >
+                Carregar exemplo
+              </Button>
+            </div>
+          </div>
+
+          <TextArea
+            rows={10}
+            value={jsonInput}
+            onChange={(e) => setJsonInput(e.target.value)}
+            placeholder={QUESTION_JSON_EXAMPLE}
+            className="font-mono text-xs"
+          />
+
+          <div className="flex flex-wrap gap-3 mt-4">
+            <Button
+              type="button"
+              className="rounded-2xl"
+              onClick={handleApplyQuestionJson}
+            >
+              <FileJson className="w-4 h-4 mr-2" />
+              Importar JSON para o formulário
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-2xl"
+              onClick={() => {
+                setJsonInput("");
+                setResolutionDraftBlocks([]);
+              }}
+            >
+              Limpar JSON
+            </Button>
+          </div>
+
+          {resolutionDraftBlocks.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {resolutionDraftBlocks.length} bloco(s) de resolução importado(s). Ao clicar em criar questão, eles serão salvos automaticamente e aparecerão no editor de resolução.
+            </div>
+          ) : null}
+        </Card>
 
         <Card className="p-6 bg-white border-slate-200">
           <h2 className="text-xl font-bold text-slate-900 mb-6">
@@ -1339,7 +1735,7 @@ export default function AdminQuestionCreatePage() {
               <label className="inline-flex">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp"
                   className="hidden"
                   onChange={handleImageUpload}
                 />
