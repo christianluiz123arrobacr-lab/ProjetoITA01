@@ -16,6 +16,17 @@ import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
+function getRegistrationErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (
+    !message ||
+    /unexpected token|json|server error|fetch failed|failed to fetch|internal server error/i.test(message)
+  ) {
+    return "O servidor não conseguiu concluir seu cadastro. Tente novamente em instantes.";
+  }
+  return message;
+}
+
 export default function RegisterPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
@@ -83,7 +94,7 @@ export default function RegisterPage() {
         senha: senhaTrimmed,
       });
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: emailTrimmed,
         password: senhaTrimmed,
       });
@@ -94,19 +105,11 @@ export default function RegisterPage() {
         return;
       }
 
-      if (data.session?.access_token) {
-        localStorage.setItem("supabase_access_token", data.session.access_token);
-      }
-
       navigate("/planos");
     } catch (error) {
       console.error("Erro ao criar conta:", error);
 
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível criar sua conta agora."
-      );
+      setErro(getRegistrationErrorMessage(error));
     } finally {
       setLoading(false);
     }
