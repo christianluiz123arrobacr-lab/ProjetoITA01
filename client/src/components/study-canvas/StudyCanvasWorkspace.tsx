@@ -587,8 +587,9 @@ function calculatePointWidth({
     return clamp(size * 2.4, 6, 40);
   }
 
+  const easedPressure = pressure * pressure * (3 - 2 * pressure);
   const pressureFactor =
-    brush === "brush" ? 0.18 + pressure * 1.7 : 0.46 + pressure * 0.9;
+    brush === "brush" ? 0.16 + easedPressure * 1.82 : 0.42 + easedPressure * 0.96;
 
   let speedFactor = 1;
 
@@ -597,13 +598,14 @@ function calculatePointWidth({
     const deltaTime = point.time - previousPoint.time;
     const velocity = distanceBetweenPoints / Math.max(deltaTime, 1);
 
-    speedFactor = clamp(1.12 - velocity * 0.35, 0.62, 1.12);
+    speedFactor = clamp(1.05 - velocity * 0.16, 0.78, 1.05);
   }
 
   const rawWidth = clamp(size * pressureFactor * speedFactor, 0.65, size * 2.05);
 
   if (typeof previousPoint?.width === "number") {
-    return previousPoint.width * 0.72 + rawWidth * 0.28;
+    const response = brush === "brush" ? 0.46 : 0.52;
+    return previousPoint.width * (1 - response) + rawWidth * response;
   }
 
   return rawWidth;
@@ -792,6 +794,80 @@ function drawRoundDot(
   ctx.fill();
 }
 
+function getRenderingWidth(
+  point: ScratchpadPoint,
+  stroke: ScratchpadStroke,
+  startDistance: number,
+  remainingDistance: number,
+  last: ScratchpadPoint,
+  previous: ScratchpadPoint
+) {
+  const width = getPointWidth(point, stroke);
+  if (stroke.brush === "highlighter") return width;
+
+  const startTaperLength = Math.max(7, stroke.size * 2.6);
+  const startTaper = clamp(0.28 + (startDistance / startTaperLength) * 0.72, 0.28, 1);
+
+  const isLightRelease = (last.pressure ?? 0.5) < 0.42 || getPointWidth(last, stroke) < getPointWidth(previous, stroke) * 0.86;
+  const endTaperLength = Math.max(6, stroke.size * 2.2);
+  const endTarget = isLightRelease ? 0.22 : 0.9;
+  const endTaper = clamp(endTarget + (remainingDistance / endTaperLength) * (1 - endTarget), endTarget, 1);
+
+  return width * Math.min(startTaper, endTaper);
+}
+
+function getStrokeOutline(stroke: ScratchpadStroke) {
+  const points = stroke.points;
+  const left: Array<{ x: number; y: number }> = [];
+  const right: Array<{ x: number; y: number }> = [];
+  const distancesFromStart = new Array<number>(points.length).fill(0);
+
+  for (let index = 1; index < points.length; index += 1) {
+    distancesFromStart[index] = distancesFromStart[index - 1] + distance(points[index - 1], points[index]);
+  }
+
+  const totalDistance = distancesFromStart[distancesFromStart.length - 1] ?? 0;
+  const last = points[points.length - 1];
+  const penultimate = points[Math.max(0, points.length - 2)];
+
+  points.forEach((point, index) => {
+    const previous = points[Math.max(0, index - 1)];
+    const next = points[Math.min(points.length - 1, index + 1)];
+    const angle = Math.atan2(next.y - previous.y, next.x - previous.x);
+    const radius = getRenderingWidth(
+      point,
+      stroke,
+      distancesFromStart[index],
+      totalDistance - distancesFromStart[index],
+      last,
+      penultimate
+    ) / 2;
+    const normalX = -Math.sin(angle) * radius;
+    const normalY = Math.cos(angle) * radius;
+    left.push({ x: point.x + normalX, y: point.y + normalY });
+    right.push({ x: point.x - normalX, y: point.y - normalY });
+  });
+
+  return [...left, ...right.reverse()];
+}
+
+function traceSmoothClosedPath(
+  ctx: CanvasRenderingContext2D,
+  points: Array<{ x: number; y: number }>
+) {
+  if (points.length < 3) return;
+  const firstMidpoint = midpoint(points[points.length - 1], points[0]);
+  ctx.beginPath();
+  ctx.moveTo(firstMidpoint.x, firstMidpoint.y);
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const nextMidpoint = midpoint(current, next);
+    ctx.quadraticCurveTo(current.x, current.y, nextMidpoint.x, nextMidpoint.y);
+  }
+  ctx.closePath();
+}
+
 function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
   if (stroke.points.length === 0) return;
 
@@ -815,39 +891,26 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
     return;
   }
 
-  if (stroke.points.length === 2) {
-    const previous = stroke.points[0];
-    const current = stroke.points[1];
+  if (stroke.brush === "highlighter") {
+    const points = stroke.points;
     ctx.beginPath();
-    ctx.moveTo(previous.x, previous.y);
-    ctx.lineTo(current.x, current.y);
-    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke)) / 2;
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const current = points[index];
+      const nextMidpoint = midpoint(current, points[index + 1]);
+      ctx.quadraticCurveTo(current.x, current.y, nextMidpoint.x, nextMidpoint.y);
+    }
+    const last = points[points.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.lineWidth = getPointWidth(last, stroke);
     ctx.stroke();
     ctx.restore();
     return;
   }
 
-  const points = stroke.points;
-
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const previous = points[i - 1];
-    const current = points[i];
-    const next = points[i + 1];
-    const startMid = {
-      x: (previous.x + current.x) / 2,
-      y: (previous.y + current.y) / 2,
-    };
-    const endMid = {
-      x: (current.x + next.x) / 2,
-      y: (current.y + next.y) / 2,
-    };
-
-    ctx.beginPath();
-    ctx.moveTo(startMid.x, startMid.y);
-    ctx.quadraticCurveTo(current.x, current.y, endMid.x, endMid.y);
-    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke) + getPointWidth(next, stroke)) / 3;
-    ctx.stroke();
-  }
+  traceSmoothClosedPath(ctx, getStrokeOutline(stroke));
+  ctx.fillStyle = stroke.color;
+  ctx.fill();
 
   ctx.restore();
 }
@@ -2772,11 +2835,13 @@ export function StudyCanvasWorkspace({
     const currentCenterRaw = midpoint(firstRawPoint, secondRawPoint);
     const currentDistance = Math.max(distanceXY(firstRawPoint, secondRawPoint), 1);
 
-    const nextZoom = clamp(
+    const measuredZoom = clamp(
       gesture.initialZoom * (currentDistance / gesture.initialDistance),
       MIN_ZOOM,
       MAX_ZOOM
     );
+    const currentZoom = viewRef.current.zoom;
+    const nextZoom = currentZoom + (measuredZoom - currentZoom) * 0.42;
 
     updateView({
       zoom: nextZoom,
@@ -3590,7 +3655,7 @@ export function StudyCanvasWorkspace({
 
     event.preventDefault();
 
-    const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+    const factor = Math.exp(-event.deltaY * 0.0015);
     const nextZoom = clamp(viewRef.current.zoom * factor, MIN_ZOOM, MAX_ZOOM);
     const rawPoint = getRawCanvasPoint(event.clientX, event.clientY);
 
