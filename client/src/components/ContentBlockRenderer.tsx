@@ -1,4 +1,4 @@
-import MathFormula from "@/components/MathFormula";
+import { MathFormula } from "@/components/MathFormula";
 import type { ContentBlockRow, ContentBlockItem } from "@/services/contentPages.service";
 
 function getInfoBoxClasses(variant?: string | null) {
@@ -45,7 +45,7 @@ function renderGridItem(item: ContentBlockItem, cardVariant?: string) {
 
       {item.formula ? (
         <div className="mt-4">
-          <MathFormula formula={item.formula} block />
+          <MathFormula formula={item.formula} display />
         </div>
       ) : null}
 
@@ -80,7 +80,7 @@ export default function ContentBlockRenderer({
 
         {block.formula ? (
           <div className="mt-5">
-            <MathFormula formula={block.formula} block />
+            <MathFormula formula={block.formula} display />
           </div>
         ) : null}
 
@@ -106,7 +106,7 @@ export default function ContentBlockRenderer({
           <div className="text-slate-700 leading-relaxed whitespace-pre-line">{block.content}</div>
         ) : null}
 
-        {block.formula ? <MathFormula formula={block.formula} block /> : null}
+        {block.formula ? <MathFormula formula={block.formula} display /> : null}
       </section>
     );
   }
@@ -118,7 +118,7 @@ export default function ContentBlockRenderer({
         {block.content ? <div className="leading-relaxed whitespace-pre-line">{block.content}</div> : null}
         {block.formula ? (
           <div className="mt-4">
-            <MathFormula formula={block.formula} block />
+            <MathFormula formula={block.formula} display />
           </div>
         ) : null}
       </section>
@@ -138,7 +138,7 @@ export default function ContentBlockRenderer({
 
         {block.formula ? (
           <div className="mt-5 bg-slate-800/70 rounded-xl p-4">
-            <MathFormula formula={block.formula} block />
+            <MathFormula formula={block.formula} display />
           </div>
         ) : null}
 
@@ -178,7 +178,7 @@ export default function ContentBlockRenderer({
           <div className={`leading-relaxed whitespace-pre-line mb-4 ${alignClass}`}>{block.content}</div>
         ) : null}
 
-        {block.formula ? <MathFormula formula={block.formula} block /> : null}
+        {block.formula ? <MathFormula formula={block.formula} display /> : null}
       </section>
     );
   }
