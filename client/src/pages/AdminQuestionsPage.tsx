@@ -563,8 +563,8 @@ export default function AdminQuestionsPage() {
                   key={question.id}
                   className="p-5 bg-white border-slate-200 shadow-sm"
                 >
-                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-                    <div className="flex-1 min-w-0">
+                  <div className="space-y-5">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-3">
                         <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">
                           {question.codigo || "Sem código"}
@@ -603,12 +603,12 @@ export default function AdminQuestionsPage() {
                         </span>
                       </div>
 
-                      <p className="text-base font-semibold text-slate-900 mb-2">
+                      <p className="max-w-4xl text-base font-semibold leading-relaxed text-slate-900 mb-3 break-words">
                         {textoCurto(question.enunciado, 140)}
                       </p>
 
-                      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600">
-                        <p>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm text-slate-600">
+                        <p className="min-w-0 break-words">
                           <span className="font-semibold text-slate-800">
                             Conteúdo:
                           </span>{" "}
@@ -664,7 +664,7 @@ export default function AdminQuestionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <div className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-4 xl:justify-end">
                       <Button
                         variant="outline"
                         className="rounded-2xl border-violet-200 text-violet-700 hover:bg-violet-50"
@@ -677,9 +677,11 @@ export default function AdminQuestionsPage() {
 
                       {question.is_public && question.public_slug ? (
                         <>
-                          <a href={`https://www.projetovetor.com/questoes/${question.public_slug}`} target="_blank" rel="noreferrer">
-                            <Button variant="outline" className="rounded-2xl"><Eye className="w-4 h-4 mr-2" />Visualizar URL pública</Button>
-                          </a>
+                          <Button asChild variant="outline" className="rounded-2xl">
+                            <a href={`https://www.projetovetor.com/questoes/${question.public_slug}`} target="_blank" rel="noreferrer">
+                              <Eye className="w-4 h-4 mr-2" />Visualizar URL pública
+                            </a>
+                          </Button>
                           <Button variant="outline" className="rounded-2xl" onClick={() => navigator.clipboard.writeText(`https://www.projetovetor.com/questoes/${question.public_slug}`)}>
                             <Copy className="w-4 h-4 mr-2" />Copiar URL pública
                           </Button>
