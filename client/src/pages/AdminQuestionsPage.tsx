@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { supabase } from "@/lib/supabase";
-import { logAdminAction } from "@/lib/adminLogs";
+import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -9,6 +8,7 @@ import AdminGuard from "@/components/admin/AdminGuard";
 import {
   Search,
   Plus,
+  FileJson,
   Loader2,
   AlertTriangle,
   Pencil,
@@ -18,6 +18,8 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Link2,
+  Copy,
 } from "lucide-react";
 
 type AdminQuestionRow = {
@@ -36,6 +38,9 @@ type AdminQuestionRow = {
   publicada?: boolean | null;
   enunciado?: string | null;
   created_at?: string | null;
+  is_public?: boolean | null;
+  public_slug?: string | null;
+  public_noindex?: boolean | null;
 };
 
 type ResolutionRow = {
@@ -48,6 +53,10 @@ type ResolutionRow = {
 type ResolutionSummary = {
   totalBlocks: number;
   totalImages: number;
+};
+
+type ResolutionSummaryRow = ResolutionSummary & {
+  questao_id: string;
 };
 
 type PublishFilter = "todas" | "publicadas" | "nao_publicadas";
@@ -130,8 +139,14 @@ function statusResolucao(summary?: ResolutionSummary) {
 }
 
 export default function AdminQuestionsPage() {
+  const listQuestionsQuery = trpc.admin.listQuestions.useQuery();
+  const setQuestionPublishedMutation = trpc.admin.setQuestionPublished.useMutation();
+  const deleteQuestionMutation = trpc.admin.deleteQuestion.useMutation();
+  const setPublicQuestionPublicationMutation = trpc.admin.setPublicQuestionPublication.useMutation();
+
   const [questions, setQuestions] = useState<AdminQuestionRow[]>([]);
   const [resolutions, setResolutions] = useState<ResolutionRow[]>([]);
+  const [resolutionSummaries, setResolutionSummaries] = useState<ResolutionSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
@@ -145,50 +160,35 @@ export default function AdminQuestionsPage() {
   const [anoFiltro, setAnoFiltro] = useState("");
 
   useEffect(() => {
-    async function loadQuestions() {
-      try {
-        setLoading(true);
-        setError("");
+    setLoading(listQuestionsQuery.isLoading || listQuestionsQuery.isFetching);
 
-        const [questionsResult, resolutionsResult] = await Promise.all([
-          supabase
-            .from("questoes")
-            .select("*")
-            .order("created_at", { ascending: false }),
-
-          supabase.from("resolucoes").select("id, questao_id, tipo, url_imagem"),
-        ]);
-
-        if (questionsResult.error) {
-          console.error("Erro ao carregar questões ADM:", questionsResult.error);
-          setError("Não foi possível carregar as questões.");
-          return;
-        }
-
-        if (resolutionsResult.error) {
-          console.error(
-            "Erro ao carregar resoluções ADM:",
-            resolutionsResult.error
-          );
-          setError("Não foi possível carregar os resumos das resoluções.");
-          return;
-        }
-
-        setQuestions((questionsResult.data as AdminQuestionRow[]) || []);
-        setResolutions((resolutionsResult.data as ResolutionRow[]) || []);
-      } catch (err) {
-        console.error("Erro inesperado ao carregar questões ADM:", err);
-        setError("Ocorreu um erro inesperado ao carregar as questões.");
-      } finally {
-        setLoading(false);
-      }
+    if (listQuestionsQuery.error) {
+      console.error("Erro ao carregar questões ADM:", listQuestionsQuery.error);
+      setError("Não foi possível carregar as questões.");
+      return;
     }
 
-    loadQuestions();
-  }, []);
+    if (listQuestionsQuery.data) {
+      setError("");
+      setQuestions((listQuestionsQuery.data.questions as AdminQuestionRow[]) || []);
+      setResolutions((listQuestionsQuery.data.resolutions as ResolutionRow[]) || []);
+      setResolutionSummaries(
+        ((listQuestionsQuery.data as any).resolutionSummaries as ResolutionSummaryRow[]) || []
+      );
+    }
+  }, [listQuestionsQuery.data, listQuestionsQuery.error, listQuestionsQuery.isFetching, listQuestionsQuery.isLoading]);
 
   const resolutionMap = useMemo(() => {
     const map = new Map<string, ResolutionSummary>();
+
+    for (const summary of resolutionSummaries) {
+      map.set(summary.questao_id, {
+        totalBlocks: summary.totalBlocks,
+        totalImages: summary.totalImages,
+      });
+    }
+
+    if (map.size > 0) return map;
 
     for (const item of resolutions) {
       const current = map.get(item.questao_id) || {
@@ -209,34 +209,28 @@ export default function AdminQuestionsPage() {
     }
 
     return map;
-  }, [resolutions]);
+  }, [resolutionSummaries, resolutions]);
 
   const disciplinasDisponiveis = useMemo(() => {
-    return [
-      ...new Set(questions.map((q) => normalizarDisciplina(q)).filter(Boolean)),
-    ]
+    return Array.from(new Set(questions.map((q) => normalizarDisciplina(q)).filter(Boolean)))
       .filter((valor) => valor !== "—")
       .sort((a, b) => a.localeCompare(b));
   }, [questions]);
 
   const dificuldadesDisponiveis = useMemo(() => {
-    return [
-      ...new Set(
-        questions.map((q) => (q.dificuldade || "").trim()).filter(Boolean)
-      ),
-    ].sort((a, b) => a.localeCompare(b));
+    return Array.from(
+      new Set(questions.map((q) => (q.dificuldade || "").trim()).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b));
   }, [questions]);
 
   const instituicoesDisponiveis = useMemo(() => {
-    return [
-      ...new Set(
-        questions.map((q) => (q.instituição || "").trim()).filter(Boolean)
-      ),
-    ].sort((a, b) => a.localeCompare(b));
+    return Array.from(
+      new Set(questions.map((q) => (q.instituição || "").trim()).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b));
   }, [questions]);
 
   const anosDisponiveis = useMemo(() => {
-    return [...new Set(questions.map((q) => q.ano).filter(Boolean) as number[])]
+    return Array.from(new Set(questions.map((q) => q.ano).filter(Boolean) as number[]))
       .sort((a, b) => b - a)
       .map(String);
   }, [questions]);
@@ -318,39 +312,9 @@ export default function AdminQuestionsPage() {
       setError("");
 
       const novoStatus = !(question.publicada === true);
-
-      const { error } = await supabase
-        .from("questoes")
-        .update({ publicada: novoStatus })
-        .eq("id", question.id);
-
-      if (error) {
-        console.error("Erro ao alterar publicação:", error);
-        setError("Não foi possível alterar o status de publicação.");
-        return;
-      }
-
-      await logAdminAction({
-        action: novoStatus ? "question_published" : "question_unpublished",
-        entityType: "questao",
-        entityId: question.id,
-        description: `Questão ${question.codigo || question.id} ${
-          novoStatus ? "publicada" : "despublicada"
-        } no ADM`,
-        level: "info",
-        metadata: {
-          codigo: question.codigo || null,
-          disciplina: normalizarDisciplina(question),
-          conteudo: question.conteudo || null,
-          conteudos: listarConteudos(question),
-          assunto: question.assunto || null,
-          assuntos: listarAssuntos(question),
-          banca: question.banca || null,
-          ano: question.ano || null,
-          dificuldade: question.dificuldade || null,
-          instituicao: question.instituição || null,
-          publicada: novoStatus,
-        },
+      await setQuestionPublishedMutation.mutateAsync({
+        id: question.id,
+        publicada: novoStatus,
       });
 
       setQuestions((prev) =>
@@ -360,7 +324,7 @@ export default function AdminQuestionsPage() {
       );
     } catch (err) {
       console.error("Erro inesperado ao alterar publicação:", err);
-      setError("Ocorreu um erro inesperado ao alterar o status.");
+      setError(err instanceof Error ? err.message : "Ocorreu um erro inesperado ao alterar o status.");
     } finally {
       setBusyQuestionId(null);
     }
@@ -377,64 +341,7 @@ export default function AdminQuestionsPage() {
       setBusyQuestionId(question.id);
       setError("");
 
-      const { error: deleteResolutionsMetaError } = await supabase
-        .from("resolucoes_meta")
-        .delete()
-        .eq("questao_id", question.id);
-
-      if (deleteResolutionsMetaError) {
-        console.error(
-          "Erro ao excluir meta da resolução:",
-          deleteResolutionsMetaError
-        );
-        setError("Não foi possível excluir os metadados da resolução.");
-        return;
-      }
-
-      const { error: deleteResolutionsError } = await supabase
-        .from("resolucoes")
-        .delete()
-        .eq("questao_id", question.id);
-
-      if (deleteResolutionsError) {
-        console.error(
-          "Erro ao excluir resoluções da questão:",
-          deleteResolutionsError
-        );
-        setError("Não foi possível excluir as resoluções vinculadas à questão.");
-        return;
-      }
-
-      const { error: deleteQuestionError } = await supabase
-        .from("questoes")
-        .delete()
-        .eq("id", question.id);
-
-      if (deleteQuestionError) {
-        console.error("Erro ao excluir questão:", deleteQuestionError);
-        setError("Não foi possível excluir a questão.");
-        return;
-      }
-
-      await logAdminAction({
-        action: "question_deleted",
-        entityType: "questao",
-        entityId: question.id,
-        description: `Questão ${question.codigo || question.id} excluída no ADM`,
-        level: "warning",
-        metadata: {
-          codigo: question.codigo || null,
-          disciplina: normalizarDisciplina(question),
-          conteudo: question.conteudo || null,
-          conteudos: listarConteudos(question),
-          assunto: question.assunto || null,
-          assuntos: listarAssuntos(question),
-          banca: question.banca || null,
-          ano: question.ano || null,
-          dificuldade: question.dificuldade || null,
-          instituicao: question.instituição || null,
-        },
-      });
+      await deleteQuestionMutation.mutateAsync({ id: question.id });
 
       setQuestions((prev) => prev.filter((item) => item.id !== question.id));
       setResolutions((prev) =>
@@ -442,7 +349,26 @@ export default function AdminQuestionsPage() {
       );
     } catch (err) {
       console.error("Erro inesperado ao excluir questão:", err);
-      setError("Ocorreu um erro inesperado ao excluir a questão.");
+      setError(err instanceof Error ? err.message : "Ocorreu um erro inesperado ao excluir a questão.");
+    } finally {
+      setBusyQuestionId(null);
+    }
+  }
+
+  async function alternarPaginaPublica(question: AdminQuestionRow) {
+    try {
+      setBusyQuestionId(question.id);
+      setError("");
+      const result = await setPublicQuestionPublicationMutation.mutateAsync({ id: question.id, publish: question.is_public !== true });
+      setQuestions((prev) => prev.map((item) => item.id === question.id ? {
+        ...item,
+        is_public: result.isPublic,
+        public_slug: result.publicSlug,
+        public_noindex: result.publicNoindex,
+      } : item));
+    } catch (err) {
+      console.error("Erro ao alterar página pública:", err);
+      setError(err instanceof Error ? err.message : "Não foi possível alterar a página pública.");
     } finally {
       setBusyQuestionId(null);
     }
@@ -477,6 +403,13 @@ export default function AdminQuestionsPage() {
                   className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
+
+              <Link href="/admin/questoes/importar-lote">
+                <Button variant="outline" className="rounded-2xl w-full sm:w-auto">
+                  <FileJson className="w-4 h-4 mr-2" />
+                  Importar lote JSON
+                </Button>
+              </Link>
 
               <Link href="/admin/questoes/nova">
                 <Button className="rounded-2xl w-full sm:w-auto">
@@ -630,8 +563,8 @@ export default function AdminQuestionsPage() {
                   key={question.id}
                   className="p-5 bg-white border-slate-200 shadow-sm"
                 >
-                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-                    <div className="flex-1 min-w-0">
+                  <div className="space-y-5">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-3">
                         <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">
                           {question.codigo || "Sem código"}
@@ -659,6 +592,10 @@ export default function AdminQuestionsPage() {
                           {question.publicada ? "Publicada" : "Não publicada"}
                         </span>
 
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${question.is_public ? "bg-violet-100 text-violet-700 border-violet-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                          {question.is_public ? (question.public_noindex ? "Página pública · noindex" : "Página pública · indexável") : "Fora do Google"}
+                        </span>
+
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold border ${status.className}`}
                         >
@@ -666,12 +603,12 @@ export default function AdminQuestionsPage() {
                         </span>
                       </div>
 
-                      <p className="text-base font-semibold text-slate-900 mb-2">
+                      <p className="max-w-4xl text-base font-semibold leading-relaxed text-slate-900 mb-3 break-words">
                         {textoCurto(question.enunciado, 140)}
                       </p>
 
-                      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600">
-                        <p>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm text-slate-600">
+                        <p className="min-w-0 break-words">
                           <span className="font-semibold text-slate-800">
                             Conteúdo:
                           </span>{" "}
@@ -727,7 +664,30 @@ export default function AdminQuestionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <div className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-4 xl:justify-end">
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl border-violet-200 text-violet-700 hover:bg-violet-50"
+                        onClick={() => alternarPaginaPublica(question)}
+                        disabled={busy}
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
+                        {question.is_public ? "Remover da página pública" : "Publicar no Google"}
+                      </Button>
+
+                      {question.is_public && question.public_slug ? (
+                        <>
+                          <Button asChild variant="outline" className="rounded-2xl">
+                            <a href={`https://www.projetovetor.com/questoes/${question.public_slug}`} target="_blank" rel="noreferrer">
+                              <Eye className="w-4 h-4 mr-2" />Visualizar URL pública
+                            </a>
+                          </Button>
+                          <Button variant="outline" className="rounded-2xl" onClick={() => navigator.clipboard.writeText(`https://www.projetovetor.com/questoes/${question.public_slug}`)}>
+                            <Copy className="w-4 h-4 mr-2" />Copiar URL pública
+                          </Button>
+                        </>
+                      ) : null}
+
                       <Button
                         variant="outline"
                         className="rounded-2xl"

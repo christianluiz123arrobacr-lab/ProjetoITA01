@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
+import { formatDifficultyLabel, getDifficultyWeight, normalizeDifficulty } from "@/lib/difficulty";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -307,44 +308,40 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
   const difficultyWeights = currentAttempts
     .filter((a) => a.difficulty)
     .map((a) => {
-      const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyWeight(a.difficulty);
       return a.is_correct ? weight : 0;
     });
 
   const maxDifficultyWeights = currentAttempts
     .filter((a) => a.difficulty)
     .map((a) => {
-      const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyWeight(a.difficulty);
     });
 
   const difficultyScore =
     maxDifficultyWeights.length > 0
-      ? (difficultyWeights.reduce((a, b) => a + b, 0) /
-          maxDifficultyWeights.reduce((a, b) => a + b, 0)) *
+      ? (difficultyWeights.reduce((a: number, b: number) => a + b, 0) /
+          maxDifficultyWeights.reduce((a: number, b: number) => a + b, 0)) *
         100
       : 0;
 
   const prevDifficultyWeights = previousAttempts
     .filter((a) => a.difficulty)
     .map((a) => {
-      const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyWeight(a.difficulty);
       return a.is_correct ? weight : 0;
     });
 
   const prevMaxDifficultyWeights = previousAttempts
     .filter((a) => a.difficulty)
     .map((a) => {
-      const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyWeight(a.difficulty);
     });
 
   const prevDifficultyScore =
     prevMaxDifficultyWeights.length > 0
-      ? (prevDifficultyWeights.reduce((a, b) => a + b, 0) /
-          prevMaxDifficultyWeights.reduce((a, b) => a + b, 0)) *
+      ? (prevDifficultyWeights.reduce((a: number, b: number) => a + b, 0) /
+          prevMaxDifficultyWeights.reduce((a: number, b: number) => a + b, 0)) *
         100
       : 0;
 
@@ -562,21 +559,23 @@ function formatDelta(delta?: number) {
 }
 
 function getDifficultyPoints(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
+  const value = normalizeDifficulty(difficulty);
 
   if (value === "facil") return 2;
   if (value === "medio") return 4;
   if (value === "dificil") return 7;
+  if (value === "muito_dificil") return 10;
 
   return 0;
 }
 
 function getDifficultyBucket(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
+  const value = normalizeDifficulty(difficulty);
 
   if (value === "facil") return "easy";
   if (value === "medio") return "medium";
   if (value === "dificil") return "hard";
+  if (value === "muito_dificil") return "very_hard";
 
   return "unknown";
 }
@@ -602,7 +601,7 @@ function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
 
   const rows: RankingEntry[] = [];
 
-  for (const [userId, userAttempts] of byUser.entries()) {
+  for (const [userId, userAttempts] of Array.from(byUser.entries())) {
     const profile = profilesMap.get(userId);
     if (!profile) continue;
 
@@ -632,7 +631,7 @@ function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
     let mediumCorrect = 0;
     let hardCorrect = 0;
 
-    for (const attempt of uniqueCorrectByQuestion.values()) {
+    for (const attempt of Array.from(uniqueCorrectByQuestion.values())) {
       const bucket = getDifficultyBucket(attempt.difficulty);
       const points = getDifficultyPoints(attempt.difficulty);
 
@@ -708,6 +707,7 @@ function getRankingTier(position: number | null) {
 export default function PublicProfilePage() {
   const [, params] = useRoute("/perfil/:userId");
   const { loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
 
   const profileUserId = params?.userId ?? "";
 
@@ -729,51 +729,13 @@ export default function PublicProfilePage() {
         setLoading(true);
         setError("");
 
-        const [profileResult, attemptsResult, profilesResult] = await Promise.all([
-          supabase
-            .from("profiles")
-            .select(
-              "id, nome, ativo, created_at, last_seen_at, avatar_key, bio, prova_alvo, foco_atual, meta_semanal_questoes"
-            )
-            .eq("id", profileUserId)
-            .maybeSingle(),
+        const data = await trpcUtils.publicStats.getPublicProfile.fetch({
+          userId: profileUserId,
+        });
 
-          supabase
-            .from("user_question_attempts")
-            .select("*")
-            .order("answered_at", { ascending: false }),
-
-          supabase.from("profiles").select("id, nome, avatar_key, ativo"),
-        ]);
-
-        if (profileResult.error) {
-          console.error(profileResult.error);
-          setError("Não foi possível carregar esse perfil.");
-          return;
-        }
-
-        if (attemptsResult.error) {
-          console.error(attemptsResult.error);
-          setError("Não foi possível carregar as estatísticas desse perfil.");
-          return;
-        }
-
-        if (profilesResult.error) {
-          console.error(profilesResult.error);
-          setError("Não foi possível carregar os perfis do ranking.");
-          return;
-        }
-
-        const profileData = (profileResult.data as ProfileRow | null) ?? null;
-
-        if (!profileData || profileData.ativo === false) {
-          setError("Esse perfil não está disponível.");
-          return;
-        }
-
-        setProfile(profileData);
-        setAttempts((attemptsResult.data as AttemptRow[]) ?? []);
-        setProfiles((profilesResult.data as ProfileRow[]) ?? []);
+        setProfile((data.profile as ProfileRow | null) ?? null);
+        setAttempts((data.attempts as unknown as AttemptRow[]) ?? []);
+        setProfiles((data.profiles as unknown as ProfileRow[]) ?? []);
       } catch (err) {
         console.error(err);
         setError("Ocorreu um erro inesperado ao carregar o perfil.");
@@ -783,7 +745,7 @@ export default function PublicProfilePage() {
     }
 
     if (!authLoading) loadData();
-  }, [profileUserId, authLoading]);
+  }, [profileUserId, authLoading, trpcUtils]);
 
   const profileAttempts = useMemo(
     () => attempts.filter((attempt) => attempt.user_id === profileUserId),
