@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { trpcClient } from "@/lib/trpcClient";
 import { Link } from "wouter";
 import type { ComponentType } from "react";
 import {
@@ -324,21 +325,27 @@ function BarRow({
 
 export default function VetMockResultPage() {
   const [result, setResult] = useState<VetMockResultPayload | null>(null);
+  const [resultError, setResultError] = useState("");
 
   useEffect(() => {
-    const raw = window.sessionStorage.getItem("vet_mock_result");
-
-    if (!raw) {
-      setResult(null);
+    const sessionId = new URLSearchParams(window.location.search).get("sessionId");
+    if (!sessionId) {
+      setResultError("Nenhum resultado persistido foi informado. Abra o resultado pelo histórico do Simulado VET.");
       return;
     }
-
-    try {
-      setResult(JSON.parse(raw) as VetMockResultPayload);
-    } catch (error) {
-      console.error("Erro ao ler resultado do Simulado VET:", error);
-      setResult(null);
-    }
+    void trpcClient.vet.getMockResult.query({ sessionId }).then((saved) => {
+        setResult({
+          mode: saved.mode as VetMockResultPayload["mode"],
+          targetExam: saved.target_exam,
+          focusSubject: saved.focus_subject,
+          totalQuestions: saved.total_questions,
+          totalAnswered: saved.total_answered,
+          score: saved.correct_answers,
+          accuracy: Number(saved.accuracy ?? 0),
+          wrongTopics: [], wrongDifficulties: [],
+          engineSummary: (saved.engine_snapshot as VetMockResultPayload["engineSummary"]) ?? undefined,
+        });
+      }).catch(error => { console.error("Erro ao carregar resultado persistido:", error); setResult(null); setResultError("O resultado persistido não foi encontrado ou não pertence a este usuário."); });
   }, []);
 
   const performanceMeta = useMemo(() => {
@@ -406,9 +413,7 @@ export default function VetMockResultPage() {
                 </h2>
 
                 <p className="text-slate-600 mb-5">
-                  Faça um Simulado VET primeiro para gerar uma análise. A página
-                  não vai inventar resultado do nada, apesar de isso ser
-                  surpreendentemente comum em certos relatórios por aí.
+                  {resultError || "Nenhum resultado persistido foi encontrado para esta sessão."}
                 </p>
 
                 <Link href="/vet/simulado">

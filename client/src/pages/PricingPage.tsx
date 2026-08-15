@@ -19,11 +19,16 @@ import {
 
 import PublicHeader from "@/components/layout/PublicHeader";
 import {
+  createCardSubscriptionCheckout,
+  createMercadoPagoPixPayment,
   formatPlanPrice,
+  getBillingCapabilities,
   loadPublicBillingPlans,
   PIX_PAYMENT_INFO,
   requestManualSubscription,
+  type BillingCapabilities,
   type BillingPlan,
+  type MercadoPagoPixResult,
 } from "@/services/billing.service";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
@@ -219,6 +224,71 @@ function PixPaymentModal({
   );
 }
 
+function MercadoPagoPixModal({
+  payment,
+  onClose,
+  onGoPending,
+}: {
+  payment: MercadoPagoPixResult;
+  onClose: () => void;
+  onGoPending: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyPix() {
+    try {
+      await navigator.clipboard.writeText(payment.qrCode || "");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-xl overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-slate-950 shadow-2xl shadow-cyan-950/50">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-cyan-100">
+              Pix Mercado Pago
+            </div>
+            <h2 className="text-2xl font-black text-white">Finalize seu Pix</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              A liberação é automática após confirmação segura do webhook do Mercado Pago.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-slate-300 transition hover:bg-white/[0.1] hover:text-white" aria-label="Fechar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-5 p-6">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+            <p className="text-sm text-slate-400">Valor</p>
+            <p className="mt-1 text-3xl font-black text-cyan-200">{formatPlanPrice(payment.amountCents)}</p>
+            {payment.expiresAt && <p className="mt-2 text-sm text-slate-400">Expira em {new Date(payment.expiresAt).toLocaleString("pt-BR")}</p>}
+          </div>
+          {payment.qrCodeBase64 && (
+            <div className="flex justify-center rounded-3xl border border-white/10 bg-white p-5">
+              <img src={`data:image/png;base64,${payment.qrCodeBase64}`} alt="QR Code Pix Mercado Pago" className="h-56 w-56" />
+            </div>
+          )}
+          <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+            <p className="text-sm font-black uppercase tracking-wide text-cyan-100">Pix copia e cola</p>
+            <p className="mt-3 max-h-28 overflow-auto break-all rounded-2xl border border-cyan-300/20 bg-slate-950/70 px-4 py-3 text-sm text-white">{payment.qrCode || "Aguardando código Pix."}</p>
+            <button type="button" onClick={copyPix} disabled={!payment.qrCode} className="mt-3 inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-50">
+              <Copy className="h-4 w-4" /> {copied ? "Copiado" : "Copiar Pix"}
+            </button>
+          </div>
+          <button type="button" onClick={onGoPending} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-slate-100">
+            Já paguei, verificar <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PricingPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
@@ -226,7 +296,10 @@ export default function PricingPage() {
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<"card" | "pix" | "manual" | null>(null);
+  const [capabilities, setCapabilities] = useState<BillingCapabilities | null>(null);
   const [paymentPlan, setPaymentPlan] = useState<BillingPlan | null>(null);
+  const [pixPayment, setPixPayment] = useState<MercadoPagoPixResult | null>(null);
   const [erro, setErro] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -241,10 +314,14 @@ export default function PricingPage() {
     async function loadPlans() {
       try {
         setPlansLoading(true);
-        const loadedPlans = await loadPublicBillingPlans();
+        const [loadedPlans, loadedCapabilities] = await Promise.all([
+          loadPublicBillingPlans(),
+          getBillingCapabilities(),
+        ]);
 
         if (mounted) {
           setPlans(loadedPlans);
+          setCapabilities(loadedCapabilities);
         }
       } catch (error) {
         console.warn("Não foi possível carregar planos públicos:", error);
@@ -260,11 +337,18 @@ export default function PricingPage() {
     };
   }, []);
 
-  async function handleSubscribe(plan: BillingPlan) {
+  async function handleSubscribe(plan: BillingPlan, method: "card" | "pix" | "manual") {
     setErro("");
     setSuccess("");
 
     if (authLoading) return;
+
+    if (!plan.canCheckout) {
+      setErro(plan.checkoutBlockReason === "legacy_founder_required"
+        ? "Exclusivo para alunos fundadores que já participaram da plataforma."
+        : "Você já possui uma assinatura ativa. Gerencie seu plano atual antes de criar uma nova cobrança.");
+      return;
+    }
 
     if (!isAuthenticated) {
       navigate("/cadastro");
@@ -278,12 +362,24 @@ export default function PricingPage() {
 
     try {
       setSelectedPlan(plan.slug);
+      setSelectedMethod(method);
+
+      if (method === "card") {
+        const checkout = await createCardSubscriptionCheckout(plan.slug);
+        if (!checkout.checkoutUrl) throw new Error("Checkout indisponível. Tente novamente.");
+        window.location.assign(checkout.checkoutUrl);
+        return;
+      }
+
+      if (method === "pix") {
+        const pix = await createMercadoPagoPixPayment(plan.slug);
+        setSuccess(`Pix do plano "${plan.name}" criado. A liberação será automática após a confirmação.`);
+        setPixPayment(pix);
+        return;
+      }
 
       await requestManualSubscription(plan.slug);
-
-      setSuccess(
-        `Solicitação do plano "${plan.name}" registrada. Agora finalize o Pix e envie o comprovante.`
-      );
+      setSuccess(`Solicitação manual do plano "${plan.name}" registrada. Finalize o Pix e envie o comprovante.`);
       setPaymentPlan(plan);
     } catch (error) {
       console.error("Erro ao solicitar assinatura:", error);
@@ -295,12 +391,21 @@ export default function PricingPage() {
       );
     } finally {
       setSelectedPlan(null);
+      setSelectedMethod(null);
     }
   }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <PublicHeader />
+
+      {pixPayment && (
+        <MercadoPagoPixModal
+          payment={pixPayment}
+          onClose={() => setPixPayment(null)}
+          onGoPending={() => navigate("/assinatura-pendente")}
+        />
+      )}
 
       {paymentPlan && (
         <PixPaymentModal
@@ -325,9 +430,7 @@ export default function PricingPage() {
             </h1>
 
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
-              Crie sua conta, escolha o plano e finalize o pagamento por Pix. A
-              solicitação fica vinculada ao seu usuário para liberação manual do
-              acesso durante a fase beta.
+              Crie sua conta, escolha o plano e finalize por cartão ou Pix Mercado Pago. A liberação acontece automaticamente após confirmação segura do webhook.
             </p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -375,6 +478,7 @@ export default function PricingPage() {
             <div className="mt-12 grid gap-6 lg:grid-cols-3">
               {plans.map((plan) => {
                 const currentLoading = selectedPlan === plan.slug;
+                const currentMethod = currentLoading ? selectedMethod : null;
                 const visual = getPlanVisual(plan);
                 const maxSlots = plan.maxActiveSubscriptions ?? null;
                 const usedSlots = plan.usedSlots ?? 0;
@@ -383,6 +487,8 @@ export default function PricingPage() {
                   ? getUsagePercent(usedSlots, maxSlots)
                   : 0;
                 const isFull = plan.hasAvailableSlots === false;
+                const isFounderLocked = plan.checkoutBlockReason === "legacy_founder_required";
+                const checkoutDisabled = !plan.canCheckout || isFull;
                 const limitText = maxSlots
                   ? `Limitado a ${maxSlots} assinaturas ativas/em análise`
                   : visual.limitFallback;
@@ -439,6 +545,24 @@ export default function PricingPage() {
                       </p>
                     </div>
 
+                    {plan.requiresLegacyFounderEligibility && (
+                      <div className={`mt-5 rounded-2xl border p-4 text-sm ${isFounderLocked ? "border-amber-300/30 bg-amber-300/10 text-amber-100" : "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"}`}>
+                        <p className="font-black">Exclusivo para fundadores</p>
+                        {isFounderLocked ? (
+                          <>
+                            <p className="mt-2 leading-6">Exclusivo para alunos fundadores que já participaram da plataforma.</p>
+                            <p className="mt-1 text-xs leading-5 opacity-80">Disponível somente para alunos que já participaram dos planos iniciais da plataforma.</p>
+                          </>
+                        ) : (
+                          <p className="mt-2 leading-6">Seu histórico de fundador foi reconhecido. Este preço permanece disponível para você.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {plan.isCurrentPlan && (
+                      <div className="mt-5 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 p-4 text-sm font-black text-cyan-100">Plano atual — gerencie sua assinatura na área do aluno.</div>
+                    )}
+
                     {limitText && (
                       <div
                         className={`mt-6 rounded-2xl border p-4 ${
@@ -483,25 +607,43 @@ export default function PricingPage() {
                       ))}
                     </ul>
 
-                    <button
-                      type="button"
-                      onClick={() => handleSubscribe(plan)}
-                      disabled={isLoading || isFull}
-                      className={`mt-8 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                        visual.featured
-                          ? "bg-cyan-300 text-slate-950 hover:bg-cyan-200"
-                          : "bg-white text-slate-950 hover:bg-slate-100"
-                      }`}
-                    >
-                      {currentLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : isFull ? (
-                        <Lock className="h-4 w-4" />
-                      ) : (
-                        <ArrowRight className="h-4 w-4" />
+                    <div className="mt-8 grid gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleSubscribe(plan, "card")}
+                        disabled={isLoading || checkoutDisabled || capabilities?.mercadoPagoEnabled === false}
+                        className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                          visual.featured
+                            ? "bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+                            : "bg-white text-slate-950 hover:bg-slate-100"
+                        }`}
+                      >
+                        {currentMethod === "card" ? <Loader2 className="h-4 w-4 animate-spin" /> : isFull ? <Lock className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
+                        {plan.isCurrentPlan ? "Plano atual" : isFounderLocked ? "Exclusivo para fundadores" : isFull ? "Plano indisponível" : "Assinar com cartão"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSubscribe(plan, "pix")}
+                        disabled={isLoading || checkoutDisabled || capabilities?.mercadoPagoEnabled === false}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-5 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {currentMethod === "pix" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                        Pagar com Pix
+                      </button>
+
+                      {capabilities?.manualPixFallbackEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => handleSubscribe(plan, "manual")}
+                          disabled={isLoading || checkoutDisabled}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-5 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {currentMethod === "manual" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                          Pix manual emergencial
+                        </button>
                       )}
-                      {isFull ? "Plano indisponível" : "Solicitar assinatura"}
-                    </button>
+                    </div>
                   </article>
                 );
               })}
@@ -548,20 +690,20 @@ export default function PricingPage() {
               </h2>
 
               <p className="mt-5 text-sm leading-7 text-emerald-50/85">
-                Ao solicitar um plano, a plataforma mostra a chave Pix e o
-                número para envio do comprovante. A liberação é manual enquanto
-                o sistema de cobrança automática não estiver ativo.
+                O Pix principal é gerado pelo Mercado Pago e confirmado automaticamente por webhook. O envio de comprovante só aparece se a contingência manual estiver habilitada no backend.
               </p>
 
-              <div className="mt-6 rounded-3xl border border-emerald-300/20 bg-slate-950/40 p-5">
-                <p className="font-black text-emerald-100">Chave Pix / WhatsApp</p>
-                <p className="mt-2 text-2xl font-black text-white">
-                  {PIX_PAYMENT_INFO.displayKey}
-                </p>
-                <p className="mt-3 text-sm leading-6 text-emerald-50/80">
-                  Envie o comprovante para esse número depois de fazer o Pix.
-                </p>
-              </div>
+              {capabilities?.manualPixFallbackEnabled && (
+                <div className="mt-6 rounded-3xl border border-emerald-300/20 bg-slate-950/40 p-5">
+                  <p className="font-black text-emerald-100">Chave Pix / WhatsApp emergencial</p>
+                  <p className="mt-2 text-2xl font-black text-white">
+                    {PIX_PAYMENT_INFO.displayKey}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-emerald-50/80">
+                    Use apenas se a contingência manual estiver liberada no backend.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
