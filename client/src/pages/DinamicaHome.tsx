@@ -35,7 +35,7 @@ export default function DinamicaHome() {
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Dinâmica</h1>
               <p className="text-xs text-slate-500">
-                Projeto ITA - Do Zero a Aprovação
+                Projeto Vetor
               </p>
             </div>
           </div>
