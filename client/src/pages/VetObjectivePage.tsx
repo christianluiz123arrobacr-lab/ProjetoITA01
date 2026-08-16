@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 type VetProfileRow = {
@@ -116,6 +116,8 @@ function toggleWeekday(list: string[], day: string) {
 
 export default function VetObjectivePage() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
+  const saveObjectiveMutation = trpc.vet.saveObjective.useMutation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -148,18 +150,7 @@ export default function VetObjectivePage() {
       setError("");
 
       try {
-        const { data, error: profileError } = await supabase
-          .from("user_vet_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error(profileError);
-          setError("Não foi possível carregar seu objetivo do VET.");
-          setLoading(false);
-          return;
-        }
+        const data = await trpcUtils.vet.getObjective.fetch();
 
         const profile = data as VetProfileRow | null;
 
@@ -187,7 +178,7 @@ export default function VetObjectivePage() {
     if (!authLoading) {
       loadProfile();
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, trpcUtils]);
 
   const monthsNumber = normalizeNumber(monthsUntilExam, 6);
   const hoursNumber = normalizeNumber(hoursPerDay, 3);
@@ -236,33 +227,16 @@ export default function VetObjectivePage() {
     };
 
     try {
-      if (profileId) {
-        const { error: updateError } = await supabase
-          .from("user_vet_profiles")
-          .update(payload)
-          .eq("id", profileId);
+      const savedProfile = await saveObjectiveMutation.mutateAsync({
+        targetExam: payload.target_exam,
+        monthsUntilExam: payload.months_until_exam,
+        hoursPerDay: payload.hours_per_day,
+        focusSubject: payload.focus_subject,
+        studyDaysPerWeek: payload.study_days_per_week,
+        studyWeekdays: payload.study_weekdays,
+      });
 
-        if (updateError) {
-          console.error(updateError);
-          setError("Não foi possível atualizar seu objetivo.");
-          return;
-        }
-      } else {
-        const { data, error: insertError } = await supabase
-          .from("user_vet_profiles")
-          .insert(payload)
-          .select("*")
-          .single();
-
-        if (insertError) {
-          console.error(insertError);
-          setError("Não foi possível salvar seu objetivo.");
-          return;
-        }
-
-        const createdProfile = data as VetProfileRow;
-        setProfileId(createdProfile.id);
-      }
+      setProfileId((savedProfile as VetProfileRow).id);
 
       setSuccessMessage("Objetivo VET salvo com sucesso.");
     } catch (err) {

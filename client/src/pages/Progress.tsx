@@ -18,7 +18,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { Link } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 type AttemptRow = {
@@ -500,7 +500,7 @@ function buildEvolutionRows(
   const currentMap = new Map(currentStats.map((item) => [item.label, item]));
   const previousMap = new Map(previousStats.map((item) => [item.label, item]));
 
-  const labels = Array.from(new Set([...currentMap.keys(), ...previousMap.keys()]));
+  const labels = Array.from(new Set([...Array.from(currentMap.keys()), ...Array.from(previousMap.keys())]));
 
   return labels
     .map((label) => {
@@ -538,6 +538,7 @@ function formatDelta(delta: number, suffix = " pts") {
 
 export default function Progress() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -557,28 +558,22 @@ export default function Progress() {
       setLoading(true);
       setError("");
 
-      const { data, error } = await supabase
-        .from("user_question_attempts")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("answered_at", { ascending: false });
-
-      if (error) {
+      try {
+        const data = await trpcUtils.quiz.getMyAttempts.fetch();
+        setAttempts((data as unknown as AttemptRow[]) ?? []);
+      } catch (error) {
         console.error("Erro ao buscar progresso:", error);
         setError("Não foi possível carregar seu progresso.");
         setAttempts([]);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setAttempts((data as AttemptRow[]) ?? []);
-      setLoading(false);
     }
 
     if (!authLoading) {
       loadAttempts();
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, trpcUtils]);
 
   const availableSubjects = useMemo(() => {
     return Array.from(
