@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { trpcClient } from "@/lib/trpcClient";
 
 export type ScratchpadPoint = {
   x: number;
@@ -9,7 +9,16 @@ export type ScratchpadPoint = {
 };
 
 export type ScratchpadBrush = "pen" | "brush" | "highlighter";
-export type ScratchpadShape = "line" | "arrow" | "rectangle" | "ellipse" | "triangle";
+export type ScratchpadShape =
+  | "line"
+  | "arrow"
+  | "rectangle"
+  | "square"
+  | "ellipse"
+  | "circle"
+  | "triangle"
+  | "diamond"
+  | "pentagon";
 export type ScratchpadBackground = "grid" | "dots" | "lined" | "blank" | "cartesian";
 
 export type ScratchpadStroke = {
@@ -42,28 +51,17 @@ export type QuestionNote = {
 };
 
 export async function getQuestionNote({
-  userId,
   questionId,
 }: {
   userId: string;
   questionId: string;
 }) {
-  const { data, error } = await supabase
-    .from("question_notes")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("question_id", questionId)
-    .maybeSingle();
+  const note = await trpcClient.notes.getQuestionNote.query({ questionId });
 
-  if (error) {
-    throw error;
-  }
-
-  return data as QuestionNote | null;
+  return note as QuestionNote | null;
 }
 
 export async function saveQuestionNote({
-  userId,
   questionId,
   strokes,
   canvasWidth,
@@ -79,61 +77,23 @@ export async function saveQuestionNote({
   backgroundType?: ScratchpadBackground;
   title?: string | null;
 }) {
-  const payload = {
-    user_id: userId,
-    question_id: questionId,
+  const note = await trpcClient.notes.saveQuestionNote.mutate({
+    questionId,
     strokes,
-    canvas_width: canvasWidth,
-    canvas_height: canvasHeight,
-    background_type: backgroundType,
-    title: title ?? null,
-    updated_at: new Date().toISOString(),
-  };
+    canvasWidth,
+    canvasHeight,
+    backgroundType,
+    title,
+  });
 
-  const existing = await getQuestionNote({ userId, questionId });
-
-  if (existing?.id) {
-    const { data, error } = await supabase
-      .from("question_notes")
-      .update(payload)
-      .eq("id", existing.id)
-      .select("*")
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return data as QuestionNote;
-  }
-
-  const { data, error } = await supabase
-    .from("question_notes")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as QuestionNote;
+  return note as QuestionNote;
 }
 
 export async function deleteQuestionNote({
-  userId,
   questionId,
 }: {
   userId: string;
   questionId: string;
 }) {
-  const { error } = await supabase
-    .from("question_notes")
-    .delete()
-    .eq("user_id", userId)
-    .eq("question_id", questionId);
-
-  if (error) {
-    throw error;
-  }
+  await trpcClient.notes.deleteQuestionNote.mutate({ questionId });
 }

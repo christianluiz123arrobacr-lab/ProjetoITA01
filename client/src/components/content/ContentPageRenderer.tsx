@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import ContentBlockRenderer from "./ContentBlockRenderer";
+import ContentBlockRenderer from "../ContentBlockRenderer";
 import {
   getContentPageWithBlocks,
   type ContentBlockRow,

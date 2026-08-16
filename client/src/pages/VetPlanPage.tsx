@@ -22,9 +22,9 @@ import {
 import type { ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { supabase } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { getQuestions } from "@/services/questions.service";
+import { mapQuestao } from "@/services/questions.service";
 import type { Question } from "@/types/question";
 import {
   buildVetEngineResult,
@@ -371,6 +371,7 @@ function RecommendedQuestionCard({
 
 export default function VetPlanPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
+  const trpcUtils = trpc.useUtils();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -390,104 +391,18 @@ export default function VetPlanPage() {
       setError("");
 
       try {
-        const { data: profileData, error: profileError } = await supabase
-          .from("user_vet_profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error(profileError);
-          setError("Não foi possível carregar seu objetivo do VET.");
-          setLoading(false);
-          return;
-        }
-
-        const currentProfile = (profileData as VetProfileRow | null) ?? null;
-        setProfile(currentProfile);
-
-        if (!currentProfile) {
-          setEngine(null);
-          setLoading(false);
-          return;
-        }
-
-        const [
-          attemptsResponse,
-          weightsResponse,
-          collectiveResponse,
-          loadedQuestions,
-        ] = await Promise.all([
-          supabase
-            .from("user_question_attempts")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("answered_at", { ascending: false }),
-
-          supabase
-            .from("vet_exam_content_weights")
-            .select("*")
-            .eq("exam", currentProfile.target_exam),
-
-          supabase
-            .from("vet_content_collective_stats")
-            .select("*")
-            .eq("exam", currentProfile.target_exam),
-
-          getQuestions(),
+        const [analysis, recommended] = await Promise.all([
+          trpcUtils.vet.getAnalysis.fetch(),
+          trpcUtils.vet.getRecommendedQuestions.fetch({ block: "ataque", limit: 20 }),
         ]);
-
-        if (attemptsResponse.error) {
-          console.error(attemptsResponse.error);
-          setError("Não foi possível carregar suas tentativas.");
-          setLoading(false);
+        const currentProfile = (analysis?.profile as VetProfileRow | null) ?? null;
+        setProfile(currentProfile);
+        if (!currentProfile || !analysis) {
+          setEngine(null);
           return;
         }
-
-        if (weightsResponse.error) {
-          console.error(weightsResponse.error);
-          setError("Não foi possível carregar os pesos da prova.");
-          setLoading(false);
-          return;
-        }
-
-        if (collectiveResponse.error) {
-          console.error(collectiveResponse.error);
-          setError("Não foi possível carregar a média coletiva dos alunos.");
-          setLoading(false);
-          return;
-        }
-
-        const loadedAttempts = (attemptsResponse.data as VetAttempt[]) ?? [];
-        const loadedWeights = (weightsResponse.data as VetWeight[]) ?? [];
-
-        const loadedCollective =
-          ((collectiveResponse.data as VetCollectiveContentStat[]) ?? []).map(
-            (item) => ({
-              ...item,
-              total_attempts: Number(item.total_attempts ?? 0),
-              correct_attempts: Number(item.correct_attempts ?? 0),
-              wrong_attempts: Number(item.wrong_attempts ?? 0),
-              collective_accuracy: Number(item.collective_accuracy ?? 0),
-              avg_time_seconds:
-                item.avg_time_seconds === null ||
-                item.avg_time_seconds === undefined
-                  ? null
-                  : Number(item.avg_time_seconds),
-            })
-          );
-
-        const result = buildVetEngineResult({
-          profile: currentProfile,
-          attempts: loadedAttempts,
-          questions: loadedQuestions,
-          weights: loadedWeights,
-          collectiveStats: loadedCollective,
-          yearsBack: 5,
-        });
-
-        setQuestions(loadedQuestions);
-        setEngine(result);
+        setQuestions((recommended as unknown as any[]).map(mapQuestao));
+        setEngine(analysis as VetEngineResult);
       } catch (err) {
         console.error(err);
         setError("Ocorreu um erro inesperado ao carregar o Plano VET.");
@@ -499,7 +414,7 @@ export default function VetPlanPage() {
     if (!authLoading) {
       loadPlan();
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, trpcUtils]);
 
   const topPriority = engine?.topPriority ?? null;
 
