@@ -34,7 +34,7 @@ import {
 import { NOTEBOOK_DEVELOPMENT_MESSAGE, NOTEBOOK_FEATURE_AVAILABLE } from "../shared/featureAvailability.js";
 import { createGoogleDriveConnectUrl, createNotebook, disconnectGoogleDrive, getNotebook, googleDriveStatus, listNotebooks, renameNotebook, trashNotebook, updateNotebook, uploadNotebookPdf } from "./googleDrive/googleDriveService.js";
 import { createQuestionReport } from "./questionReports.js";
-import { assertUserCanCheckoutPlan, hasLegacyFounderEligibility, isSamePlanFamily, LEGACY_FOUNDER_SLUG, publicPlanAvailability } from "./billing/legacyFounderPricing.js";
+import { assertUserCanCheckoutPlan, hasLegacyFounderEligibility, hasValidPlanInvite, isSamePlanFamily, LEGACY_FOUNDER_SLUG, publicPlanAvailability } from "./billing/legacyFounderPricing.js";
 import { getCanonicalVetAnalysis, safeQuestionDto, VET_ENGINE_VERSION } from "./vet/vetService.js";
 import { normalizeVetText } from "../shared/vet/vetEngine.js";
 import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetContent, postgrestAliasFilter, prioritizeVetCandidates } from "./vet/vetQuestionSelection.js";
@@ -624,7 +624,7 @@ export const appRouter = router({
         currentPlanSlug = pickBillingPlan(current)?.slug ?? null;
       }
 
-      return (data ?? []).map((plan: any) => ({
+      return Promise.all((data ?? []).map(async (plan: any) => ({
         id: String(plan.id),
         slug: plan.slug,
         name: plan.name,
@@ -640,8 +640,8 @@ export const appRouter = router({
         remaining_slots: plan.max_active_subscriptions ?? null,
         has_available_slots: true,
         display_order: Number(plan.display_order ?? 100),
-        ...publicPlanAvailability(plan, eligible, currentPlanId === String(plan.id) || isSamePlanFamily(plan.slug, currentPlanSlug), currentPlanId !== null),
-      }));
+        ...publicPlanAvailability(plan, eligible, currentPlanId === String(plan.id) || isSamePlanFamily(plan.slug, currentPlanSlug), currentPlanId !== null, Boolean(userId && plan.requires_legacy_founder_eligibility && await hasValidPlanInvite(userId, String(plan.id)))),
+      })));
     }),
 
     requestManualSubscription: protectedProcedure

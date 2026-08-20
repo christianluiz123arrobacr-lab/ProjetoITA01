@@ -554,7 +554,7 @@ export default function PricingPage() {
                             <p className="mt-1 text-xs leading-5 opacity-80">Disponível somente para alunos que já participaram dos planos iniciais da plataforma.</p>
                           </>
                         ) : (
-                          <p className="mt-2 leading-6">Seu histórico de fundador foi reconhecido. Este preço permanece disponível para você.</p>
+                          <p className="mt-2 leading-6">{plan.hasValidInvite ? "Seu convite foi reconhecido. Este preço está disponível para você." : "Seu histórico de fundador foi reconhecido. Este preço permanece disponível para você."}</p>
                         )}
                       </div>
                     )}

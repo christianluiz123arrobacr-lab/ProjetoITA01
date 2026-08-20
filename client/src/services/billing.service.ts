@@ -17,6 +17,7 @@ export type BillingPlan = {
   hasAvailableSlots?: boolean;
   requiresLegacyFounderEligibility: boolean;
   legacyFounderEligible: boolean;
+  hasValidInvite: boolean;
   canCheckout: boolean;
   checkoutBlockReason: "legacy_founder_required" | "active_subscription" | null;
   isCurrentPlan: boolean;
@@ -40,6 +41,7 @@ export type PublicBillingPlanRow = {
   has_available_slots: boolean;
   requires_legacy_founder_eligibility: boolean;
   legacy_founder_eligible: boolean;
+  has_valid_invite: boolean;
   can_checkout: boolean;
   checkout_block_reason: "legacy_founder_required" | "active_subscription" | null;
   is_current_plan: boolean;
@@ -121,6 +123,7 @@ function mapPublicRowToPlan(row: PublicBillingPlanRow): BillingPlan {
     hasAvailableSlots: row.has_available_slots,
     requiresLegacyFounderEligibility: row.requires_legacy_founder_eligibility,
     legacyFounderEligible: row.legacy_founder_eligible,
+    hasValidInvite: row.has_valid_invite,
     canCheckout: row.can_checkout,
     checkoutBlockReason: row.checkout_block_reason,
     isCurrentPlan: row.is_current_plan,

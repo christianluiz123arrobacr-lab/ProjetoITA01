@@ -31,6 +31,10 @@ describe("preços legados de fundador", () => {
     expect(publicPlanAvailability(founderPlan, true, false, false)).toMatchObject({ can_checkout: true, legacy_founder_eligible: true });
   });
 
+  it("permite o checkout fundador quando existe convite válido para o plano", () => {
+    expect(publicPlanAvailability(founderPlan, false, false, false, true)).toMatchObject({ can_checkout: true, legacy_founder_eligible: false, has_valid_invite: true, checkout_block_reason: null });
+  });
+
   it("mostra fundador bloqueado e Plano Normal disponível para usuário novo", () => {
     expect(publicPlanAvailability(founderPlan, false, false, false)).toMatchObject({ can_checkout: false, checkout_block_reason: "legacy_founder_required" });
     expect(publicPlanAvailability(normalPlan, false, false, false)).toMatchObject({ can_checkout: true, checkout_block_reason: null });
@@ -78,9 +82,11 @@ describe("preços legados de fundador", () => {
   it("checkout recebe somente planSlug; preço e elegibilidade são carregados no servidor", () => {
     const router = readFileSync(new URL("../routers.ts", import.meta.url), "utf8");
     const service = readFileSync(new URL("./billingService.ts", import.meta.url), "utf8");
+    const eligibility = readFileSync(new URL("./legacyFounderPricing.ts", import.meta.url), "utf8");
     expect(router).toContain('z.object({ planSlug: z.string().min(1).max(120) })');
     expect(router).not.toMatch(/createCardSubscriptionCheckout[\s\S]{0,300}priceCents/);
     expect(service).toContain("await assertUserCanCheckoutPlan(userId, data as BillingPlanRow)");
+    expect(eligibility).toContain("await hasValidPlanInvite(userId, plan.id)");
     expect(service).toContain("amount: centsToMercadoPagoAmount(Number(plan.price_cents))");
   });
 
