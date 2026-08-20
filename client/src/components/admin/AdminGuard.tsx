@@ -37,7 +37,7 @@ export default function AdminGuard({
     staleTime: ADMIN_ACCESS_RECHECK_MS,
     gcTime: ADMIN_ACCESS_CACHE_MS,
     refetchOnMount: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     refetchInterval: ADMIN_ACCESS_RECHECK_MS,
     refetchIntervalInBackground: false,
@@ -66,18 +66,18 @@ export default function AdminGuard({
       return;
     }
 
-    if (meQuery.isLoading || (meQuery.isFetching && !meQuery.data)) {
-      setStatus("checking-role");
-      setErrorMessage("");
-      return;
-    }
-
-    if (meQuery.error) {
+    if (meQuery.error && !meQuery.data) {
       console.error("Erro ao verificar acesso administrativo no backend:", meQuery.error);
       setStatus("error");
       setErrorMessage(
         "Não foi possível validar suas permissões administrativas no momento."
       );
+      return;
+    }
+
+    if (meQuery.isLoading || (meQuery.isFetching && !meQuery.data)) {
+      setStatus("checking-role");
+      setErrorMessage("");
       return;
     }
 
