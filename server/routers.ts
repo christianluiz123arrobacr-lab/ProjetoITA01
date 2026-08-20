@@ -2829,7 +2829,7 @@ export const appRouter = router({
       const [attemptsResult, profilesResult] = await Promise.all([
         supabaseAdmin
           .from("user_question_attempts")
-          .select("user_id,is_correct,time_spent_seconds,answered_at,subject,difficulty")
+          .select("user_id,question_id,is_correct,time_spent_seconds,answered_at,subject,difficulty")
           .order("answered_at", { ascending: false }),
         supabaseAdmin
           .from("profiles")
@@ -2843,13 +2843,13 @@ export const appRouter = router({
       const groups = new Map<string, any>();
       for (const attempt of attemptsResult.data ?? []) {
         const day = String(attempt.answered_at ?? "").slice(0, 10);
-        const key = [attempt.user_id, day, attempt.subject ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
-        const current = groups.get(key) ?? { user_id: attempt.user_id, answered_at: `${day}T12:00:00.000Z`, subject: attempt.subject, difficulty: attempt.difficulty, is_correct: attempt.is_correct, count: 0, total_time: 0, timed: 0 };
+        const key = [attempt.user_id, attempt.question_id, day, attempt.subject ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
+        const current = groups.get(key) ?? { user_id: attempt.user_id, question_id: attempt.question_id, answered_at: `${day}T12:00:00.000Z`, subject: attempt.subject, difficulty: attempt.difficulty, is_correct: attempt.is_correct, count: 0, total_time: 0, timed: 0 };
         current.count += 1;
         if (typeof attempt.time_spent_seconds === "number") { current.total_time += attempt.time_spent_seconds; current.timed += 1; }
         groups.set(key, current);
       }
-      const attempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: group.user_id, answered_at: group.answered_at, subject: group.subject, difficulty: group.difficulty, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null })));
+      const attempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: group.user_id, question_id: group.question_id, answered_at: group.answered_at, subject: group.subject, difficulty: group.difficulty, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null })));
       return { attempts, profiles: profilesResult.data ?? [] };
     }),
 
