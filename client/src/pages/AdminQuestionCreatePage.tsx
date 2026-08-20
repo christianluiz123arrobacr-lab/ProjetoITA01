@@ -1422,19 +1422,15 @@ export default function AdminQuestionCreatePage() {
   ) {
     if (blocks.length === 0) return;
 
-    const payload = blocks.map((block, index) => ({
-      questao_id: questaoId,
+    await saveResolutionBlocksMutation.mutateAsync({
+      questaoId,
+      blocks: blocks.map((block, index) => ({
       tipo: block.tipo,
       texto: block.tipo === "imagem" ? null : block.texto,
       url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
       ordem: index + 1,
-    }));
-
-    const { error } = await supabase.from("resolucoes").insert(payload);
-
-    if (error) {
-      throw error;
-    }
+      })),
+    });
   }
 
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -1675,35 +1671,6 @@ export default function AdminQuestionCreatePage() {
         );
         return;
       }
-
-      await logAdminAction({
-        action: "question_created",
-        entityType: "questao",
-        entityId: data.id,
-        description: `Questão ${form.codigo || data.id} criada no ADM`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          banca: form.banca || null,
-          ano: anoNumero,
-          dificuldade: form.dificuldade || null,
-          instituicao: form.instituicao || null,
-          publicada: form.publicada,
-          urlImagem: form.url_imagem || null,
-          alternativaAImagem: form.alternativa_a_imagem || null,
-          alternativaBImagem: form.alternativa_b_imagem || null,
-          alternativaCImagem: form.alternativa_c_imagem || null,
-          alternativaDImagem: form.alternativa_d_imagem || null,
-          alternativaEImagem: form.alternativa_e_imagem || null,
-          resolucaoImportadaBlocos: pendingResolutionBlocks.length,
-        },
-      });
 
       setSuccessMessage(
         pendingResolutionBlocks.length > 0 || resolutionDraftBlocks.length > 0

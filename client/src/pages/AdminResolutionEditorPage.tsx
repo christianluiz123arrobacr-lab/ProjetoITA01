@@ -122,7 +122,7 @@ function normalizeImportedResolutionBlocks(rawValue: unknown) {
   const blocks = Array.isArray(rawValue) ? rawValue : [];
 
   return blocks
-    .map((block, index) => {
+    .map<EditableBlock | null>((block, index) => {
       if (!block || typeof block !== "object") return null;
 
       const rawBlock = block as ImportedResolutionBlock;

@@ -1652,7 +1652,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "student_profile_updated",
           entity_type: "profile",
           entity_id: input.id,
@@ -1719,7 +1719,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_user_subscription_renewed",
           entity_type: "billing_subscription",
           entity_id: input.userId,
@@ -1740,7 +1740,7 @@ export const appRouter = router({
         });
 
         const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_mercadopago_subscription_canceled_now",
           entity_type: "billing_subscription",
           entity_id: input.subscriptionId,
@@ -1839,7 +1839,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_subscription_renewed",
           entity_type: "billing_subscription",
           entity_id: input.subscriptionId,
@@ -1875,7 +1875,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_subscription_canceled",
           entity_type: "billing_subscription",
           entity_id: input.subscriptionId,
@@ -1937,7 +1937,7 @@ export const appRouter = router({
         if (updateError) throw new TRPCError({ code: "BAD_REQUEST", message: updateError.message });
 
         const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_plan_updated",
           entity_type: "billing_plan",
           entity_id: input.planId,
@@ -1978,7 +1978,7 @@ export const appRouter = router({
         if (error || !data?.id) throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Não foi possível criar o convite." });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_plan_invite_created",
           entity_type: "billing_plan_invite",
           entity_id: data.id,
@@ -2001,7 +2001,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_plan_invite_deleted",
           entity_type: "billing_plan_invite",
           entity_id: input.inviteId,
@@ -2145,7 +2145,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_created",
           entity_type: "questao",
           entity_id: data.id,
@@ -2286,7 +2286,7 @@ export const appRouter = router({
         const durationMs = Date.now() - startedAt;
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_batch_imported",
           entity_type: "question_import_batch",
           entity_id: input.batchId,
@@ -2354,7 +2354,7 @@ export const appRouter = router({
           .getPublicUrl(path);
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "admin_image_signed_upload_created",
           entity_type: "storage_object",
           entity_id: path,
@@ -2443,7 +2443,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_author_saved",
           entity_type: "resolucao_meta",
           entity_id: input.questaoId,
@@ -2481,7 +2481,7 @@ export const appRouter = router({
           }
 
           await supabaseAdmin.from("admin_logs").insert({
-            admin_user_id: ctx.user.id,
+            actor_user_id: ctx.user.id,
             action: "resolution_block_updated",
             entity_type: "resolucao",
             entity_id: data.id,
@@ -2504,7 +2504,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_block_created",
           entity_type: "resolucao",
           entity_id: data.id,
@@ -2568,7 +2568,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_blocks_saved",
           entity_type: "resolucao",
           entity_id: input.questaoId,
@@ -2614,7 +2614,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_block_deleted",
           entity_type: "resolucao",
           entity_id: input.id,
@@ -2639,7 +2639,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_updated",
           entity_type: "questao",
           entity_id: input.id,
@@ -2674,7 +2674,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: input.publicada ? "question_published" : "question_unpublished",
           entity_type: "questao",
           entity_id: input.id,
@@ -2751,7 +2751,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_report_updated",
           entity_type: "question_report",
           entity_id: input.id,
@@ -2809,7 +2809,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_deleted",
           entity_type: "questao",
           entity_id: input.id,
@@ -3137,7 +3137,7 @@ export const appRouter = router({
       const query = existing?.id ? supabaseAdmin.from("vet_exam_content_weights").update(payload).eq("id", existing.id) : supabaseAdmin.from("vet_exam_content_weights").insert(payload);
       const { data, error } = await query.select("*").single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-      await supabaseAdmin.from("admin_logs").insert({ admin_user_id: ctx.user.id, action: "vet_weight_updated", entity_type: "vet_exam_content_weight", entity_id: data.id, description: "Peso editorial do VET atualizado", level: "info", metadata: input });
+      await supabaseAdmin.from("admin_logs").insert({ actor_user_id: ctx.user.id, action: "vet_weight_updated", entity_type: "vet_exam_content_weight", entity_id: data.id, description: "Peso editorial do VET atualizado", level: "info", metadata: input });
       return data;
     }),
   }),

@@ -134,6 +134,12 @@ describe("integração da tela pendente e do guard", () => {
     );
   });
 
+  it("consulta o Mercado Pago automaticamente enquanto a assinatura está pendente", () => {
+    expect(pendingPage).toContain("loadLatestSubscription(false, true)");
+    expect(pendingPage).toContain("syncGateway = showRefreshing");
+    expect(pendingPage).toContain("const refreshed = syncGateway");
+  });
+
   it("mantém erro temporário no guard e oferece nova tentativa sem redirecionar", () => {
     expect(guard).toContain('setAccessState("error")');
     expect(guard).toContain("Tentar novamente");

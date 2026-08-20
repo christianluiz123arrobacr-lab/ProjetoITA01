@@ -1125,7 +1125,7 @@ export async function reconcileDuplicateMercadoPagoSubscriptions(input: { subscr
     input.subscriptionId ? "A assinatura informada não possui reconciliação pendente." : "Nenhuma reconciliação pendente foi encontrada.",
   );
   const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-    admin_user_id: input.adminUserId,
+    actor_user_id: input.adminUserId,
     action: "billing_mercadopago_duplicates_reconciled",
     entity_type: "billing_subscription",
     entity_id: input.subscriptionId ?? null,
@@ -1294,7 +1294,7 @@ export async function reconcileMercadoPagoPaymentByAdmin(
 
   const audit = async (success: boolean, error?: string) => {
     await dependencies.writeAuditLog({
-      admin_user_id: input.adminUserId,
+      actor_user_id: input.adminUserId,
       action: "billing_mercadopago_payment_reconciled",
       entity_type: "billing_payment",
       entity_id: input.billingPaymentId,
@@ -1335,7 +1335,9 @@ export async function reconcileMercadoPagoPaymentByAdmin(
       ?? localPayment.subscription_id
       ?? null;
 
-    await audit(true);
+    await audit(true).catch(auditError => {
+      console.error({ event: "billing_admin_reconciliation_audit_failed", billing_payment_id: input.billingPaymentId, message: sanitizeBillingError(auditError) });
+    });
 
     if (processed.paymentStatus === "approved" && accessApplied) {
       return { success: true, paymentStatus: processed.paymentStatus, subscriptionId, accessApplied, message: "Pagamento confirmado e acesso liberado." };
