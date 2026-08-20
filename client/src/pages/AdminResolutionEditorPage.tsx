@@ -1,7 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
-import { trpc } from "@/lib/trpc";
+import { supabase } from "@/lib/supabase";
+import { logAdminAction } from "@/lib/adminLogs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -10,7 +10,6 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import {
   ArrowLeft,
   ArrowDown,
@@ -64,8 +63,6 @@ type EditableBlock = {
 };
 
 const STORAGE_BUCKET = "resolucoes-imagens";
-const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
-const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const AUTORES_RESOLUCAO = ["Christian", "Maurício"];
 const RESOLUTION_IMPORT_STORAGE_PREFIX = "pending-resolution-import:";
 
@@ -100,14 +97,14 @@ function criarBlocoVazio(ordem: number): EditableBlock {
   };
 }
 
-function validarImagemUpload(file: File) {
-  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
-    throw new Error("Envie uma imagem PNG, JPG ou WebP.");
-  }
+function gerarNomeArquivo(originalName: string) {
+  const extensao = originalName.includes(".")
+    ? originalName.split(".").pop()
+    : "png";
 
-  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-    throw new Error("A imagem deve ter no máximo 3 MB.");
-  }
+  return `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}.${extensao}`;
 }
 
 function normalizarOrdens(lista: EditableBlock[]) {
@@ -155,17 +152,8 @@ function normalizeImportedResolutionBlocks(rawValue: unknown) {
 }
 
 export default function AdminResolutionEditorPage() {
-  const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
-  const saveAuthorMutation = trpc.admin.saveResolutionAuthor.useMutation();
-  const saveBlockMutation = trpc.admin.saveResolutionBlock.useMutation();
-  const saveBlocksMutation = trpc.admin.saveResolutionBlocks.useMutation();
-  const deleteBlockMutation = trpc.admin.deleteResolutionBlock.useMutation();
   const [match, params] = useRoute("/admin/resolucoes/:questaoId");
   const questaoId = match ? params.questaoId : null;
-  const resolutionEditorQuery = trpc.admin.getResolutionEditor.useQuery(
-    { questaoId: questaoId ?? "00000000-0000-0000-0000-000000000000" },
-    { enabled: !!questaoId }
-  );
 
   const [question, setQuestion] = useState<QuestionInfo | null>(null);
   const [resolutionMeta, setResolutionMeta] = useState<ResolutionMeta | null>(null);
@@ -180,22 +168,73 @@ export default function AdminResolutionEditorPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
-    if (!questaoId) {
-      setError("Questão não encontrada.");
-      setLoading(false);
-      return;
-    }
+    async function loadData() {
+      if (!questaoId) {
+        setError("Questão não encontrada.");
+        setLoading(false);
+        return;
+      }
 
-    if (resolutionEditorQuery.isLoading) {
-      setLoading(true);
-      return;
-    }
+      try {
+        setLoading(true);
+        setError("");
+        setSuccessMessage("");
 
-    if (resolutionEditorQuery.error) {
-      console.error("Erro ao carregar editor de resolução:", resolutionEditorQuery.error);
-      setError(resolutionEditorQuery.error.message || "Não foi possível carregar a resolução.");
-      setLoading(false);
-      return;
+        const [questionResult, resolutionsResult, metaResult] = await Promise.all([
+          supabase
+            .from("questoes")
+            .select("id, codigo, enunciado")
+            .eq("id", questaoId)
+            .single(),
+
+          supabase
+            .from("resolucoes")
+            .select(
+              "id, questao_id, tipo, texto, ordem, url_imagem, codigo_resolucao, created_at"
+            )
+            .eq("questao_id", questaoId)
+            .order("ordem", { ascending: true }),
+
+          supabase
+            .from("resolucoes_meta")
+            .select("*")
+            .eq("questao_id", questaoId)
+            .maybeSingle(),
+        ]);
+
+        if (questionResult.error || !questionResult.data) {
+          console.error(
+            "Erro ao carregar questão da resolução:",
+            questionResult.error
+          );
+          setError("Não foi possível carregar a questão.");
+          return;
+        }
+
+        if (resolutionsResult.error) {
+          console.error(
+            "Erro ao carregar blocos da resolução:",
+            resolutionsResult.error
+          );
+          setError("Não foi possível carregar os blocos da resolução.");
+          return;
+        }
+
+        if (metaResult.error) {
+          console.error(
+            "Erro ao carregar metadados da resolução:",
+            metaResult.error
+          );
+          setError("Não foi possível carregar os dados gerais da resolução.");
+          return;
+        }
+
+        setQuestion(questionResult.data as QuestionInfo);
+
+        const meta = (metaResult.data as ResolutionMeta | null) ?? null;
+        setResolutionMeta(meta);
+        setAuthorName(meta?.autor_nome || "");
+
         const mappedBlocks: EditableBlock[] = (
           (resolutionsResult.data as ResolutionBlock[]) || []
         ).map((block, index) => ({
@@ -249,34 +288,8 @@ export default function AdminResolutionEditorPage() {
       }
     }
 
-    if (!resolutionEditorQuery.data) return;
-
-    setError("");
-    setSuccessMessage("");
-    setQuestion(resolutionEditorQuery.data.question as QuestionInfo);
-
-    const meta = (resolutionEditorQuery.data.meta as ResolutionMeta | null) ?? null;
-    setResolutionMeta(meta);
-    setAuthorName(meta?.autor_nome || "");
-
-    const mappedBlocks: EditableBlock[] = (
-      (resolutionEditorQuery.data.blocks as ResolutionBlock[]) || []
-    ).map((block, index) => ({
-      id: block.id,
-      localId: block.id || `${index}-${gerarLocalId()}`,
-      tipo: ((block.tipo || "texto").toLowerCase() as
-        | "texto"
-        | "latex"
-        | "imagem"),
-      texto: block.texto || "",
-      url_imagem: block.url_imagem || "",
-      ordem: block.ordem ?? index + 1,
-      isNew: false,
-    }));
-
-    setBlocks(normalizarOrdens(mappedBlocks));
-    setLoading(false);
-  }, [questaoId, resolutionEditorQuery.data, resolutionEditorQuery.error, resolutionEditorQuery.isLoading]);
+    loadData();
+  }, [questaoId]);
 
   const orderedBlocks = useMemo(
     () => [...blocks].sort((a, b) => a.ordem - b.ordem),
@@ -392,12 +405,40 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
-      const result = await saveAuthorMutation.mutateAsync({
-        questaoId,
-        autorNome: autor,
+      const payload = {
+        questao_id: questaoId,
+        autor_nome: autor,
+      };
+
+      const { data, error } = await supabase
+        .from("resolucoes_meta")
+        .upsert(payload, { onConflict: "questao_id" })
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error("Erro ao salvar autor da resolução:", error);
+        setError("Não foi possível salvar o autor da resolução.");
+        return;
+      }
+
+      setResolutionMeta((data as ResolutionMeta) || null);
+
+      await logAdminAction({
+        action: "resolution_author_saved",
+        entityType: "resolucao_meta",
+        entityId: questaoId,
+        description: `Autor da resolução da questão ${
+          question?.codigo || questaoId
+        } definido como ${autor}`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          autorNome: autor,
+        },
       });
 
-      setResolutionMeta((result.meta as ResolutionMeta) || null);
       setSuccessMessage("Autor da resolução salvo com sucesso.");
     } catch (err) {
       console.error("Erro inesperado ao salvar autor:", err);
@@ -413,13 +454,33 @@ export default function AdminResolutionEditorPage() {
       return;
     }
 
-    if (!questaoId) return;
-
     try {
       setError("");
       setSuccessMessage("");
 
-      await deleteBlockMutation.mutateAsync({ questaoId, id });
+      const { error } = await supabase.from("resolucoes").delete().eq("id", id);
+
+      if (error) {
+        console.error("Erro ao excluir bloco:", error);
+        setError("Não foi possível excluir o bloco.");
+        return;
+      }
+
+      await logAdminAction({
+        action: "resolution_block_deleted",
+        entityType: "resolucao",
+        entityId: id,
+        description: `Bloco de resolução excluído da questão ${
+          question?.codigo || questaoId
+        }`,
+        level: "warning",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          blocoId: id,
+          localId,
+        },
+      });
 
       removeLocalBlock(localId);
       setSuccessMessage("Bloco excluído com sucesso.");
@@ -432,18 +493,32 @@ export default function AdminResolutionEditorPage() {
   async function saveBlock(block: EditableBlock) {
     if (!questaoId) return;
 
-    const result = await saveBlockMutation.mutateAsync({
-      questaoId,
-      block: {
-        id: block.id,
-        tipo: block.tipo,
-        texto: block.tipo === "imagem" ? null : block.texto || null,
-        url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
-        ordem: block.ordem,
-      },
-    });
+    const payload = {
+      questao_id: questaoId,
+      tipo: block.tipo,
+      texto: block.tipo === "imagem" ? null : block.texto || null,
+      url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
+      ordem: block.ordem,
+    };
 
-    return result.id;
+    if (block.id) {
+      const { error } = await supabase
+        .from("resolucoes")
+        .update(payload)
+        .eq("id", block.id);
+
+      if (error) throw error;
+      return block.id;
+    }
+
+    const { data, error } = await supabase
+      .from("resolucoes")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return data?.id as string;
   }
 
   async function handleSaveSingle(localId: string) {
@@ -467,7 +542,28 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
+      const wasExisting = !!block.id;
       const savedId = await saveBlock(block);
+
+      await logAdminAction({
+        action: "resolution_block_saved",
+        entityType: "resolucao",
+        entityId: savedId,
+        description: `Bloco ${
+          wasExisting ? "atualizado" : "criado"
+        } na resolução da questão ${question?.codigo || questaoId}`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          blocoId: savedId,
+          tipo: block.tipo,
+          ordem: block.ordem,
+          isNew: !wasExisting,
+          hasImage: block.tipo === "imagem",
+          autorNome: authorName || null,
+        },
+      });
 
       setBlocks((prev) =>
         prev.map((item) =>
@@ -507,23 +603,41 @@ export default function AdminResolutionEditorPage() {
         }
       }
 
-      const result = await saveBlocksMutation.mutateAsync({
-        questaoId,
-        blocks: orderedBlocks.map((block) => ({
-          id: block.id,
-          tipo: block.tipo,
-          texto: block.tipo === "imagem" ? null : block.texto || null,
-          url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
-          ordem: block.ordem,
-        })),
-      });
+      const updatedBlocks: EditableBlock[] = [];
+      let createdCount = 0;
+      let updatedCount = 0;
 
-      const idByIndex = new Map(result.blocks.map((item) => [item.index, item.id]));
-      const updatedBlocks = orderedBlocks.map((block, index) => ({
-        ...block,
-        id: idByIndex.get(index) ?? block.id,
-        isNew: false,
-      }));
+      for (const block of orderedBlocks) {
+        const wasExisting = !!block.id;
+        const savedId = await saveBlock(block);
+
+        if (wasExisting) updatedCount += 1;
+        else createdCount += 1;
+
+        updatedBlocks.push({
+          ...block,
+          id: savedId,
+          isNew: false,
+        });
+      }
+
+      await logAdminAction({
+        action: "resolution_blocks_saved",
+        entityType: "resolucao",
+        entityId: questaoId,
+        description: `Todos os blocos da resolução da questão ${
+          question?.codigo || questaoId
+        } foram salvos`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          totalBlocos: updatedBlocks.length,
+          criados: createdCount,
+          atualizados: updatedCount,
+          autorNome: authorName || null,
+        },
+      });
 
       setBlocks(updatedBlocks);
       setSuccessMessage("Todos os blocos foram salvos com sucesso.");
@@ -543,25 +657,18 @@ export default function AdminResolutionEditorPage() {
     if (!file || !questaoId) return;
 
     try {
-      validarImagemUpload(file);
       setUploadingBlockId(localId);
       setError("");
       setSuccessMessage("");
 
-      const upload = await createImageUploadMutation.mutateAsync({
-        bucket: STORAGE_BUCKET,
-        originalName: file.name,
-        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
-        context: questaoId,
-      });
+      const fileName = gerarNomeArquivo(file.name);
+      const path = `${questaoId}/${fileName}`;
 
-      const { error: uploadError } = await uploadToSignedStorageUrl({
-        bucket: upload.bucket,
-        path: upload.path,
-        token: upload.token,
-        file,
-        contentType: file.type,
-      });
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(path, file, {
+          upsert: true,
+        });
 
       if (uploadError) {
         console.error("Erro ao enviar imagem:", uploadError);
@@ -569,14 +676,38 @@ export default function AdminResolutionEditorPage() {
         return;
       }
 
-      if (!upload.publicUrl) {
+      const { data } = supabase.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(path);
+
+      if (!data?.publicUrl) {
         setError("Não foi possível gerar a URL pública da imagem.");
         return;
       }
 
       updateBlock(localId, {
         tipo: "imagem",
-        url_imagem: upload.publicUrl,
+        url_imagem: data.publicUrl,
+      });
+
+      await logAdminAction({
+        action: "resolution_image_uploaded",
+        entityType: "resolucao",
+        entityId: questaoId,
+        description: `Imagem enviada para a resolução da questão ${
+          question?.codigo || questaoId
+        }`,
+        level: "info",
+        metadata: {
+          questaoId,
+          questaoCodigo: question?.codigo || null,
+          localId,
+          bucket: STORAGE_BUCKET,
+          path,
+          fileName: file.name,
+          publicUrl: data.publicUrl,
+          autorNome: authorName || null,
+        },
       });
 
       setSuccessMessage("Imagem enviada com sucesso.");
@@ -896,7 +1027,7 @@ export default function AdminResolutionEditorPage() {
                     <label className="inline-flex">
                       <input
                         type="file"
-                        accept="image/png,image/jpeg,image/webp"
+                        accept="image/*"
                         className="hidden"
                         onChange={(e) => handleImageUpload(block.localId, e)}
                       />
@@ -968,9 +1099,9 @@ export default function AdminResolutionEditorPage() {
                         {block.texto.trim() ? (
                           <ReactMarkdown
                             remarkPlugins={[remarkMath]}
-                            rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}
+                            rehypePlugins={[rehypeKatex]}
                           >
-                            {normalizeMathSource(block.texto)}
+                            {block.texto}
                           </ReactMarkdown>
                         ) : (
                           <p className="text-sm text-slate-500">

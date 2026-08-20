@@ -1666,8 +1666,6 @@ export default function AdminQuestionCreatePage() {
         });
       }
 
-      setSuccessMessage(
-        resolutionDraftBlocks.length > 0
       try {
         await saveImportedResolutionBlocks(data.id, pendingResolutionBlocks);
       } catch (resolutionError) {
@@ -1678,20 +1676,6 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
-      if (resolutionDraftBlocks.length > 0) {
-        await saveResolutionBlocksMutation.mutateAsync({
-          questaoId: data.id,
-          blocks: resolutionDraftBlocks.map((block, index) => ({
-            tipo: block.tipo,
-            texto: block.tipo === "imagem" ? null : block.texto ?? null,
-            url_imagem: block.tipo === "imagem" ? block.url_imagem ?? null : null,
-            ordem: index + 1,
-          })),
-        });
-      }
-
-      setSuccessMessage(
-        resolutionDraftBlocks.length > 0
       await logAdminAction({
         action: "question_created",
         entityType: "questao",
@@ -1722,7 +1706,7 @@ export default function AdminQuestionCreatePage() {
       });
 
       setSuccessMessage(
-        pendingResolutionBlocks.length > 0
+        pendingResolutionBlocks.length > 0 || resolutionDraftBlocks.length > 0
           ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
           : "Questão criada com sucesso. Indo para a resolução..."
       );
