@@ -13,7 +13,11 @@
     <!-- MathJax para renderizar fórmulas LaTeX -->
     <script>
       window.MathJax = {
+        loader: {
+          load: ["[tex]/mhchem"],
+        },
         tex: {
+          packages: { "[+]": ["mhchem"] },
           macros: {
             sen: "\\operatorname{sen}",
           },

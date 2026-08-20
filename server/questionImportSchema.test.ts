@@ -94,4 +94,30 @@ describe("questionImportSchema", () => {
     expect(payload.instituição).toBe("Não informada");
     expect(typeof payload.ano).toBe("number");
   });
+
+  it("preserva literalmente LaTeX químico em todos os textos da importação em lote", () => {
+    const chemistry = String.raw`\ce{2H2 + O2 -> 2H2O}`;
+    const item = parseQuestionImportPayload({
+      ...validQuestion,
+      disciplina: "quimica",
+      enunciado: `Reação $${chemistry}$.`,
+      enunciado_pos_imagem: `Depois $${chemistry}$.`,
+      alternativas: {
+        A: `$${String.raw`\ce{H2O}`}$`,
+        B: `$${String.raw`\ce{CO2}`}$`,
+        C: `$${String.raw`\ce{O2}`}$`,
+        D: `$${String.raw`\ce{H2}`}$`,
+        E: `$${String.raw`\ce{NaCl}`}$`,
+      },
+      resolucao_blocos: undefined,
+      resolucao: `Pela estequiometria $${chemistry}$.`,
+    }).questoes[0].item;
+
+    expect(item.enunciado).toContain(chemistry);
+    expect(item.enunciado_pos_imagem).toContain(chemistry);
+    expect([item.A, item.B, item.C, item.D, item.E].every(value => value.includes("\\ce{"))).toBe(true);
+    expect(item.resolucao_blocos).toEqual([
+      expect.objectContaining({ tipo: "texto", texto: expect.stringContaining(chemistry) }),
+    ]);
+  });
 });

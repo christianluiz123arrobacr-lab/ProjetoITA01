@@ -116,7 +116,7 @@ const QUESTION_IMAGES_BUCKET = "questoes-imagens";
 const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-const initialForm: QuestionFormData = {
+export const initialForm: QuestionFormData = {
   codigo: "",
   disciplina: "",
   conteudo: "",
@@ -350,7 +350,7 @@ function normalizeResolutionBlockType(value: string, urlImagem: string): "texto"
   return "texto";
 }
 
-function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
+export function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
   const directBlocksValue = readJsonValue(record, [
     "resolucao_blocos",
     "resolução_blocos",
@@ -372,11 +372,12 @@ function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
     ? readJsonValue(resolutionValue, ["blocos", "blocks", "passos", "steps"])
     : resolutionValue;
 
-  if (!Array.isArray(blocksValue)) return [];
+  const normalizedBlocksValue = typeof blocksValue === "string" ? [blocksValue] : blocksValue;
+  if (!Array.isArray(normalizedBlocksValue)) return [];
 
   const parsedBlocks: ResolutionDraftBlock[] = [];
 
-  blocksValue.forEach((item, index) => {
+  normalizedBlocksValue.forEach((item, index) => {
     let block: ResolutionDraftBlock | null = null;
 
     if (typeof item === "string") {
@@ -430,7 +431,7 @@ function readAssuntosPorConteudo(record: JsonRecord, conteudos: string[]) {
   );
 }
 
-function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
+export function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
   const conteudos = normalizarLista([
     ...readJsonStringArray(record, ["conteudos", "contents"]),
     readJsonString(record, ["conteudo", "content"]),
@@ -669,10 +670,14 @@ function normalizeImportedGroupedSubtopics(
 }
 
 function normalizeImportedResolutionBlocks(rawValue: unknown) {
-  const blocks = Array.isArray(rawValue) ? rawValue : [];
+  const blocks = typeof rawValue === "string" ? [rawValue] : Array.isArray(rawValue) ? rawValue : [];
 
   return blocks
     .map((block, index) => {
+      if (typeof block === "string") {
+        const texto = block.trim();
+        return texto ? { tipo: "texto" as const, texto, url_imagem: "", ordem: index + 1 } : null;
+      }
       if (!block || typeof block !== "object") return null;
 
       const rawBlock = block as ImportedResolutionBlock;
@@ -703,7 +708,7 @@ function normalizeImportedResolutionBlocks(rawValue: unknown) {
     }));
 }
 
-function normalizeImportedQuestion(rawData: unknown) {
+export function normalizeImportedQuestion(rawData: unknown) {
   if (!rawData || typeof rawData !== "object") {
     throw new Error("O arquivo precisa ser um JSON de questão.");
   }
@@ -717,7 +722,7 @@ function normalizeImportedQuestion(rawData: unknown) {
     assuntos
   );
   const assuntosNormalizados = flattenAssuntosPorConteudo(assuntosPorConteudo);
-  const alternativas = raw.alternativas ?? raw.options;
+  const alternativas = raw.alternativas ?? raw.options ?? raw;
   const rawResolucao =
     raw.resolucao && typeof raw.resolucao === "object"
       ? (raw.resolucao as { blocos?: unknown; blocks?: unknown })
@@ -749,7 +754,7 @@ function normalizeImportedQuestion(rawData: unknown) {
       ),
     },
     resolutionBlocks: normalizeImportedResolutionBlocks(
-      raw.resolucao_blocos ?? raw.resolutionBlocks ?? rawResolucao?.blocos ?? rawResolucao?.blocks
+      raw.resolucao_blocos ?? raw.resolutionBlocks ?? rawResolucao?.blocos ?? rawResolucao?.blocks ?? raw.resolucao
     ),
   };
 }

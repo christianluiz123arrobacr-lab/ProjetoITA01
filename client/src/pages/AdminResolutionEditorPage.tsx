@@ -9,6 +9,7 @@ import AdminGuard from "@/components/admin/AdminGuard";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import "katex/dist/katex.min.css";
 import {
   ArrowLeft,
@@ -1099,9 +1100,9 @@ export default function AdminResolutionEditorPage() {
                         {block.texto.trim() ? (
                           <ReactMarkdown
                             remarkPlugins={[remarkMath]}
-                            rehypePlugins={[rehypeKatex]}
+                            rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}
                           >
-                            {block.texto}
+                            {normalizeMathSource(block.texto)}
                           </ReactMarkdown>
                         ) : (
                           <p className="text-sm text-slate-500">

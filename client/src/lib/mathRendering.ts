@@ -1,4 +1,5 @@
 import katex, { type KatexOptions } from "katex";
+import "katex/contrib/mhchem";
 
 export const MATH_MACROS = {
   "\\sen": "\\operatorname{sen}",
