@@ -23,6 +23,8 @@ export function getDifficultyLabel(value?: string | null) {
   return String(value ?? "");
 }
 
+export const formatDifficultyLabel = getDifficultyLabel;
+
 export function getDifficultyOrder(value?: string | null) {
   const index = DIFFICULTY_ORDER.indexOf(normalizeDifficulty(value) as CanonicalDifficulty);
   return index === -1 ? 99 : index + 1;
