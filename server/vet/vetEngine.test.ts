@@ -32,6 +32,11 @@ describe("VET canônico", () => {
     expect(result.historicalMetrics[0]).toMatchObject({ trendScore: 5, confidence: "low", totalYearsAnalyzed: 5 });
   });
 
+  it("trata muito_dificil como nível 4 na análise histórica", () => {
+    const result = buildVetEngineResult({ profile, attempts: [], questions: [question("very-hard", "quimica", 2026, "muito_dificil")], weights: [] });
+    expect(result.historicalMetrics[0].difficultyScore).toBe(10);
+  });
+
   it("não transforma 1/1 em diagnóstico confiável", () => {
     const result = buildVetEngineResult({ profile, attempts: [attempt("q1", "dinamica", true)], questions: [question("q1", "dinamica", 2026)], weights: [] });
     expect(result.diagnosticConfidence.level).toBe("initial");

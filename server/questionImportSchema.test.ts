@@ -120,4 +120,10 @@ describe("questionImportSchema", () => {
       expect.objectContaining({ tipo: "texto", texto: expect.stringContaining(chemistry) }),
     ]);
   });
+
+  it("aceita o valor canônico muito_dificil na importação em lote", () => {
+    const item = parseQuestionImportPayload({ ...validQuestion, dificuldade: "muito_dificil" }).questoes[0];
+    expect(item.status).toBe("valida");
+    expect(item.item.dificuldade).toBe("muito_dificil");
+  });
 });

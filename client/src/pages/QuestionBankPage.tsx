@@ -10,6 +10,7 @@ import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
+import { getDifficultyLabel, getDifficultyOrder } from "@shared/difficulty";
 import {
   ArrowLeft,
   Zap,
@@ -151,13 +152,7 @@ function formatSubjectLabel(value: string) {
 }
 
 function formatDifficultyLabel(value: string) {
-  const normalized = normalizeText(value);
-
-  if (normalized === "facil") return "Fácil";
-  if (normalized === "medio") return "Médio";
-  if (normalized === "dificil") return "Difícil";
-
-  return value;
+  return getDifficultyLabel(value);
 }
 
 function sortSubjects(values: string[]) {
@@ -175,15 +170,9 @@ function sortSubjects(values: string[]) {
 }
 
 function sortDifficulties(values: string[]) {
-  const order: Record<string, number> = {
-    facil: 1,
-    medio: 2,
-    dificil: 3,
-  };
-
   return [...values].sort(
     (a, b) =>
-      (order[normalizeText(a)] ?? 99) - (order[normalizeText(b)] ?? 99) ||
+      getDifficultyOrder(a) - getDifficultyOrder(b) ||
       a.localeCompare(b, "pt-BR")
   );
 }
@@ -704,6 +693,7 @@ export default function QuestionBankPage() {
       facil: "Fácil",
       medio: "Médio",
       dificil: "Difícil",
+      muito_dificil: "Muito difícil",
     };
 
     const counts = questions.reduce<Record<string, number>>((acc, q) => {
@@ -716,6 +706,7 @@ export default function QuestionBankPage() {
       facil: 1,
       medio: 2,
       dificil: 3,
+      muito_dificil: 4,
     };
 
     return Object.entries(counts)
@@ -753,6 +744,12 @@ export default function QuestionBankPage() {
         label: "Difícil",
         count: counts.dificil || 0,
         colorClass: "bg-rose-500",
+      },
+      {
+        key: "muito_dificil",
+        label: "Muito difícil",
+        count: counts.muito_dificil || 0,
+        colorClass: "bg-indigo-700",
       },
     ];
   }, [filteredQuestions]);
@@ -1272,7 +1269,9 @@ export default function QuestionBankPage() {
                           ? "bg-emerald-500"
                           : item.key === "medio"
                             ? "bg-amber-500"
-                            : "bg-rose-500";
+                            : item.key === "dificil"
+                              ? "bg-rose-500"
+                              : "bg-indigo-700";
 
                       return (
                         <div key={item.key}>

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { getDifficultyLabel, getDifficultyOrder } from "@shared/difficulty";
 import {
   Search,
   Plus,
@@ -107,6 +108,10 @@ function corDificuldade(dificuldade?: string | null) {
 
   if (valor === "dificil") {
     return "bg-red-100 text-red-700 border-red-200";
+  }
+
+  if (valor === "muito_dificil") {
+    return "bg-indigo-100 text-indigo-800 border-indigo-300";
   }
 
   return "bg-slate-100 text-slate-700 border-slate-200";
@@ -214,7 +219,7 @@ export default function AdminQuestionsPage() {
   const dificuldadesDisponiveis = useMemo(() => {
     return Array.from(
       new Set(questions.map((q) => (q.dificuldade || "").trim()).filter(Boolean))
-    ).sort((a, b) => a.localeCompare(b));
+    ).sort((a, b) => getDifficultyOrder(a) - getDifficultyOrder(b));
   }, [questions]);
 
   const instituicoesDisponiveis = useMemo(() => {
@@ -428,7 +433,7 @@ export default function AdminQuestionsPage() {
                 <option value="">Todas</option>
                 {dificuldadesDisponiveis.map((dificuldade) => (
                   <option key={dificuldade} value={dificuldade}>
-                    {dificuldade}
+                    {getDifficultyLabel(dificuldade)}
                   </option>
                 ))}
               </select>
@@ -554,7 +559,7 @@ export default function AdminQuestionsPage() {
                             question.dificuldade
                           )}`}
                         >
-                          {question.dificuldade || "sem dificuldade"}
+                          {question.dificuldade ? getDifficultyLabel(question.dificuldade) : "Sem dificuldade"}
                         </span>
 
                         <span
