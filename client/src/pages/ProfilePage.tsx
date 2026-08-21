@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getDifficultyBucket as getCanonicalDifficultyBucket, getDifficultyNumeric, getDifficultyRankingPoints } from "@shared/difficulty";
 import {
   ArrowLeft,
   Pencil,
@@ -350,7 +351,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -358,7 +359,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const difficultyScore =
@@ -372,7 +373,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -380,7 +381,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const prevDifficultyScore =
@@ -604,23 +605,11 @@ function formatDelta(delta?: number) {
 }
 
 function getDifficultyPoints(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return 2;
-  if (value === "medio") return 4;
-  if (value === "dificil") return 7;
-
-  return 0;
+  return getDifficultyRankingPoints(difficulty);
 }
 
 function getDifficultyBucket(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return "easy";
-  if (value === "medio") return "medium";
-  if (value === "dificil") return "hard";
-
-  return "unknown";
+  return getCanonicalDifficultyBucket(difficulty);
 }
 
 function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {

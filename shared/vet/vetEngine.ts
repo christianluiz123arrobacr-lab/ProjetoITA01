@@ -1,3 +1,5 @@
+import { getDifficultyNumeric } from "../difficulty";
+
 export type VetQuestion = {
   id: string;
   subject: string;
@@ -276,13 +278,7 @@ function matchesFocusSubject(subject: string | null | undefined, focus: string) 
 }
 
 function getQuestionDifficultyNumeric(question: Question) {
-  const difficulty = normalizeVetText(question.difficulty);
-
-  if (difficulty === "facil") return 1;
-  if (difficulty === "medio") return 2;
-  if (difficulty === "dificil") return 3;
-
-  return 2;
+  return getDifficultyNumeric(question.difficulty);
 }
 
 function getWeightForContent(
@@ -703,7 +699,7 @@ export function buildHistoricalMetrics(params: {
         item.totalQuestions > 0 ? item.difficultyTotal / item.totalQuestions : 2;
 
       const difficultyScore =
-        avgDifficulty >= 2.7 ? 10 : avgDifficulty >= 2.2 ? 7 : avgDifficulty >= 1.7 ? 4 : 2;
+        avgDifficulty >= 3.5 ? 10 : avgDifficulty >= 2.8 ? 7 : avgDifficulty >= 2 ? 4 : 2;
 
       const historicalScore =
         frequencyScore * 0.35 +

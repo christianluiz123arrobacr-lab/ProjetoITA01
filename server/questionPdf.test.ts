@@ -11,8 +11,14 @@ const filters = questionPdfFiltersSchema.parse({ institutions: ["ITA", "AFA"], y
 const row = { id: "1", publicada: true, disciplina: "fisica", conteudo: "Dinâmica", assunto: "Forças", instituição: "ITA", ano: 2026, dificuldade: "medio", codigo: "F-1", enunciado: "Calcule $F=ma$" };
 const question: Question = { id: "1", subject: "fisica", topic: "Dinâmica", topics: ["Dinâmica"], subtopic: "Forças", institution: "ITA", year: 2026, exam: "ITA", statement: "Calcule $F=ma$", formula: "$$F=ma$$", imageUrl: "https://project.supabase.co/storage/v1/object/public/q/image.png", options: [{ id: "a", label: "A", text: "2 N", imageUrl: "https://project.supabase.co/a.png" }], correctOptionId: "a", difficulty: "medio" };
 
+const veryHardFilters = questionPdfFiltersSchema.parse({ difficulties: ["muito_dificil"] });
+
 describe("exportação de questões em PDF", () => {
   it("usa os filtros ativos", () => expect(questionRowMatchesPdfFilters(row, filters)).toBe(true));
+  it("filtra e rotula muito_dificil no PDF", () => {
+    expect(questionRowMatchesPdfFilters({ ...row, dificuldade: "muito_dificil" }, veryHardFilters)).toBe(true);
+    expect(getQuestionPdfTags({ ...question, difficulty: "muito_dificil" })).toContain("Muito difícil");
+  });
   it("rejeita instituição fora do filtro", () => expect(questionRowMatchesPdfFilters({ ...row, instituição: "IME" }, filters)).toBe(false));
   it("considera resultados além da página visível", () => expect(Array.from({ length: 41 }, (_, i) => ({ ...row, id: String(i) })).filter(item => questionRowMatchesPdfFilters(item, filters))).toHaveLength(41));
   it("mantém limite técnico público e configurável", () => expect(QUESTION_PDF_EXPORT_LIMIT).toBe(120));

@@ -23,7 +23,7 @@ import {
 import type { Question } from "@/types/question";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { trpc } from "@/lib/trpc";
-import { KATEX_RENDER_OPTIONS } from "@/lib/mathRendering";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import { buildQuestionRichContent, groupRichQuestionContent, parseRichQuestionText, serializeRichQuestionText } from "@/lib/richQuestionContent";
 
 export type QuizCompletionData = {
@@ -212,7 +212,7 @@ function MarkdownContent({
           li: ({ children }) => <li className="mb-1">{children}</li>,
         }}
       >
-        {serializeRichQuestionText(parseRichQuestionText(children))}
+        {normalizeMathSource(serializeRichQuestionText(parseRichQuestionText(children)))}
       </ReactMarkdown>
     </div>
   );

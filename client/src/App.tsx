@@ -384,7 +384,7 @@ function PrivateRouter() {
   }
 
   return (
-    <SubscriptionGuard>
+    <SubscriptionGuard bypass={isAdminRoute}>
       {!isAdminRoute ? (
         <StudentSidebar
           expanded={studentMenuOpen}

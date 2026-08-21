@@ -116,7 +116,7 @@ const QUESTION_IMAGES_BUCKET = "questoes-imagens";
 const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-const initialForm: QuestionFormData = {
+export const initialForm: QuestionFormData = {
   codigo: "",
   disciplina: "",
   conteudo: "",
@@ -350,7 +350,7 @@ function normalizeResolutionBlockType(value: string, urlImagem: string): "texto"
   return "texto";
 }
 
-function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
+export function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
   const directBlocksValue = readJsonValue(record, [
     "resolucao_blocos",
     "resolução_blocos",
@@ -372,11 +372,12 @@ function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
     ? readJsonValue(resolutionValue, ["blocos", "blocks", "passos", "steps"])
     : resolutionValue;
 
-  if (!Array.isArray(blocksValue)) return [];
+  const normalizedBlocksValue = typeof blocksValue === "string" ? [blocksValue] : blocksValue;
+  if (!Array.isArray(normalizedBlocksValue)) return [];
 
   const parsedBlocks: ResolutionDraftBlock[] = [];
 
-  blocksValue.forEach((item, index) => {
+  normalizedBlocksValue.forEach((item, index) => {
     let block: ResolutionDraftBlock | null = null;
 
     if (typeof item === "string") {
@@ -430,7 +431,7 @@ function readAssuntosPorConteudo(record: JsonRecord, conteudos: string[]) {
   );
 }
 
-function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
+export function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
   const conteudos = normalizarLista([
     ...readJsonStringArray(record, ["conteudos", "contents"]),
     readJsonString(record, ["conteudo", "content"]),
@@ -669,10 +670,14 @@ function normalizeImportedGroupedSubtopics(
 }
 
 function normalizeImportedResolutionBlocks(rawValue: unknown) {
-  const blocks = Array.isArray(rawValue) ? rawValue : [];
+  const blocks = typeof rawValue === "string" ? [rawValue] : Array.isArray(rawValue) ? rawValue : [];
 
   return blocks
     .map((block, index) => {
+      if (typeof block === "string") {
+        const texto = block.trim();
+        return texto ? { tipo: "texto" as const, texto, url_imagem: "", ordem: index + 1 } : null;
+      }
       if (!block || typeof block !== "object") return null;
 
       const rawBlock = block as ImportedResolutionBlock;
@@ -703,7 +708,7 @@ function normalizeImportedResolutionBlocks(rawValue: unknown) {
     }));
 }
 
-function normalizeImportedQuestion(rawData: unknown) {
+export function normalizeImportedQuestion(rawData: unknown) {
   if (!rawData || typeof rawData !== "object") {
     throw new Error("O arquivo precisa ser um JSON de questão.");
   }
@@ -717,7 +722,7 @@ function normalizeImportedQuestion(rawData: unknown) {
     assuntos
   );
   const assuntosNormalizados = flattenAssuntosPorConteudo(assuntosPorConteudo);
-  const alternativas = raw.alternativas ?? raw.options;
+  const alternativas = raw.alternativas ?? raw.options ?? raw;
   const rawResolucao =
     raw.resolucao && typeof raw.resolucao === "object"
       ? (raw.resolucao as { blocos?: unknown; blocks?: unknown })
@@ -749,7 +754,7 @@ function normalizeImportedQuestion(rawData: unknown) {
       ),
     },
     resolutionBlocks: normalizeImportedResolutionBlocks(
-      raw.resolucao_blocos ?? raw.resolutionBlocks ?? rawResolucao?.blocos ?? rawResolucao?.blocks
+      raw.resolucao_blocos ?? raw.resolutionBlocks ?? rawResolucao?.blocos ?? rawResolucao?.blocks ?? raw.resolucao
     ),
   };
 }
@@ -1422,19 +1427,15 @@ export default function AdminQuestionCreatePage() {
   ) {
     if (blocks.length === 0) return;
 
-    const payload = blocks.map((block, index) => ({
-      questao_id: questaoId,
+    await saveResolutionBlocksMutation.mutateAsync({
+      questaoId,
+      blocks: blocks.map((block, index) => ({
       tipo: block.tipo,
       texto: block.tipo === "imagem" ? null : block.texto,
       url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
       ordem: index + 1,
-    }));
-
-    const { error } = await supabase.from("resolucoes").insert(payload);
-
-    if (error) {
-      throw error;
-    }
+      })),
+    });
   }
 
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -1666,8 +1667,6 @@ export default function AdminQuestionCreatePage() {
         });
       }
 
-      setSuccessMessage(
-        resolutionDraftBlocks.length > 0
       try {
         await saveImportedResolutionBlocks(data.id, pendingResolutionBlocks);
       } catch (resolutionError) {
@@ -1678,51 +1677,8 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
-      if (resolutionDraftBlocks.length > 0) {
-        await saveResolutionBlocksMutation.mutateAsync({
-          questaoId: data.id,
-          blocks: resolutionDraftBlocks.map((block, index) => ({
-            tipo: block.tipo,
-            texto: block.tipo === "imagem" ? null : block.texto ?? null,
-            url_imagem: block.tipo === "imagem" ? block.url_imagem ?? null : null,
-            ordem: index + 1,
-          })),
-        });
-      }
-
       setSuccessMessage(
-        resolutionDraftBlocks.length > 0
-      await logAdminAction({
-        action: "question_created",
-        entityType: "questao",
-        entityId: data.id,
-        description: `Questão ${form.codigo || data.id} criada no ADM`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          banca: form.banca || null,
-          ano: anoNumero,
-          dificuldade: form.dificuldade || null,
-          instituicao: form.instituicao || null,
-          publicada: form.publicada,
-          urlImagem: form.url_imagem || null,
-          alternativaAImagem: form.alternativa_a_imagem || null,
-          alternativaBImagem: form.alternativa_b_imagem || null,
-          alternativaCImagem: form.alternativa_c_imagem || null,
-          alternativaDImagem: form.alternativa_d_imagem || null,
-          alternativaEImagem: form.alternativa_e_imagem || null,
-          resolucaoImportadaBlocos: pendingResolutionBlocks.length,
-        },
-      });
-
-      setSuccessMessage(
-        pendingResolutionBlocks.length > 0
+        pendingResolutionBlocks.length > 0 || resolutionDraftBlocks.length > 0
           ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
           : "Questão criada com sucesso. Indo para a resolução..."
       );

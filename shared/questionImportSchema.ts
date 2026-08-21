@@ -248,10 +248,11 @@ function readResolutionBlocks(record: JsonRecord) {
   const blocks = Array.isArray(direct) ? direct : isRecord(resolution) ? read(resolution, ["blocos", "blocks", "passos", "steps"]) : resolution;
   const unsupportedTypes: string[] = [];
 
-  if (!Array.isArray(blocks)) return { blocks: [] as NormalizedResolutionImportBlock[], unsupportedTypes };
+  const normalizedBlocks = typeof blocks === "string" ? [blocks] : blocks;
+  if (!Array.isArray(normalizedBlocks)) return { blocks: [] as NormalizedResolutionImportBlock[], unsupportedTypes };
 
   const parsed: NormalizedResolutionImportBlock[] = [];
-  blocks.forEach((item, index) => {
+  normalizedBlocks.forEach((item, index) => {
     if (typeof item === "string") {
       if (item.trim()) parsed.push({ tipo: "texto", texto: item.trim(), url_imagem: null, ordem: index + 1 });
       return;

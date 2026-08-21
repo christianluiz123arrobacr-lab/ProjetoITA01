@@ -1,6 +1,6 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { SpatialGeometrySimulator } from "@/components/simulators/SpatialGeometrySimulator";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MathFormula } from "@/components/MathFormula";
@@ -4642,14 +4642,12 @@ export default function AdminSpatialGeometryPrototypePage() {
     );
   }
 
-export default function AdminSpatialGeometryPrototypePage() {
   return (
     <AdminGuard allowedRoles={["admin"]}>
       <AdminLayout
         title="Simulador de Geometria Espacial"
         subtitle="Laboratório 3D para sólidos, volumes, áreas, cortes e relações de inscrição."
       >
-        <SpatialGeometrySimulator />
         <div
           className={
             isFullscreen
