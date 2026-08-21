@@ -51,4 +51,18 @@ describe("paginação da listagem pública de questões", () => {
     expect(procedure).toContain('query.eq("banca", input.exam)');
     expect(procedure).toContain('query.eq("instituição", input.institution)');
   });
+
+  it("admin.listQuestions também pagina todas as questões com ordem determinística", () => {
+    const router = readFileSync(new URL("../routers.ts", import.meta.url), "utf8");
+    const listStart = router.indexOf("listQuestions: adminOrEditorProcedure");
+    const createStart = router.indexOf("createQuestion: adminOrEditorProcedure", listStart);
+    const procedure = router.slice(listStart, createStart);
+
+    expect(procedure).toContain("fetchAllQuestionPages");
+    expect(procedure).toContain('.from("questoes")');
+    expect(procedure).toContain('.order("created_at", { ascending: false })');
+    expect(procedure).toContain('.order("id", { ascending: true })');
+    expect(procedure).toContain(".range(from, to)");
+    expect(procedure).toContain("questions,");
+  });
 });

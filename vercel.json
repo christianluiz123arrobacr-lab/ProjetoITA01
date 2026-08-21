@@ -46,6 +46,14 @@
   ],
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
+      "source": "/questoes/:slug",
+      "destination": "/api/public-question/:slug"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

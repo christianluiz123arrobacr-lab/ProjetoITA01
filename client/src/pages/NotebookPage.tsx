@@ -17,8 +17,9 @@ import {
 export default function NotebookPage() {
   const utils = trpc.useUtils();
   const status = trpc.googleDrive.status.useQuery();
+  const driveReady = status.data?.connected === true && status.data.requiresReconnect !== true;
   const notebooks = trpc.notebooks.list.useQuery(undefined, {
-    enabled: status.data?.connected === true,
+    enabled: driveReady,
     retry: false,
   });
   const connect = trpc.googleDrive.connectUrl.useQuery(undefined, {
@@ -94,22 +95,30 @@ export default function NotebookPage() {
               </p>
             </div>
           </div>
-          {status.data?.connected && (
+          {driveReady && (
             <Button onClick={() => setDialog(true)} className="rounded-2xl">
               <Plus className="mr-2 h-4 w-4" />
               Novo caderno
             </Button>
           )}
         </header>
-        {!status.data?.connected ? (
+        {status.data?.requiresReconnect ? (
+          <section className="rounded-3xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+            <Cloud className="mx-auto h-14 w-14 text-amber-500" />
+            <h2 className="mt-4 text-2xl font-black">Reconecte seu Google Drive</h2>
+            <p className="mx-auto mt-2 max-w-xl text-slate-600">
+              Precisamos da nova permissão para manter o caderno editável na área privada do aplicativo. Seus arquivos antigos não serão apagados.
+            </p>
+            <Button onClick={connectDrive} className="mt-6 rounded-2xl">Reconectar Google Drive</Button>
+          </section>
+        ) : !status.data?.connected ? (
           <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <Cloud className="mx-auto h-14 w-14 text-blue-500" />
             <h2 className="mt-4 text-2xl font-black">
               Conecte seu Google Drive
             </h2>
             <p className="mx-auto mt-2 max-w-xl text-slate-600">
-              Seus cadernos serão salvos diretamente no seu Google Drive. O
-              Projeto Vetor não armazena o conteúdo das suas anotações.
+              Seus cadernos editáveis ficam na área privada do Projeto Vetor no Google Drive. Somente PDFs exportados aparecem na pasta visível.
             </p>
             <Button onClick={connectDrive} className="mt-6 rounded-2xl">
               Conectar Google Drive

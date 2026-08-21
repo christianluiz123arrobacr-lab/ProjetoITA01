@@ -10,7 +10,7 @@ import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
-import { getDifficultyLabel, getDifficultyOrder } from "@shared/difficulty";
+import { getDifficultyLabel, getDifficultyOrder, normalizeDifficulty } from "@shared/difficulty";
 import {
   ArrowLeft,
   Zap,
@@ -154,7 +154,6 @@ function formatSubjectLabel(value: string) {
 function formatDifficultyLabel(value: string) {
   return getDifficultyLabel(value);
 }
-
 function sortSubjects(values: string[]) {
   const order: Record<string, number> = {
     fisica: 1,
@@ -596,7 +595,7 @@ export default function QuestionBankPage() {
       Array.from(
         new Set(
           questionsForDifficulties
-            .map((q) => String(q.difficulty ?? ""))
+            .map((q) => normalizeDifficulty(q.difficulty) ?? "")
             .filter(Boolean)
         )
       )
@@ -695,10 +694,10 @@ export default function QuestionBankPage() {
       dificil: "Difícil",
       muito_dificil: "Muito difícil",
     };
-
     const counts = questions.reduce<Record<string, number>>((acc, q) => {
-      if (!q.difficulty) return acc;
-      acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
+      const difficulty = normalizeDifficulty(q.difficulty);
+      if (!difficulty) return acc;
+      acc[difficulty] = (acc[difficulty] || 0) + 1;
       return acc;
     }, {});
 
@@ -708,19 +707,18 @@ export default function QuestionBankPage() {
       dificil: 3,
       muito_dificil: 4,
     };
-
     return Object.entries(counts)
       .map(([key, count]) => ({
         key,
-        label: labels[key] ?? key,
+        label: formatDifficultyLabel(key),
         count,
       }))
-      .sort((a, b) => (order[a.key] ?? 99) - (order[b.key] ?? 99));
+      .sort((a, b) => getDifficultyOrder(a.key) - getDifficultyOrder(b.key));
   }, [questions]);
 
   const filteredDifficultyStats = useMemo(() => {
     const counts = filteredQuestions.reduce<Record<string, number>>((acc, q) => {
-      const difficulty = String(q.difficulty ?? "");
+      const difficulty = normalizeDifficulty(q.difficulty);
       if (!difficulty) return acc;
       acc[difficulty] = (acc[difficulty] || 0) + 1;
       return acc;
@@ -945,7 +943,7 @@ export default function QuestionBankPage() {
     );
 
     filtered = filtered.filter((q) =>
-      matchesMulti(q.difficulty, selectedDifficulties)
+      matchesMulti(normalizeDifficulty(q.difficulty) ?? q.difficulty, selectedDifficulties)
     );
 
     filtered = filtered.filter((q) =>

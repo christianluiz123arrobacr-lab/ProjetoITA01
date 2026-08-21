@@ -19,6 +19,8 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Link2,
+  Copy,
 } from "lucide-react";
 
 type AdminQuestionRow = {
@@ -37,6 +39,9 @@ type AdminQuestionRow = {
   publicada?: boolean | null;
   enunciado?: string | null;
   created_at?: string | null;
+  is_public?: boolean | null;
+  public_slug?: string | null;
+  public_noindex?: boolean | null;
 };
 
 type ResolutionRow = {
@@ -142,6 +147,7 @@ export default function AdminQuestionsPage() {
   const listQuestionsQuery = trpc.admin.listQuestions.useQuery();
   const setQuestionPublishedMutation = trpc.admin.setQuestionPublished.useMutation();
   const deleteQuestionMutation = trpc.admin.deleteQuestion.useMutation();
+  const setPublicQuestionPublicationMutation = trpc.admin.setPublicQuestionPublication.useMutation();
 
   const [questions, setQuestions] = useState<AdminQuestionRow[]>([]);
   const [resolutions, setResolutions] = useState<ResolutionRow[]>([]);
@@ -354,6 +360,25 @@ export default function AdminQuestionsPage() {
     }
   }
 
+  async function alternarPaginaPublica(question: AdminQuestionRow) {
+    try {
+      setBusyQuestionId(question.id);
+      setError("");
+      const result = await setPublicQuestionPublicationMutation.mutateAsync({ id: question.id, publish: question.is_public !== true });
+      setQuestions((prev) => prev.map((item) => item.id === question.id ? {
+        ...item,
+        is_public: result.isPublic,
+        public_slug: result.publicSlug,
+        public_noindex: result.publicNoindex,
+      } : item));
+    } catch (err) {
+      console.error("Erro ao alterar página pública:", err);
+      setError(err instanceof Error ? err.message : "Não foi possível alterar a página pública.");
+    } finally {
+      setBusyQuestionId(null);
+    }
+  }
+
   return (
     <AdminGuard>
       <AdminLayout
@@ -543,8 +568,8 @@ export default function AdminQuestionsPage() {
                   key={question.id}
                   className="p-5 bg-white border-slate-200 shadow-sm"
                 >
-                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-                    <div className="flex-1 min-w-0">
+                  <div className="space-y-5">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-3">
                         <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">
                           {question.codigo || "Sem código"}
@@ -572,6 +597,10 @@ export default function AdminQuestionsPage() {
                           {question.publicada ? "Publicada" : "Não publicada"}
                         </span>
 
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${question.is_public ? "bg-violet-100 text-violet-700 border-violet-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                          {question.is_public ? (question.public_noindex ? "Página pública · noindex" : "Página pública · indexável") : "Fora do Google"}
+                        </span>
+
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold border ${status.className}`}
                         >
@@ -579,12 +608,12 @@ export default function AdminQuestionsPage() {
                         </span>
                       </div>
 
-                      <p className="text-base font-semibold text-slate-900 mb-2">
+                      <p className="max-w-4xl text-base font-semibold leading-relaxed text-slate-900 mb-3 break-words">
                         {textoCurto(question.enunciado, 140)}
                       </p>
 
-                      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600">
-                        <p>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm text-slate-600">
+                        <p className="min-w-0 break-words">
                           <span className="font-semibold text-slate-800">
                             Conteúdo:
                           </span>{" "}
@@ -640,7 +669,30 @@ export default function AdminQuestionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <div className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-4 xl:justify-end">
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl border-violet-200 text-violet-700 hover:bg-violet-50"
+                        onClick={() => alternarPaginaPublica(question)}
+                        disabled={busy}
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
+                        {question.is_public ? "Remover da página pública" : "Publicar no Google"}
+                      </Button>
+
+                      {question.is_public && question.public_slug ? (
+                        <>
+                          <Button asChild variant="outline" className="rounded-2xl">
+                            <a href={`https://www.projetovetor.com/questoes/${question.public_slug}`} target="_blank" rel="noreferrer">
+                              <Eye className="w-4 h-4 mr-2" />Visualizar URL pública
+                            </a>
+                          </Button>
+                          <Button variant="outline" className="rounded-2xl" onClick={() => navigator.clipboard.writeText(`https://www.projetovetor.com/questoes/${question.public_slug}`)}>
+                            <Copy className="w-4 h-4 mr-2" />Copiar URL pública
+                          </Button>
+                        </>
+                      ) : null}
+
                       <Button
                         variant="outline"
                         className="rounded-2xl"

@@ -34,6 +34,12 @@ describe("questionImportSchema", () => {
     expect(batch.summary.validas).toBe(1);
   });
 
+  it.each(["Muito difícil", "muito dificil", "muito_dificil", "muito-dificil"])("normaliza a dificuldade %s na importação", dificuldade => {
+    const batch = parseQuestionImportPayload({ ...validQuestion, dificuldade });
+    expect(batch.questoes[0].item.dificuldade).toBe("muito_dificil");
+    expect(batch.summary.validas).toBe(1);
+  });
+
   it("marca alternativa correta vazia como inválida", () => {
     const batch = parseQuestionImportPayload({ ...validQuestion, alternativa_correta: "" });
     expect(batch.summary.invalidas).toBe(1);

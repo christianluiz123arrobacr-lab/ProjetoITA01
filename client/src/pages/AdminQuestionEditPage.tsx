@@ -19,6 +19,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
+import { normalizeDifficulty } from "@/lib/difficulty";
 import {
   Loader2,
   AlertTriangle,
@@ -815,7 +816,7 @@ export default function AdminQuestionEditPage() {
           assuntosPorConteudo,
           banca: data.banca ?? "",
           ano: data.ano ? String(data.ano) : "",
-          dificuldade: data.dificuldade ?? "",
+          dificuldade: normalizeDifficulty(data.dificuldade) ?? "",
           instituicao: data["instituição"] ?? "",
           publicada: data.publicada ?? true,
           enunciado: data.enunciado ?? "",
@@ -1047,7 +1048,7 @@ export default function AdminQuestionEditPage() {
       assuntos_por_conteudo: assuntosPorConteudoSelecionados,
       banca: valorLimpo(form.banca),
       ano: anoNumero,
-      dificuldade: valorLimpo(form.dificuldade),
+      dificuldade: normalizeDifficulty(form.dificuldade) || "",
       instituição: valorLimpo(form.instituicao),
       publicada: form.publicada,
       enunciado: valorLimpo(form.enunciado),

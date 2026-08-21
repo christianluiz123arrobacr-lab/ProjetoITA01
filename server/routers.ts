@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { chemistryResolutionBlockSchema, safeChemistryLatexSchema, safeResolutionTextSchema } from "../shared/chemistryContent.js";
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies.js";
 import { systemRouter } from "./_core/systemRouter.js";
@@ -39,6 +40,7 @@ import { getCanonicalVetAnalysis, safeQuestionDto, VET_ENGINE_VERSION } from "./
 import { normalizeVetText } from "../shared/vet/vetEngine.js";
 import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetContent, postgrestAliasFilter, prioritizeVetCandidates } from "./vet/vetQuestionSelection.js";
 import { fetchAllQuestionPages } from "./questions/questionPagination.js";
+import { setPublicQuestionPublication } from "./publicQuestions.js";
 
 const notebookPaperSchema = z.object({ size: z.enum(["a5", "a4", "a3", "infinite"]), lined: z.boolean() });
 const stableVetOrder = (seed: string, value: string) => Array.from(`${seed}:${value}`).reduce((hash, char) => ((hash * 31) ^ char.charCodeAt(0)) >>> 0, 2166136261);
@@ -70,10 +72,15 @@ async function assertQuestionPdfAccess(userId: string, tokenRole?: string) {
 
 const resolutionBlockInputSchema = z.object({
   id: z.string().uuid().optional(),
-  tipo: z.enum(["texto", "latex", "imagem"]),
+  tipo: z.enum(["texto", "latex", "imagem", "equacao_quimica", "molecula"]),
   texto: z.string().max(20000).nullable().optional(),
   url_imagem: z.string().url().nullable().optional(),
+  smiles: z.string().max(512).optional(),
+  legenda: z.string().max(300).optional(),
   ordem: z.number().int().min(1).max(500),
+}).superRefine((block, context) => {
+  if (block.tipo === "texto" && !safeResolutionTextSchema.safeParse(block.texto).success) context.addIssue({ code: "custom", message: "Texto de resolução inválido." });
+  if (block.tipo === "latex" && !safeChemistryLatexSchema.safeParse(block.texto).success) context.addIssue({ code: "custom", message: "LaTeX de resolução inválido." });
 });
 
 const scratchpadPointInputSchema = z.object({
@@ -91,7 +98,7 @@ const scratchpadStrokeInputSchema = z.object({
   size: z.number().min(0).max(500),
   points: z.array(scratchpadPointInputSchema).max(20000),
   brush: z.enum(["pen", "brush", "highlighter"]).optional(),
-  shape: z.enum(["line", "arrow", "rectangle", "ellipse", "triangle"]).optional(),
+  shape: z.enum(["line", "arrow", "rectangle", "square", "ellipse", "circle", "triangle", "diamond", "pentagon"]).optional(),
   opacity: z.number().min(0).max(1).optional(),
   text: z.string().max(20000).optional(),
   imageData: z.string().max(2_000_000).optional(),
@@ -109,7 +116,19 @@ const questionNoteInputSchema = z.object({
   title: z.string().max(160).nullable().optional(),
 });
 
-function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeof resolutionBlockInputSchema>) {
+function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeof resolutionBlockInputSchema>): {
+  questao_id: string; tipo: string; texto: string | null; url_imagem: string | null; ordem: number;
+} {
+  if (block.tipo === "equacao_quimica") {
+    const parsed = chemistryResolutionBlockSchema.options[2].parse({ tipo: "equacao_quimica", latex: block.texto });
+    return { questao_id: questaoId, tipo: block.tipo, texto: parsed.latex, url_imagem: null, ordem: block.ordem };
+  }
+  if (block.tipo === "molecula") {
+    let source: unknown = { smiles: block.smiles, legenda: block.legenda };
+    if (!block.smiles && block.texto) { try { source = JSON.parse(block.texto); } catch { source = {}; } }
+    const parsed = chemistryResolutionBlockSchema.options[3].parse({ tipo: "molecula", ...(source as object) });
+    return { questao_id: questaoId, tipo: block.tipo, texto: JSON.stringify({ smiles: parsed.smiles, ...(parsed.legenda ? { legenda: parsed.legenda } : {}) }), url_imagem: null, ordem: block.ordem };
+  }
   return {
     questao_id: questaoId,
     tipo: block.tipo,
@@ -365,20 +384,25 @@ export const appRouter = router({
         const telefone = input.telefone.trim();
         const email = input.email.trim().toLowerCase();
 
-        await assertRequestRateLimit(ctx.req, "auth:register:ip", {
-          limit: 10,
-          windowMs: 15 * 60 * 1000,
-        });
-        await assertRateLimit({
-          key: `auth:register:email:${email}`,
-          limit: 3,
-          windowMs: 60 * 60 * 1000,
-        });
+        await Promise.all([
+          assertRequestRateLimit(ctx.req, "auth:register:ip", {
+            limit: 10,
+            windowMs: 15 * 60 * 1000,
+          }),
+          assertRateLimit({
+            key: `auth:register:email:${email}`,
+            limit: 3,
+            windowMs: 60 * 60 * 1000,
+          }),
+        ]);
 
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email,
           password: input.senha,
-          email_confirm: false,
+          // Public registration is completed server-side so the client can
+          // establish a session immediately and continue to plan selection.
+          // This confirms identity only; subscription access remains guarded.
+          email_confirm: true,
           user_metadata: {
             nome,
             telefone,
@@ -467,6 +491,22 @@ export const appRouter = router({
 
 
     getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
+      // The canonical role was already resolved from admin_users by the
+      // authenticated request context. Admin access must not depend on student
+      // profile columns or subscription infrastructure.
+      if (ctx.user.role === "admin" || ctx.user.role === "editor") {
+        return {
+          accessState: "allowed",
+          role: ctx.user.role,
+          ativo: true,
+          hasActiveSubscription: true,
+          subscriptionStatus: "admin_override",
+          currentPeriodEnd: null,
+          planName: null,
+          blockReason: null,
+          source: "role",
+        } as const;
+      }
       const { data: profile, error: profileError } = await supabaseAdmin
         .from("profiles")
         .select("role, ativo")
@@ -2108,20 +2148,26 @@ export const appRouter = router({
 
 
     listQuestions: adminOrEditorProcedure.query(async () => {
-      const [questionsResult, resolutionSummaries] = await Promise.all([
-        supabaseAdmin
-          .from("questoes")
-          .select("*")
-          .order("created_at", { ascending: false }),
+      const [questions, resolutionSummaries] = await Promise.all([
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin
+            .from("questoes")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: true })
+            .range(from, to);
+
+          if (error) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+          }
+
+          return data ?? [];
+        }),
         loadAllResolutionSummaries(),
       ]);
 
-      if (questionsResult.error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: questionsResult.error.message });
-      }
-
       return {
-        questions: questionsResult.data ?? [],
+        questions,
         resolutions: [],
         resolutionSummaries,
       };
@@ -2687,6 +2733,12 @@ export const appRouter = router({
         });
 
         return { success: true } as const;
+      }),
+
+    setPublicQuestionPublication: adminProcedure
+      .input(z.object({ id: z.string().uuid(), publish: z.boolean() }).strict())
+      .mutation(async ({ ctx, input }) => {
+        return setPublicQuestionPublication(input.id, input.publish, ctx.user.id);
       }),
 
 

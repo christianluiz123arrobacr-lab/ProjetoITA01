@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { normalizeDifficulty, type QuestionDifficulty } from "./difficulty.js";
 
 export const MAX_QUESTION_IMPORT_ITEMS = 50;
 export const MAX_QUESTION_IMPORT_JSON_BYTES = 2 * 1024 * 1024;
 
-export const QUESTION_IMPORT_BLOCK_TYPES = ["texto", "latex", "imagem"] as const;
+export const QUESTION_IMPORT_BLOCK_TYPES = ["texto", "latex", "imagem", "equacao_quimica", "molecula"] as const;
 export type QuestionImportBlockType = (typeof QUESTION_IMPORT_BLOCK_TYPES)[number];
 export type QuestionImportStatus = "valida" | "invalida";
 export type ImportResultStatus = "criada" | "duplicada" | "falhou";
@@ -24,7 +25,7 @@ export type NormalizedQuestionImportItem = {
   id_importacao: string | null;
   codigo: string | null;
   disciplina: string;
-  dificuldade: string;
+  dificuldade: QuestionDifficulty;
   conteudos: string[];
   assuntos: string[];
   assuntos_por_conteudo: AssuntosPorConteudoImportItem[];
@@ -89,7 +90,7 @@ export const normalizedQuestionImportItemSchema = z.object({
   id_importacao: z.string().trim().min(1).max(180).nullable(),
   codigo: z.string().trim().min(1).max(120).nullable(),
   disciplina: z.string().trim().min(1).max(120),
-  dificuldade: z.string().trim().min(1).max(80),
+  dificuldade: z.enum(["facil", "medio", "dificil", "muito_dificil"]),
   conteudos: z.array(z.string().trim().min(1).max(160)).min(1).max(40),
   assuntos: z.array(z.string().trim().min(1).max(180)).min(1).max(80),
   assuntos_por_conteudo: z.array(z.object({
@@ -238,6 +239,8 @@ function normalizeBlockType(value: string, imageUrl: string): QuestionImportBloc
   const normalized = normalizeSearch(value);
   if (["imagem", "image"].includes(normalized) || imageUrl.trim()) return "imagem";
   if (["latex", "formula", "fórmula", "math"].includes(normalized)) return "latex";
+  if (["equacao_quimica", "equação_química", "chemical_equation"].includes(normalized)) return "equacao_quimica";
+  if (["molecula", "molécula", "molecule", "smiles"].includes(normalized)) return "molecula";
   if (!normalized || ["texto", "text", "markdown"].includes(normalized)) return "texto";
   return null;
 }
@@ -258,7 +261,7 @@ function readResolutionBlocks(record: JsonRecord) {
       return;
     }
     if (!isRecord(item)) return;
-    const texto = readString(item, ["texto", "text", "conteudo", "content", "latex"]);
+    let texto = readString(item, ["texto", "text", "conteudo", "content", "latex"]);
     const url = readString(item, ["url_imagem", "imagem", "image", "imageUrl"]);
     const rawType = readString(item, ["tipo", "type"]);
     const tipo = normalizeBlockType(rawType, url);
@@ -267,6 +270,11 @@ function readResolutionBlocks(record: JsonRecord) {
       return;
     }
     if (tipo === "imagem" && !url.trim()) return;
+    if (tipo === "molecula") {
+      const smiles = readString(item, ["smiles"]);
+      const legenda = readString(item, ["legenda", "caption"]);
+      texto = JSON.stringify({ smiles, ...(legenda ? { legenda } : {}) });
+    }
     if (tipo !== "imagem" && !texto.trim()) return;
     parsed.push({
       tipo,
@@ -343,7 +351,9 @@ function normalizeQuestion(record: JsonRecord, rawIndex: number): { item: Normal
     id_importacao: nullable(readString(record, ["id_importacao", "import_id", "external_id"])),
     codigo: nullable(readString(record, ["codigo", "código", "code"])),
     disciplina: readString(record, ["disciplina", "subject"]).trim(),
-    dificuldade: readString(record, ["dificuldade", "difficulty"]).trim(),
+    dificuldade:
+      normalizeDifficulty(readString(record, ["dificuldade", "difficulty"])) ??
+      ("" as QuestionDifficulty),
     conteudos,
     assuntos,
     assuntos_por_conteudo: normalizedGroups,

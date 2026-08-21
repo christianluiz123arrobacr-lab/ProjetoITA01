@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -25,6 +25,7 @@ import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { trpc } from "@/lib/trpc";
 import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import { buildQuestionRichContent, groupRichQuestionContent, parseRichQuestionText, serializeRichQuestionText } from "@/lib/richQuestionContent";
+import { ChemistryResolutionBlock } from "@/components/chemistry/ChemistryResolutionBlock";
 
 export type QuizCompletionData = {
   totalQuestions: number;
@@ -107,6 +108,7 @@ function formatDifficultyLabel(value?: string | null) {
   if (normalized === "facil") return "Fácil";
   if (normalized === "medio") return "Médio";
   if (normalized === "dificil") return "Difícil";
+  if (normalized === "muito_dificil" || normalized === "muito dificil") return "Muito difícil";
 
   return value || "Dificuldade";
 }
@@ -157,6 +159,13 @@ function getDifficultyClasses(value?: string | null) {
     return {
       pill: "bg-rose-50 text-rose-700 border-rose-200",
       result: "bg-rose-50 border-rose-200",
+    };
+  }
+
+  if (normalized === "muito_dificil" || normalized === "muito dificil") {
+    return {
+      pill: "bg-violet-50 text-violet-700 border-violet-200",
+      result: "bg-violet-50 border-violet-200",
     };
   }
 
@@ -261,7 +270,10 @@ export function InteractiveQuiz({
   const [reportError, setReportError] = useState("");
 
   const question = questions[currentQuestion] ?? null;
-  const questionContent = question ? groupRichQuestionContent(buildQuestionRichContent(question)) : [];
+  const questionContent = useMemo(
+    () => question ? groupRichQuestionContent(buildQuestionRichContent(question)) : [],
+    [question]
+  );
 
   const selectedAnswer = answersByQuestion[currentQuestion] ?? null;
   const answered = selectedAnswer !== null;
@@ -412,14 +424,7 @@ export function InteractiveQuiz({
     }
   }, [completionData, hasSentCompletion, isQuizComplete, onComplete]);
 
-  useEffect(() => {
-    if (!question?.id || !answered) return;
-    if (answerStatsByQuestionId[question.id]) return;
-
-    loadAnswerStats(question.id);
-  }, [answered, answerStatsByQuestionId, question?.id]);
-
-  const loadAnswerStats = async (questionId: string) => {
+  const loadAnswerStats = useCallback(async (questionId: string) => {
     if (!questionId) return;
 
     setAnswerStatsLoadingQuestionId(questionId);
@@ -438,7 +443,14 @@ export function InteractiveQuiz({
         current === questionId ? null : current
       );
     }
-  };
+  }, [trpcUtils]);
+
+  useEffect(() => {
+    if (!question?.id || !answered) return;
+    if (answerStatsByQuestionId[question.id]) return;
+
+    loadAnswerStats(question.id);
+  }, [answered, answerStatsByQuestionId, loadAnswerStats, question?.id]);
 
   const saveAttempt = async (optionId: string) => {
     if (!user?.id || !question) {
@@ -550,9 +562,14 @@ export function InteractiveQuiz({
   const handleRestart = () => {
     setCurrentQuestion(0);
     setAnswersByQuestion({});
+    setAnswerResultsByQuestion({});
+    setResolutionByQuestion({});
     setShowExplanationByQuestion({});
     setQuestionStartedAt(Date.now());
     setHasSentCompletion(false);
+    setSubmittingOptionId(null);
+    setAnswerStatsLoadingQuestionId(null);
+    setAnswerError("");
     setReportOpen(false);
     setReportType("enunciado");
     setReportComment("");
@@ -874,6 +891,9 @@ export function InteractiveQuiz({
                   {(resolutionByQuestion[currentQuestion]?.map(block => ({ type: block.tipo, content: block.texto, imageUrl: block.url_imagem, order: block.ordem ?? 0 })) ?? question.explanationBlocks ?? [])
                     .sort((a, b) => a.order - b.order)
                     .map((block, index) => {
+                      if (block.type === "equacao_quimica" || block.type === "molecula") {
+                        return <ChemistryResolutionBlock key={`${block.type}-${block.order}-${index}`} block={{ tipo: block.type, texto: block.content }} />;
+                      }
                       if (block.type === "imagem" && block.imageUrl) {
                         return (
                           <div

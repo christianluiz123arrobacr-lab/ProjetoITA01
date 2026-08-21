@@ -8,8 +8,16 @@ export const MATH_MACROS = {
 export const KATEX_RENDER_OPTIONS: KatexOptions = {
   macros: MATH_MACROS,
   throwOnError: false,
+  trust: false,
 };
 
+export function renderChemicalEquation(latex: string) {
+  return katex.renderToString(latex, {
+    ...KATEX_RENDER_OPTIONS,
+    displayMode: true,
+    throwOnError: true,
+  });
+}
 const escapedMacroPattern = /\\\\(?=sen(?:\b|\^|\{|\(|\\))/g;
 
 export function normalizeMathSource(value: string) {

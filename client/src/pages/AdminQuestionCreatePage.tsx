@@ -1,4 +1,12 @@
-import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type {
+  ChangeEvent,
+  InputHTMLAttributes,
+  KeyboardEvent,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 import { Link, useLocation } from "wouter";
 import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { trpc } from "@/lib/trpc";
@@ -11,6 +19,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
+import { normalizeDifficulty } from "@/lib/difficulty";
 import {
   Loader2,
   AlertTriangle,
@@ -35,6 +44,11 @@ type ResolutionDraftBlock = {
   ordem: number;
 };
 
+function getQuestionCreationSuccessMessage(resolutionBlockCount: number) {
+  return resolutionBlockCount > 0
+    ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
+    : "Questão criada com sucesso. Indo para a resolução...";
+}
 type QuestionFormData = {
   codigo: string;
   disciplina: string;
@@ -455,7 +469,7 @@ export function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionF
     assuntosPorConteudo: assuntosPorConteudo.length ? assuntosPorConteudo : currentForm.assuntosPorConteudo,
     banca: readJsonString(record, ["banca", "examBoard"]) || currentForm.banca,
     ano: readJsonString(record, ["ano", "year"]) || currentForm.ano,
-    dificuldade: readJsonString(record, ["dificuldade", "difficulty"]) || currentForm.dificuldade,
+    dificuldade: normalizeDifficulty(readJsonString(record, ["dificuldade", "difficulty"])) || currentForm.dificuldade,
     instituicao:
       readJsonString(record, ["instituição", "instituicao", "institution"]) || currentForm.instituicao,
     publicada: readJsonBoolean(record, ["publicada", "published"], currentForm.publicada),
@@ -490,7 +504,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
@@ -501,7 +515,7 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
@@ -512,7 +526,7 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   );
 }
 
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
@@ -1437,7 +1451,6 @@ export default function AdminQuestionCreatePage() {
       })),
     });
   }
-
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1625,7 +1638,7 @@ export default function AdminQuestionCreatePage() {
         assuntos_por_conteudo: assuntosPorConteudoSelecionados,
         banca: valorLimpo(form.banca),
         ano: anoNumero,
-        dificuldade: valorLimpo(form.dificuldade),
+        dificuldade: normalizeDifficulty(form.dificuldade) || "",
         instituição: valorLimpo(form.instituicao),
         publicada: form.publicada,
         enunciado: valorLimpo(form.enunciado),
