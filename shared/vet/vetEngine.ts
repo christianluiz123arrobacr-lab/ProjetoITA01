@@ -1,4 +1,4 @@
-import { getDifficultyNumeric } from "../difficulty";
+import { getDifficultyNumeric } from "../difficulty.js";
 
 export type VetQuestion = {
   id: string;
