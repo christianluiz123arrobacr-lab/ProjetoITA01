@@ -53,7 +53,7 @@ export default function StudentSidebar({
 
   return (
     <aside
-      className={`fixed bottom-0 left-0 top-0 z-40 hidden flex-col border-r border-blue-100 bg-white text-slate-900 shadow-[8px_0_24px_rgba(15,23,42,0.08)] transition-[width] duration-200 md:flex ${
+      className={`fixed bottom-0 left-0 top-0 z-[60] hidden overflow-hidden flex-col border-r border-blue-100 bg-white text-slate-900 shadow-[8px_0_24px_rgba(15,23,42,0.08)] transition-[width] duration-200 md:flex ${
         expanded ? "w-72" : "w-[76px]"
       }`}
     >
@@ -80,7 +80,7 @@ export default function StudentSidebar({
         ) : null}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-2 px-3 py-5">
+      <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-5">
         {navItems.map(item => {
           const Icon = item.icon;
           const active = isActiveRoute(location, item.href);
@@ -91,7 +91,7 @@ export default function StudentSidebar({
             item.disabled
               ? "cursor-not-allowed text-slate-400 opacity-70"
               : active
-              ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-lg shadow-blue-600/20"
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
               : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
           ].join(" ");
 
@@ -131,7 +131,7 @@ export default function StudentSidebar({
       </nav>
 
       {expanded ? (
-        <div className="mx-4 mb-4 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-sky-50 p-4">
+        <div className="mx-4 mb-4 shrink-0 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-sky-50 p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
             Acesso rápido
           </p>
@@ -142,7 +142,7 @@ export default function StudentSidebar({
         </div>
       ) : (
         <div className="mb-4 flex justify-center">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500" />
+          <div className="h-10 w-10 rounded-2xl bg-blue-600" />
         </div>
       )}
     </aside>

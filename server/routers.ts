@@ -360,9 +360,22 @@ export const appRouter = router({
     linkedQuestions: protectedProcedure.input(z.object({ questionIds: z.array(z.string().uuid()).max(100) })).query(async ({ input }) => {
       assertNotebooksAvailable();
       if (!input.questionIds.length) return [];
-      const { data, error } = await supabaseAdmin.from("questoes").select("*").in("id", input.questionIds).eq("publicada", true);
+      const { data, error } = await supabaseAdmin
+        .from("questoes")
+        .select("id,codigo,instituição,ano,disciplina,enunciado,enunciado_pos_imagem,url_imagem")
+        .in("id", input.questionIds)
+        .eq("publicada", true);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar as questões desta lista." });
-      return ((data ?? []) as Array<Record<string, unknown>>).map(row => ({ id: String(row.id), codigo: typeof row.codigo === "string" ? row.codigo : null, instituição: typeof row["instituição"] === "string" ? row["instituição"] : null, ano: typeof row.ano === "number" ? row.ano : null, disciplina: typeof row.disciplina === "string" ? row.disciplina : null, enunciado: typeof row.enunciado === "string" ? row.enunciado : "" }));
+      return ((data ?? []) as Array<Record<string, unknown>>).map(row => ({
+        id: String(row.id),
+        codigo: typeof row.codigo === "string" ? row.codigo : null,
+        instituição: typeof row["instituição"] === "string" ? row["instituição"] : null,
+        ano: typeof row.ano === "number" ? row.ano : null,
+        disciplina: typeof row.disciplina === "string" ? row.disciplina : null,
+        statement: typeof row.enunciado === "string" ? row.enunciado : "",
+        statementAfterImage: typeof row.enunciado_pos_imagem === "string" ? row.enunciado_pos_imagem : null,
+        imageUrl: typeof row.url_imagem === "string" ? row.url_imagem : null,
+      }));
     }),
   }),
   system: systemRouter,

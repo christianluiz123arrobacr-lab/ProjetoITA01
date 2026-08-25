@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Save } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { Link, useLocation, useRoute } from "wouter";
 import {
   StudyCanvasWorkspace,
@@ -15,8 +19,63 @@ import {
   type NotebookPaperSize,
 } from "@/lib/notebookDocument";
 import type { ScratchpadStroke } from "@/services/question-notes.service";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
+import {
+  buildQuestionRichContent,
+  groupRichQuestionContent,
+  parseRichQuestionText,
+  serializeRichQuestionText,
+} from "@/lib/richQuestionContent";
 
 type SaveState = "saved" | "dirty" | "saving" | "error" | "conflict";
+
+type LinkedQuestionContent = {
+  statement: string;
+  statementAfterImage: string | null;
+  imageUrl: string | null;
+};
+
+function QuestionRichContent({ question }: { question: LinkedQuestionContent }) {
+  const content = useMemo(
+    () => groupRichQuestionContent(buildQuestionRichContent(question)),
+    [question],
+  );
+
+  return (
+    <div className="mt-3 space-y-3 text-sm leading-6 text-slate-800">
+      {content.map((group, index) => {
+        if (group.type === "image") {
+          return (
+            <img
+              key={`${group.url}-${index}`}
+              src={group.url}
+              alt="Imagem da questão"
+              className="h-auto max-w-full rounded-lg border border-slate-200"
+            />
+          );
+        }
+
+        return (
+          <div key={index} className="prose prose-slate max-w-none prose-p:my-2">
+            <ReactMarkdown
+              remarkPlugins={[remarkMath]}
+              rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}
+              components={{
+                p: ({ children }) => <p className="leading-relaxed">{children}</p>,
+                strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                ul: ({ children }) => <ul className="mb-3 list-disc pl-5">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-3 list-decimal pl-5">{children}</ol>,
+                li: ({ children }) => <li className="mb-1">{children}</li>,
+              }}
+            >
+              {normalizeMathSource(serializeRichQuestionText(group.nodes))}
+            </ReactMarkdown>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function elementToStroke(value: unknown): ScratchpadStroke | null {
   if (!value || typeof value !== "object") return null;
@@ -191,9 +250,37 @@ export default function NotebookEditorPage() {
         {linkedIds.length ? <Button variant="outline" size="sm" onClick={() => setQuestionPanelOpen(value => !value)}>Questões da lista</Button> : null}
       </header>
       <section className="flex h-[calc(100dvh-57px)] overflow-hidden p-2 sm:p-3">
-        {linkedIds.length && questionPanelOpen ? <aside className="mr-3 hidden w-[34%] min-w-[280px] max-w-[480px] overflow-auto rounded-2xl border bg-white p-4 shadow-sm md:block"><h2 className="font-bold">Questões da lista</h2><div className="mt-3 flex gap-2 overflow-x-auto">{document.linkedQuestions?.map((item, index) => <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>{index + 1}</button>)}</div>{activeQuestion ? <article className="mt-4"><p className="text-xs font-bold text-blue-700">{activeQuestion.instituição} · {activeQuestion.ano} · {activeQuestion.disciplina}</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">{activeQuestion.enunciado}</p></article> : <p className="mt-4 text-sm text-slate-500">Carregando questão...</p>}</aside> : null}
+        {linkedIds.length && questionPanelOpen ? (
+          <aside className="mr-3 hidden w-[34%] min-w-[280px] max-w-[480px] overflow-auto rounded-2xl border bg-white p-4 shadow-sm md:block">
+            <h2 className="font-bold">Questões da lista</h2>
+            <div className="mt-3 flex gap-2 overflow-x-auto">
+              {document.linkedQuestions?.map((item, index) => (
+                <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+            {activeQuestion ? (
+              <article className="mt-4">
+                <p className="text-xs font-bold text-blue-700">{activeQuestion.instituição} · {activeQuestion.ano} · {activeQuestion.disciplina}</p>
+                <QuestionRichContent question={activeQuestion} />
+              </article>
+            ) : <p className="mt-4 text-sm text-slate-500">Carregando questão...</p>}
+          </aside>
+        ) : null}
         <div className="min-w-0 flex-1 overflow-auto">
-        {linkedIds.length && questionPanelOpen ? <div className="mb-2 max-h-[42dvh] overflow-auto rounded-xl border bg-white p-3 md:hidden"><div className="flex gap-2 overflow-x-auto">{document.linkedQuestions?.map((item, index) => <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>Questão {index + 1}</button>)}</div>{activeQuestion ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{activeQuestion.enunciado}</p> : null}</div> : null}
+        {linkedIds.length && questionPanelOpen ? (
+          <div className="mb-2 max-h-[42dvh] overflow-auto rounded-xl border bg-white p-3 md:hidden">
+            <div className="flex gap-2 overflow-x-auto">
+              {document.linkedQuestions?.map((item, index) => (
+                <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>
+                  Questão {index + 1}
+                </button>
+              ))}
+            </div>
+            {activeQuestion ? <QuestionRichContent question={activeQuestion} /> : null}
+          </div>
+        ) : null}
         <StudyCanvasWorkspace
           questionId={documentId}
           titleOverride={document.name}
