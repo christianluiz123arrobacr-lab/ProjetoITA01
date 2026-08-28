@@ -84,6 +84,8 @@ type StudentBillingRow = {
   next_due_date: string | null;
   subscription_created_at: string | null;
   updated_at: string | null;
+  has_valid_access: boolean;
+  effective_subscription_id: string | null;
 
   attempts_count: number | null;
   correct_count: number | null;
@@ -171,19 +173,8 @@ function formatMoney(cents?: number | null) {
 function getSubscriptionStatus(student: StudentBillingRow) {
   if (!student.subscription_id) return "without_subscription";
 
-  if (
-    student.subscription_status === "active" ||
-    student.subscription_status === "trialing"
-  ) {
-    if (student.current_period_end) {
-      const endDate = new Date(student.current_period_end);
-      if (!Number.isNaN(endDate.getTime()) && endDate < new Date()) {
-        return "expired";
-      }
-    }
-
-    return "active";
-  }
+  if (student.has_valid_access) return "active";
+  if (student.subscription_status === "active" || student.subscription_status === "trialing") return "expired";
 
   return student.subscription_status || "without_subscription";
 }
@@ -767,7 +758,7 @@ export default function AdminUsersPage() {
           </Card>
 
           <Card className="border-emerald-200 bg-emerald-50 p-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">Ativos</p>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">Acessos liberados</p>
             <p className="mt-2 text-3xl font-black text-emerald-700">{stats.active}</p>
             <p className="text-sm text-emerald-700/80">com acesso liberado</p>
           </Card>

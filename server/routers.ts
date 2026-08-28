@@ -20,6 +20,7 @@ import {
   reconcileMercadoPagoPaymentByAdmin,
   syncMyMercadoPagoPaymentStatus,
 } from "./billing/billingService.js";
+import { buildBillingConsistencyReport, resolveEffectiveBillingAccess } from "./billing/accessConsistency.js";
 import {
   buildQuestionInsertPayload,
   getQuestionImportSourceId,
@@ -265,6 +266,14 @@ function flattenBillingSubscription(row: any) {
     plan_currency: plan?.currency ?? "BRL",
     plan_billing_cycle: plan?.billing_cycle ?? null,
   };
+}
+
+async function loadBillingAccessPayments() {
+  const { data, error } = await supabaseAdmin
+    .from("billing_payments")
+    .select("user_id, status, access_applied_at, subscription_id, original_subscription_id, applied_to_subscription_id");
+  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+  return data ?? [];
 }
 
 async function getLatestUserBillingSubscription(userId: string) {
@@ -1511,10 +1520,14 @@ export const appRouter = router({
       }
 
       const profileMap = new Map((profiles ?? []).map((profile: any) => [String(profile.id), profile]));
+      const payments = await loadBillingAccessPayments();
+      const { effectiveByUser } = resolveEffectiveBillingAccess(subscriptions ?? [], payments);
 
       return (subscriptions ?? []).map((subscription: any) => {
         const profile = profileMap.get(String(subscription.user_id));
         const plan = pickBillingPlan(subscription);
+        const effective = effectiveByUser.get(String(subscription.user_id));
+        const isEffective = effective?.subscriptionId === String(subscription.id);
 
         return {
           subscription_id: String(subscription.id),
@@ -1545,6 +1558,10 @@ export const appRouter = router({
           next_due_date: subscription.next_due_date ?? null,
           created_at: subscription.created_at,
           updated_at: subscription.updated_at,
+          effective_subscription_id: effective?.subscriptionId ?? null,
+          is_effective_subscription: isEffective,
+          has_valid_access: Boolean(isEffective && effective?.hasValidAccess),
+          is_historical_subscription: Boolean(effective?.subscriptionId && !isEffective),
         };
       });
     }),
@@ -1634,14 +1651,13 @@ export const appRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
       }
 
-      const subscriptionMap = new Map<string, any>();
-      for (const subscription of subscriptions ?? []) {
-        const userId = String((subscription as any).user_id);
-        if (!subscriptionMap.has(userId)) subscriptionMap.set(userId, subscription);
-      }
+      const payments = await loadBillingAccessPayments();
+      const { effectiveByUser } = resolveEffectiveBillingAccess(subscriptions ?? [], payments);
+      const subscriptionById = new Map((subscriptions ?? []).map((subscription: any) => [String(subscription.id), subscription]));
 
       return (profiles ?? []).map((profile: any) => {
-        const subscription = subscriptionMap.get(String(profile.id));
+        const effective = effectiveByUser.get(String(profile.id));
+        const subscription = effective?.subscriptionId ? subscriptionById.get(effective.subscriptionId) : null;
         const plan = pickBillingPlan(subscription);
 
         return {
@@ -1671,12 +1687,25 @@ export const appRouter = router({
           next_due_date: subscription?.next_due_date ?? null,
           subscription_created_at: subscription?.created_at ?? null,
           updated_at: subscription?.updated_at ?? null,
+          has_valid_access: Boolean(effective?.hasValidAccess),
+          effective_subscription_id: effective?.subscriptionId ?? null,
           attempts_count: 0,
           correct_count: 0,
           wrong_count: 0,
           last_answered_at: null,
         };
       });
+    }),
+
+    getBillingConsistencyReport: adminProcedure.query(async () => {
+      const [{ data: subscriptions, error: subscriptionsError }, payments] = await Promise.all([
+        supabaseAdmin
+          .from("billing_subscriptions")
+          .select("id, user_id, status, current_period_end, updated_at, created_at, canonical_access_subscription_id"),
+        loadBillingAccessPayments(),
+      ]);
+      if (subscriptionsError) throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
+      return buildBillingConsistencyReport(subscriptions ?? [], payments);
     }),
 
     updateStudentProfile: adminProcedure

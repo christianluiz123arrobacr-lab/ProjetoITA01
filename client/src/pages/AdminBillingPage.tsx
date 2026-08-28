@@ -59,6 +59,10 @@ type AdminBillingSubscriptionRow = {
 
   created_at: string;
   updated_at: string;
+  effective_subscription_id: string | null;
+  is_effective_subscription: boolean;
+  has_valid_access: boolean;
+  is_historical_subscription: boolean;
 };
 
 type InviteRow = {
@@ -260,7 +264,9 @@ export default function AdminBillingPage() {
       pending: subscriptions.filter((item) => item.status === "pending").length,
       manualReview: subscriptions.filter((item) => item.status === "manual_review")
         .length,
-      active: subscriptions.filter((item) => item.status === "active").length,
+      studentsWithActiveAccess: new Set(subscriptions.filter((item) => item.has_valid_access).map((item) => item.user_id)).size,
+      activeRecords: subscriptions.filter((item) => item.status === "active" || item.status === "trialing").length,
+      historical: subscriptions.filter((item) => item.is_historical_subscription).length,
       expired: subscriptions.filter((item) => item.status === "expired").length,
       canceled: subscriptions.filter((item) => item.status === "canceled").length,
       reconciliation: subscriptions.filter((item) => Boolean(item.gateway_reconciliation_status)).length,
@@ -639,10 +645,20 @@ export default function AdminBillingPage() {
           </Card>
 
           <Card className="border-emerald-200 bg-emerald-50 p-5">
-            <p className="text-sm text-emerald-700">Ativas</p>
+            <p className="text-sm text-emerald-700">Alunos com acesso ativo</p>
             <p className="mt-2 text-3xl font-black text-emerald-900">
-              {subscriptionStats.active}
+              {subscriptionStats.studentsWithActiveAccess}
             </p>
+          </Card>
+
+          <Card className="border-blue-200 bg-blue-50 p-5">
+            <p className="text-sm text-blue-700">Registros ativos</p>
+            <p className="mt-2 text-3xl font-black text-blue-900">{subscriptionStats.activeRecords}</p>
+          </Card>
+
+          <Card className="border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm text-slate-600">Registros históricos</p>
+            <p className="mt-2 text-3xl font-black text-slate-900">{subscriptionStats.historical}</p>
           </Card>
 
           <Card className="border-red-200 bg-red-50 p-5">
@@ -844,6 +860,12 @@ export default function AdminBillingPage() {
                                 Reconciliação necessária
                               </span>
                             ) : null}
+
+                            {subscription.is_effective_subscription ? (
+                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Assinatura efetiva</span>
+                            ) : subscription.is_historical_subscription ? (
+                              <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">Histórico / substituída</span>
+                            ) : null}
                           </div>
 
                           <h3 className="mt-3 text-lg font-black text-slate-900">
@@ -979,7 +1001,7 @@ export default function AdminBillingPage() {
               <div className="divide-y divide-slate-200">
                 {payments.map(payment => {
                   const canReconcile = payment.gateway === "mercadopago"
-                    && (["pending", "failed"].includes(payment.status) || Boolean(payment.gateway_reconciliation_error));
+                    && (!payment.access_applied_at || ["pending", "failed"].includes(payment.status) || Boolean(payment.gateway_reconciliation_error));
                   const isActionLoading = actionLoadingId === payment.id;
                   return (
                     <div key={payment.id} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -997,7 +1019,7 @@ export default function AdminBillingPage() {
                       {canReconcile ? (
                         <Button variant="outline" onClick={() => reconcilePayment(payment)} disabled={isActionLoading || !payment.gateway_payment_id} className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50">
                           {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                          Verificar pagamento no Mercado Pago
+                          Reconciliar acesso
                         </Button>
                       ) : null}
                     </div>
