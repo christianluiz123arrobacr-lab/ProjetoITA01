@@ -14,6 +14,7 @@ import {
   cancelUserMercadoPagoSubscription,
   createCardSubscriptionCheckout,
   createPixPayment,
+  createPrepaidCheckout,
   getBillingCapabilities,
   getMyPayments,
   reconcileDuplicateMercadoPagoSubscriptions,
@@ -21,6 +22,7 @@ import {
   syncMyMercadoPagoPaymentStatus,
 } from "./billing/billingService.js";
 import { buildBillingConsistencyReport, resolveEffectiveBillingAccess } from "./billing/accessConsistency.js";
+import { isWhatsAppRemindersEnabled, retryBillingReminder, runBillingReminderJob } from "./billing/whatsappReminders.js";
 import {
   buildQuestionInsertPayload,
   getQuestionImportSourceId,
@@ -397,6 +399,7 @@ export const appRouter = router({
         z.object({
           nome: z.string().min(2, "Nome muito curto"),
           telefone: z.string().min(8, "Digite um telefone válido"),
+          billingWhatsappOptIn: z.boolean().optional().default(false),
           email: z.string().email("E-mail inválido"),
           senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
         })
@@ -449,6 +452,7 @@ export const appRouter = router({
               email,
               role: "student",
               ativo: true,
+              billing_whatsapp_opt_in: input.billingWhatsappOptIn,
             },
             {
               onConflict: "id",
@@ -483,6 +487,7 @@ export const appRouter = router({
           provaAlvo: z.string().max(120).nullable().optional(),
           focoAtual: z.string().max(160).nullable().optional(),
           metaSemanalQuestoes: z.number().int().min(0).nullable().optional(),
+          billingWhatsappOptIn: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -498,6 +503,7 @@ export const appRouter = router({
               prova_alvo: input.provaAlvo?.trim() || null,
               foco_atual: input.focoAtual?.trim() || null,
               meta_semanal_questoes: input.metaSemanalQuestoes ?? null,
+              ...(input.billingWhatsappOptIn === undefined ? {} : { billing_whatsapp_opt_in: input.billingWhatsappOptIn }),
             },
             { onConflict: "id" }
           )
@@ -640,6 +646,22 @@ export const appRouter = router({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
+        })
+      ),
+
+    createPrepaidCheckout: protectedProcedure
+      .input(z.object({
+        planSlug: z.string().min(1).max(120),
+        durationMonths: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+        paymentMethod: z.enum(["card", "pix"]),
+      }))
+      .mutation(async ({ ctx, input }) =>
+        createPrepaidCheckout({
+          userId: ctx.user.id,
+          userEmail: ctx.user.email ?? null,
+          planSlug: input.planSlug,
+          durationMonths: input.durationMonths,
+          paymentMethod: input.paymentMethod,
         })
       ),
 
@@ -1706,6 +1728,27 @@ export const appRouter = router({
       ]);
       if (subscriptionsError) throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
       return buildBillingConsistencyReport(subscriptions ?? [], payments);
+    }),
+
+    listBillingNotificationLogs: adminProcedure.query(async () => {
+      const { data, error } = await supabaseAdmin
+        .from("billing_notification_log")
+        .select("id,user_id,subscription_id,notification_type,due_date,channel,status,error_message,created_at,sent_at,profiles(nome,email)")
+        .order("created_at", { ascending: false }).limit(200);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { enabled: isWhatsAppRemindersEnabled(), logs: data ?? [] };
+    }),
+
+    runBillingReminders: adminProcedure.mutation(async ({ ctx }) => {
+      const result = await runBillingReminderJob();
+      await supabaseAdmin.from("admin_logs").insert({ actor_user_id: ctx.user.id, actor_email: ctx.user.email, action: "billing_reminders_run", entity_type: "billing_notification_log", entity_id: null, description: "Job administrativo de avisos de cobrança executado.", level: "info", metadata: result });
+      return result;
+    }),
+
+    retryBillingReminder: adminProcedure.input(z.object({ notificationId: z.string().uuid() })).mutation(async ({ ctx, input }) => {
+      const result = await retryBillingReminder(input.notificationId);
+      await supabaseAdmin.from("admin_logs").insert({ actor_user_id: ctx.user.id, actor_email: ctx.user.email, action: "billing_reminder_retried", entity_type: "billing_notification_log", entity_id: input.notificationId, description: "Aviso de cobrança reenviado administrativamente.", level: "info", metadata: result });
+      return result;
     }),
 
     updateStudentProfile: adminProcedure

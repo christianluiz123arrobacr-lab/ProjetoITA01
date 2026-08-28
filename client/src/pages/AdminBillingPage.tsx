@@ -12,6 +12,7 @@ import {
   Edit3,
   Gift,
   Loader2,
+  MessageCircle,
   RefreshCw,
   RotateCcw,
   Save,
@@ -138,7 +139,8 @@ type StatusFilter =
   | "canceled"
   | "failed"
   | "reconciliation";
-type AdminBillingTab = "subscriptions" | "payments" | "plans" | "invites";
+type AdminBillingTab = "subscriptions" | "payments" | "plans" | "invites" | "notifications";
+type BillingNotificationLog = { id: string; notification_type: string; due_date: string; status: string; error_message: string | null; created_at: string; sent_at: string | null; profiles?: { nome?: string | null; email?: string | null } | null };
 
 function formatDate(date?: string | null) {
   if (!date) return "Sem data";
@@ -212,6 +214,9 @@ export default function AdminBillingPage() {
   const listBillingPlansQuery = trpc.admin.listBillingPlans.useQuery(undefined, { enabled: false });
   const listBillingPlanInvitesQuery = trpc.admin.listBillingPlanInvites.useQuery(undefined, { enabled: false });
   const listBillingPaymentsQuery = trpc.admin.listBillingPayments.useQuery(undefined, { enabled: false });
+  const listBillingNotificationLogsQuery = trpc.admin.listBillingNotificationLogs.useQuery(undefined, { enabled: false });
+  const runBillingRemindersMutation = trpc.admin.runBillingReminders.useMutation();
+  const retryBillingReminderMutation = trpc.admin.retryBillingReminder.useMutation();
   const renewBillingSubscriptionMutation = trpc.admin.renewBillingSubscription.useMutation();
   const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
   const cancelMercadoPagoSubscriptionNowMutation = trpc.admin.cancelMercadoPagoSubscriptionNow.useMutation();
@@ -230,6 +235,8 @@ export default function AdminBillingPage() {
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [payments, setPayments] = useState<AdminBillingPaymentRow[]>([]);
   const [plans, setPlans] = useState<AdminBillingPlanRow[]>([]);
+  const [notificationLogs, setNotificationLogs] = useState<BillingNotificationLog[]>([]);
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [planForms, setPlanForms] = useState<Record<string, PlanFormState>>({});
 
   const [selectedPlanSlug, setSelectedPlanSlug] = useState("");
@@ -328,6 +335,13 @@ export default function AdminBillingPage() {
     const result = await listBillingPaymentsQuery.refetch();
     if (result.error) throw new Error(result.error.message || "Não foi possível carregar os pagamentos.");
     setPayments((result.data ?? []) as AdminBillingPaymentRow[]);
+  }
+
+  async function loadNotificationLogs() {
+    const result = await listBillingNotificationLogsQuery.refetch();
+    if (result.error) throw new Error(result.error.message || "Não foi possível carregar os avisos.");
+    setNotificationLogs((result.data?.logs ?? []) as BillingNotificationLog[]);
+    setRemindersEnabled(Boolean(result.data?.enabled));
   }
 
   async function loadAllData() {
@@ -730,6 +744,7 @@ export default function AdminBillingPage() {
               <RefreshCw className="h-4 w-4" />
               Pagamentos Mercado Pago
             </button>
+            <button type="button" onClick={() => { setActiveTab("notifications"); loadNotificationLogs().catch(error => setError(error.message)); }} className={["flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition", activeTab === "notifications" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"].join(" ")}><MessageCircle className="h-4 w-4" />Avisos de cobrança</button>
 
             <button
               type="button"
@@ -1027,6 +1042,13 @@ export default function AdminBillingPage() {
                 })}
               </div>
             )}
+          </Card>
+        )}
+
+        {activeTab === "notifications" && (
+          <Card className="border-slate-200 p-5">
+            <div className="flex items-center justify-between gap-4"><div><h2 className="text-lg font-black text-slate-900">Avisos de cobrança</h2><p className="text-sm text-slate-500">{remindersEnabled ? "Integração WhatsApp habilitada." : "Modo simulação: nenhum WhatsApp é enviado."}</p></div><Button variant="outline" onClick={async () => { await runBillingRemindersMutation.mutateAsync(); await loadNotificationLogs(); }} disabled={runBillingRemindersMutation.isPending}>{runBillingRemindersMutation.isPending ? "Executando..." : "Executar agora"}</Button></div>
+            <div className="mt-5 space-y-3">{notificationLogs.length === 0 ? <p className="text-sm text-slate-500">Nenhum aviso registrado.</p> : notificationLogs.map(log => <div key={log.id} className="rounded-xl border border-slate-200 p-3 text-sm"><div className="flex justify-between gap-3"><strong>{log.profiles?.nome || log.profiles?.email || "Aluno"}</strong><span>{log.status}</span></div><p className="mt-1 text-slate-600">{log.notification_type} · vencimento {formatDate(log.due_date)}</p>{log.error_message ? <p className="mt-1 text-xs text-slate-500">{log.error_message}</p> : null}{log.status === "failed" ? <Button variant="outline" size="sm" className="mt-2" disabled={!remindersEnabled || retryBillingReminderMutation.isPending} onClick={async () => { await retryBillingReminderMutation.mutateAsync({ notificationId: log.id }); await loadNotificationLogs(); }}>Reenviar com segurança</Button> : null}</div>)}</div>
           </Card>
         )}
 

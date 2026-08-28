@@ -175,6 +175,10 @@ export async function createMercadoPagoPixPayment(
   return trpcClient.billing.createPixPayment.mutate({ planSlug });
 }
 
+export async function createPrepaidCheckout(planSlug: string, durationMonths: 1 | 2 | 3, paymentMethod: "card" | "pix") {
+  return trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod });
+}
+
 export async function getMySubscription() {
   return trpcClient.billing.getMySubscription.query();
 }

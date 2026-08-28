@@ -1,4 +1,5 @@
 {
+  "crons": [{ "path": "/api/cron/billing-reminders", "schedule": "0 12 * * *" }],
   "headers": [
     {
       "source": "/((?!assets/|api/).*)",

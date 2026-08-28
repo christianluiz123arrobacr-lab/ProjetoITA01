@@ -37,6 +37,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [billingWhatsappOptIn, setBillingWhatsappOptIn] = useState(false);
   const [erro, setErro] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -92,6 +93,7 @@ export default function RegisterPage() {
         telefone: telefoneTrimmed,
         email: emailTrimmed,
         senha: senhaTrimmed,
+        billingWhatsappOptIn,
       });
 
       const { error } = await supabase.auth.signInWithPassword({
@@ -257,6 +259,8 @@ export default function RegisterPage() {
                 </div>
               </div>
             </div>
+
+            <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={billingWhatsappOptIn} onChange={event => setBillingWhatsappOptIn(event.target.checked)} className="mt-1" />Quero receber pelo WhatsApp avisos sobre pagamento, vencimento e acesso ao Projeto Vetor.</label>
 
             {erro && (
               <div className="flex gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">

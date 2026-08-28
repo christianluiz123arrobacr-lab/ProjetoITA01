@@ -60,7 +60,7 @@ export function resolveEffectiveBillingAccess(
   }
 
   const effectiveByUser = new Map<string, EffectiveBillingAccess>();
-  for (const [userId, rows] of byUser) {
+  for (const [userId, rows] of Array.from(byUser.entries())) {
     const ordered = [...rows].sort((left, right) => {
       const leftValid = hasValidBillingAccess(left, now);
       const rightValid = hasValidBillingAccess(right, now);
@@ -110,20 +110,20 @@ export function buildBillingConsistencyReport(
   }
 
   const latestCreatedByUser = new Map<string, string>();
-  for (const [userId, rows] of byUser) {
+  for (const [userId, rows] of Array.from(byUser.entries())) {
     const latest = [...rows].sort((a, b) => timestamp(b.created_at, Number.NEGATIVE_INFINITY) - timestamp(a.created_at, Number.NEGATIVE_INFINITY))[0];
     if (latest) latestCreatedByUser.set(userId, latest.id);
   }
 
-  const effectiveSubscriptionIds = new Set([...effectiveByUser.values()].map(item => item.subscriptionId).filter(Boolean));
+  const effectiveSubscriptionIds = new Set(Array.from(effectiveByUser.values()).map(item => item.subscriptionId).filter(Boolean));
   return {
-    totalStudentsWithEffectiveAccess: [...effectiveByUser.values()].filter(item => item.hasValidAccess).length,
+    totalStudentsWithEffectiveAccess: Array.from(effectiveByUser.values()).filter(item => item.hasValidAccess).length,
     totalActiveOrTrialingRecords: activeLike.length,
     historicalRecords: subscriptions.filter(item => effectiveSubscriptionIds.has(item.id) === false).length,
-    usersWithMultipleActiveOrTrialingRecords: [...byUser.entries()]
+    usersWithMultipleActiveOrTrialingRecords: Array.from(byUser.entries())
       .filter(([, rows]) => rows.filter(item => accessStatuses.has(item.status ?? "")).length > 1)
       .map(([userId]) => userId),
-    usersWithDisplayedSubscriptionDivergingFromEffective: [...effectiveByUser.entries()]
+    usersWithDisplayedSubscriptionDivergingFromEffective: Array.from(effectiveByUser.entries())
       .filter(([userId, effective]) => effective.subscriptionId && latestCreatedByUser.get(userId) !== effective.subscriptionId)
       .map(([userId]) => userId),
     approvedPaymentsWithoutAccessApplied: payments
