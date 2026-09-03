@@ -53,15 +53,15 @@ export default function StudentSidebar({
 
   return (
     <aside
-      className={`fixed bottom-0 left-0 top-0 z-[60] hidden overflow-hidden flex-col border-r border-blue-100 bg-white text-slate-900 shadow-[8px_0_24px_rgba(15,23,42,0.08)] transition-[width] duration-200 md:flex ${
+      className={`fixed bottom-0 left-0 top-0 z-[60] hidden overflow-hidden flex-col border-r border-slate-200 bg-white text-slate-900 shadow-[4px_0_16px_rgba(15,23,42,0.06)] transition-[width] duration-200 md:flex ${
         expanded ? "w-72" : "w-[76px]"
       }`}
     >
-      <div className="flex h-20 items-center gap-3 border-b border-blue-50 px-4">
+      <div className="flex h-20 items-center gap-3 border-b border-slate-100 px-4">
         <button
           type="button"
           onClick={() => onExpandedChange(!expanded)}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition hover:bg-blue-700"
           aria-label={expanded ? "Fechar menu lateral" : "Abrir menu lateral"}
           title={expanded ? "Fechar menu" : "Abrir menu"}
         >
@@ -86,12 +86,12 @@ export default function StudentSidebar({
           const active = isActiveRoute(location, item.href);
 
           const className = [
-            "group relative flex h-12 items-center rounded-2xl text-sm font-black transition-all",
+            "group relative flex h-12 items-center rounded-xl text-sm font-black transition-colors",
             expanded ? "justify-start gap-3 px-3" : "justify-center px-0",
             item.disabled
               ? "cursor-not-allowed text-slate-400 opacity-70"
               : active
-              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+              ? "bg-blue-600 text-white shadow-sm"
               : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
           ].join(" ");
 
@@ -131,7 +131,7 @@ export default function StudentSidebar({
       </nav>
 
       {expanded ? (
-        <div className="mx-4 mb-4 shrink-0 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-sky-50 p-4">
+        <div className="mx-4 mb-4 shrink-0 rounded-xl border border-blue-100 bg-blue-50 p-4">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
             Acesso rápido
           </p>
@@ -142,7 +142,7 @@ export default function StudentSidebar({
         </div>
       ) : (
         <div className="mb-4 flex justify-center">
-          <div className="h-10 w-10 rounded-2xl bg-blue-600" />
+          <div className="h-10 w-10 rounded-xl bg-blue-600" />
         </div>
       )}
     </aside>

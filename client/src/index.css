@@ -52,7 +52,7 @@
   --chart-3: oklch(0.48 0.17 260);
   --chart-4: oklch(0.42 0.15 260);
   --chart-5: oklch(0.35 0.13 260);
-  --radius: 0.75rem;
+  --radius: 0.625rem;
   --background: oklch(0.98 0.001 286.375);
   --foreground: oklch(0.15 0.02 260);
   --card: oklch(1 0 0);
@@ -158,6 +158,18 @@
   .flex {
     min-height: 0;
     min-width: 0;
+  }
+
+  .vetor-surface {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .vetor-action-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700;
+  }
+
+  .vetor-action-secondary {
+    @apply border border-slate-300 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700;
   }
 
   @media (min-width: 640px) {
