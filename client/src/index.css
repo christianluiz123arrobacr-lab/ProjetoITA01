@@ -113,6 +113,130 @@
   --sidebar-ring: oklch(0.623 0.214 259.815);
 }
 
+/* Compatibilidade gradual: páginas legadas usam utilitários claros diretamente. */
+.dark body,
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-slate-50\/70,
+.dark .bg-slate-50\/80 {
+  background-color: #0f172a !important;
+}
+
+.dark .bg-white,
+.dark .bg-white\/90,
+.dark .bg-white\/95 {
+  background-color: #172033 !important;
+}
+
+.dark .bg-slate-200 {
+  background-color: #263449 !important;
+}
+
+.dark .bg-blue-50,
+.dark .bg-blue-50\/70 {
+  background-color: #172b4d !important;
+}
+
+.dark .bg-violet-50 {
+  background-color: #2b2145 !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-orange-50 {
+  background-color: #3a2b16 !important;
+}
+
+.dark .bg-emerald-50,
+.dark .bg-emerald-50\/70 {
+  background-color: #12372f !important;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+.dark .border-blue-100,
+.dark .border-violet-100,
+.dark .border-amber-100,
+.dark .border-emerald-200 {
+  border-color: #475569 !important;
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-blue-600,
+.dark .text-blue-700 {
+  color: #93c5fd !important;
+}
+
+.dark .text-violet-600,
+.dark .text-violet-700 {
+  color: #c4b5fd !important;
+}
+
+.dark .text-amber-600,
+.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  border-color: #475569 !important;
+  background-color: #172033 !important;
+  color: #e2e8f0 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.dark table,
+.dark th,
+.dark td {
+  border-color: #334155;
+}
+
+.dark mjx-container,
+.dark mjx-container svg {
+  color: #e2e8f0 !important;
+  fill: currentColor;
+}
+
+.dark .vetor-surface {
+  border-color: #334155;
+  background-color: #172033;
+}
+
+.dark .vetor-action-secondary {
+  border-color: #475569;
+  background-color: #172033;
+  color: #dbeafe;
+}
+
+.dark .vetor-action-secondary:hover {
+  border-color: #3b82f6;
+  background-color: #1e3a5f;
+  color: #eff6ff;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

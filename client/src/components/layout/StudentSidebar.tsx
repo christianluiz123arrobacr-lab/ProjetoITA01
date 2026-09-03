@@ -9,10 +9,13 @@ import {
   Home,
   Menu,
   NotebookPen,
+  Moon,
+  Sun,
   Trophy,
   X,
 } from "lucide-react";
 import { NOTEBOOK_FEATURE_AVAILABLE } from "@shared/featureAvailability";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type StudentSidebarProps = {
   expanded: boolean;
@@ -50,6 +53,8 @@ export default function StudentSidebar({
   onExpandedChange,
 }: StudentSidebarProps) {
   const [location] = useLocation();
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <aside
@@ -131,18 +136,42 @@ export default function StudentSidebar({
       </nav>
 
       {expanded ? (
-        <div className="mx-4 mb-4 shrink-0 rounded-xl border border-blue-100 bg-blue-50 p-4">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
-            Acesso rápido
+        <div className="mx-4 mb-4 shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="px-1 text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+            Aparência
           </p>
-          <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
-            Navegue entre estudo, desempenho, revisões e VET sem voltar para a
-            página inicial.
-          </p>
+          <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Escolha de aparência">
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              aria-label="Usar modo claro"
+              aria-pressed={!isDark}
+              className={`flex items-center justify-center gap-2 rounded-md px-2 py-2 text-xs font-bold transition ${!isDark ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}
+            >
+              <Sun className="h-4 w-4" aria-hidden="true" /> Claro
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              aria-label="Usar modo escuro"
+              aria-pressed={isDark}
+              className={`flex items-center justify-center gap-2 rounded-md px-2 py-2 text-xs font-bold transition ${isDark ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}
+            >
+              <Moon className="h-4 w-4" aria-hidden="true" /> Escuro
+            </button>
+          </div>
         </div>
       ) : (
         <div className="mb-4 flex justify-center">
-          <div className="h-10 w-10 rounded-xl bg-blue-600" />
+          <button
+            type="button"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            aria-label={isDark ? "Alternar para modo claro" : "Alternar para modo escuro"}
+            title={isDark ? "Alternar para modo claro" : "Alternar para modo escuro"}
+          >
+            {isDark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
+          </button>
         </div>
       )}
     </aside>

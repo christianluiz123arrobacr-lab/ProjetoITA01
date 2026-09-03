@@ -21,6 +21,18 @@
     <meta property="og:url" content="https://www.projetovetor.com/" />
     <link rel="icon" type="image/svg+xml" href="/brand/projeto-vetor-logo.svg" />
     <title>Projeto Vetor | Plataforma de Estudos</title>
+    <script>
+      (function () {
+        try {
+          var savedTheme = localStorage.getItem("projeto-vetor-theme");
+          var theme = savedTheme === "light" || savedTheme === "dark"
+            ? savedTheme
+            : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          document.documentElement.style.colorScheme = theme;
+        } catch (_) {}
+      })();
+    </script>
 
     <!-- MathJax para renderizar fórmulas LaTeX -->
     <script>

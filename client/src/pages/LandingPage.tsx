@@ -46,8 +46,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Top Bar */}
-      <div className="w-full px-6 pt-6">
-        <div className="max-w-6xl mx-auto flex justify-end">
+      <div className="w-full px-5 pt-5 sm:px-8 sm:pt-6 lg:px-10">
+        <div className="flex justify-end">
           {loading ? (
             <Button
               disabled
@@ -137,7 +137,7 @@ export default function LandingPage() {
       </div>
 
       {/* Hero Section */}
-      <section className="py-14 px-6 text-center">
+      <section className="px-6 pb-14 pt-4 text-center sm:pt-6">
         <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Projeto Vetor</p>
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">
           <span className="font-bold">Domine Exatas</span>
@@ -178,10 +178,10 @@ export default function LandingPage() {
       <section className="px-6 pb-16">
         <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-5">
           {/* Matemática */}
-          <div className="vetor-surface overflow-hidden">
-            <div className="bg-slate-100 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
+          <div className="vetor-surface overflow-hidden border-blue-100">
+            <div className="bg-blue-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
               <div>
-                <Calculator className="w-12 h-12 mb-6" />
+                <Calculator className="w-9 h-9 mb-5 text-blue-600" />
                 <h3 className="text-3xl font-bold mb-3">Matemática</h3>
                 <p className="text-slate-600 text-sm leading-relaxed">
                   Álgebra, geometria, trigonometria, funções e cálculo
@@ -191,7 +191,7 @@ export default function LandingPage() {
             </div>
 
             <div className="p-6">
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500"><span>Em desenvolvimento</span></div>
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700"><span>Em desenvolvimento</span></div>
             </div>
           </div>
 
@@ -199,7 +199,7 @@ export default function LandingPage() {
           <div className="vetor-surface overflow-hidden transition hover:-translate-y-0.5 hover:border-violet-200">
             <div className="bg-violet-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
               <div>
-                <BookOpen className="w-12 h-12 mb-6" />
+                <BookOpen className="w-9 h-9 mb-5 text-violet-600" />
                 <h3 className="text-3xl font-bold mb-3">Física</h3>
                 <p className="text-slate-600 text-sm leading-relaxed">
                   Mecânica, termologia, ondulatória, óptica, eletricidade e
@@ -218,10 +218,10 @@ export default function LandingPage() {
           </div>
 
           {/* Química */}
-          <div className="vetor-surface overflow-hidden">
-            <div className="bg-slate-100 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
+          <div className="vetor-surface overflow-hidden border-amber-100">
+            <div className="bg-amber-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
               <div>
-                <Beaker className="w-12 h-12 mb-6" />
+                <Beaker className="w-9 h-9 mb-5 text-amber-600" />
                 <h3 className="text-3xl font-bold mb-3">Química</h3>
                 <p className="text-slate-600 text-sm leading-relaxed">
                   Geral, físico-química, orgânica e questões de alto nível
@@ -230,7 +230,7 @@ export default function LandingPage() {
             </div>
 
             <div className="p-6">
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500"><span>Em desenvolvimento</span></div>
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700"><span>Em desenvolvimento</span></div>
             </div>
           </div>
         </div>
