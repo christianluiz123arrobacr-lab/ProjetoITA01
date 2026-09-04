@@ -1049,7 +1049,7 @@ export default function QuestionBankPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="theme-page min-h-screen bg-slate-50">
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/70">
         <div className="container py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">

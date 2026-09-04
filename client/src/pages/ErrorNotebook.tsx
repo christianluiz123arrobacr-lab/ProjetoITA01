@@ -514,7 +514,7 @@ export default function ErrorNotebook() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-slate-50">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-slate-50">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/progress">
