@@ -44,14 +44,14 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="theme-page min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Top Bar */}
       <div className="w-full px-5 pt-5 sm:px-8 sm:pt-6 lg:px-10">
         <div className="flex justify-end">
           {loading ? (
             <Button
               disabled
-              className="bg-slate-200 text-slate-500 font-semibold px-6 py-2 rounded-full flex items-center gap-2 cursor-wait"
+              className="bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-300 font-semibold px-6 py-2 rounded-full flex items-center gap-2 cursor-wait"
             >
               Carregando...
             </Button>
@@ -60,30 +60,30 @@ export default function LandingPage() {
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((current) => !current)}
-                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm hover:bg-slate-50 transition-all"
+                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
               >
-                <div className="w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-slate-900 text-white dark:bg-blue-600 flex items-center justify-center">
                   <UserCircle2 className="w-5 h-5" />
                 </div>
 
-                <span className="hidden sm:inline text-sm font-semibold text-slate-800">
+                <span className="hidden sm:inline text-sm font-semibold text-slate-800 dark:text-slate-100">
                   Conta
                 </span>
 
                 <ChevronDown
-                  className={`w-4 h-4 text-slate-500 transition-transform ${
+                  className={`w-4 h-4 text-slate-500 dark:text-slate-400 transition-transform ${
                     profileMenuOpen ? "rotate-180" : ""
                   }`}
                 />
               </button>
 
               {profileMenuOpen && (
-                <div className="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg z-50">
-                  <div className="px-3 py-3 border-b border-slate-100">
-                    <p className="text-sm font-bold text-slate-900">
+                <div className="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg z-50 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="px-3 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                       Minha conta
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       Gerencie seu perfil e assinatura
                     </p>
                   </div>
@@ -93,7 +93,7 @@ export default function LandingPage() {
                       <button
                         type="button"
                         onClick={() => setProfileMenuOpen(false)}
-                        className="w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
+                        className="w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                       >
                         <UserCircle2 className="w-4 h-4 text-slate-500" />
                         Ver perfil
@@ -104,7 +104,7 @@ export default function LandingPage() {
                       <button
                         type="button"
                         onClick={() => setProfileMenuOpen(false)}
-                        className="w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
+                        className="w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                       >
                         <BadgeCheck className="w-4 h-4 text-emerald-600" />
                         Minha assinatura
@@ -115,7 +115,7 @@ export default function LandingPage() {
                       <button
                         type="button"
                         onClick={() => setProfileMenuOpen(false)}
-                        className="w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
+                        className="w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                       >
                         <CreditCard className="w-4 h-4 text-cyan-600" />
                         Ver planos
@@ -139,16 +139,16 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="px-6 pb-14 pt-4 text-center sm:pt-6">
         <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Projeto Vetor</p>
-        <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">
+        <h1 className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-slate-100 mb-4 tracking-tight">
           <span className="font-bold">Domine Exatas</span>
-          <span className="text-slate-600 font-normal">
+          <span className="text-slate-600 dark:text-slate-300 font-normal">
             {" "}
             para vestibulares e{" "}
           </span>
           <span className="font-bold">concursos militares</span>
         </h1>
 
-        <p className="text-lg text-slate-600 mb-10 max-w-2xl mx-auto">
+        <p className="text-lg text-slate-600 dark:text-slate-300 mb-10 max-w-2xl mx-auto">
           Teoria, questões, simulados e resolução inteligente em um só lugar.
         </p>
 
@@ -168,9 +168,9 @@ export default function LandingPage() {
         </div>
 
         <div className="mx-auto grid max-w-2xl grid-cols-3 gap-2 text-sm">
-          <Link href="/progress"><a className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"><BarChart3 className="h-4 w-4" />Progresso</a></Link>
-          <Link href="/ranking"><a className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"><Trophy className="h-4 w-4" />Ranking</a></Link>
-          <Link href="/vet"><a className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-semibold text-slate-700 transition hover:border-violet-200 hover:text-violet-700"><BrainCircuit className="h-4 w-4" />VET</a></Link>
+          <Link href="/progress"><a className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:text-blue-300"><BarChart3 className="h-4 w-4" />Progresso</a></Link>
+          <Link href="/ranking"><a className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:text-blue-300"><Trophy className="h-4 w-4" />Ranking</a></Link>
+          <Link href="/vet"><a className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-semibold text-slate-700 transition hover:border-violet-200 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-violet-500 dark:hover:text-violet-300"><BrainCircuit className="h-4 w-4" />VET</a></Link>
         </div>
       </section>
 
@@ -178,12 +178,12 @@ export default function LandingPage() {
       <section className="px-6 pb-16">
         <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-5">
           {/* Matemática */}
-          <div className="vetor-surface overflow-hidden border-blue-100">
-            <div className="bg-blue-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
+          <div className="vetor-surface overflow-hidden border-blue-100 dark:border-blue-900">
+            <div className="bg-blue-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between dark:bg-blue-950/50 dark:text-slate-100">
               <div>
                 <Calculator className="w-9 h-9 mb-5 text-blue-600" />
                 <h3 className="text-3xl font-bold mb-3">Matemática</h3>
-                <p className="text-slate-600 text-sm leading-relaxed">
+                <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
                   Álgebra, geometria, trigonometria, funções e cálculo
                   estratégico
                 </p>
@@ -191,17 +191,17 @@ export default function LandingPage() {
             </div>
 
             <div className="p-6">
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700"><span>Em desenvolvimento</span></div>
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300"><span>Em desenvolvimento</span></div>
             </div>
           </div>
 
           {/* Física */}
-          <div className="vetor-surface overflow-hidden transition hover:-translate-y-0.5 hover:border-violet-200">
-            <div className="bg-violet-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
+          <div className="vetor-surface overflow-hidden transition hover:-translate-y-0.5 hover:border-violet-200 dark:border-violet-900">
+            <div className="bg-violet-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between dark:bg-violet-950/50 dark:text-slate-100">
               <div>
                 <BookOpen className="w-9 h-9 mb-5 text-violet-600" />
                 <h3 className="text-3xl font-bold mb-3">Física</h3>
-                <p className="text-slate-600 text-sm leading-relaxed">
+                <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
                   Mecânica, termologia, ondulatória, óptica, eletricidade e
                   moderna
                 </p>
@@ -218,19 +218,19 @@ export default function LandingPage() {
           </div>
 
           {/* Química */}
-          <div className="vetor-surface overflow-hidden border-amber-100">
-            <div className="bg-amber-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between">
+          <div className="vetor-surface overflow-hidden border-amber-100 dark:border-amber-900">
+            <div className="bg-amber-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between dark:bg-amber-950/40 dark:text-slate-100">
               <div>
                 <Beaker className="w-9 h-9 mb-5 text-amber-600" />
                 <h3 className="text-3xl font-bold mb-3">Química</h3>
-                <p className="text-slate-600 text-sm leading-relaxed">
+                <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
                   Geral, físico-química, orgânica e questões de alto nível
                 </p>
               </div>
             </div>
 
             <div className="p-6">
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700"><span>Em desenvolvimento</span></div>
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"><span>Em desenvolvimento</span></div>
             </div>
           </div>
         </div>
