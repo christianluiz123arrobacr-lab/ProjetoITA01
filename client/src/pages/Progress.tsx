@@ -945,8 +945,8 @@ export default function Progress() {
   }, [chartSourceAttempts]);
 
   return (
-    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50 dark:from-slate-950 dark:via-indigo-950/25 dark:to-slate-950">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700 dark:bg-slate-950/85">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/">
             <Button variant="ghost" size="sm">
@@ -954,7 +954,7 @@ export default function Progress() {
               Voltar
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Seu Progresso</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Seu Progresso</h1>
         </div>
       </header>
 
@@ -989,7 +989,7 @@ export default function Progress() {
                   <select
                     value={subjectFilter}
                     onChange={(e) => setSubjectFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todas">Todas</option>
                     {availableSubjects.map((subject) => (
@@ -1007,7 +1007,7 @@ export default function Progress() {
                   <select
                     value={periodFilter}
                     onChange={(e) => setPeriodFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="all">Todo o período</option>
                     <option value="7d">Últimos 7 dias</option>
@@ -1019,7 +1019,7 @@ export default function Progress() {
             </Card>
 
             <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-4">
-              <Card className="relative overflow-hidden border-slate-200 bg-white shadow-sm">
+              <Card className="relative overflow-hidden border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
                 <div className="absolute top-0 right-0 h-24 w-24 rounded-full bg-blue-100/60 blur-2xl" />
                 <div className="p-6 relative">
                   <div className="flex items-start justify-between mb-4">
@@ -1041,7 +1041,7 @@ export default function Progress() {
                 </div>
               </Card>
 
-              <Card className="relative overflow-hidden border-green-200 bg-white shadow-sm">
+              <Card className="relative overflow-hidden border-green-200 bg-white shadow-sm dark:border-emerald-900 dark:bg-slate-900">
                 <div className="absolute top-0 right-0 h-24 w-24 rounded-full bg-green-100/70 blur-2xl" />
                 <div className="p-6 relative">
                   <div className="flex items-start justify-between mb-4">
@@ -1059,7 +1059,7 @@ export default function Progress() {
                 </div>
               </Card>
 
-              <Card className="relative overflow-hidden border-red-200 bg-white shadow-sm">
+              <Card className="relative overflow-hidden border-red-200 bg-white shadow-sm dark:border-red-900 dark:bg-slate-900">
                 <div className="absolute top-0 right-0 h-24 w-24 rounded-full bg-red-100/70 blur-2xl" />
                 <div className="p-6 relative">
                   <div className="flex items-start justify-between mb-4">
@@ -1077,7 +1077,7 @@ export default function Progress() {
                 </div>
               </Card>
 
-              <Card className="relative overflow-hidden border-indigo-200 bg-white shadow-sm">
+              <Card className="relative overflow-hidden border-indigo-200 bg-white shadow-sm dark:border-indigo-900 dark:bg-slate-900">
                 <div className="absolute top-0 right-0 h-24 w-24 rounded-full bg-indigo-100/70 blur-2xl" />
                 <div className="p-6 relative">
                   <div className="flex items-start justify-between mb-4">
@@ -1101,7 +1101,7 @@ export default function Progress() {
                 </div>
               </Card>
 
-              <Card className="relative overflow-hidden border-purple-200 bg-white shadow-sm">
+              <Card className="relative overflow-hidden border-purple-200 bg-white shadow-sm dark:border-purple-900 dark:bg-slate-900">
                 <div className="absolute top-0 right-0 h-24 w-24 rounded-full bg-purple-100/70 blur-2xl" />
                 <div className="p-6 relative">
                   <div className="flex items-start justify-between mb-4">
@@ -1376,7 +1376,7 @@ export default function Progress() {
                     topDrops.map((item) => (
                       <div
                         key={item.label}
-                        className="rounded-xl border border-red-200 bg-red-50 p-4"
+                        className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-semibold text-slate-900">{item.label}</span>
@@ -1465,7 +1465,7 @@ export default function Progress() {
                   subjectEvolution.map((item) => (
                     <div
                       key={item.label}
-                      className="rounded-xl border border-slate-200 bg-white p-4"
+                      className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/70"
                     >
                       <div className="flex items-center justify-between gap-3 mb-2">
                         <span className="font-semibold text-slate-900">{item.label}</span>
@@ -1506,7 +1506,7 @@ export default function Progress() {
                     byBanca.slice(0, 10).map((item) => (
                       <div
                         key={item.label}
-                        className="rounded-xl border border-slate-200 p-4 bg-white"
+                        className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-slate-800">{item.label}</span>
@@ -1536,7 +1536,7 @@ export default function Progress() {
                     averageTimeBySubject.map((item) => (
                       <div
                         key={item.label}
-                        className="rounded-xl border border-slate-200 p-4 bg-white"
+                        className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-slate-800">{item.label}</span>
@@ -1567,7 +1567,7 @@ export default function Progress() {
                     byConteudo.slice(0, 10).map((item) => (
                       <div
                         key={item.label}
-                        className="rounded-xl border border-slate-200 p-4 bg-white"
+                        className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-slate-800">{item.label}</span>
@@ -1595,7 +1595,7 @@ export default function Progress() {
                     byAssunto.slice(0, 10).map((item) => (
                       <div
                         key={item.label}
-                        className="rounded-xl border border-slate-200 p-4 bg-white"
+                        className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-slate-800">{item.label}</span>
@@ -1623,22 +1623,22 @@ export default function Progress() {
               </div>
 
               <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="rounded-xl border border-slate-200 p-4 bg-white">
+                <div className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70">
                   <p className="text-sm text-slate-500 mb-1">Questões únicas</p>
                   <p className="text-2xl font-bold text-slate-900">{coverageInfo.uniqueQuestions}</p>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-4 bg-white">
+                <div className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70">
                   <p className="text-sm text-slate-500 mb-1">Disciplinas tocadas</p>
                   <p className="text-2xl font-bold text-slate-900">{coverageInfo.uniqueSubjects}</p>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-4 bg-white">
+                <div className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70">
                   <p className="text-sm text-slate-500 mb-1">Conteúdos tocados</p>
                   <p className="text-2xl font-bold text-slate-900">{coverageInfo.uniqueConteudos}</p>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 p-4 bg-white">
+                <div className="rounded-xl border border-slate-200 p-4 bg-white dark:border-slate-700 dark:bg-slate-800/70">
                   <p className="text-sm text-slate-500 mb-1">Assuntos tocados</p>
                   <p className="text-2xl font-bold text-slate-900">{coverageInfo.uniqueAssuntos}</p>
                 </div>
@@ -1652,7 +1652,7 @@ export default function Progress() {
               </div>
 
               <div className="grid md:grid-cols-3 gap-4">
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40">
                   <p className="text-sm font-semibold text-red-700 mb-2">Conteúdo com mais erros</p>
                   <p className="font-bold text-slate-900">
                     {mostWrongConteudo?.label ?? "Sem dados"}
@@ -1662,7 +1662,7 @@ export default function Progress() {
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950/40">
                   <p className="text-sm font-semibold text-orange-700 mb-2">
                     Pior conteúdo por aproveitamento
                   </p>
@@ -1676,7 +1676,7 @@ export default function Progress() {
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-950/40">
                   <p className="text-sm font-semibold text-yellow-700 mb-2">
                     Pior assunto por aproveitamento
                   </p>
@@ -1703,7 +1703,7 @@ export default function Progress() {
                   {recommendations.map((rec, index) => (
                     <div
                       key={index}
-                      className="rounded-xl bg-indigo-50 border border-indigo-200 p-4 text-slate-700"
+                      className="rounded-xl bg-indigo-50 border border-indigo-200 p-4 text-slate-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100"
                     >
                       {rec}
                     </div>
@@ -1733,7 +1733,7 @@ export default function Progress() {
                     {wrongAttempts.map((attempt) => (
                       <div
                         key={attempt.id}
-                        className="rounded-xl border border-red-200 bg-red-50 p-4"
+                        className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40"
                       >
                         <p className="font-semibold text-slate-900">
                           {attempt.subject ?? "Sem disciplina"} •{" "}
@@ -1763,7 +1763,7 @@ export default function Progress() {
                     {recentAttempts.map((attempt) => (
                       <div
                         key={attempt.id}
-                        className="rounded-xl border border-slate-200 p-4 bg-white flex flex-col gap-3"
+                        className="rounded-xl border border-slate-200 p-4 bg-white flex flex-col gap-3 dark:border-slate-700 dark:bg-slate-800/70"
                       >
                         <div>
                           <p className="font-semibold text-slate-900">

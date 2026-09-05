@@ -953,8 +953,8 @@ export default function RankingPage() {
   }
 
   return (
-    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-slate-50">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-slate-50 dark:from-slate-950 dark:via-amber-950/20 dark:to-slate-950">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700 dark:bg-slate-950/85">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/">
             <Button variant="ghost" size="sm">
@@ -963,7 +963,7 @@ export default function RankingPage() {
             </Button>
           </Link>
 
-          <h1 className="text-2xl font-bold text-slate-900">Ranking</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Ranking</h1>
         </div>
       </header>
 
