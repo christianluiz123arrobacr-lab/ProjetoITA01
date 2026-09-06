@@ -203,19 +203,19 @@ function getStatusLabel(status: string) {
 function getStatusBadge(status: string) {
   switch (status) {
     case "active":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+      return "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300";
     case "manual_review":
-      return "border-amber-200 bg-amber-50 text-amber-700";
+      return "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300";
     case "expired":
     case "overdue":
-      return "border-orange-200 bg-orange-50 text-orange-700";
+      return "border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300";
     case "canceled":
     case "failed":
-      return "border-red-200 bg-red-50 text-red-700";
+      return "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300";
     case "without_subscription":
-      return "border-slate-200 bg-slate-50 text-slate-600";
+      return "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300";
     default:
-      return "border-blue-200 bg-blue-50 text-blue-700";
+      return "border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300";
   }
 }
 
@@ -724,7 +724,7 @@ export default function AdminUsersPage() {
         title="Alunos e acessos"
         subtitle="Gerencie alunos, assinaturas, renovações manuais, bloqueios e acessos administrativos."
       >
-        <Card className="border-slate-200 bg-white p-6">
+        <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white">
@@ -732,8 +732,8 @@ export default function AdminUsersPage() {
                 Central administrativa
               </div>
 
-              <h2 className="text-2xl font-black text-slate-950">Área de alunos</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-2xl font-black text-slate-950 dark:text-slate-100">Área de alunos</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Controle assinatura, liberação manual, vencimento e status do aluno sem abrir o Supabase.
               </p>
             </div>
@@ -751,38 +751,38 @@ export default function AdminUsersPage() {
         </Card>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <Card className="border-slate-200 bg-white p-5">
+          <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Total</p>
-            <p className="mt-2 text-3xl font-black text-slate-950">{stats.total}</p>
-            <p className="text-sm text-slate-500">alunos cadastrados</p>
+            <p className="mt-2 text-3xl font-black text-slate-950 dark:text-slate-100">{stats.total}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">alunos cadastrados</p>
           </Card>
 
-          <Card className="border-emerald-200 bg-emerald-50 p-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">Acessos liberados</p>
-            <p className="mt-2 text-3xl font-black text-emerald-700">{stats.active}</p>
-            <p className="text-sm text-emerald-700/80">com acesso liberado</p>
+          <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">Acessos liberados</p>
+            <p className="mt-2 text-3xl font-black text-emerald-700 dark:text-emerald-300">{stats.active}</p>
+            <p className="text-sm text-emerald-700/80 dark:text-emerald-300">com acesso liberado</p>
           </Card>
 
-          <Card className="border-amber-200 bg-amber-50 p-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-600">Pendentes</p>
-            <p className="mt-2 text-3xl font-black text-amber-700">{stats.pending}</p>
-            <p className="text-sm text-amber-700/80">aguardando confirmação</p>
+          <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-300">Pendentes</p>
+            <p className="mt-2 text-3xl font-black text-amber-700 dark:text-amber-300">{stats.pending}</p>
+            <p className="text-sm text-amber-700/80 dark:text-amber-300">aguardando confirmação</p>
           </Card>
 
-          <Card className="border-orange-200 bg-orange-50 p-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-600">Vencidos</p>
-            <p className="mt-2 text-3xl font-black text-orange-700">{stats.expired}</p>
-            <p className="text-sm text-orange-700/80">precisam renovar</p>
+          <Card className="border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-600 dark:text-orange-300">Vencidos</p>
+            <p className="mt-2 text-3xl font-black text-orange-700 dark:text-orange-300">{stats.expired}</p>
+            <p className="text-sm text-orange-700/80 dark:text-orange-300">precisam renovar</p>
           </Card>
 
-          <Card className="border-red-200 bg-red-50 p-5">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-red-600">Bloqueados</p>
-            <p className="mt-2 text-3xl font-black text-red-700">{stats.blocked}</p>
-            <p className="text-sm text-red-700/80">perfil inativo</p>
+          <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-red-600 dark:text-red-300">Bloqueados</p>
+            <p className="mt-2 text-3xl font-black text-red-700 dark:text-red-300">{stats.blocked}</p>
+            <p className="text-sm text-red-700/80 dark:text-red-300">perfil inativo</p>
           </Card>
         </div>
 
-        <Card className="border-slate-200 bg-white p-4">
+        <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
           <div className="flex flex-wrap gap-3">
             <Button
               variant={viewMode === "alunos" ? "default" : "outline"}
@@ -806,68 +806,68 @@ export default function AdminUsersPage() {
 
         {loading ? (
           <Card className="flex items-center justify-center gap-3 p-10">
-            <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando alunos e assinaturas...</p>
+            <Loader2 className="h-5 w-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando alunos e assinaturas...</p>
           </Card>
         ) : null}
 
         {!loading && error ? (
-          <Card className="border-red-200 bg-red-50 p-6">
+          <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-6">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 text-red-600" />
+              <AlertTriangle className="mt-0.5 h-5 w-5 text-red-600 dark:text-red-300" />
               <div>
-                <h2 className="text-lg font-bold text-red-700">Erro</h2>
-                <p className="mt-1 text-red-600">{error}</p>
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300">Erro</h2>
+                <p className="mt-1 text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : null}
 
         {!loading && successMessage ? (
-          <Card className="border-emerald-200 bg-emerald-50 p-5">
+          <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-5">
             <div className="flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-emerald-600" />
-              <p className="font-medium text-emerald-700">{successMessage}</p>
+              <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
+              <p className="font-medium text-emerald-700 dark:text-emerald-300">{successMessage}</p>
             </div>
           </Card>
         ) : null}
 
         {!loading && viewMode === "alunos" ? (
           <>
-            <Card className="border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-lg font-black text-slate-950">Criar aluno manualmente</h2>
+            <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+              <h2 className="mb-4 text-lg font-black text-slate-950 dark:text-slate-100">Criar aluno manualmente</h2>
 
               <form onSubmit={handleCreateStudent} className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Nome</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Nome</label>
                   <input
                     type="text"
                     value={studentName}
                     onChange={(event) => setStudentName(event.target.value)}
                     placeholder="Nome do aluno"
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">E-mail</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">E-mail</label>
                   <input
                     type="email"
                     value={studentEmail}
                     onChange={(event) => setStudentEmail(event.target.value)}
                     placeholder="email@exemplo.com"
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Senha inicial</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Senha inicial</label>
                   <input
                     type="text"
                     value={studentPassword}
                     onChange={(event) => setStudentPassword(event.target.value)}
                     placeholder="Mínimo 6 caracteres"
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   />
                 </div>
 
@@ -887,7 +887,7 @@ export default function AdminUsersPage() {
               </form>
             </Card>
 
-            <Card className="border-slate-200 bg-white p-6">
+            <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
               <div className="grid gap-4 xl:grid-cols-[1fr_220px_220px]">
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -896,14 +896,14 @@ export default function AdminUsersPage() {
                     value={studentSearch}
                     onChange={(event) => setStudentSearch(event.target.value)}
                     placeholder="Buscar por nome, e-mail, telefone, plano ou ID..."
-                    className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-11 pr-4 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   />
                 </div>
 
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as StudentStatusFilter)}
-                  className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 >
                   <option value="all">Todos os status</option>
                   <option value="active">Assinatura ativa</option>
@@ -918,7 +918,7 @@ export default function AdminUsersPage() {
                 <select
                   value={planFilter}
                   onChange={(event) => setPlanFilter(event.target.value)}
-                  className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 >
                   <option value="all">Todos os planos</option>
                   {plans.map((plan) => (
@@ -931,10 +931,10 @@ export default function AdminUsersPage() {
             </Card>
 
             {filteredStudents.length === 0 ? (
-              <Card className="border-slate-200 p-10 text-center">
+              <Card className="border-slate-200 dark:border-slate-700 p-10 text-center">
                 <UserCircle2 className="mx-auto mb-3 h-9 w-9 text-slate-400" />
-                <h3 className="text-lg font-black text-slate-950">Nenhum aluno encontrado</h3>
-                <p className="mt-1 text-slate-500">Tente outro filtro ou busca.</p>
+                <h3 className="text-lg font-black text-slate-950 dark:text-slate-100">Nenhum aluno encontrado</h3>
+                <p className="mt-1 text-slate-500 dark:text-slate-400">Tente outro filtro ou busca.</p>
               </Card>
             ) : (
               <div className="space-y-4">
@@ -952,7 +952,7 @@ export default function AdminUsersPage() {
                   const whatsappUrl = makeWhatsappUrl(student);
 
                   return (
-                    <Card key={student.id} className="border-slate-200 bg-white p-6 shadow-sm">
+                    <Card key={student.id} className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm">
                       <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start 2xl:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -961,41 +961,41 @@ export default function AdminUsersPage() {
                             </span>
 
                             {student.ativo === false ? (
-                              <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-black text-red-700">
+                              <span className="rounded-full border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-3 py-1 text-xs font-black text-red-700 dark:text-red-300">
                                 Perfil bloqueado
                               </span>
                             ) : (
-                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                              <span className="rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 px-3 py-1 text-xs font-black text-emerald-700 dark:text-emerald-300">
                                 Perfil ativo
                               </span>
                             )}
 
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                            <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
                               {student.role || "student"}
                             </span>
                           </div>
 
                           <div className="grid gap-4 lg:grid-cols-2">
                             <div>
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">Nome</label>
+                              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Nome</label>
                               <input
                                 type="text"
                                 value={student.nome || ""}
                                 onChange={(event) =>
                                   updateLocalProfile(student.id, { nome: event.target.value })
                                 }
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                               />
                             </div>
 
                             <div>
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">E-mail</label>
+                              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">E-mail</label>
                               <div className="flex gap-2">
                                 <input
                                   type="text"
                                   value={student.email || ""}
                                   disabled
-                                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 shadow-sm"
+                                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-500 dark:text-slate-400 shadow-sm"
                                 />
                                 <Button
                                   type="button"
@@ -1009,7 +1009,7 @@ export default function AdminUsersPage() {
                             </div>
 
                             <div>
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">Telefone / WhatsApp</label>
+                              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Telefone / WhatsApp</label>
                               <input
                                 type="text"
                                 value={student.telefone || ""}
@@ -1017,12 +1017,12 @@ export default function AdminUsersPage() {
                                   updateLocalProfile(student.id, { telefone: event.target.value })
                                 }
                                 placeholder="Telefone não informado"
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                               />
                             </div>
 
                             <div>
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">Status do perfil</label>
+                              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Status do perfil</label>
                               <select
                                 value={student.ativo === false ? "inativo" : "ativo"}
                                 onChange={(event) =>
@@ -1030,7 +1030,7 @@ export default function AdminUsersPage() {
                                     ativo: event.target.value === "ativo",
                                   })
                                 }
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                               >
                                 <option value="ativo">Ativo</option>
                                 <option value="inativo">Inativo</option>
@@ -1038,37 +1038,37 @@ export default function AdminUsersPage() {
                             </div>
                           </div>
 
-                          <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                            <p className="rounded-2xl bg-slate-50 p-3">
+                          <div className="mt-4 grid gap-3 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2 xl:grid-cols-4">
+                            <p className="rounded-2xl bg-slate-50 dark:bg-slate-900 p-3">
                               <span className="block text-xs font-bold uppercase tracking-wide text-slate-400">Plano</span>
-                              <span className="font-semibold text-slate-900">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100">
                                 {student.plan_name || "Sem plano"}
                               </span>
                             </p>
 
-                            <p className="rounded-2xl bg-slate-50 p-3">
+                            <p className="rounded-2xl bg-slate-50 dark:bg-slate-900 p-3">
                               <span className="block text-xs font-bold uppercase tracking-wide text-slate-400">Vencimento</span>
-                              <span className="font-semibold text-slate-900">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100">
                                 {formatDate(student.current_period_end)}
                               </span>
                             </p>
 
-                            <p className="rounded-2xl bg-slate-50 p-3">
+                            <p className="rounded-2xl bg-slate-50 dark:bg-slate-900 p-3">
                               <span className="block text-xs font-bold uppercase tracking-wide text-slate-400">Último acesso</span>
-                              <span className="font-semibold text-slate-900">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100">
                                 {formatLastSeen(student.last_seen_at)}
                               </span>
                             </p>
 
-                            <p className="rounded-2xl bg-slate-50 p-3">
+                            <p className="rounded-2xl bg-slate-50 dark:bg-slate-900 p-3">
                               <span className="block text-xs font-bold uppercase tracking-wide text-slate-400">Questões</span>
-                              <span className="font-semibold text-slate-900">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100">
                                 {attempts} feitas{accuracy !== null ? ` • ${accuracy}%` : ""}
                               </span>
                             </p>
                           </div>
 
-                          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+                          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400">
                             <span className="inline-flex items-center gap-1">
                               <Mail className="h-3.5 w-3.5" /> {student.email || "Sem e-mail"}
                             </span>
@@ -1081,19 +1081,19 @@ export default function AdminUsersPage() {
                           </div>
                         </div>
 
-                        <div className="w-full rounded-3xl border border-slate-200 bg-slate-50 p-4 2xl:w-[360px]">
-                          <h3 className="mb-3 flex items-center gap-2 text-sm font-black text-slate-950">
+                        <div className="w-full rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 2xl:w-[360px]">
+                          <h3 className="mb-3 flex items-center gap-2 text-sm font-black text-slate-950 dark:text-slate-100">
                             <CreditCard className="h-4 w-4" />
                             Assinatura manual
                           </h3>
 
                           <div className="space-y-3">
                             <div>
-                              <label className="mb-1 block text-xs font-bold text-slate-600">Plano</label>
+                              <label className="mb-1 block text-xs font-bold text-slate-600 dark:text-slate-300">Plano</label>
                               <select
                                 value={draft.planId}
                                 onChange={(event) => updateStudentDraft(student.id, { planId: event.target.value })}
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                               >
                                 {plans.length === 0 ? <option value="">Nenhum plano</option> : null}
                                 {plans.map((plan) => (
@@ -1105,14 +1105,14 @@ export default function AdminUsersPage() {
                             </div>
 
                             <div>
-                              <label className="mb-1 block text-xs font-bold text-slate-600">Meses de acesso</label>
+                              <label className="mb-1 block text-xs font-bold text-slate-600 dark:text-slate-300">Meses de acesso</label>
                               <input
                                 type="number"
                                 min={1}
                                 max={24}
                                 value={draft.months}
                                 onChange={(event) => updateStudentDraft(student.id, { months: event.target.value })}
-                                className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                               />
                             </div>
 
@@ -1134,7 +1134,7 @@ export default function AdminUsersPage() {
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="rounded-2xl border-red-200 text-red-700 hover:bg-red-50"
+                                className="rounded-2xl border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
                                 disabled={isBusy || !student.subscription_id}
                                 onClick={() => handleCancelSubscription(student)}
                               >
@@ -1180,7 +1180,7 @@ export default function AdminUsersPage() {
                                 href={whatsappUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 px-4 py-2 text-sm font-black text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-950"
                               >
                                 <MessageCircle className="h-4 w-4" />
                                 Chamar no WhatsApp do aluno
@@ -1189,7 +1189,7 @@ export default function AdminUsersPage() {
                               <button
                                 type="button"
                                 disabled
-                                className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-black text-slate-400"
+                                className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 px-4 py-2 text-sm font-black text-slate-400"
                               >
                                 <MessageCircle className="h-4 w-4" />
                                 Sem WhatsApp cadastrado
@@ -1208,27 +1208,27 @@ export default function AdminUsersPage() {
 
         {!loading && viewMode === "adms" ? (
           <>
-            <Card className="border-slate-200 bg-white p-6">
-              <h2 className="mb-4 text-lg font-black text-slate-950">Adicionar acesso administrativo</h2>
+            <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+              <h2 className="mb-4 text-lg font-black text-slate-950 dark:text-slate-100">Adicionar acesso administrativo</h2>
 
               <div className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">E-mail do usuário</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">E-mail do usuário</label>
                   <input
                     type="email"
                     value={newEmail}
                     onChange={(event) => setNewEmail(event.target.value)}
                     placeholder="email@exemplo.com"
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Papel</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Papel</label>
                   <select
                     value={newRole}
                     onChange={(event) => setNewRole(event.target.value as "admin" | "editor")}
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   >
                     <option value="editor">Editor</option>
                     <option value="admin">Admin</option>
@@ -1246,7 +1246,7 @@ export default function AdminUsersPage() {
               </div>
             </Card>
 
-            <Card className="border-slate-200 bg-white p-6">
+            <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
               <div className="relative mb-5">
                 <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
@@ -1254,7 +1254,7 @@ export default function AdminUsersPage() {
                   value={searchAdmins}
                   onChange={(event) => setSearchAdmins(event.target.value)}
                   placeholder="Buscar administrador/editor..."
-                  className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-11 pr-4 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 />
               </div>
 
@@ -1262,19 +1262,19 @@ export default function AdminUsersPage() {
                 {filteredAdmins.map((adminUser) => (
                   <div
                     key={adminUser.id}
-                    className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-5 md:flex-row md:items-center md:justify-between"
+                    className="flex flex-col gap-4 rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-5 md:flex-row md:items-center md:justify-between"
                   >
                     <div>
                       <div className="mb-2 flex flex-wrap items-center gap-2">
                         <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white">
                           {adminUser.role}
                         </span>
-                        <span className="text-xs text-slate-500">Criado em {formatDate(adminUser.created_at)}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Criado em {formatDate(adminUser.created_at)}</span>
                       </div>
-                      <p className="text-lg font-black text-slate-950">
+                      <p className="text-lg font-black text-slate-950 dark:text-slate-100">
                         {adminUser.profile?.nome || adminUser.profile?.email || "Usuário sem perfil"}
                       </p>
-                      <p className="text-sm text-slate-500">{adminUser.profile?.email || adminUser.user_id}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{adminUser.profile?.email || adminUser.user_id}</p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -1289,7 +1289,7 @@ export default function AdminUsersPage() {
 
                       <Button
                         variant="outline"
-                        className="rounded-2xl border-red-200 text-red-700 hover:bg-red-50"
+                        className="rounded-2xl border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
                         disabled={busyId === adminUser.id}
                         onClick={() => handleRemoveAdminAccess(adminUser)}
                       >

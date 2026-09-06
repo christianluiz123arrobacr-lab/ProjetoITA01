@@ -404,7 +404,7 @@ function PrivateRouter() {
       <div
         className={
           isAdminRoute
-            ? ""
+            ? "admin-theme min-h-screen dark:bg-slate-950 dark:text-slate-100"
             : studentMenuOpen
               ? "theme-page min-h-screen bg-slate-50 text-slate-900 transition-[padding] duration-200 dark:bg-slate-950 dark:text-slate-100 md:pl-72"
               : "theme-page min-h-screen bg-slate-50 text-slate-900 transition-[padding] duration-200 dark:bg-slate-950 dark:text-slate-100 md:pl-[76px]"

@@ -19,12 +19,11 @@ const THEME_STORAGE_KEY = "projeto-vetor-theme";
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
 
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored === "light" || stored === "dark") return stored;
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+  } catch { /* Storage may be unavailable in private browsing. */ }
+  return "light";
 }
 
 export function ThemeProvider({
@@ -41,7 +40,7 @@ export function ThemeProvider({
     }
     root.style.colorScheme = theme;
 
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    try { window.localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* Keep the toggle usable without storage. */ }
   }, [theme]);
 
   const toggleTheme = () => {

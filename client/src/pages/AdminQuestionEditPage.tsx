@@ -133,7 +133,7 @@ const initialForm: QuestionFormData = {
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <label className="block text-sm font-semibold text-slate-700 mb-2">
+    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
       {children}
     </label>
   );
@@ -143,7 +143,7 @@ function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+      className={`w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
         props.className || ""
       }`}
     />
@@ -154,7 +154,7 @@ function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+      className={`w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
         props.className || ""
       }`}
     />
@@ -165,7 +165,7 @@ function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+      className={`w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
         props.className || ""
       }`}
     />
@@ -384,7 +384,7 @@ function MultiTagInput({
     <div>
       <FieldLabel>{label}</FieldLabel>
 
-      <div className="rounded-2xl border border-slate-300 bg-white p-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900">
+      <div className="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900">
         {values.length > 0 ? (
           <div className="flex flex-wrap gap-2 mb-3">
             {values.map((value) => (
@@ -412,11 +412,11 @@ function MultiTagInput({
           onKeyDown={handleKeyDown}
           onBlur={() => addValues(draft)}
           placeholder={placeholder}
-          className="w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+          className="w-full border-0 bg-transparent text-sm text-slate-700 dark:text-slate-300 outline-none placeholder:text-slate-400"
         />
 
         {filteredSuggestions.length > 0 ? (
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+          <div className="mt-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2">
             <p className="px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
               Sugestões já cadastradas
             </p>
@@ -429,7 +429,7 @@ function MultiTagInput({
                   event.preventDefault();
                   addSingleValue(suggestion);
                 }}
-                className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-white"
+                className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800"
               >
                 {suggestion}
               </button>
@@ -438,7 +438,7 @@ function MultiTagInput({
         ) : null}
       </div>
 
-      {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
+      {helper ? <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{helper}</p> : null}
     </div>
   );
 }
@@ -467,12 +467,12 @@ function AssuntosPorConteudoEditor({
   }
 
   return (
-    <div className="md:col-span-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+    <div className="md:col-span-4 rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
       <div className="mb-4">
-        <h3 className="text-base font-bold text-slate-900">
+        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
           Assuntos por conteúdo
         </h3>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Cada conteúdo selecionado tem sua própria caixa de assuntos. Assim o filtro deixa de misturar função modular com Álgebra, porque até o ADM merece alguma dignidade.
         </p>
       </div>
@@ -482,10 +482,10 @@ function AssuntosPorConteudoEditor({
           {items.map((item) => (
             <div
               key={item.conteudo}
-              className="rounded-2xl border border-slate-200 bg-white p-4"
+              className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4"
             >
               <div className="mb-3">
-                <span className="inline-flex rounded-full bg-purple-50 border border-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
+                <span className="inline-flex rounded-full bg-purple-50 dark:bg-purple-950 border border-purple-100 dark:border-purple-800 px-3 py-1 text-xs font-bold text-purple-700 dark:text-purple-300">
                   {item.conteudo}
                 </span>
               </div>
@@ -502,7 +502,7 @@ function AssuntosPorConteudoEditor({
           ))}
         </div>
       ) : (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Adicione pelo menos um conteúdo para liberar as caixas de assuntos.
         </p>
       )}
@@ -530,11 +530,11 @@ function MarkdownPreview({
   const content = value.trim();
 
   if (!content) {
-    return <p className="text-sm text-slate-500">{emptyMessage}</p>;
+    return <p className="text-sm text-slate-500 dark:text-slate-400">{emptyMessage}</p>;
   }
 
   return (
-    <div className="prose prose-slate max-w-none text-slate-800 prose-p:my-2 prose-img:rounded-xl prose-img:border prose-img:border-slate-200">
+    <div className="prose dark:prose-invert prose-slate max-w-none text-slate-800 dark:text-slate-100 prose-p:my-2 prose-img:rounded-xl prose-img:border prose-img:border-slate-200">
       <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}>
         {normalizeMathSource(content)}
       </ReactMarkdown>
@@ -581,36 +581,36 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
   );
 
   return (
-    <Card className="p-6 bg-white border-slate-200">
+    <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
       <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Eye className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-bold text-slate-900">Prévia da questão</h2>
+            <Eye className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Prévia da questão</h2>
           </div>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Veja como o enunciado, a imagem, as fórmulas e as alternativas vão aparecer para o aluno.
           </p>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 md:p-6 space-y-5">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+      <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-5 md:p-6 space-y-5">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           {form.codigo.trim() ? (
-            <span className="rounded-full bg-white border border-slate-200 px-3 py-1 font-semibold">
+            <span className="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1 font-semibold">
               {form.codigo.trim()}
             </span>
           ) : null}
 
           {form.disciplina.trim() ? (
-            <span className="rounded-full bg-blue-50 border border-blue-100 px-3 py-1 font-semibold text-blue-700">
+            <span className="rounded-full bg-blue-50 dark:bg-blue-950 border border-blue-100 dark:border-blue-800 px-3 py-1 font-semibold text-blue-700 dark:text-blue-300">
               {form.disciplina.trim()}
             </span>
           ) : null}
           {normalizarLista(form.conteudos).map((conteudo) => (
             <span
               key={conteudo}
-              className="rounded-full bg-purple-50 border border-purple-100 px-3 py-1 font-semibold text-purple-700"
+              className="rounded-full bg-purple-50 dark:bg-purple-950 border border-purple-100 dark:border-purple-800 px-3 py-1 font-semibold text-purple-700 dark:text-purple-300"
             >
               {conteudo}
             </span>
@@ -619,21 +619,21 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
           {normalizarLista(form.assuntos).map((assunto) => (
             <span
               key={assunto}
-              className="rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 font-semibold text-emerald-700"
+              className="rounded-full bg-emerald-50 dark:bg-emerald-950 border border-emerald-100 dark:border-emerald-800 px-3 py-1 font-semibold text-emerald-700 dark:text-emerald-300"
             >
               {assunto}
             </span>
           ))}
 
           {form.banca.trim() || form.ano.trim() ? (
-            <span className="rounded-full bg-amber-50 border border-amber-100 px-3 py-1 font-semibold text-amber-700">
+            <span className="rounded-full bg-amber-50 dark:bg-amber-950 border border-amber-100 dark:border-amber-800 px-3 py-1 font-semibold text-amber-700 dark:text-amber-300">
               {[form.banca.trim(), form.ano.trim()].filter(Boolean).join(" • ")}
             </span>
           ) : null}
         </div>
 
-        <div className="rounded-2xl bg-white border border-slate-200 p-5">
-          <p className="text-sm font-semibold text-slate-500 mb-3">Enunciado</p>
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">Enunciado</p>
           <MarkdownPreview
             value={form.enunciado}
             emptyMessage="Digite o enunciado para ver a prévia renderizada aqui."
@@ -641,19 +641,19 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
         </div>
 
         {form.url_imagem.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">Imagem</p>
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">Imagem</p>
             <img
               src={form.url_imagem.trim()}
               alt="Imagem da questão"
-              className="max-w-full rounded-xl border border-slate-200 bg-white"
+              className="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
             />
           </div>
         ) : null}
 
         {form.enunciado_pos_imagem.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">
               Continuação do enunciado
             </p>
             <MarkdownPreview value={form.enunciado_pos_imagem} />
@@ -661,14 +661,14 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
         ) : null}
 
         {form.formula.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">Fórmula</p>
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">Fórmula</p>
             <MarkdownPreview value={form.formula} />
           </div>
         ) : null}
 
-        <div className="rounded-2xl bg-white border border-slate-200 p-5">
-          <p className="text-sm font-semibold text-slate-500 mb-4">Alternativas</p>
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4">Alternativas</p>
 
           {hasAnyAlternative ? (
             <div className="space-y-3">
@@ -684,8 +684,8 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
                     key={alternative.value}
                     className={`rounded-2xl border p-4 ${
                       isCorrect
-                        ? "border-emerald-300 bg-emerald-50"
-                        : "border-slate-200 bg-slate-50"
+                        ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -693,7 +693,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
                         className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
                           isCorrect
                             ? "bg-emerald-600 text-white"
-                            : "bg-white text-slate-700 border border-slate-200"
+                            : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                         }`}
                       >
                         {alternative.letter}
@@ -708,7 +708,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
                           <img
                             src={alternative.image.trim()}
                             alt={`Imagem da alternativa ${alternative.letter}`}
-                            className="max-h-56 rounded-xl border border-slate-200 bg-white"
+                            className="max-h-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                           />
                         ) : null}
                       </div>
@@ -718,7 +718,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
               })}
             </div>
           ) : (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Preencha as alternativas para visualizar como elas aparecerão.
             </p>
           )}
@@ -1145,7 +1145,7 @@ export default function AdminQuestionEditPage() {
               className="hidden"
               onChange={(e) => handleAlternativeImageUpload(imageField, e)}
             />
-            <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+            <span className="inline-flex items-center rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
               {uploadingAlternative === imageField ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1171,7 +1171,7 @@ export default function AdminQuestionEditPage() {
           <img
             src={imageValue}
             alt={`Preview ${label}`}
-            className="mt-3 max-h-40 rounded-xl border border-slate-200 bg-white"
+            className="mt-3 max-h-40 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
         ) : null}
       </div>
@@ -1184,11 +1184,11 @@ export default function AdminQuestionEditPage() {
         title="Editar questão"
         subtitle="Edite os dados estruturais da questão diretamente no banco."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <p className="text-sm text-slate-500 mb-1">ID da questão</p>
-              <p className="text-sm font-mono text-slate-800 break-all">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">ID da questão</p>
+              <p className="text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
                 {questionId || "—"}
               </p>
             </div>
@@ -1215,36 +1215,36 @@ export default function AdminQuestionEditPage() {
 
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando dados da questão...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando dados da questão...</p>
           </Card>
         ) : error ? (
-          <Card className="p-8 border-red-200 bg-red-50">
+          <Card className="p-8 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">
                   Erro na edição
                 </h2>
-                <p className="text-red-600">{error}</p>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : (
           <>
             {successMessage ? (
-              <Card className="p-5 border-emerald-200 bg-emerald-50">
+              <Card className="p-5 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950">
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  <p className="text-emerald-700 font-medium">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+                  <p className="text-emerald-700 dark:text-emerald-300 font-medium">
                     {successMessage}
                   </p>
                 </div>
               </Card>
             ) : null}
 
-            <Card className="p-6 bg-white border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">
+            <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">
                 Dados principais
               </h2>
 
@@ -1384,15 +1384,15 @@ export default function AdminQuestionEditPage() {
                     onChange={(e) => updateField("publicada", e.target.checked)}
                     className="h-4 w-4"
                   />
-                  <span className="text-sm font-medium text-slate-700">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     Questão publicada
                   </span>
                 </label>
               </div>
             </Card>
 
-            <Card className="p-6 bg-white border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">
+            <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">
                 Enunciado e imagem
               </h2>
 
@@ -1427,7 +1427,7 @@ export default function AdminQuestionEditPage() {
                       className="hidden"
                       onChange={handleImageUpload}
                     />
-                    <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                    <span className="inline-flex items-center rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                       {uploadingImage ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1452,10 +1452,10 @@ export default function AdminQuestionEditPage() {
                   />
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <ImageIcon className="w-4 h-4 text-emerald-600" />
-                    <p className="text-sm font-semibold text-slate-700">
+                    <ImageIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                       Preview da imagem da questão
                     </p>
                   </div>
@@ -1464,10 +1464,10 @@ export default function AdminQuestionEditPage() {
                     <img
                       src={form.url_imagem}
                       alt="Preview da imagem da questão"
-                      className="max-w-full rounded-xl border border-slate-200 bg-white"
+                      className="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                     />
                   ) : (
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
                       Envie uma imagem ou cole uma URL para visualizar o preview.
                     </p>
                   )}
@@ -1485,8 +1485,8 @@ export default function AdminQuestionEditPage() {
               </div>
             </Card>
 
-            <Card className="p-6 bg-white border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">
+            <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">
                 Alternativas
               </h2>
 

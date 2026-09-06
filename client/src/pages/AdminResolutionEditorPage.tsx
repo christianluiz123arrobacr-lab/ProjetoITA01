@@ -659,25 +659,25 @@ export default function AdminResolutionEditorPage() {
         title="Editar resolução"
         subtitle="Monte a resolução por blocos de texto, latex e imagem, na ordem que quiser."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div>
-              <p className="text-sm text-slate-500 mb-1">Questão</p>
-              <p className="font-semibold text-slate-900">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Questão</p>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">
                 {question?.codigo || "Sem código"}
               </p>
-              <p className="text-sm text-slate-600 mt-1">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                 {textoCurto(question?.enunciado)}
               </p>
-              <p className="text-xs text-slate-500 mt-2 break-all">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 break-all">
                 ID: {questaoId || "—"}
               </p>
             </div>
 
-            <div className="w-full lg:max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="w-full lg:max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
               <div className="flex items-center gap-2 mb-3">
-                <UserSquare2 className="w-4 h-4 text-slate-600" />
-                <p className="text-sm font-semibold text-slate-800">
+                <UserSquare2 className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   Autor da resolução
                 </p>
               </div>
@@ -686,7 +686,7 @@ export default function AdminResolutionEditorPage() {
                 <select
                   value={authorName}
                   onChange={(e) => setAuthorName(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 >
                   <option value="">Selecione o autor</option>
                   {AUTORES_RESOLUCAO.map((autor) => (
@@ -715,7 +715,7 @@ export default function AdminResolutionEditorPage() {
                 </Button>
               </div>
 
-              <p className="text-xs text-slate-500 mt-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
                 Atual: {resolutionMeta?.autor_nome || "Nenhum autor definido"}
               </p>
             </div>
@@ -756,28 +756,28 @@ export default function AdminResolutionEditorPage() {
 
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando blocos da resolução...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando blocos da resolução...</p>
           </Card>
         ) : error ? (
-          <Card className="p-6 border-red-200 bg-red-50">
+          <Card className="p-6 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">
                   Erro no editor de resolução
                 </h2>
-                <p className="text-red-600">{error}</p>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : null}
 
         {successMessage ? (
-          <Card className="p-5 border-emerald-200 bg-emerald-50">
+          <Card className="p-5 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <p className="text-emerald-700 font-medium">{successMessage}</p>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+              <p className="text-emerald-700 dark:text-emerald-300 font-medium">{successMessage}</p>
             </div>
           </Card>
         ) : null}
@@ -785,10 +785,10 @@ export default function AdminResolutionEditorPage() {
         {!loading && orderedBlocks.length === 0 ? (
           <Card className="p-10 text-center">
             <Blocks className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-            <h2 className="text-lg font-bold text-slate-900 mb-2">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Nenhum bloco de resolução cadastrado
             </h2>
-            <p className="text-slate-500 mb-4">
+            <p className="text-slate-500 dark:text-slate-400 mb-4">
               Comece adicionando um bloco de texto, latex ou imagem.
             </p>
             <Button onClick={addNewBlock} className="rounded-2xl">
@@ -800,7 +800,7 @@ export default function AdminResolutionEditorPage() {
 
         <div className="space-y-5">
           {orderedBlocks.map((block, index) => (
-            <Card key={block.localId} className="p-6 bg-white border-slate-200">
+            <Card key={block.localId} className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
               <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-5">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -808,24 +808,24 @@ export default function AdminResolutionEditorPage() {
                       Bloco {index + 1}
                     </span>
 
-                    <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+                    <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700">
                       Ordem {block.ordem}
                     </span>
 
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-semibold border ${
                         block.tipo === "imagem"
-                          ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                          ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
                           : block.tipo === "latex"
-                          ? "bg-purple-100 text-purple-700 border-purple-200"
-                          : "bg-blue-100 text-blue-700 border-blue-200"
+                          ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+                          : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
                       }`}
                     >
                       {block.tipo}
                     </span>
                   </div>
 
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     {block.id ? `ID: ${block.id}` : "Bloco ainda não salvo"}
                   </p>
                 </div>
@@ -889,7 +889,7 @@ export default function AdminResolutionEditorPage() {
 
                   <Button
                     variant="outline"
-                    className="rounded-2xl border-red-200 text-red-600 hover:bg-red-50"
+                    className="rounded-2xl border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
                     onClick={() => deletePersistedBlock(block.localId, block.id)}
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -900,7 +900,7 @@ export default function AdminResolutionEditorPage() {
 
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mb-5">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                     Tipo do bloco
                   </label>
                   <select
@@ -910,7 +910,7 @@ export default function AdminResolutionEditorPage() {
                         tipo: e.target.value as "texto" | "latex" | "imagem",
                       })
                     }
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   >
                     <option value="texto">Texto</option>
                     <option value="latex">Latex</option>
@@ -919,7 +919,7 @@ export default function AdminResolutionEditorPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                     Ordem
                   </label>
                   <input
@@ -930,13 +930,13 @@ export default function AdminResolutionEditorPage() {
                         ordem: Number(e.target.value) || 1,
                       })
                     }
-                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                   />
                 </div>
 
                 {block.tipo === "imagem" ? (
                   <div className="md:col-span-2 xl:col-span-1">
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                       URL da imagem
                     </label>
                     <input
@@ -948,7 +948,7 @@ export default function AdminResolutionEditorPage() {
                         })
                       }
                       placeholder="https://..."
-                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                     />
                   </div>
                 ) : null}
@@ -964,7 +964,7 @@ export default function AdminResolutionEditorPage() {
                         className="hidden"
                         onChange={(e) => handleImageUpload(block.localId, e)}
                       />
-                      <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                      <span className="inline-flex items-center rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                         {uploadingBlockId === block.localId ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -980,10 +980,10 @@ export default function AdminResolutionEditorPage() {
                     </label>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <Image className="w-4 h-4 text-emerald-600" />
-                      <p className="text-sm font-semibold text-slate-700">
+                      <Image className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Preview da imagem
                       </p>
                     </div>
@@ -992,10 +992,10 @@ export default function AdminResolutionEditorPage() {
                       <img
                         src={block.url_imagem}
                         alt="Preview do bloco de imagem"
-                        className="max-w-full rounded-xl border border-slate-200 bg-white"
+                        className="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                       />
                     ) : (
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
                         Envie uma imagem ou cole uma URL para visualizar o preview.
                       </p>
                     )}
@@ -1004,7 +1004,7 @@ export default function AdminResolutionEditorPage() {
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                       Conteúdo do bloco
                     </label>
                     <textarea
@@ -1018,17 +1018,17 @@ export default function AdminResolutionEditorPage() {
                           ? "Ex.: $$ v = \\frac{\\Delta s}{\\Delta t} $$"
                           : "Digite o texto do bloco..."
                       }
-                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                     />
                   </div>
 
                   {block.tipo === "latex" ? (
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-700 mb-3">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
                         Preview do LaTeX
                       </p>
 
-                      <div className="prose prose-slate max-w-none text-slate-800">
+                      <div className="prose dark:prose-invert prose-slate max-w-none text-slate-800 dark:text-slate-100">
                         {block.texto.trim() ? (
                           <ReactMarkdown
                             remarkPlugins={[remarkMath]}
@@ -1037,7 +1037,7 @@ export default function AdminResolutionEditorPage() {
                             {normalizeMathSource(block.texto)}
                           </ReactMarkdown>
                         ) : (
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
                             Digite o conteúdo em LaTeX para ver o preview aqui.
                           </p>
                         )}

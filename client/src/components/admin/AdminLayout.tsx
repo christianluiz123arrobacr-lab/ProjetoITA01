@@ -14,7 +14,7 @@ export default function AdminLayout({
   children,
 }: AdminLayoutProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 dark:from-slate-900 via-slate-100 dark:via-slate-900 to-slate-50 dark:to-slate-900">
       <main className="container py-6 space-y-6">
         <AdminTopbar title={title} subtitle={subtitle} />
 
