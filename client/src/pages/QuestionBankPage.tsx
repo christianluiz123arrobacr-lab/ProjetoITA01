@@ -1302,13 +1302,13 @@ export default function QuestionBankPage() {
             </div>
 
             <Card className="p-4 bg-white border-slate-200 shadow-sm rounded-xl">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
                     <Filter className="w-4 h-4 text-blue-600" />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="text-base font-bold text-slate-900">
                       Filtros
                     </h3>
@@ -1319,30 +1319,34 @@ export default function QuestionBankPage() {
                   </div>
                 </div>
 
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                  <Button
-                    variant="outline"
-                    onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
-                    disabled={filteredQuestions.length === 0 || authLoading || !user}
-                    className="rounded-xl h-9 px-4 text-sm"
-                  >
-                    <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
-                  </Button>
-                  <Button
-                    onClick={handleExportPdf}
-                    disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
-                    className="rounded-lg h-9 px-4 text-sm bg-blue-600 hover:bg-blue-700"
-                  >
-                    {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                    {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={clearAllFilters}
-                    className="rounded-xl h-9 px-4 text-sm"
-                  >
-                    Limpar filtros
-                  </Button>
+                <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center lg:justify-end">
+                  <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                    <Button
+                      variant="outline"
+                      onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
+                      disabled={filteredQuestions.length === 0 || authLoading || !user}
+                      className="h-9 rounded-xl px-4 text-sm sm:flex-1 lg:flex-none"
+                    >
+                      <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
+                    </Button>
+                    <Button
+                      onClick={handleExportPdf}
+                      disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
+                      className="h-9 rounded-lg bg-blue-600 px-4 text-sm hover:bg-blue-700 sm:flex-1 lg:flex-none"
+                    >
+                      {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                      {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
+                    </Button>
+                  </div>
+                  <div className="flex w-full border-t border-slate-100 pt-3 sm:justify-end lg:w-auto lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
+                    <Button
+                      variant="outline"
+                      onClick={clearAllFilters}
+                      className="h-9 rounded-xl px-4 text-sm text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -1708,6 +1712,7 @@ export default function QuestionBankPage() {
               ].join("::")}
               questions={filteredQuestions}
               onQuestionAnswered={handleQuestionAnswered}
+              optionFeedbackTheme="question-bank"
             />
           ) : (
             <Card className="p-12 text-center bg-white border-slate-200">
