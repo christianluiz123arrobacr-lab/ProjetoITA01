@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getDifficultyBucket as getCanonicalDifficultyBucket, getDifficultyNumeric, getDifficultyRankingPoints } from "@shared/difficulty";
 import {
   ArrowLeft,
   Pencil,
@@ -62,6 +63,7 @@ type ProfileRow = {
   prova_alvo?: string | null;
   foco_atual?: string | null;
   meta_semanal_questoes?: number | null;
+  billing_whatsapp_opt_in?: boolean | null;
 };
 
 type EditableProfile = {
@@ -71,6 +73,7 @@ type EditableProfile = {
   prova_alvo: string;
   foco_atual: string;
   meta_semanal_questoes: string;
+  billing_whatsapp_opt_in: boolean;
 };
 
 type GroupedStat = {
@@ -147,6 +150,7 @@ const INITIAL_FORM: EditableProfile = {
   prova_alvo: "",
   foco_atual: "",
   meta_semanal_questoes: "",
+  billing_whatsapp_opt_in: false,
 };
 
 function formatDate(date?: string | null) {
@@ -350,7 +354,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -358,7 +362,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const difficultyScore =
@@ -372,7 +376,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -380,7 +384,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const prevDifficultyScore =
@@ -604,23 +608,11 @@ function formatDelta(delta?: number) {
 }
 
 function getDifficultyPoints(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return 2;
-  if (value === "medio") return 4;
-  if (value === "dificil") return 7;
-
-  return 0;
+  return getDifficultyRankingPoints(difficulty);
 }
 
 function getDifficultyBucket(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return "easy";
-  if (value === "medio") return "medium";
-  if (value === "dificil") return "hard";
-
-  return "unknown";
+  return getCanonicalDifficultyBucket(difficulty);
 }
 
 function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
@@ -794,6 +786,7 @@ export default function ProfilePage() {
           meta_semanal_questoes: profileData?.meta_semanal_questoes
             ? String(profileData.meta_semanal_questoes)
             : "",
+          billing_whatsapp_opt_in: Boolean(profileData?.billing_whatsapp_opt_in),
         });
       } catch (err) {
         console.error(err);
@@ -845,6 +838,7 @@ export default function ProfilePage() {
         provaAlvo: form.prova_alvo.trim() || null,
         focoAtual: form.foco_atual.trim() || null,
         metaSemanalQuestoes: metaSemanal,
+        billingWhatsappOptIn: form.billing_whatsapp_opt_in,
       });
 
       setProfile(data as ProfileRow);
@@ -1371,6 +1365,8 @@ export default function ProfilePage() {
                       </div>
                     </div>
                   </div>
+
+                  <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"><input type="checkbox" checked={form.billing_whatsapp_opt_in} onChange={event => updateField("billing_whatsapp_opt_in", event.target.checked)} className="mt-1" />Quero receber pelo WhatsApp avisos sobre pagamento, vencimento e acesso ao Projeto Vetor.</label>
 
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">

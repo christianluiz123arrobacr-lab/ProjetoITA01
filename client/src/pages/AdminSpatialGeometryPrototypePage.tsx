@@ -1,6 +1,5 @@
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { SpatialGeometrySimulator } from "@/components/simulators/SpatialGeometrySimulator";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MathFormula } from "@/components/MathFormula";
@@ -4106,15 +4105,15 @@ export default function AdminSpatialGeometryPrototypePage() {
   }) {
     const toneClass = {
       slate: "border-white/10 bg-white/10 text-white hover:bg-white/15",
-      cyan: "border-cyan-300/25 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25",
+      cyan: "border-cyan-300/25 dark:border-cyan-800/25 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25",
       emerald:
-        "border-emerald-300/25 bg-emerald-400/15 text-emerald-50 hover:bg-emerald-400/25",
+        "border-emerald-300/25 dark:border-emerald-800/25 bg-emerald-400/15 text-emerald-50 hover:bg-emerald-400/25",
       violet:
-        "border-violet-300/25 bg-violet-400/15 text-violet-50 hover:bg-violet-400/25",
+        "border-violet-300/25 dark:border-violet-800/25 bg-violet-400/15 text-violet-50 hover:bg-violet-400/25",
       amber:
-        "border-amber-300/25 bg-amber-400/15 text-amber-50 hover:bg-amber-400/25",
+        "border-amber-300/25 dark:border-amber-800/25 bg-amber-400/15 text-amber-50 hover:bg-amber-400/25",
       orange:
-        "border-orange-300/25 bg-orange-400/15 text-orange-50 hover:bg-orange-400/25",
+        "border-orange-300/25 dark:border-orange-800/25 bg-orange-400/15 text-orange-50 hover:bg-orange-400/25",
     }[tone];
 
     return (
@@ -4354,7 +4353,7 @@ export default function AdminSpatialGeometryPrototypePage() {
           </div>
 
           {activeAdjustment && adjustmentDetails ? (
-            <div className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3">
+            <div className="mt-3 rounded-2xl border border-cyan-300/20 dark:border-cyan-800/20 bg-cyan-400/10 p-3">
               <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-cyan-100">
                 <span>{adjustmentDetails.label}</span>
                 <span>
@@ -4642,14 +4641,12 @@ export default function AdminSpatialGeometryPrototypePage() {
     );
   }
 
-export default function AdminSpatialGeometryPrototypePage() {
   return (
     <AdminGuard allowedRoles={["admin"]}>
       <AdminLayout
         title="Simulador de Geometria Espacial"
         subtitle="Laboratório 3D para sólidos, volumes, áreas, cortes e relações de inscrição."
       >
-        <SpatialGeometrySimulator />
         <div
           className={
             isFullscreen
@@ -4661,12 +4658,12 @@ export default function AdminSpatialGeometryPrototypePage() {
           }}
         >
           {isFullscreen ? (
-            <div className="absolute left-3 right-3 top-3 z-40 flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/90 px-3 py-3 shadow-2xl backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-5">
+            <div className="absolute left-3 right-3 top-3 z-40 flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/90 dark:bg-slate-900/90 px-3 py-3 shadow-2xl backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">
+                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
                   Modo tela cheia
                 </p>
-                <h2 className="text-lg font-black text-slate-900">
+                <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                   Laboratório de Geometria Espacial
                 </h2>
               </div>
@@ -4754,25 +4751,25 @@ export default function AdminSpatialGeometryPrototypePage() {
           }
         >
           <Card
-            className={`overflow-hidden border-slate-200 bg-white ${
+            className={`overflow-hidden border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 ${
               isFullscreen
                 ? "h-full min-h-0 rounded-none border-0 bg-transparent shadow-none"
                 : ""
             }`}
           >
             <div
-              className={`border-b border-slate-100 p-5 ${
+              className={`border-b border-slate-100 dark:border-slate-700 p-5 ${
                 isFullscreen ? "hidden" : ""
               }`}
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
                     <Box className="h-4 w-4" />
                     Visualização 3D didática
                   </div>
 
-                  <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100">
                     {mode === "simple"
                       ? activeDefinition.label
                       : `${
@@ -4782,7 +4779,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                         }`}
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     {mode === "simple"
                       ? activeDefinition.description
                       : relationship.text}
@@ -4879,7 +4876,7 @@ export default function AdminSpatialGeometryPrototypePage() {
               ) : null}
 
               {measurementStart ? (
-                <div className="absolute left-1/2 top-28 z-30 w-[min(520px,calc(100vw_-_32px))] -translate-x-1/2 rounded-2xl border border-cyan-300/30 bg-cyan-950/90 px-4 py-3 text-center text-white shadow-2xl backdrop-blur">
+                <div className="absolute left-1/2 top-28 z-30 w-[min(520px,calc(100vw_-_32px))] -translate-x-1/2 rounded-2xl border border-cyan-300/30 dark:border-cyan-800/30 bg-cyan-950/90 px-4 py-3 text-center text-white shadow-2xl backdrop-blur">
                   <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
                     Medição ativa
                   </p>
@@ -5194,7 +5191,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </div>
 
                       {activeAdjustment && adjustmentDetails ? (
-                        <div className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3">
+                        <div className="mt-3 rounded-2xl border border-cyan-300/20 dark:border-cyan-800/20 bg-cyan-400/10 p-3">
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <p className="text-xs font-bold uppercase tracking-wide text-cyan-200">
                               {adjustmentDetails.label}
@@ -5247,7 +5244,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                                   Number(event.target.value)
                                 )
                               }
-                              className="rounded-xl border border-white/10 bg-white px-3 py-2 text-center text-sm font-black text-slate-900 outline-none"
+                              className="rounded-xl border border-white/10 bg-white dark:bg-slate-900 px-3 py-2 text-center text-sm font-black text-slate-900 dark:text-slate-100 outline-none"
                             />
 
                             <button
@@ -5275,7 +5272,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       ) : null}
 
                       {mode === "inscribed" && floatingMenu.target === "inner" ? (
-                        <div className="mt-3 rounded-2xl border border-violet-300/20 bg-violet-400/10 p-3">
+                        <div className="mt-3 rounded-2xl border border-violet-300/20 dark:border-violet-800/20 bg-violet-400/10 p-3">
                           <div className="mb-3 flex items-center justify-between gap-3">
                             <div>
                               <p className="text-xs font-bold uppercase tracking-wide text-violet-200">
@@ -5365,14 +5362,14 @@ export default function AdminSpatialGeometryPrototypePage() {
                         <button
                           type="button"
                           onClick={() => adjustSelectedSolid("volume")}
-                          className="rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/20"
+                          className="rounded-xl border border-cyan-300/30 dark:border-cyan-800/30 bg-cyan-400/10 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/20"
                         >
                           Volume
                         </button>
                         <button
                           type="button"
                           onClick={() => adjustSelectedSolid("area")}
-                          className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-100 hover:bg-amber-400/20"
+                          className="rounded-xl border border-amber-300/30 dark:border-amber-800/30 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-100 hover:bg-amber-400/20"
                         >
                           Área total
                         </button>
@@ -5387,7 +5384,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           <button
                             type="button"
                             onClick={placeSelectedInsideAnother}
-                            className="rounded-xl border border-indigo-300/30 bg-indigo-400/10 px-3 py-2 text-left text-sm font-bold text-indigo-100 hover:bg-indigo-400/20"
+                            className="rounded-xl border border-indigo-300/30 dark:border-indigo-800/30 bg-indigo-400/10 px-3 py-2 text-left text-sm font-bold text-indigo-100 hover:bg-indigo-400/20"
                           >
                             Colocar este sólido dentro de outro
                           </button>
@@ -5396,7 +5393,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                             type="button"
                             onClick={fitCurrentSolids}
                             disabled={mode !== "inscribed"}
-                            className="rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-left text-sm font-bold text-emerald-100 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="rounded-xl border border-emerald-300/30 dark:border-emerald-800/30 bg-emerald-400/10 px-3 py-2 text-left text-sm font-bold text-emerald-100 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             Centralizar e encaixar no externo
                           </button>
@@ -5475,12 +5472,12 @@ export default function AdminSpatialGeometryPrototypePage() {
             </div>
 
             <div
-              className={`border-t border-slate-100 bg-slate-50 p-5 ${
+              className={`border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-5 ${
                 isFullscreen ? "hidden" : ""
               }`}
             >
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
                   <Rotate3D className="h-4 w-4" />
                   Controles do simulador
                 </div>
@@ -5525,7 +5522,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               <div className="grid gap-4 lg:grid-cols-4">
                 <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     {mode === "simple" ? "Sólido" : "Sólido externo"}
                   </label>
 
@@ -5538,7 +5535,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       setSelectedTarget("outer");
                       clearSelection();
                     }}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                   >
                     {SOLIDS.map((solid) => (
                       <option key={solid.type} value={solid.type}>
@@ -5550,7 +5547,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                 {mode === "inscribed" ? (
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Sólido interno
                     </label>
 
@@ -5561,7 +5558,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                         setSelectedTarget("inner");
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     >
                       {SOLIDS.map((solid) => (
                         <option key={solid.type} value={solid.type}>
@@ -5673,22 +5670,22 @@ export default function AdminSpatialGeometryPrototypePage() {
             </div>
 
             <div
-              className={`border-t border-slate-100 bg-slate-50/80 p-5 ${
+              className={`border-t border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 p-5 ${
                 isFullscreen ? "hidden" : ""
               }`}
             >
               <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                     <Ruler className="h-4 w-4" />
                     Medidas do sólido
                   </div>
 
-                  <h3 className="mt-2 text-xl font-black text-slate-900">
+                  <h3 className="mt-2 text-xl font-black text-slate-900 dark:text-slate-100">
                     Ajuste os parâmetros
                   </h3>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                     Agora o uso principal é arrastar e clicar no sólido. Esses
                     campos ficam como ajuste fino para a matemática não virar
                     estimativa visual sem controle.
@@ -5697,7 +5694,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Lado / aresta
                     </label>
                     <input
@@ -5708,12 +5705,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                         setSide(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Altura
                     </label>
                     <input
@@ -5724,12 +5721,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                         setHeight(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Raio
                     </label>
                     <input
@@ -5740,12 +5737,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                         setRadius(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Nº lados da base
                     </label>
                     <select
@@ -5754,7 +5751,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                         setPolygonSides(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     >
                       {[3, 4, 5, 6, 8, 12].map((value) => (
                         <option key={value} value={value}>
@@ -5765,7 +5762,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Comprimento
                     </label>
                     <input
@@ -5776,12 +5773,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                         setWidth(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Profundidade
                     </label>
                     <input
@@ -5792,7 +5789,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                         setDepth(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
                 </div>
@@ -5807,17 +5804,17 @@ export default function AdminSpatialGeometryPrototypePage() {
                 : ""
             }`}
           >
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                 <ListTree className="h-4 w-4" />
                 Cena
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Objetos do laboratório
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Clique em um objeto para selecionar. Dê duplo clique no sólido
                 no desenho para editar medidas ou trocar a forma.
               </p>
@@ -5833,40 +5830,40 @@ export default function AdminSpatialGeometryPrototypePage() {
                     }}
                     className={`w-full rounded-2xl border p-4 text-left transition ${
                       selectedTarget === object.id
-                        ? "border-indigo-300 bg-indigo-50"
-                        : "border-slate-200 bg-slate-50 hover:border-indigo-200 hover:bg-indigo-50/60"
+                        ? "border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/60"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-black text-slate-900">
+                        <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                           {object.label}
                         </p>
-                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           {object.color} · {object.visible ? "visível" : "oculto"}
                         </p>
                       </div>
 
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                      <span className="rounded-full bg-white dark:bg-slate-900 px-3 py-1 text-xs font-black text-slate-600 dark:text-slate-300 shadow-sm">
                         {SOLIDS.find((solid) => solid.type === object.solid)?.shortLabel}
                       </span>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                      <div className="rounded-xl bg-white p-2">
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <div className="rounded-xl bg-white dark:bg-slate-900 p-2">
                         <p className="font-bold uppercase tracking-wide text-slate-400">
                           Volume
                         </p>
-                        <p className="mt-1 font-black text-slate-900">
+                        <p className="mt-1 font-black text-slate-900 dark:text-slate-100">
                           {formatNumber(object.metrics.volume)} u³
                         </p>
                       </div>
 
-                      <div className="rounded-xl bg-white p-2">
+                      <div className="rounded-xl bg-white dark:bg-slate-900 p-2">
                         <p className="font-bold uppercase tracking-wide text-slate-400">
                           Área total
                         </p>
-                        <p className="mt-1 font-black text-slate-900">
+                        <p className="mt-1 font-black text-slate-900 dark:text-slate-100">
                           {formatNumber(object.metrics.totalArea)} u²
                         </p>
                       </div>
@@ -5904,17 +5901,17 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                 <Layers className="h-4 w-4" />
                 Encaixe e ocupação
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Colocar sólido dentro de outro
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Use os encaixes clássicos para montar relações de prova e ver
                 volume ocupado, volume vazio e porcentagem de ocupação.
               </p>
@@ -5927,8 +5924,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                     onClick={() => applyClassicFit(preset)}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       currentClassicFit?.id === preset.id
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-950"
-                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
+                        ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-950 dark:text-emerald-200"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950"
                     }`}
                   >
                     <p className="text-sm font-black">{preset.label}</p>
@@ -5940,13 +5937,13 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               {mode === "inscribed" ? (
-                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="mt-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-black text-emerald-950">
+                      <p className="text-sm font-black text-emerald-950 dark:text-emerald-200">
                         {relationship.title}
                       </p>
-                      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                         {isCentered ? "centros alinhados" : "centros deslocados"}
                       </p>
                     </div>
@@ -5961,16 +5958,16 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </Button>
                   </div>
 
-                  <p className="mt-3 text-sm leading-7 text-emerald-900">
+                  <p className="mt-3 text-sm leading-7 text-emerald-900 dark:text-emerald-200">
                     {relationship.text}
                   </p>
 
                   <div className="mt-4">
-                    <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-emerald-700">
+                    <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                       <span>Volume em comum</span>
                       <span>{formatNumber(occupation)}%</span>
                     </div>
-                    <div className="h-3 overflow-hidden rounded-full bg-white">
+                    <div className="h-3 overflow-hidden rounded-full bg-white dark:bg-slate-900">
                       <div
                         className="h-full rounded-full bg-emerald-500"
                         style={{ width: `${clamp(occupation, 0, 100)}%` }}
@@ -5978,13 +5975,13 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                        <p className="text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                           Precisão da interseção
                         </p>
-                        <p className="mt-1 text-xs font-semibold text-emerald-900">
+                        <p className="mt-1 text-xs font-semibold text-emerald-900 dark:text-emerald-200">
                           Estado: {overlapEstimate?.state ?? "calculando"} · grade{" "}
                           {overlapEstimate?.sampleResolution ?? 0}³ · erro aprox.{" "}
                           ±{formatNumber(overlapEstimate?.estimatedErrorPercent ?? 0)}%
@@ -5998,7 +5995,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           className={`rounded-xl px-3 py-2 text-xs font-black transition ${
                             overlapQuality === "fast"
                               ? "bg-emerald-600 text-white"
-                              : "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                              : "bg-emerald-50 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200 dark:ring-emerald-800"
                           }`}
                         >
                           Rápido
@@ -6009,7 +6006,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           className={`rounded-xl px-3 py-2 text-xs font-black transition ${
                             overlapQuality === "precise"
                               ? "bg-emerald-600 text-white"
-                              : "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                              : "bg-emerald-50 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200 dark:ring-emerald-800"
                           }`}
                         >
                           Preciso
@@ -6017,16 +6014,16 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </div>
                     </div>
 
-                    <p className="mt-3 text-xs leading-5 text-emerald-800">
+                    <p className="mt-3 text-xs leading-5 text-emerald-800 dark:text-emerald-200">
                       Enquanto você arrasta, o laboratório usa uma grade leve
                       para manter o movimento fluido. Ao soltar, ele recalcula
                       conforme o modo escolhido.
                     </p>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-emerald-950">
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-emerald-950 dark:text-emerald-200">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Interseção
                       </p>
                       <p className="mt-1 font-black">
@@ -6034,8 +6031,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         União
                       </p>
                       <p className="mt-1 font-black">
@@ -6043,8 +6040,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Externo vazio
                       </p>
                       <p className="mt-1 font-black">
@@ -6052,8 +6049,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Interno fora
                       </p>
                       <p className="mt-1 font-black">
@@ -6062,9 +6059,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-emerald-950">
-                    <div className="rounded-xl bg-white/80 p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-emerald-950 dark:text-emerald-200">
+                    <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Volume externo
                       </p>
                       <p className="mt-1 font-black">
@@ -6072,8 +6069,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white/80 p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Volume interno
                       </p>
                       <p className="mt-1 font-black">
@@ -6082,9 +6079,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                      <p className="text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                         Controle fino do interno
                       </p>
                       <Button
@@ -6149,7 +6146,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       },
                     ].map((control) => (
                       <div key={control.label} className="mt-3">
-                        <div className="mb-1 flex items-center justify-between text-xs font-bold text-emerald-900">
+                        <div className="mb-1 flex items-center justify-between text-xs font-bold text-emerald-900 dark:text-emerald-200">
                           <span>{control.label}</span>
                           <span>
                             {formatNumber(control.value)}
@@ -6171,13 +6168,13 @@ export default function AdminSpatialGeometryPrototypePage() {
                     ))}
                   </div>
 
-                  <p className="mt-3 text-xs leading-5 text-emerald-800">
+                  <p className="mt-3 text-xs leading-5 text-emerald-800 dark:text-emerald-200">
                     Interseção e união são estimadas em tempo real por amostragem
                     3D ({overlapEstimate?.sampleResolution ?? 0}³ pontos). Ao
                     mover o sólido interno, os valores mudam automaticamente.
                   </p>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <MathFormula formula={relationship.formula} display={true} />
                     <MathFormula
                       formula={relationship.substitution}
@@ -6186,11 +6183,11 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-bold text-slate-900">
+                <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Ainda não há sólido interno.
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                     Escolha um encaixe clássico acima ou dê duplo clique/segure
                     no fundo do laboratório para adicionar uma forma.
                   </p>
@@ -6198,17 +6195,17 @@ export default function AdminSpatialGeometryPrototypePage() {
               )}
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
                 <Ruler className="h-4 w-4" />
                 Cortes inteligentes
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Seções do sólido
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Escolha um corte para revelar a figura plana que aparece dentro
                 do sólido. É aqui que nascem muitas contas de diagonal, geratriz,
                 área da base e volume.
@@ -6222,8 +6219,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                     onClick={() => applySmartCut(cut.id)}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       activeSmartCut === cut.id
-                        ? "border-amber-300 bg-amber-50 text-amber-950"
-                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-amber-300 hover:bg-amber-50"
+                        ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-950 dark:text-amber-200"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-amber-300 dark:hover:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950"
                     }`}
                   >
                     <p className="text-sm font-black">{cut.label}</p>
@@ -6234,13 +6231,13 @@ export default function AdminSpatialGeometryPrototypePage() {
                 ))}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-black text-amber-950">
+              <div className="mt-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4">
+                <p className="text-sm font-black text-amber-950 dark:text-amber-200">
                   Corte selecionado:{" "}
                   {SMART_CUTS.find((cut) => cut.id === activeSmartCut)?.label ??
                     "nenhum"}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-amber-900">
+                <p className="mt-2 text-sm leading-6 text-amber-900 dark:text-amber-200">
                   O destaque amarelo no desenho mostra a medida ou seção
                   associada. Para cilindro e cone, o corte axial mostra
                   retângulo/triângulo; para esfera, o corte central mostra o
@@ -6250,17 +6247,17 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
             </Card>
 
-            <Card className="border-slate-200 p-6">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-fuchsia-700">
                 <Layers className="h-4 w-4" />
                 Planificação
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Abrir o sólido
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 A planificação mostra de onde vem a área total: bases mais
                 faces laterais. É o antídoto contra decorar fórmula sem enxergar
                 as peças.
@@ -6277,7 +6274,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               {showNet ? (
                 <div className="mt-5 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4">
-                  <div className="grid min-h-[190px] place-items-center rounded-2xl bg-white p-4">
+                  <div className="grid min-h-[190px] place-items-center rounded-2xl bg-white dark:bg-slate-900 p-4">
                     {inspectedSolid === "cylinder" ? (
                       <div className="flex flex-wrap items-center justify-center gap-3">
                         <div className="grid h-16 w-16 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
@@ -6358,7 +6355,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                     )}
                   </div>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
                       <div className="rounded-xl bg-fuchsia-50 p-3">
                         <p className="font-black uppercase tracking-wide text-fuchsia-500">
@@ -6399,17 +6396,17 @@ export default function AdminSpatialGeometryPrototypePage() {
               ) : null}
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700 dark:text-cyan-300">
                 <MousePointerClick className="h-4 w-4" />
                 Ações geométricas
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 {inspectedDefinition.label}
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Clique no sólido azul ou laranja e escolha o que deseja analisar.
                 O simulador destaca a medida no desenho e mostra a conta.
               </p>
@@ -6450,8 +6447,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                     onClick={() => setSelectedAction(action.id)}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       selectedAction === action.id
-                        ? "border-cyan-400 bg-cyan-50 text-cyan-950"
-                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50"
+                        ? "border-cyan-400 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950 text-cyan-950 dark:text-cyan-200"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-cyan-300 dark:hover:border-cyan-800 hover:bg-cyan-50 dark:hover:bg-cyan-950"
                     }`}
                   >
                     <p className="text-sm font-black">{action.label}</p>
@@ -6463,12 +6460,12 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               {inspector ? (
-                <div className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
-                  <p className="text-sm font-black text-cyan-950">
+                <div className="mt-5 rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950 p-4">
+                  <p className="text-sm font-black text-cyan-950 dark:text-cyan-200">
                     {inspector.title}
                   </p>
 
-                  <p className="mt-2 text-sm leading-7 text-cyan-900">
+                  <p className="mt-2 text-sm leading-7 text-cyan-900 dark:text-cyan-200">
                     {inspector.description}
                   </p>
 
@@ -6476,9 +6473,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                     {inspector.formulas.map((item) => (
                       <div
                         key={item.label}
-                        className="rounded-2xl border border-cyan-100 bg-white p-4"
+                        className="rounded-2xl border border-cyan-100 dark:border-cyan-800 bg-white dark:bg-slate-900 p-4"
                       >
-                        <p className="text-xs font-bold uppercase tracking-wide text-cyan-700">
+                        <p className="text-xs font-bold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
                           {item.label}
                         </p>
                         <div className="mt-2">
@@ -6494,19 +6491,19 @@ export default function AdminSpatialGeometryPrototypePage() {
               ) : null}
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
                 <Calculator className="h-4 w-4" />
                 Fórmulas e resultados
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Como calcular {activeDefinition.label.toLowerCase()}
               </h2>
 
               <div className="mt-5 grid gap-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Volume
                   </p>
                   <div className="mt-2">
@@ -6520,8 +6517,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Área total
                   </p>
                   <div className="mt-2">
@@ -6536,18 +6533,18 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </div>
               </div>
 
-              <p className="mt-5 text-sm leading-7 text-slate-700">
+              <p className="mt-5 text-sm leading-7 text-slate-700 dark:text-slate-300">
                 {outerMetrics.explanation}
               </p>
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-orange-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-orange-700 dark:text-orange-300">
                 <Layers className="h-4 w-4" />
                 Sólidos inscritos
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Relação entre formas
               </h2>
 
@@ -6557,7 +6554,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                     key={preset.label}
                     type="button"
                     onClick={() => applyPreset(preset)}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-950"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-left text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:border-orange-300 dark:hover:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-950 hover:text-orange-950 dark:hover:text-orange-200"
                   >
                     {preset.label}
                   </button>
@@ -6565,11 +6562,11 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               {mode === "inscribed" ? (
-                <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-                  <p className="text-sm font-black text-orange-950">
+                <div className="mt-5 rounded-2xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950 p-4">
+                  <p className="text-sm font-black text-orange-950 dark:text-orange-200">
                     {relationship.title}
                   </p>
-                  <p className="mt-2 text-sm leading-7 text-orange-900">
+                  <p className="mt-2 text-sm leading-7 text-orange-900 dark:text-orange-200">
                     {relationship.text}
                   </p>
                   <div className="mt-3">
@@ -6583,7 +6580,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-4 text-sm leading-7 text-slate-600">
+                <p className="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">
                   Ative o modo de sólido inscrito para comparar volumes e ver
                   relações como raio, aresta, diagonal e altura compartilhada.
                 </p>
@@ -6591,29 +6588,29 @@ export default function AdminSpatialGeometryPrototypePage() {
             </Card>
 
             {mode === "inscribed" ? (
-              <Card className="border-slate-200 p-6">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Card className="border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                   <Sparkles className="h-4 w-4" />
                   Mover sólido interno
                 </div>
 
-                <h2 className="mt-2 text-2xl font-black text-slate-900">
+                <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                   Controle de posição interna
                 </h2>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-bold text-slate-900">
+                <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Status da inscrição
                   </p>
 
-                  <p className="mt-2 text-sm leading-7 text-slate-700">
+                  <p className="mt-2 text-sm leading-7 text-slate-700 dark:text-slate-300">
                     {isCentered
                       ? "Centros alinhados. Em problemas clássicos, esse costuma ser o estado ideal de inscrição."
                       : "O sólido interno está deslocado. Em questões tradicionais, a inscrição perfeita geralmente exige centros coincidentes."}
                   </p>
 
                   {exceedsSuggestedScale ? (
-                    <p className="mt-2 text-sm font-bold text-red-700">
+                    <p className="mt-2 text-sm font-bold text-red-700 dark:text-red-300">
                       A escala passou de 100%. O sólido interno provavelmente atravessa o externo.
                     </p>
                   ) : null}
@@ -6621,7 +6618,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                 <div className="mt-5 space-y-4">
                   <div>
-                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
                       <span>Escala interna</span>
                       <span>
                         B {formatNumber(innerBaseScale * 100)}% · H{" "}
@@ -6643,7 +6640,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
 
                   <div>
-                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
                       <span>Profundidade Z</span>
                       <span>{innerOffsetZ.toFixed(2)}</span>
                     </div>
@@ -6669,11 +6666,11 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </Button>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Comparação de volumes
                   </p>
-                  <div className="mt-3 space-y-2 text-sm text-slate-700">
+                  <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <div className="flex justify-between gap-3">
                       <span>Volume externo</span>
                       <strong>{formatNumber(outerMetrics.volume)} u³</strong>
@@ -6718,13 +6715,13 @@ export default function AdminSpatialGeometryPrototypePage() {
               </Card>
             ) : null}
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:text-purple-300">
                 <BadgeInfo className="h-4 w-4" />
                 Como usar em questão
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Raciocínio de prova
               </h2>
 
@@ -6738,12 +6735,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                 ].map((step, index) => (
                   <div
                     key={step}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4"
                   >
-                    <p className="text-sm font-black text-slate-900">
+                    <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                       Passo {index + 1}
                     </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-700">
+                    <p className="mt-1 text-sm leading-6 text-slate-700 dark:text-slate-300">
                       {step}
                     </p>
                   </div>

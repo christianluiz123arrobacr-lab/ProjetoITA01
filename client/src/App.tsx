@@ -8,6 +8,7 @@ import NotFound from "@/pages/NotFound";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import SubscriptionGuard from "./components/SubscriptionGuard";
+import { isAdminPath, normalizeLegacyAdminPath } from "./lib/privateRouteAccess";
 import StudentSidebar from "./components/layout/StudentSidebar";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
@@ -286,7 +287,7 @@ import FisicaModernaTopicAtomo from "./pages/FisicaModernaTopicAtomo";
 import FisicaModernaTopicParticulas from "./pages/FisicaModernaTopicParticulas";
 import FisicaModernaTopicAplicacoes from "./pages/FisicaModernaTopicAplicacoes";
 
-type RootAccessState = "checking" | "allowed" | "blocked" | "public";
+type RootAccessState = "checking" | "allowed" | "blocked" | "public" | "error";
 
 function RootGate() {
   const { isAuthenticated, loading: authLoading, user } = useSupabaseAuth();
@@ -327,8 +328,8 @@ function RootGate() {
       } catch (error) {
         console.warn("Erro inesperado na entrada do site:", error);
 
-        if (!cancelled && !cached) {
-          setAccessState("blocked");
+        if (!cancelled && cached?.status !== "allowed") {
+          setAccessState("error");
         }
       }
     }
@@ -362,29 +363,37 @@ function RootGate() {
     return <Redirect to="/assinatura-pendente" />;
   }
 
+  if (accessState === "error") {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-3xl border border-amber-300/30 bg-white/[0.06] p-8 text-center shadow-2xl">
+          <h1 className="text-xl font-black">Não foi possível verificar seu acesso</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-300">
+            O serviço está temporariamente indisponível. Nenhuma alteração foi feita na sua conta.
+          </p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-6 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950">
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return <Landing />;
 }
 
 function PrivateRouter() {
   const [location] = useLocation();
-  const legacyAdminPrefix = "/plataforma/admin";
-  const isLegacyAdminRoute =
-    location === legacyAdminPrefix ||
-    location.startsWith(`${legacyAdminPrefix}/`);
-  const isAdminRoute = location.startsWith("/admin") || isLegacyAdminRoute;
+  const normalizedLegacyAdminPath = normalizeLegacyAdminPath(location);
+  const isAdminRoute = isAdminPath(location);
   const [studentMenuOpen, setStudentMenuOpen] = useState(false);
 
-  if (isLegacyAdminRoute) {
-    const normalizedAdminPath = location.replace(
-      /^\/plataforma\/admin/,
-      "/admin"
-    );
-
-    return <Redirect to={normalizedAdminPath || "/admin"} />;
+  if (normalizedLegacyAdminPath) {
+    return <Redirect to={normalizedLegacyAdminPath} />;
   }
 
-  return (
-    <SubscriptionGuard>
+  const pageContent = (
+    <>
       {!isAdminRoute ? (
         <StudentSidebar
           expanded={studentMenuOpen}
@@ -395,10 +404,10 @@ function PrivateRouter() {
       <div
         className={
           isAdminRoute
-            ? ""
+            ? "admin-theme min-h-screen dark:bg-slate-950 dark:text-slate-100"
             : studentMenuOpen
-              ? "min-h-screen transition-[padding] duration-200 md:pl-72"
-              : "min-h-screen transition-[padding] duration-200 md:pl-[76px]"
+              ? "theme-page min-h-screen bg-slate-50 text-slate-900 transition-[padding] duration-200 dark:bg-slate-950 dark:text-slate-100 md:pl-72"
+              : "theme-page min-h-screen bg-slate-50 text-slate-900 transition-[padding] duration-200 dark:bg-slate-950 dark:text-slate-100 md:pl-[76px]"
         }
       >
         <Suspense
@@ -797,8 +806,10 @@ function PrivateRouter() {
           </Switch>
         </Suspense>
       </div>
-    </SubscriptionGuard>
+    </>
   );
+
+  return <SubscriptionGuard bypass={isAdminRoute}>{pageContent}</SubscriptionGuard>;
 }
 
 function Router() {
@@ -825,7 +836,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider>
         <TooltipProvider>
           <Toaster />
           <Router />

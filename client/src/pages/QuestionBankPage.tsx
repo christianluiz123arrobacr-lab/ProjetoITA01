@@ -10,6 +10,7 @@ import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
+import { getDifficultyLabel, getDifficultyOrder, normalizeDifficulty } from "@shared/difficulty";
 import {
   ArrowLeft,
   Zap,
@@ -151,15 +152,8 @@ function formatSubjectLabel(value: string) {
 }
 
 function formatDifficultyLabel(value: string) {
-  const normalized = normalizeText(value);
-
-  if (normalized === "facil") return "Fácil";
-  if (normalized === "medio") return "Médio";
-  if (normalized === "dificil") return "Difícil";
-
-  return value;
+  return getDifficultyLabel(value);
 }
-
 function sortSubjects(values: string[]) {
   const order: Record<string, number> = {
     fisica: 1,
@@ -175,15 +169,9 @@ function sortSubjects(values: string[]) {
 }
 
 function sortDifficulties(values: string[]) {
-  const order: Record<string, number> = {
-    facil: 1,
-    medio: 2,
-    dificil: 3,
-  };
-
   return [...values].sort(
     (a, b) =>
-      (order[normalizeText(a)] ?? 99) - (order[normalizeText(b)] ?? 99) ||
+      getDifficultyOrder(a) - getDifficultyOrder(b) ||
       a.localeCompare(b, "pt-BR")
   );
 }
@@ -410,7 +398,7 @@ function ActiveFilterChip({ label, onRemove }: ActiveFilterChipProps) {
     <button
       type="button"
       onClick={onRemove}
-      className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 text-violet-700 px-3 py-1.5 text-xs font-semibold hover:bg-violet-100 transition-colors"
+      className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-100 transition-colors"
     >
       <span>{label}</span>
       <X className="w-3.5 h-3.5" />
@@ -607,7 +595,7 @@ export default function QuestionBankPage() {
       Array.from(
         new Set(
           questionsForDifficulties
-            .map((q) => String(q.difficulty ?? ""))
+            .map((q) => normalizeDifficulty(q.difficulty) ?? "")
             .filter(Boolean)
         )
       )
@@ -704,11 +692,12 @@ export default function QuestionBankPage() {
       facil: "Fácil",
       medio: "Médio",
       dificil: "Difícil",
+      muito_dificil: "Muito difícil",
     };
-
     const counts = questions.reduce<Record<string, number>>((acc, q) => {
-      if (!q.difficulty) return acc;
-      acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
+      const difficulty = normalizeDifficulty(q.difficulty);
+      if (!difficulty) return acc;
+      acc[difficulty] = (acc[difficulty] || 0) + 1;
       return acc;
     }, {});
 
@@ -716,20 +705,20 @@ export default function QuestionBankPage() {
       facil: 1,
       medio: 2,
       dificil: 3,
+      muito_dificil: 4,
     };
-
     return Object.entries(counts)
       .map(([key, count]) => ({
         key,
-        label: labels[key] ?? key,
+        label: formatDifficultyLabel(key),
         count,
       }))
-      .sort((a, b) => (order[a.key] ?? 99) - (order[b.key] ?? 99));
+      .sort((a, b) => getDifficultyOrder(a.key) - getDifficultyOrder(b.key));
   }, [questions]);
 
   const filteredDifficultyStats = useMemo(() => {
     const counts = filteredQuestions.reduce<Record<string, number>>((acc, q) => {
-      const difficulty = String(q.difficulty ?? "");
+      const difficulty = normalizeDifficulty(q.difficulty);
       if (!difficulty) return acc;
       acc[difficulty] = (acc[difficulty] || 0) + 1;
       return acc;
@@ -753,6 +742,12 @@ export default function QuestionBankPage() {
         label: "Difícil",
         count: counts.dificil || 0,
         colorClass: "bg-rose-500",
+      },
+      {
+        key: "muito_dificil",
+        label: "Muito difícil",
+        count: counts.muito_dificil || 0,
+        colorClass: "bg-indigo-700",
       },
     ];
   }, [filteredQuestions]);
@@ -948,7 +943,7 @@ export default function QuestionBankPage() {
     );
 
     filtered = filtered.filter((q) =>
-      matchesMulti(q.difficulty, selectedDifficulties)
+      matchesMulti(normalizeDifficulty(q.difficulty) ?? q.difficulty, selectedDifficulties)
     );
 
     filtered = filtered.filter((q) =>
@@ -1054,7 +1049,7 @@ export default function QuestionBankPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-100">
+    <div className="theme-page min-h-screen bg-slate-50">
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/70">
         <div className="container py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -1066,7 +1061,7 @@ export default function QuestionBankPage() {
             </Link>
 
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-500 flex items-center justify-center shadow-md shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm shrink-0">
                 <Zap className="w-5 h-5 text-white" />
               </div>
 
@@ -1082,8 +1077,8 @@ export default function QuestionBankPage() {
             </div>
           </div>
 
-          <Card className="hidden sm:flex items-center gap-3 px-4 py-2.5 border-violet-100 bg-white shadow-sm rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center">
+          <Card className="hidden sm:flex items-center gap-3 px-4 py-2.5 border-slate-200 bg-white shadow-sm rounded-xl">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
               <BookMarked className="w-5 h-5 text-white" />
             </div>
 
@@ -1092,7 +1087,7 @@ export default function QuestionBankPage() {
                 {filteredQuestions.length}
               </p>
 
-              <p className="text-xs font-semibold text-violet-700">
+              <p className="text-xs font-semibold text-blue-700">
                 questões
               </p>
             </div>
@@ -1103,7 +1098,7 @@ export default function QuestionBankPage() {
       <main className="container py-8 space-y-7">
         {hasVetFilter ? (
           <section>
-            <Card className="p-4 md:p-5 border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50">
+            <Card className="p-4 md:p-5 border-emerald-200 bg-emerald-50/70 shadow-sm">
               <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
@@ -1148,10 +1143,10 @@ export default function QuestionBankPage() {
         <section className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
           <div className="space-y-5">
             <div className="grid md:grid-cols-3 gap-4">
-              <Card className="p-4 border-violet-100 bg-white shadow-sm">
+              <Card className="p-4 border-slate-200 bg-white shadow-sm rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-violet-100 flex items-center justify-center">
-                    <BookMarked className="w-5 h-5 text-violet-600" />
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <BookMarked className="w-5 h-5 text-blue-600" />
                   </div>
 
                   <div>
@@ -1168,9 +1163,9 @@ export default function QuestionBankPage() {
                 </div>
               </Card>
 
-              <Card className="p-4 border-blue-100 bg-white shadow-sm">
+              <Card className="p-4 border-slate-200 bg-white shadow-sm rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-blue-100 flex items-center justify-center">
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
                     <GraduationCap className="w-5 h-5 text-blue-600" />
                   </div>
 
@@ -1188,10 +1183,10 @@ export default function QuestionBankPage() {
                 </div>
               </Card>
 
-              <Card className="p-4 border-orange-100 bg-white shadow-sm">
+              <Card className="p-4 border-slate-200 bg-white shadow-sm rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-orange-100 flex items-center justify-center">
-                    <BarChart3 className="w-5 h-5 text-orange-600" />
+                  <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-slate-600" />
                   </div>
 
                   <div>
@@ -1212,7 +1207,7 @@ export default function QuestionBankPage() {
             </div>
 
             <div className="grid lg:grid-cols-2 gap-4">
-              <Card className="p-5 bg-white border-slate-200 shadow-sm">
+              <Card className="p-5 bg-white border-slate-200 shadow-sm rounded-xl">
                 <h3 className="text-base font-bold text-slate-900 mb-4">
                   Questões por disciplina
                 </h3>
@@ -1239,7 +1234,7 @@ export default function QuestionBankPage() {
 
                           <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-violet-500"
+                              className="h-full rounded-full bg-blue-600"
                               style={{ width: `${percentage}%` }}
                             />
                           </div>
@@ -1254,7 +1249,7 @@ export default function QuestionBankPage() {
                 </div>
               </Card>
 
-              <Card className="p-5 bg-white border-slate-200 shadow-sm">
+              <Card className="p-5 bg-white border-slate-200 shadow-sm rounded-xl">
                 <h3 className="text-base font-bold text-slate-900 mb-4">
                   Questões por nível
                 </h3>
@@ -1272,7 +1267,9 @@ export default function QuestionBankPage() {
                           ? "bg-emerald-500"
                           : item.key === "medio"
                             ? "bg-amber-500"
-                            : "bg-rose-500";
+                            : item.key === "dificil"
+                              ? "bg-rose-500"
+                              : "bg-indigo-700";
 
                       return (
                         <div key={item.key}>
@@ -1304,14 +1301,14 @@ export default function QuestionBankPage() {
               </Card>
             </div>
 
-            <Card className="p-4 bg-white border-slate-200 shadow-sm">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
-                    <Filter className="w-4 h-4 text-violet-600" />
+            <Card className="p-4 bg-white border-slate-200 shadow-sm rounded-xl">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Filter className="w-4 h-4 text-blue-600" />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="text-base font-bold text-slate-900">
                       Filtros
                     </h3>
@@ -1322,30 +1319,34 @@ export default function QuestionBankPage() {
                   </div>
                 </div>
 
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                  <Button
-                    variant="outline"
-                    onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
-                    disabled={filteredQuestions.length === 0 || authLoading || !user}
-                    className="rounded-xl h-9 px-4 text-sm"
-                  >
-                    <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
-                  </Button>
-                  <Button
-                    onClick={handleExportPdf}
-                    disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
-                    className="rounded-xl h-9 px-4 text-sm bg-cyan-600 hover:bg-cyan-700"
-                  >
-                    {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                    {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={clearAllFilters}
-                    className="rounded-xl h-9 px-4 text-sm"
-                  >
-                    Limpar filtros
-                  </Button>
+                <div className="grid w-full grid-cols-1 gap-3 xl:w-auto xl:shrink-0 xl:grid-cols-[auto_auto] xl:items-center">
+                  <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
+                    <Button
+                      variant="outline"
+                      onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
+                      disabled={filteredQuestions.length === 0 || authLoading || !user}
+                      className="h-9 shrink-0 rounded-xl px-4 text-sm sm:flex-1 xl:flex-none"
+                    >
+                      <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
+                    </Button>
+                    <Button
+                      onClick={handleExportPdf}
+                      disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
+                      className="h-9 shrink-0 rounded-lg bg-blue-600 px-4 text-sm hover:bg-blue-700 sm:flex-1 xl:flex-none"
+                    >
+                      {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                      {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
+                    </Button>
+                  </div>
+                  <div className="flex w-full justify-end border-t border-slate-100 pt-3 xl:w-auto xl:border-l xl:border-t-0 xl:pl-3 xl:pt-0">
+                    <Button
+                      variant="outline"
+                      onClick={clearAllFilters}
+                      className="h-9 shrink-0 rounded-xl px-4 text-sm text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -1464,7 +1465,7 @@ export default function QuestionBankPage() {
                         event.target.value as PracticeStatusFilter
                       )
                     }
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {PRACTICE_STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -1610,7 +1611,7 @@ export default function QuestionBankPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4 mb-5">
+            <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 mb-5">
               <p className="text-sm font-bold text-slate-900 mb-3">
                 Seu histórico
               </p>
@@ -1619,7 +1620,7 @@ export default function QuestionBankPage() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-slate-500">Já feitas</p>
-                    <p className="text-xl font-bold text-violet-700">
+                    <p className="text-xl font-bold text-blue-700">
                       {practiceStats.answered}
                     </p>
                   </div>
@@ -1711,6 +1712,7 @@ export default function QuestionBankPage() {
               ].join("::")}
               questions={filteredQuestions}
               onQuestionAnswered={handleQuestionAnswered}
+              optionFeedbackTheme="question-bank"
             />
           ) : (
             <Card className="p-12 text-center bg-white border-slate-200">

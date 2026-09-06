@@ -141,7 +141,7 @@ export default function SubscriptionPendingPage() {
   useEffect(() => {
     if (!subscription || ["active", "expired", "failed", "refunded", "canceled"].includes(subscription.status)) return;
     const timer = window.setInterval(() => {
-      void loadLatestSubscription(false);
+      void loadLatestSubscription(false, true);
     }, 30_000);
     return () => window.clearInterval(timer);
   }, [subscription?.subscription_id, subscription?.status]);
@@ -187,7 +187,7 @@ export default function SubscriptionPendingPage() {
     }
   }
 
-  async function loadLatestSubscription(showRefreshing = false) {
+  async function loadLatestSubscription(showRefreshing = false, syncGateway = showRefreshing) {
     try {
       if (showRefreshing) {
         setRefreshing(true);
@@ -198,7 +198,7 @@ export default function SubscriptionPendingPage() {
       setErrorMessage("");
       setCopyMessage("");
 
-      const refreshed = showRefreshing
+      const refreshed = syncGateway
         ? await syncMyMercadoPagoPaymentStatus()
         : null;
 

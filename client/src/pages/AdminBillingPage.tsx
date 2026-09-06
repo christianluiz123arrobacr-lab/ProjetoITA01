@@ -12,6 +12,7 @@ import {
   Edit3,
   Gift,
   Loader2,
+  MessageCircle,
   RefreshCw,
   RotateCcw,
   Save,
@@ -59,6 +60,10 @@ type AdminBillingSubscriptionRow = {
 
   created_at: string;
   updated_at: string;
+  effective_subscription_id: string | null;
+  is_effective_subscription: boolean;
+  has_valid_access: boolean;
+  is_historical_subscription: boolean;
 };
 
 type InviteRow = {
@@ -134,7 +139,8 @@ type StatusFilter =
   | "canceled"
   | "failed"
   | "reconciliation";
-type AdminBillingTab = "subscriptions" | "payments" | "plans" | "invites";
+type AdminBillingTab = "subscriptions" | "payments" | "plans" | "invites" | "notifications";
+type BillingNotificationLog = { id: string; notification_type: string; due_date: string; status: string; error_message: string | null; created_at: string; sent_at: string | null; profiles?: { nome?: string | null; email?: string | null } | null };
 
 function formatDate(date?: string | null) {
   if (!date) return "Sem data";
@@ -155,21 +161,21 @@ function formatDate(date?: string | null) {
 function getStatusBadge(status: string) {
   switch (status) {
     case "manual_review":
-      return "bg-yellow-50 text-yellow-700 border-yellow-200";
+      return "bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800";
     case "pending":
-      return "bg-amber-50 text-amber-700 border-amber-200";
+      return "bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800";
     case "active":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      return "bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800";
     case "overdue":
-      return "bg-orange-50 text-orange-700 border-orange-200";
+      return "bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800";
     case "expired":
-      return "bg-red-50 text-red-700 border-red-200";
+      return "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800";
     case "canceled":
-      return "bg-slate-100 text-slate-600 border-slate-200";
+      return "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700";
     case "failed":
-      return "bg-red-50 text-red-700 border-red-200";
+      return "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800";
     default:
-      return "bg-blue-50 text-blue-700 border-blue-200";
+      return "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800";
   }
 }
 
@@ -208,6 +214,9 @@ export default function AdminBillingPage() {
   const listBillingPlansQuery = trpc.admin.listBillingPlans.useQuery(undefined, { enabled: false });
   const listBillingPlanInvitesQuery = trpc.admin.listBillingPlanInvites.useQuery(undefined, { enabled: false });
   const listBillingPaymentsQuery = trpc.admin.listBillingPayments.useQuery(undefined, { enabled: false });
+  const listBillingNotificationLogsQuery = trpc.admin.listBillingNotificationLogs.useQuery(undefined, { enabled: false });
+  const runBillingRemindersMutation = trpc.admin.runBillingReminders.useMutation();
+  const retryBillingReminderMutation = trpc.admin.retryBillingReminder.useMutation();
   const renewBillingSubscriptionMutation = trpc.admin.renewBillingSubscription.useMutation();
   const cancelBillingSubscriptionMutation = trpc.admin.cancelBillingSubscription.useMutation();
   const cancelMercadoPagoSubscriptionNowMutation = trpc.admin.cancelMercadoPagoSubscriptionNow.useMutation();
@@ -226,6 +235,8 @@ export default function AdminBillingPage() {
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [payments, setPayments] = useState<AdminBillingPaymentRow[]>([]);
   const [plans, setPlans] = useState<AdminBillingPlanRow[]>([]);
+  const [notificationLogs, setNotificationLogs] = useState<BillingNotificationLog[]>([]);
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [planForms, setPlanForms] = useState<Record<string, PlanFormState>>({});
 
   const [selectedPlanSlug, setSelectedPlanSlug] = useState("");
@@ -260,7 +271,9 @@ export default function AdminBillingPage() {
       pending: subscriptions.filter((item) => item.status === "pending").length,
       manualReview: subscriptions.filter((item) => item.status === "manual_review")
         .length,
-      active: subscriptions.filter((item) => item.status === "active").length,
+      studentsWithActiveAccess: new Set(subscriptions.filter((item) => item.has_valid_access).map((item) => item.user_id)).size,
+      activeRecords: subscriptions.filter((item) => item.status === "active" || item.status === "trialing").length,
+      historical: subscriptions.filter((item) => item.is_historical_subscription).length,
       expired: subscriptions.filter((item) => item.status === "expired").length,
       canceled: subscriptions.filter((item) => item.status === "canceled").length,
       reconciliation: subscriptions.filter((item) => Boolean(item.gateway_reconciliation_status)).length,
@@ -322,6 +335,13 @@ export default function AdminBillingPage() {
     const result = await listBillingPaymentsQuery.refetch();
     if (result.error) throw new Error(result.error.message || "Não foi possível carregar os pagamentos.");
     setPayments((result.data ?? []) as AdminBillingPaymentRow[]);
+  }
+
+  async function loadNotificationLogs() {
+    const result = await listBillingNotificationLogsQuery.refetch();
+    if (result.error) throw new Error(result.error.message || "Não foi possível carregar os avisos.");
+    setNotificationLogs((result.data?.logs ?? []) as BillingNotificationLog[]);
+    setRemindersEnabled(Boolean(result.data?.enabled));
   }
 
   async function loadAllData() {
@@ -624,49 +644,59 @@ export default function AdminBillingPage() {
         subtitle="Gerencie planos, preços, limites de vagas, renovações manuais e solicitações de acesso."
       >
         <div className="grid gap-4 md:grid-cols-5">
-          <Card className="border-slate-200 p-5">
-            <p className="text-sm text-slate-500">Solicitações</p>
-            <p className="mt-2 text-3xl font-black text-slate-900">
+          <Card className="border-slate-200 dark:border-slate-700 p-5">
+            <p className="text-sm text-slate-500 dark:text-slate-400">Solicitações</p>
+            <p className="mt-2 text-3xl font-black text-slate-900 dark:text-slate-100">
               {subscriptionStats.total}
             </p>
           </Card>
 
-          <Card className="border-yellow-200 bg-yellow-50 p-5">
-            <p className="text-sm text-yellow-700">Aguardando análise</p>
-            <p className="mt-2 text-3xl font-black text-yellow-900">
+          <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950 p-5">
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">Aguardando análise</p>
+            <p className="mt-2 text-3xl font-black text-yellow-900 dark:text-yellow-200">
               {subscriptionStats.manualReview}
             </p>
           </Card>
 
-          <Card className="border-emerald-200 bg-emerald-50 p-5">
-            <p className="text-sm text-emerald-700">Ativas</p>
-            <p className="mt-2 text-3xl font-black text-emerald-900">
-              {subscriptionStats.active}
+          <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-5">
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">Alunos com acesso ativo</p>
+            <p className="mt-2 text-3xl font-black text-emerald-900 dark:text-emerald-200">
+              {subscriptionStats.studentsWithActiveAccess}
             </p>
           </Card>
 
-          <Card className="border-red-200 bg-red-50 p-5">
-            <p className="text-sm text-red-700">Expiradas</p>
-            <p className="mt-2 text-3xl font-black text-red-900">
+          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-5">
+            <p className="text-sm text-blue-700 dark:text-blue-300">Registros ativos</p>
+            <p className="mt-2 text-3xl font-black text-blue-900 dark:text-blue-200">{subscriptionStats.activeRecords}</p>
+          </Card>
+
+          <Card className="border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-5">
+            <p className="text-sm text-slate-600 dark:text-slate-300">Registros históricos</p>
+            <p className="mt-2 text-3xl font-black text-slate-900 dark:text-slate-100">{subscriptionStats.historical}</p>
+          </Card>
+
+          <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-5">
+            <p className="text-sm text-red-700 dark:text-red-300">Expiradas</p>
+            <p className="mt-2 text-3xl font-black text-red-900 dark:text-red-200">
               {subscriptionStats.expired}
             </p>
           </Card>
 
-          <Card className="border-cyan-200 bg-cyan-50 p-5">
-            <p className="text-sm text-cyan-700">Planos ativos</p>
-            <p className="mt-2 text-3xl font-black text-cyan-900">
+          <Card className="border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950 p-5">
+            <p className="text-sm text-cyan-700 dark:text-cyan-300">Planos ativos</p>
+            <p className="mt-2 text-3xl font-black text-cyan-900 dark:text-cyan-200">
               {planStats.active}
             </p>
           </Card>
         </div>
 
-        <Card className="border-slate-200 p-5">
+        <Card className="border-slate-200 dark:border-slate-700 p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
                 Controle financeiro manual
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Use esta tela para alterar preços, limites, aprovar pagamentos e renovar acessos enquanto a cobrança automática não estiver ativa.
               </p>
             </div>
@@ -694,7 +724,7 @@ export default function AdminBillingPage() {
                 "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
                 activeTab === "subscriptions"
                   ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
               ].join(" ")}
             >
               <CreditCard className="h-4 w-4" />
@@ -708,12 +738,13 @@ export default function AdminBillingPage() {
                 "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
                 activeTab === "payments"
                   ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
               ].join(" ")}
             >
               <RefreshCw className="h-4 w-4" />
               Pagamentos Mercado Pago
             </button>
+            <button type="button" onClick={() => { setActiveTab("notifications"); loadNotificationLogs().catch(error => setError(error.message)); }} className={["flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition", activeTab === "notifications" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"].join(" ")}><MessageCircle className="h-4 w-4" />Avisos de cobrança</button>
 
             <button
               type="button"
@@ -722,7 +753,7 @@ export default function AdminBillingPage() {
                 "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
                 activeTab === "plans"
                   ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
               ].join(" ")}
             >
               <Settings2 className="h-4 w-4" />
@@ -736,7 +767,7 @@ export default function AdminBillingPage() {
                 "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
                 activeTab === "invites"
                   ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
               ].join(" ")}
             >
               <Gift className="h-4 w-4" />
@@ -746,14 +777,14 @@ export default function AdminBillingPage() {
         </Card>
 
         {error && (
-          <div className="flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="flex gap-3 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-4 text-sm text-red-700 dark:text-red-300">
             <AlertTriangle className="h-5 w-5 shrink-0" />
             {error}
           </div>
         )}
 
         {success && (
-          <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          <div className="flex gap-3 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-4 text-sm text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             {success}
           </div>
@@ -761,7 +792,7 @@ export default function AdminBillingPage() {
 
         {activeTab === "subscriptions" && (
           <>
-            <Card className="border-slate-200 p-4">
+            <Card className="border-slate-200 dark:border-slate-700 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 {[
                   ["all", "Todas"],
@@ -781,7 +812,7 @@ export default function AdminBillingPage() {
                       "rounded-full border px-3 py-1.5 text-xs font-bold transition",
                       statusFilter === value
                         ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800",
                     ].join(" ")}
                   >
                     {label}
@@ -792,20 +823,20 @@ export default function AdminBillingPage() {
 
             {loading ? (
               <Card className="flex items-center justify-center gap-3 p-10">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-                <p className="text-slate-600">Carregando assinaturas...</p>
+                <Loader2 className="h-5 w-5 animate-spin text-slate-500 dark:text-slate-400" />
+                <p className="text-slate-600 dark:text-slate-300">Carregando assinaturas...</p>
               </Card>
             ) : filteredSubscriptions.length === 0 ? (
-              <Card className="border-slate-200 p-10 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
-                  <CreditCard className="h-6 w-6 text-slate-500" />
+              <Card className="border-slate-200 dark:border-slate-700 p-10 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-900">
+                  <CreditCard className="h-6 w-6 text-slate-500 dark:text-slate-400" />
                 </div>
 
-                <h2 className="text-xl font-bold text-slate-900">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
                   Nenhuma assinatura encontrada
                 </h2>
 
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                   Quando alguém clicar em um plano, a solicitação aparecerá aqui.
                 </p>
               </Card>
@@ -819,7 +850,7 @@ export default function AdminBillingPage() {
                   return (
                     <Card
                       key={subscription.subscription_id}
-                      className="overflow-hidden border-slate-200"
+                      className="overflow-hidden border-slate-200 dark:border-slate-700"
                     >
                       <div className="grid gap-4 p-5 lg:grid-cols-[1.4fr_1fr_auto] lg:items-center">
                         <div>
@@ -835,22 +866,28 @@ export default function AdminBillingPage() {
                               )}
                             </span>
 
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                            <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
                               {subscription.gateway}
                             </span>
 
                             {subscription.gateway_reconciliation_status ? (
-                              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                              <span className="rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
                                 Reconciliação necessária
                               </span>
                             ) : null}
+
+                            {subscription.is_effective_subscription ? (
+                              <span className="rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">Assinatura efetiva</span>
+                            ) : subscription.is_historical_subscription ? (
+                              <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">Histórico / substituída</span>
+                            ) : null}
                           </div>
 
-                          <h3 className="mt-3 text-lg font-black text-slate-900">
+                          <h3 className="mt-3 text-lg font-black text-slate-900 dark:text-slate-100">
                             {subscription.user_name || "Aluno sem nome"}
                           </h3>
 
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
                             {subscription.user_email || "Sem e-mail"}
                           </p>
 
@@ -859,7 +896,7 @@ export default function AdminBillingPage() {
                           </p>
 
                           {subscription.gateway_reconciliation_status ? (
-                            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                            <div className="mt-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-3 text-xs text-amber-900 dark:text-amber-200">
                               <p className="font-black uppercase tracking-wide">Reconciliação financeira</p>
                               <p className="mt-1">Status: {subscription.gateway_reconciliation_status}</p>
                               <p className="mt-1 break-all">Mercado Pago: {subscription.gateway_subscription_id || subscription.gateway_payment_id || "Sem ID"}</p>
@@ -869,23 +906,23 @@ export default function AdminBillingPage() {
                           ) : null}
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Plano
                           </p>
 
-                          <p className="mt-1 font-bold text-slate-900">
+                          <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">
                             {subscription.plan_name}
                           </p>
 
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
                             {formatPriceFromCents(
                               subscription.plan_price_cents
                             )}{" "}
                             / mês
                           </p>
 
-                          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <Clock3 className="h-4 w-4" />
                             Vence em: {formatDate(subscription.current_period_end)}
                           </div>
@@ -897,7 +934,7 @@ export default function AdminBillingPage() {
                               variant="outline"
                               onClick={() => reconcileSubscription(subscription)}
                               disabled={isActionLoading}
-                              className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50"
+                              className="gap-2 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950"
                             >
                               {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                               Reconciliar gateway
@@ -945,7 +982,7 @@ export default function AdminBillingPage() {
                                 cancelSubscription(subscription)
                               }
                               disabled={isActionLoading}
-                              className="gap-2 border-red-200 text-red-700 hover:bg-red-50"
+                              className="gap-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
                             >
                               {isActionLoading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -966,38 +1003,38 @@ export default function AdminBillingPage() {
         )}
 
         {activeTab === "payments" && (
-          <Card className="overflow-hidden border-slate-200">
-            <div className="border-b border-slate-200 p-5">
-              <h2 className="text-lg font-black text-slate-900">Pagamentos registrados</h2>
-              <p className="mt-1 text-sm text-slate-500">A verificação consulta o Mercado Pago e nunca ativa uma assinatura manualmente.</p>
+          <Card className="overflow-hidden border-slate-200 dark:border-slate-700">
+            <div className="border-b border-slate-200 dark:border-slate-700 p-5">
+              <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">Pagamentos registrados</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A verificação consulta o Mercado Pago e nunca ativa uma assinatura manualmente.</p>
             </div>
             {loading ? (
-              <div className="flex items-center justify-center gap-3 p-10 text-slate-600"><Loader2 className="h-5 w-5 animate-spin" />Carregando pagamentos...</div>
+              <div className="flex items-center justify-center gap-3 p-10 text-slate-600 dark:text-slate-300"><Loader2 className="h-5 w-5 animate-spin" />Carregando pagamentos...</div>
             ) : payments.length === 0 ? (
-              <p className="p-10 text-center text-sm text-slate-500">Nenhum pagamento encontrado.</p>
+              <p className="p-10 text-center text-sm text-slate-500 dark:text-slate-400">Nenhum pagamento encontrado.</p>
             ) : (
-              <div className="divide-y divide-slate-200">
+              <div className="divide-y divide-slate-200 dark:divide-slate-700">
                 {payments.map(payment => {
                   const canReconcile = payment.gateway === "mercadopago"
-                    && (["pending", "failed"].includes(payment.status) || Boolean(payment.gateway_reconciliation_error));
+                    && (!payment.access_applied_at || ["pending", "failed"].includes(payment.status) || Boolean(payment.gateway_reconciliation_error));
                   const isActionLoading = actionLoadingId === payment.id;
                   return (
                     <div key={payment.id} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={["rounded-full border px-3 py-1 text-xs font-bold", getStatusBadge(payment.status)].join(" ")}>{payment.status}</span>
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">{payment.payment_method}</span>
+                          <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">{payment.payment_method}</span>
                         </div>
-                        <p className="mt-3 font-bold text-slate-900">{formatPriceFromCents(payment.amount_cents)} {payment.currency}</p>
-                        <p className="mt-1 break-all text-xs text-slate-500">Pagamento local: {payment.id}</p>
-                        <p className="mt-1 break-all text-xs text-slate-500">Mercado Pago: {payment.gateway_payment_id || "ID não registrado"}</p>
-                        <p className="mt-1 text-xs text-slate-500">Criado em {formatDate(payment.created_at)} · Acesso {payment.access_applied_at ? "aplicado" : "não aplicado"}</p>
-                        {payment.gateway_reconciliation_error ? <p className="mt-2 text-xs text-red-700">Falha anterior: {payment.gateway_reconciliation_error}</p> : null}
+                        <p className="mt-3 font-bold text-slate-900 dark:text-slate-100">{formatPriceFromCents(payment.amount_cents)} {payment.currency}</p>
+                        <p className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">Pagamento local: {payment.id}</p>
+                        <p className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">Mercado Pago: {payment.gateway_payment_id || "ID não registrado"}</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Criado em {formatDate(payment.created_at)} · Acesso {payment.access_applied_at ? "aplicado" : "não aplicado"}</p>
+                        {payment.gateway_reconciliation_error ? <p className="mt-2 text-xs text-red-700 dark:text-red-300">Falha anterior: {payment.gateway_reconciliation_error}</p> : null}
                       </div>
                       {canReconcile ? (
-                        <Button variant="outline" onClick={() => reconcilePayment(payment)} disabled={isActionLoading || !payment.gateway_payment_id} className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50">
+                        <Button variant="outline" onClick={() => reconcilePayment(payment)} disabled={isActionLoading || !payment.gateway_payment_id} className="gap-2 border-cyan-300 dark:border-cyan-800 text-cyan-800 dark:text-cyan-200 hover:bg-cyan-50 dark:hover:bg-cyan-950">
                           {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                          Verificar pagamento no Mercado Pago
+                          Reconciliar acesso
                         </Button>
                       ) : null}
                     </div>
@@ -1008,33 +1045,40 @@ export default function AdminBillingPage() {
           </Card>
         )}
 
+        {activeTab === "notifications" && (
+          <Card className="border-slate-200 dark:border-slate-700 p-5">
+            <div className="flex items-center justify-between gap-4"><div><h2 className="text-lg font-black text-slate-900 dark:text-slate-100">Avisos de cobrança</h2><p className="text-sm text-slate-500 dark:text-slate-400">{remindersEnabled ? "Integração WhatsApp habilitada." : "Modo simulação: nenhum WhatsApp é enviado."}</p></div><Button variant="outline" onClick={async () => { await runBillingRemindersMutation.mutateAsync(); await loadNotificationLogs(); }} disabled={runBillingRemindersMutation.isPending}>{runBillingRemindersMutation.isPending ? "Executando..." : "Executar agora"}</Button></div>
+            <div className="mt-5 space-y-3">{notificationLogs.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum aviso registrado.</p> : notificationLogs.map(log => <div key={log.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-sm"><div className="flex justify-between gap-3"><strong>{log.profiles?.nome || log.profiles?.email || "Aluno"}</strong><span>{log.status}</span></div><p className="mt-1 text-slate-600 dark:text-slate-300">{log.notification_type} · vencimento {formatDate(log.due_date)}</p>{log.error_message ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{log.error_message}</p> : null}{log.status === "failed" ? <Button variant="outline" size="sm" className="mt-2" disabled={!remindersEnabled || retryBillingReminderMutation.isPending} onClick={async () => { await retryBillingReminderMutation.mutateAsync({ notificationId: log.id }); await loadNotificationLogs(); }}>Reenviar com segurança</Button> : null}</div>)}</div>
+          </Card>
+        )}
+
         {activeTab === "plans" && (
           <>
             <div className="grid gap-4 md:grid-cols-3">
-              <Card className="border-slate-200 p-5">
-                <p className="text-sm text-slate-500">Total de planos</p>
-                <p className="mt-2 text-3xl font-black text-slate-900">
+              <Card className="border-slate-200 dark:border-slate-700 p-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Total de planos</p>
+                <p className="mt-2 text-3xl font-black text-slate-900 dark:text-slate-100">
                   {planStats.total}
                 </p>
               </Card>
 
-              <Card className="border-emerald-200 bg-emerald-50 p-5">
-                <p className="text-sm text-emerald-700">Ativos</p>
-                <p className="mt-2 text-3xl font-black text-emerald-900">
+              <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-5">
+                <p className="text-sm text-emerald-700 dark:text-emerald-300">Ativos</p>
+                <p className="mt-2 text-3xl font-black text-emerald-900 dark:text-emerald-200">
                   {planStats.active}
                 </p>
               </Card>
 
-              <Card className="border-cyan-200 bg-cyan-50 p-5">
-                <p className="text-sm text-cyan-700">Com limite de vagas</p>
-                <p className="mt-2 text-3xl font-black text-cyan-900">
+              <Card className="border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950 p-5">
+                <p className="text-sm text-cyan-700 dark:text-cyan-300">Com limite de vagas</p>
+                <p className="mt-2 text-3xl font-black text-cyan-900 dark:text-cyan-200">
                   {planStats.limited}
                 </p>
               </Card>
             </div>
 
-            <Card className="border-slate-200 p-5">
-              <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+            <Card className="border-slate-200 dark:border-slate-700 p-5">
+              <div className="flex items-start gap-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 text-sm leading-6 text-amber-800 dark:text-amber-200">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                 <p>
                   Alterações de preço valem somente para novos checkouts e não
@@ -1047,8 +1091,8 @@ export default function AdminBillingPage() {
 
             {loading ? (
               <Card className="flex items-center justify-center gap-3 p-10">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-                <p className="text-slate-600">Carregando planos...</p>
+                <Loader2 className="h-5 w-5 animate-spin text-slate-500 dark:text-slate-400" />
+                <p className="text-slate-600 dark:text-slate-300">Carregando planos...</p>
               </Card>
             ) : (
               <div className="grid gap-4 lg:grid-cols-3">
@@ -1062,14 +1106,14 @@ export default function AdminBillingPage() {
                     : 0;
 
                   return (
-                    <Card key={plan.id} className="border-slate-200 p-5">
+                    <Card key={plan.id} className="border-slate-200 dark:border-slate-700 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400">
                             <Edit3 className="h-4 w-4" />
                             {plan.slug}
                           </div>
-                          <h3 className="mt-2 text-xl font-black text-slate-900">
+                          <h3 className="mt-2 text-xl font-black text-slate-900 dark:text-slate-100">
                             {plan.name}
                           </h3>
                         </div>
@@ -1077,8 +1121,8 @@ export default function AdminBillingPage() {
                         <span
                           className={`rounded-full border px-3 py-1 text-xs font-bold ${
                             plan.is_active
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-slate-200 bg-slate-100 text-slate-600"
+                              ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                              : "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300"
                           }`}
                         >
                           {plan.is_active ? "Ativo" : "Inativo"}
@@ -1087,7 +1131,7 @@ export default function AdminBillingPage() {
 
                       <div className="mt-5 space-y-3">
                         <label className="block">
-                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Nome
                           </span>
                           <input
@@ -1095,40 +1139,40 @@ export default function AdminBillingPage() {
                             onChange={(event) =>
                               updatePlanForm(plan.id, { name: event.target.value })
                             }
-                            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                            className="mt-1 w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                           />
                         </label>
 
                         <label className="block">
-                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Ordem de exibição</span>
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ordem de exibição</span>
                           <input
                             type="number"
                             min="0"
                             value={form.displayOrder}
                             onChange={(event) => updatePlanForm(plan.id, { displayOrder: event.target.value })}
-                            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                            className="mt-1 w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                           />
                         </label>
 
                         <label className="block">
-                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Valor mensal
                           </span>
-                          <div className="mt-1 flex items-center rounded-2xl border border-slate-200 bg-white px-4 focus-within:border-slate-900">
-                            <span className="text-sm font-black text-slate-500">R$</span>
+                          <div className="mt-1 flex items-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 focus-within:border-slate-900 dark:focus-within:border-slate-400">
+                            <span className="text-sm font-black text-slate-500 dark:text-slate-400">R$</span>
                             <input
                               value={form.price}
                               onChange={(event) =>
                                 updatePlanForm(plan.id, { price: event.target.value })
                               }
                               placeholder="9,00"
-                              className="w-full bg-transparent px-3 py-3 text-sm text-slate-700 outline-none"
+                              className="w-full bg-transparent px-3 py-3 text-sm text-slate-700 dark:text-slate-300 outline-none"
                             />
                           </div>
                         </label>
 
                         <label className="block">
-                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Limite de assinaturas
                           </span>
                           <input
@@ -1139,7 +1183,7 @@ export default function AdminBillingPage() {
                               })
                             }
                             placeholder="Sem limite"
-                            className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                            className="mt-1 w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                           />
                           <p className="mt-1 text-xs text-slate-400">
                             Deixe em branco para plano sem limite.
@@ -1147,7 +1191,7 @@ export default function AdminBillingPage() {
                         </label>
 
                         <label className="block">
-                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Descrição pública
                           </span>
                           <textarea
@@ -1158,11 +1202,11 @@ export default function AdminBillingPage() {
                               })
                             }
                             rows={3}
-                            className="mt-1 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                            className="mt-1 w-full resize-none rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                           />
                         </label>
 
-                        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
                           <input
                             type="checkbox"
                             checked={form.isActive}
@@ -1175,7 +1219,7 @@ export default function AdminBillingPage() {
                           Plano ativo para novos checkouts
                         </label>
 
-                        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
                           <input
                             type="checkbox"
                             checked={form.isPublic}
@@ -1184,7 +1228,7 @@ export default function AdminBillingPage() {
                           Mostrar plano na tela pública
                         </label>
 
-                        <div className={`rounded-2xl border p-4 text-sm ${plan.requires_legacy_founder_eligibility ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                        <div className={`rounded-2xl border p-4 text-sm ${plan.requires_legacy_founder_eligibility ? "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-200" : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300"}`}>
                           <p className="font-bold">Elegibilidade de fundador</p>
                           <p className="mt-1 text-xs leading-5">
                             {plan.requires_legacy_founder_eligibility
@@ -1194,8 +1238,8 @@ export default function AdminBillingPage() {
                         </div>
                       </div>
 
-                      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex justify-between text-xs font-bold text-slate-500">
+                      <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                        <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
                           <span>Uso atual</span>
                           <span>
                             {used}
@@ -1203,14 +1247,14 @@ export default function AdminBillingPage() {
                           </span>
                         </div>
                         {max && (
-                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-900">
                             <div
                               className="h-full rounded-full bg-cyan-400"
                               style={{ width: `${percent}%` }}
                             />
                           </div>
                         )}
-                        <p className="mt-2 text-xs text-slate-500">
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                           {max
                             ? `${plan.remaining_slots ?? 0} vagas restantes.`
                             : "Plano sem limite definido."}
@@ -1239,13 +1283,13 @@ export default function AdminBillingPage() {
 
         {activeTab === "invites" && (
           <>
-            <Card className="border-slate-200 p-5">
+            <Card className="border-slate-200 dark:border-slate-700 p-5">
               <div className="flex flex-col gap-2">
-                <h2 className="text-lg font-bold text-slate-900">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
                   Criar convite de plano
                 </h2>
 
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   Use isso para liberar um plano especial para um e-mail específico.
                 </p>
               </div>
@@ -1257,7 +1301,7 @@ export default function AdminBillingPage() {
                 <select
                   value={selectedPlanSlug}
                   onChange={(event) => setSelectedPlanSlug(event.target.value)}
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                  className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                 >
                   {plans
                     .filter((plan) => plan.is_active)
@@ -1273,7 +1317,7 @@ export default function AdminBillingPage() {
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                   placeholder="email@exemplo.com"
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-900"
+                  className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                 />
 
                 <Button type="submit" disabled={creatingInvite} className="gap-2">
@@ -1288,23 +1332,23 @@ export default function AdminBillingPage() {
             </Card>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <Card className="border-slate-200 p-5">
-                <p className="text-sm text-slate-500">Total de convites</p>
-                <p className="mt-2 text-3xl font-black text-slate-900">
+              <Card className="border-slate-200 dark:border-slate-700 p-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Total de convites</p>
+                <p className="mt-2 text-3xl font-black text-slate-900 dark:text-slate-100">
                   {inviteStats.total}
                 </p>
               </Card>
 
-              <Card className="border-emerald-200 bg-emerald-50 p-5">
-                <p className="text-sm text-emerald-700">Disponíveis</p>
-                <p className="mt-2 text-3xl font-black text-emerald-900">
+              <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-5">
+                <p className="text-sm text-emerald-700 dark:text-emerald-300">Disponíveis</p>
+                <p className="mt-2 text-3xl font-black text-emerald-900 dark:text-emerald-200">
                   {inviteStats.available}
                 </p>
               </Card>
 
-              <Card className="border-slate-200 bg-slate-50 p-5">
-                <p className="text-sm text-slate-500">Usados</p>
-                <p className="mt-2 text-3xl font-black text-slate-900">
+              <Card className="border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Usados</p>
+                <p className="mt-2 text-3xl font-black text-slate-900 dark:text-slate-100">
                   {inviteStats.used}
                 </p>
               </Card>
@@ -1312,20 +1356,20 @@ export default function AdminBillingPage() {
 
             {loading ? (
               <Card className="flex items-center justify-center gap-3 p-10">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-                <p className="text-slate-600">Carregando convites...</p>
+                <Loader2 className="h-5 w-5 animate-spin text-slate-500 dark:text-slate-400" />
+                <p className="text-slate-600 dark:text-slate-300">Carregando convites...</p>
               </Card>
             ) : invites.length === 0 ? (
-              <Card className="border-slate-200 p-10 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
-                  <Gift className="h-6 w-6 text-slate-500" />
+              <Card className="border-slate-200 dark:border-slate-700 p-10 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-900">
+                  <Gift className="h-6 w-6 text-slate-500 dark:text-slate-400" />
                 </div>
 
-                <h2 className="text-xl font-bold text-slate-900">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
                   Nenhum convite criado
                 </h2>
 
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                   Crie convites para liberar planos especiais por e-mail.
                 </p>
               </Card>
@@ -1338,7 +1382,7 @@ export default function AdminBillingPage() {
                   return (
                     <Card
                       key={invite.invite_id}
-                      className="overflow-hidden border-slate-200"
+                      className="overflow-hidden border-slate-200 dark:border-slate-700"
                     >
                       <div className="grid gap-4 p-5 lg:grid-cols-[1.3fr_1fr_auto] lg:items-center">
                         <div>
@@ -1347,41 +1391,41 @@ export default function AdminBillingPage() {
                               className={[
                                 "rounded-full border px-3 py-1 text-xs font-bold",
                                 used
-                                  ? "border-slate-200 bg-slate-100 text-slate-600"
-                                  : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                                  ? "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300"
+                                  : "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300",
                               ].join(" ")}
                             >
                               {used ? "Usado" : "Disponível"}
                             </span>
 
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                            <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
                               {invite.plan_slug}
                             </span>
                           </div>
 
-                          <h3 className="mt-3 text-lg font-black text-slate-900">
+                          <h3 className="mt-3 text-lg font-black text-slate-900 dark:text-slate-100">
                             {invite.email ?? "Sem e-mail"}
                           </h3>
 
-                          <p className="mt-1 text-sm text-slate-500">
+                          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                             Criado em {formatDate(invite.created_at)}
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Plano liberado
                           </p>
 
-                          <p className="mt-1 font-bold text-slate-900">
+                          <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">
                             {invite.plan_name}
                           </p>
 
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
                             {formatPriceFromCents(invite.plan_price_cents)} / mês
                           </p>
 
-                          <p className="mt-2 text-xs text-slate-500">
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                             Expira: {formatDate(invite.expires_at)}
                           </p>
                         </div>
@@ -1392,7 +1436,7 @@ export default function AdminBillingPage() {
                               variant="outline"
                               onClick={() => deleteInvite(invite.invite_id)}
                               disabled={isDeleting}
-                              className="gap-2 border-red-200 text-red-700 hover:bg-red-50"
+                              className="gap-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
                             >
                               {isDeleting ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />

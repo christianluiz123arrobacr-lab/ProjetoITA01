@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -23,8 +23,9 @@ import {
 import type { Question } from "@/types/question";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { trpc } from "@/lib/trpc";
-import { KATEX_RENDER_OPTIONS } from "@/lib/mathRendering";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
 import { buildQuestionRichContent, groupRichQuestionContent, parseRichQuestionText, serializeRichQuestionText } from "@/lib/richQuestionContent";
+import { ChemistryResolutionBlock } from "@/components/chemistry/ChemistryResolutionBlock";
 
 export type QuizCompletionData = {
   totalQuestions: number;
@@ -43,6 +44,7 @@ type InteractiveQuizProps = {
   initialAnswers?: Record<number, { selectedOption: string; isCorrect: boolean; correctOption: string; resolution?: any[] }>;
   onComplete?: (data: QuizCompletionData) => void;
   onQuestionAnswered?: (questionId: string, isCorrect: boolean) => void;
+  optionFeedbackTheme?: "question-bank";
 };
 
 type ResolutionMetaRow = {
@@ -107,6 +109,7 @@ function formatDifficultyLabel(value?: string | null) {
   if (normalized === "facil") return "Fácil";
   if (normalized === "medio") return "Médio";
   if (normalized === "dificil") return "Difícil";
+  if (normalized === "muito_dificil" || normalized === "muito dificil") return "Muito difícil";
 
   return value || "Dificuldade";
 }
@@ -160,6 +163,13 @@ function getDifficultyClasses(value?: string | null) {
     };
   }
 
+  if (normalized === "muito_dificil" || normalized === "muito dificil") {
+    return {
+      pill: "bg-violet-50 text-violet-700 border-violet-200",
+      result: "bg-violet-50 border-violet-200",
+    };
+  }
+
   return {
     pill: "bg-slate-50 text-slate-700 border-slate-200",
     result: "bg-slate-50 border-slate-200",
@@ -185,9 +195,11 @@ function MetaPill({
 function MarkdownContent({
   children,
   large = false,
+  className = "",
 }: {
   children: string;
   large?: boolean;
+  className?: string;
 }) {
   return (
     <div
@@ -195,7 +207,7 @@ function MarkdownContent({
         large
           ? "prose-p:my-3 text-base md:text-lg"
           : "prose-p:my-2 text-sm md:text-base"
-      }`}
+      } ${className}`}
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
@@ -212,7 +224,7 @@ function MarkdownContent({
           li: ({ children }) => <li className="mb-1">{children}</li>,
         }}
       >
-        {serializeRichQuestionText(parseRichQuestionText(children))}
+        {normalizeMathSource(serializeRichQuestionText(parseRichQuestionText(children)))}
       </ReactMarkdown>
     </div>
   );
@@ -224,6 +236,7 @@ export function InteractiveQuiz({
   initialAnswers = {},
   onComplete,
   onQuestionAnswered,
+  optionFeedbackTheme,
 }: InteractiveQuizProps) {
   const { user } = useSupabaseAuth();
   const trpcUtils = trpc.useUtils();
@@ -261,7 +274,10 @@ export function InteractiveQuiz({
   const [reportError, setReportError] = useState("");
 
   const question = questions[currentQuestion] ?? null;
-  const questionContent = question ? groupRichQuestionContent(buildQuestionRichContent(question)) : [];
+  const questionContent = useMemo(
+    () => question ? groupRichQuestionContent(buildQuestionRichContent(question)) : [],
+    [question]
+  );
 
   const selectedAnswer = answersByQuestion[currentQuestion] ?? null;
   const answered = selectedAnswer !== null;
@@ -412,14 +428,7 @@ export function InteractiveQuiz({
     }
   }, [completionData, hasSentCompletion, isQuizComplete, onComplete]);
 
-  useEffect(() => {
-    if (!question?.id || !answered) return;
-    if (answerStatsByQuestionId[question.id]) return;
-
-    loadAnswerStats(question.id);
-  }, [answered, answerStatsByQuestionId, question?.id]);
-
-  const loadAnswerStats = async (questionId: string) => {
+  const loadAnswerStats = useCallback(async (questionId: string) => {
     if (!questionId) return;
 
     setAnswerStatsLoadingQuestionId(questionId);
@@ -438,7 +447,14 @@ export function InteractiveQuiz({
         current === questionId ? null : current
       );
     }
-  };
+  }, [trpcUtils]);
+
+  useEffect(() => {
+    if (!question?.id || !answered) return;
+    if (answerStatsByQuestionId[question.id]) return;
+
+    loadAnswerStats(question.id);
+  }, [answered, answerStatsByQuestionId, loadAnswerStats, question?.id]);
 
   const saveAttempt = async (optionId: string) => {
     if (!user?.id || !question) {
@@ -550,9 +566,14 @@ export function InteractiveQuiz({
   const handleRestart = () => {
     setCurrentQuestion(0);
     setAnswersByQuestion({});
+    setAnswerResultsByQuestion({});
+    setResolutionByQuestion({});
     setShowExplanationByQuestion({});
     setQuestionStartedAt(Date.now());
     setHasSentCompletion(false);
+    setSubmittingOptionId(null);
+    setAnswerStatsLoadingQuestionId(null);
+    setAnswerError("");
     setReportOpen(false);
     setReportType("enunciado");
     setReportComment("");
@@ -698,6 +719,7 @@ export function InteractiveQuiz({
           {question.options.map((option) => {
             const isSelected = selectedAnswer === option.id;
             const isCorrectOption = option.id === currentAnswerResult?.correctOption;
+            const usesQuestionBankFeedback = optionFeedbackTheme === "question-bank";
             const optionCount = currentAnswerStats?.counts[option.id] ?? 0;
             const optionPercentage =
               currentAnswerStats?.percentages[option.id] ?? 0;
@@ -714,6 +736,47 @@ export function InteractiveQuiz({
                 : isCorrectOption
                   ? "border-emerald-300 bg-emerald-50 text-emerald-900"
                   : "border-slate-200 bg-slate-50 text-slate-600";
+            const questionBankOptionDarkClass = usesQuestionBankFeedback && answered
+              ? isCorrectOption
+                ? "dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"
+                : isSelected
+                  ? "dark:border-rose-700 dark:bg-rose-950 dark:text-rose-100"
+                  : "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              : "";
+
+            const answerStatsClass = !usesQuestionBankFeedback
+              ? "border-white/70 bg-white/75"
+              : isCorrectOption
+                ? "border-white/70 bg-white/75 dark:border-emerald-800 dark:bg-emerald-950"
+                : isSelected
+                  ? "border-white/70 bg-white/75 dark:border-rose-800 dark:bg-rose-950"
+                  : "border-white/70 bg-white/75 dark:border-slate-700 dark:bg-slate-950";
+            const answerStatsTextClass = !usesQuestionBankFeedback
+              ? "text-slate-600"
+              : isCorrectOption
+                ? "text-slate-600 dark:text-emerald-100"
+                : isSelected
+                  ? "text-slate-600 dark:text-rose-100"
+                  : "text-slate-600 dark:text-slate-200";
+            const answerStatsValueClass = !usesQuestionBankFeedback
+              ? "text-slate-800"
+              : isCorrectOption
+                ? "text-slate-800 dark:text-emerald-50"
+                : isSelected
+                  ? "text-slate-800 dark:text-rose-50"
+                  : "text-slate-800 dark:text-slate-100";
+            const answerStatsTrackClass = !usesQuestionBankFeedback
+              ? "bg-slate-200"
+              : isCorrectOption
+                ? "bg-slate-200 dark:bg-emerald-900"
+                : isSelected
+                  ? "bg-slate-200 dark:bg-rose-900"
+                  : "bg-slate-200 dark:bg-slate-800";
+            const answerStatsFillClass = isCorrectOption
+              ? `bg-emerald-500 ${usesQuestionBankFeedback ? "dark:bg-emerald-400" : ""}`
+              : isSelected
+                ? `bg-rose-500 ${usesQuestionBankFeedback ? "dark:bg-rose-400" : ""}`
+                : `bg-violet-400 ${usesQuestionBankFeedback ? "dark:bg-violet-400" : ""}`;
 
             return (
               <button
@@ -723,7 +786,7 @@ export function InteractiveQuiz({
                 disabled={answered || submittingOptionId !== null}
                 aria-pressed={isSelected || isSubmitting}
                 aria-busy={isSubmitting}
-                className={`relative z-10 w-full touch-manipulation rounded-2xl border p-4 text-left transition-all disabled:cursor-not-allowed ${optionClass}`}
+                className={`relative z-10 w-full touch-manipulation rounded-2xl border p-4 text-left transition-all disabled:cursor-not-allowed ${optionClass} ${questionBankOptionDarkClass}`}
               >
                 <div className="flex items-start gap-4">
                   <div
@@ -732,7 +795,9 @@ export function InteractiveQuiz({
                         ? "bg-emerald-600 text-white"
                         : answered && isSelected && !isCorrectOption
                           ? "bg-rose-600 text-white"
-                          : "bg-violet-50 text-violet-700 border border-violet-200"
+                          : `bg-violet-50 text-violet-700 border border-violet-200 ${
+                            usesQuestionBankFeedback ? "dark:bg-slate-800 dark:text-violet-200 dark:border-slate-600" : ""
+                          }`
                     }`}
                   >
                     {option.label}
@@ -740,25 +805,31 @@ export function InteractiveQuiz({
 
                   <div className="flex-1 min-w-0">
                     {option.text ? (
-                      <MarkdownContent>{option.text}</MarkdownContent>
+                      <MarkdownContent
+                        className={usesQuestionBankFeedback ? "dark:prose-invert dark:[&_.katex]:text-inherit" : ""}
+                      >
+                        {option.text}
+                      </MarkdownContent>
                     ) : null}
 
                     {option.imageUrl ? (
                       <img
                         src={option.imageUrl}
                         alt={`Alternativa ${option.label}`}
-                        className="mt-3 max-h-48 max-w-full object-contain rounded-xl border border-slate-200 bg-white"
+                        className={`mt-3 max-h-48 max-w-full object-contain rounded-xl border border-slate-200 bg-white ${
+                          usesQuestionBankFeedback ? "dark:border-slate-700 dark:bg-slate-900" : ""
+                        }`}
                       />
                     ) : null}
 
                     {answered ? (
-                      <div className="mt-4 rounded-2xl border border-white/70 bg-white/75 p-3">
+                      <div className={`mt-4 rounded-2xl border p-3 ${answerStatsClass}`}>
                         <div className="flex items-center justify-between gap-3 mb-2">
-                          <span className="text-xs font-bold text-slate-600">
+                          <span className={`text-xs font-bold ${answerStatsTextClass}`}>
                             Respostas nessa alternativa
                           </span>
 
-                          <span className="text-xs font-extrabold text-slate-800">
+                          <span className={`text-xs font-extrabold ${answerStatsValueClass}`}>
                             {answerStatsLoading
                               ? "carregando..."
                               : currentAnswerStats && currentAnswerStats.total > 0
@@ -767,15 +838,9 @@ export function InteractiveQuiz({
                           </span>
                         </div>
 
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                        <div className={`h-2 w-full overflow-hidden rounded-full ${answerStatsTrackClass}`}>
                           <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              isCorrectOption
-                                ? "bg-emerald-500"
-                                : isSelected
-                                  ? "bg-rose-500"
-                                  : "bg-violet-400"
-                            }`}
+                            className={`h-full rounded-full transition-all duration-500 ${answerStatsFillClass}`}
                             style={{
                               width:
                                 currentAnswerStats && currentAnswerStats.total > 0
@@ -785,7 +850,15 @@ export function InteractiveQuiz({
                           />
                         </div>
 
-                        <p className="mt-2 text-[11px] font-medium text-slate-500">
+                        <p className={`mt-2 text-[11px] font-medium ${
+                          usesQuestionBankFeedback
+                            ? isCorrectOption
+                              ? "text-slate-500 dark:text-emerald-200"
+                              : isSelected
+                                ? "text-slate-500 dark:text-rose-200"
+                                : "text-slate-500 dark:text-slate-300"
+                            : "text-slate-500"
+                        }`}>
                           {currentAnswerStats && currentAnswerStats.total > 0
                             ? `${optionCount} de ${currentAnswerStats.total} respostas registradas`
                             : "A estatística aparece quando houver respostas registradas."}
@@ -874,6 +947,9 @@ export function InteractiveQuiz({
                   {(resolutionByQuestion[currentQuestion]?.map(block => ({ type: block.tipo, content: block.texto, imageUrl: block.url_imagem, order: block.ordem ?? 0 })) ?? question.explanationBlocks ?? [])
                     .sort((a, b) => a.order - b.order)
                     .map((block, index) => {
+                      if (block.type === "equacao_quimica" || block.type === "molecula") {
+                        return <ChemistryResolutionBlock key={`${block.type}-${block.order}-${index}`} block={{ tipo: block.type, texto: block.content }} />;
+                      }
                       if (block.type === "imagem" && block.imageUrl) {
                         return (
                           <div

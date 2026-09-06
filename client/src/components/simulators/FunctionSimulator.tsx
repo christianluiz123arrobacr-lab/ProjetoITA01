@@ -487,11 +487,11 @@ export function FunctionSimulator() {
 
   return (
     <section className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-      <aside className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <aside className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-black text-slate-900">Funções</h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="font-black text-slate-900 dark:text-slate-100">Funções</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Até cinco gráficos simultâneos
             </p>
           </div>
@@ -503,26 +503,26 @@ export function FunctionSimulator() {
           {functions.map((item, index) => (
             <div
               key={index}
-              className={`rounded-2xl border p-3 ${selectedIndex === index ? "border-blue-300 bg-blue-50/40" : "border-slate-200"}`}
+              className={`rounded-2xl border p-3 ${selectedIndex === index ? "border-blue-300 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-950/40" : "border-slate-200 dark:border-slate-700 dark:bg-slate-800/60"}`}
             >
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setSelectedIndex(index)}
-                  className="font-black text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="font-black text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-100"
                   aria-label={`Selecionar ${FUNCTION_NAMES[index]} de x`}
                 >
                   <span style={{ color: item.color }}>
                     {FUNCTION_NAMES[index]}(x)
                   </span>
                 </button>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   — {COLOR_NAMES[index]}
                 </span>
                 <div className="ml-auto flex gap-1">
                   <button
                     type="button"
-                    className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-300 dark:hover:bg-slate-700"
                     onClick={() =>
                       setFunction(index, { visible: !item.visible })
                     }
@@ -537,7 +537,7 @@ export function FunctionSimulator() {
                   {functions.length > 1 && (
                     <button
                       type="button"
-                      className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-500"
+                      className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-rose-300 dark:hover:bg-rose-950/50"
                       onClick={() => {
                         setFunctions(current =>
                           current.filter((_, i) => i !== index)
@@ -554,7 +554,7 @@ export function FunctionSimulator() {
                 </div>
               </div>
               <label
-                className="mt-2 block text-xs font-bold text-slate-700"
+                className="mt-2 block text-xs font-bold text-slate-700 dark:text-slate-300"
                 htmlFor={`function-${index}`}
               >
                 Expressão de {FUNCTION_NAMES[index]}(x)
@@ -571,7 +571,7 @@ export function FunctionSimulator() {
                   parsed[index].error ? `function-error-${index}` : undefined
                 }
                 placeholder="Ex.: sen(x) + 2"
-                className="mt-1 h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-blue-900"
               />
               {parsed[index].error && (
                 <p
@@ -597,14 +597,14 @@ export function FunctionSimulator() {
             {notice}
           </p>
         )}
-        <details className="rounded-2xl border border-slate-200 p-3" open>
-          <summary className="cursor-pointer font-bold text-slate-800">
+        <details className="rounded-2xl border border-slate-200 p-3 dark:border-slate-700 dark:bg-slate-800/60" open>
+          <summary className="cursor-pointer font-bold text-slate-800 dark:text-slate-100">
             Exemplos
           </summary>
           <div className="mt-3 space-y-3">
             {Object.entries(EXAMPLES).map(([group, examples]) => (
               <div key={group}>
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   {group}
                 </p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
@@ -613,7 +613,7 @@ export function FunctionSimulator() {
                       key={example}
                       type="button"
                       onClick={() => useExample(example)}
-                      className="rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500"
+                      className="rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-blue-950 dark:hover:text-blue-300"
                     >
                       {example}
                     </button>
@@ -626,7 +626,7 @@ export function FunctionSimulator() {
       </aside>
 
       <div className="min-w-0 space-y-4">
-        <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Button
               size="icon"
@@ -681,7 +681,7 @@ export function FunctionSimulator() {
               )}
             </Button>
           </div>
-          <div className="relative h-[420px] min-h-[380px] overflow-hidden rounded-2xl border border-slate-200 bg-white sm:h-[560px]">
+          <div className="relative h-[420px] min-h-[380px] overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-600 sm:h-[560px]">
             <canvas
               ref={canvasRef}
               className="h-full w-full touch-none cursor-crosshair"
@@ -701,15 +701,15 @@ export function FunctionSimulator() {
               onPointerCancel={releasePointer}
             />
           </div>
-          <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+          <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               Rastrear x ={" "}
               <input
                 type="number"
                 step="any"
                 value={Number(trackerX.toFixed(4))}
                 onChange={event => setTrackerX(Number(event.target.value) || 0)}
-                className="h-10 w-28 rounded-lg border border-slate-300 px-2 font-mono font-normal focus:ring-2 focus:ring-blue-500"
+                className="h-10 w-28 rounded-lg border border-slate-300 bg-white px-2 font-mono font-normal text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
               />
             </label>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
@@ -732,8 +732,8 @@ export function FunctionSimulator() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
             Leitura didática de {FUNCTION_NAMES[selectedIndex]}(x)
           </h2>
           <p className="mt-1 break-words font-mono text-sm text-blue-700">
@@ -741,7 +741,7 @@ export function FunctionSimulator() {
           </p>
           {selected ? (
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 text-sm text-slate-700">
+              <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
                 <p>
                   <strong>f(0):</strong>{" "}
                   {formatNumber(safeEvaluate(selected, 0))}
@@ -753,7 +753,7 @@ export function FunctionSimulator() {
                     : `(0, ${formatNumber(safeEvaluate(selected, 0))})`}
                 </p>
                 {visibleDomainIssue && (
-                  <p className="rounded-xl bg-amber-50 p-3 font-semibold text-amber-800">
+                  <p className="rounded-xl bg-amber-50 p-3 font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
                     A função não está definida em parte do intervalo atual.
                   </p>
                 )}
@@ -768,7 +768,7 @@ export function FunctionSimulator() {
                   Valores aproximados da função selecionada
                 </caption>
                 <thead>
-                  <tr className="bg-slate-100 text-slate-700">
+                  <tr className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     <th className="p-2 text-left">x</th>
                     <th className="p-2 text-left">
                       {FUNCTION_NAMES[selectedIndex]}(x)
@@ -777,7 +777,7 @@ export function FunctionSimulator() {
                 </thead>
                 <tbody>
                   {tableValues.map(row => (
-                    <tr key={row.x} className="border-t border-slate-100">
+                    <tr key={row.x} className="border-t border-slate-100 dark:border-slate-700">
                       <td className="p-2">{row.x}</td>
                       <td className="p-2">{formatNumber(row.y)}</td>
                     </tr>
