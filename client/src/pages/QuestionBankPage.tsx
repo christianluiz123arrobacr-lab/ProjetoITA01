@@ -1319,30 +1319,30 @@ export default function QuestionBankPage() {
                   </div>
                 </div>
 
-                <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center lg:justify-end">
-                  <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                <div className="grid w-full grid-cols-1 gap-3 xl:w-auto xl:shrink-0 xl:grid-cols-[auto_auto] xl:items-center">
+                  <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
                     <Button
                       variant="outline"
                       onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
                       disabled={filteredQuestions.length === 0 || authLoading || !user}
-                      className="h-9 rounded-xl px-4 text-sm sm:flex-1 lg:flex-none"
+                      className="h-9 shrink-0 rounded-xl px-4 text-sm sm:flex-1 xl:flex-none"
                     >
                       <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
                     </Button>
                     <Button
                       onClick={handleExportPdf}
                       disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
-                      className="h-9 rounded-lg bg-blue-600 px-4 text-sm hover:bg-blue-700 sm:flex-1 lg:flex-none"
+                      className="h-9 shrink-0 rounded-lg bg-blue-600 px-4 text-sm hover:bg-blue-700 sm:flex-1 xl:flex-none"
                     >
                       {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
                       {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
                     </Button>
                   </div>
-                  <div className="flex w-full border-t border-slate-100 pt-3 sm:justify-end lg:w-auto lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
+                  <div className="flex w-full justify-end border-t border-slate-100 pt-3 xl:w-auto xl:border-l xl:border-t-0 xl:pl-3 xl:pt-0">
                     <Button
                       variant="outline"
                       onClick={clearAllFilters}
-                      className="h-9 rounded-xl px-4 text-sm text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                      className="h-9 shrink-0 rounded-xl px-4 text-sm text-rose-700 hover:bg-rose-50 hover:text-rose-800"
                     >
                       Limpar filtros
                     </Button>
