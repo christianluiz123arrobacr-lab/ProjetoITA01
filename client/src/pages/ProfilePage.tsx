@@ -742,6 +742,8 @@ export default function ProfilePage() {
   const { user, loading: authLoading, signOut } = useSupabaseAuth();
   const trpcUtils = trpc.useUtils();
   const updateMyProfileMutation = trpc.auth.updateMyProfile.useMutation();
+  const legalConfig = trpc.legal.publicConfig.useQuery();
+  const whatsappConsentMutation = trpc.legal.setWhatsAppConsent.useMutation();
   const [, setLocation] = useLocation();
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -838,10 +840,13 @@ export default function ProfilePage() {
         provaAlvo: form.prova_alvo.trim() || null,
         focoAtual: form.foco_atual.trim() || null,
         metaSemanalQuestoes: metaSemanal,
-        billingWhatsappOptIn: form.billing_whatsapp_opt_in,
       });
 
-      setProfile(data as ProfileRow);
+      if (form.billing_whatsapp_opt_in !== Boolean(profile?.billing_whatsapp_opt_in)) {
+        await whatsappConsentMutation.mutateAsync({ granted: form.billing_whatsapp_opt_in });
+      }
+
+      setProfile({ ...(data as ProfileRow), billing_whatsapp_opt_in: form.billing_whatsapp_opt_in });
       setEditing(false);
       setSuccessMessage("Perfil salvo com sucesso.");
     } catch (err) {
@@ -1366,7 +1371,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"><input type="checkbox" checked={form.billing_whatsapp_opt_in} onChange={event => updateField("billing_whatsapp_opt_in", event.target.checked)} className="mt-1" />Quero receber pelo WhatsApp avisos sobre pagamento, vencimento e acesso ao Projeto Vetor.</label>
+                  {(legalConfig.data?.whatsappConsentAvailable || profile?.billing_whatsapp_opt_in) && <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><input type="checkbox" checked={form.billing_whatsapp_opt_in} onChange={event => updateField("billing_whatsapp_opt_in", event.target.checked)} disabled={!legalConfig.data?.whatsappConsentAvailable && !form.billing_whatsapp_opt_in} className="mt-1 h-4 w-4" /><span>Quero receber comunicações do Projeto Vetor pelo WhatsApp.{!legalConfig.data?.whatsappConsentAvailable && profile?.billing_whatsapp_opt_in ? <small className="mt-1 block text-slate-500 dark:text-slate-400">A integração está indisponível; você ainda pode retirar esta autorização.</small> : null}</span></label>}
 
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">

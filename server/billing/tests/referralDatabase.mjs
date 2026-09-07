@@ -18,7 +18,8 @@ export async function createReferralTestDatabase() {
         f.startsWith("20260718") ||
         f.startsWith("20260728") ||
         f.startsWith("202608280001") ||
-        f.startsWith("20260906")
+        f.startsWith("20260906") ||
+        f.startsWith("20260907")
     )) {
     try {
       await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));

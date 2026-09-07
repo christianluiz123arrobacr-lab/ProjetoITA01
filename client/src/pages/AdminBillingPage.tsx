@@ -140,7 +140,7 @@ type StatusFilter =
   | "canceled"
   | "failed"
   | "reconciliation";
-type AdminBillingTab = "subscriptions" | "payments" | "plans" | "invites" | "notifications";
+type AdminBillingTab = "subscriptions" | "payments" | "plans" | "invites" | "notifications" | "referrals";
 type BillingNotificationLog = { id: string; notification_type: string; due_date: string; status: string; error_message: string | null; created_at: string; sent_at: string | null; profiles?: { nome?: string | null; email?: string | null } | null };
 
 function formatDate(date?: string | null) {
@@ -644,7 +644,6 @@ export default function AdminBillingPage() {
         title="Assinaturas"
         subtitle="Gerencie planos, preços, limites de vagas, renovações manuais e solicitações de acesso."
       >
-        <AdminReferralProgram />
         <div className="grid gap-4 md:grid-cols-5">
           <Card className="border-slate-200 dark:border-slate-700 p-5">
             <p className="text-sm text-slate-500 dark:text-slate-400">Solicitações</p>
@@ -703,7 +702,7 @@ export default function AdminBillingPage() {
               </p>
             </div>
 
-            <Button
+            {activeTab !== "referrals" && <Button
               variant="outline"
               onClick={refreshActiveTab}
               disabled={loading || refreshing}
@@ -715,7 +714,7 @@ export default function AdminBillingPage() {
                 <RefreshCw className="h-4 w-4" />
               )}
               Atualizar
-            </Button>
+            </Button>}
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -774,6 +773,15 @@ export default function AdminBillingPage() {
             >
               <Gift className="h-4 w-4" />
               Convites
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("referrals")}
+              className={["flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition", activeTab === "referrals" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"].join(" ")}
+            >
+              <Gift className="h-4 w-4" />
+              Indique e Ganhe
             </button>
           </div>
         </Card>
@@ -1003,6 +1011,8 @@ export default function AdminBillingPage() {
             )}
           </>
         )}
+
+        {activeTab === "referrals" && <AdminReferralProgram />}
 
         {activeTab === "payments" && (
           <Card className="overflow-hidden border-slate-200 dark:border-slate-700">

@@ -22,6 +22,18 @@ async function user(email = randomUUID() + "@example.test", role = "student") {
   return id;
 }
 const admin = await user("admin@example.test", "admin");
+const legalUser = await user("legal@example.test");
+await db.query("select record_legal_acceptance($1,'2026-09-07','2026-09-07','existing_user_update')", [legalUser]);
+await db.query("select record_legal_acceptance($1,'2026-09-07','2026-09-07','existing_user_update')", [legalUser]);
+ok((await one("select count(*)::int as n from legal_document_acceptances where user_id=$1", [legalUser])).n, 1, "Aceite legal versionado é idempotente");
+await db.query("select record_whatsapp_consent($1,'2026-09-07',true,'profile_settings')", [legalUser]);
+await db.query("select record_whatsapp_consent($1,'2026-09-07',false,'profile_settings')", [legalUser]);
+ok([(await one("select billing_whatsapp_opt_in as value from profiles where id=$1", [legalUser])).value, (await one("select count(*)::int as n from whatsapp_consent_events where user_id=$1", [legalUser])).n], [false, 2], "Consentimento de WhatsApp registra concessão e revogação");
+await db.exec("set role authenticated");
+await assert.rejects(db.query("select * from legal_document_acceptances"), /permission denied/);
+await assert.rejects(db.query("select record_legal_acceptance($1,'x','x','existing_user_update')", [legalUser]), /permission denied/);
+checks += 2;
+await db.exec("reset role");
 const plan = (
   await one(
     "insert into billing_plans(slug,name,price_cents,max_active_subscriptions) values('test','Plano teste',1000,10) returning id"

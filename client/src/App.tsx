@@ -12,6 +12,9 @@ import SubscriptionGuard from "./components/SubscriptionGuard";
 import { isAdminPath, normalizeLegacyAdminPath } from "./lib/privateRouteAccess";
 import StudentSidebar from "./components/layout/StudentSidebar";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import LegalAcceptanceGuard from "./components/legal/LegalAcceptanceGuard";
+import LegalFooter from "./components/legal/LegalFooter";
+import LegalPage from "./pages/LegalPage";
 
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import {
@@ -834,6 +837,10 @@ function Router() {
       <Route path="/cadastro" component={RegisterPage} />
       <Route path="/planos" component={PricingPage} />
       <Route path="/assinatura-pendente" component={SubscriptionPendingPage} />
+      <Route path="/termos-de-uso">{() => <LegalPage kind="terms" />}</Route>
+      <Route path="/politica-de-privacidade">{() => <LegalPage kind="privacy" />}</Route>
+      <Route path="/assinaturas-cancelamento-e-reembolso">{() => <LegalPage kind="billing" />}</Route>
+      <Route path="/regras-indique-e-ganhe">{() => <LegalPage kind="referrals" />}</Route>
 
       {/* Todo o resto exige login + assinatura, com exceção de admin liberado pelo guard */}
       <Route>
@@ -849,7 +856,10 @@ function App() {
       <ThemeProvider>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <LegalAcceptanceGuard>
+            <Router />
+            <LegalFooter />
+          </LegalAcceptanceGuard>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -47,6 +47,7 @@ import { normalizeVetText } from "../shared/vet/vetEngine.js";
 import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetContent, postgrestAliasFilter, prioritizeVetCandidates } from "./vet/vetQuestionSelection.js";
 import { fetchAllQuestionPages } from "./questions/questionPagination.js";
 import { setPublicQuestionPublication } from "./publicQuestions.js";
+import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
 
 const notebookPaperSchema = z.object({ size: z.enum(["a5", "a4", "a3", "infinite"]), lined: z.boolean() });
 const stableVetOrder = (seed: string, value: string) => Array.from(`${seed}:${value}`).reduce((hash, char) => ((hash * 31) ^ char.charCodeAt(0)) >>> 0, 2166136261);
@@ -384,6 +385,7 @@ export const appRouter = router({
   }),
   system: systemRouter,
   referrals: referralRouter,
+  legal: legalRouter,
 
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
@@ -395,6 +397,7 @@ export const appRouter = router({
           nome: z.string().min(2, "Nome muito curto"),
           telefone: z.string().min(8, "Digite um telefone válido"),
           billingWhatsappOptIn: z.boolean().optional().default(false),
+          legalAccepted: z.literal(true),
           email: z.string().email("E-mail inválido"),
           senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
         })
@@ -464,6 +467,19 @@ export const appRouter = router({
           });
         }
 
+        try {
+          await recordLegalAcceptance(data.user.id, "registration");
+          if (input.billingWhatsappOptIn) {
+            await recordWhatsAppConsent(data.user.id, true, "registration");
+          }
+        } catch {
+          await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não foi possível registrar o aceite dos termos.",
+          });
+        }
+
         // Registration must remain usable if attribution is unavailable. The hint
         // can be retried at checkout; no benefit is granted during registration.
         let referralWarning: string | null = null;
@@ -488,7 +504,6 @@ export const appRouter = router({
           provaAlvo: z.string().max(120).nullable().optional(),
           focoAtual: z.string().max(160).nullable().optional(),
           metaSemanalQuestoes: z.number().int().min(0).nullable().optional(),
-          billingWhatsappOptIn: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -504,7 +519,6 @@ export const appRouter = router({
               prova_alvo: input.provaAlvo?.trim() || null,
               foco_atual: input.focoAtual?.trim() || null,
               meta_semanal_questoes: input.metaSemanalQuestoes ?? null,
-              ...(input.billingWhatsappOptIn === undefined ? {} : { billing_whatsapp_opt_in: input.billingWhatsappOptIn }),
             },
             { onConflict: "id" }
           )
