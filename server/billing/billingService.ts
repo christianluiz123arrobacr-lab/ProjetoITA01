@@ -1,3 +1,4 @@
+import { attachReferral, referralRpc } from "./referralService.js";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
@@ -836,7 +837,7 @@ export function mapMercadoPagoCardCheckoutError(
   return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível iniciar a assinatura." });
 }
 
-export async function createCardSubscriptionCheckout(input: { userId: string; userEmail: string | null; planSlug: string }) {
+export async function createCardSubscriptionCheckout(input: { userId: string; userEmail: string | null; planSlug: string; referralCode?: string }) {
   let subscriptionId: string | null = null;
   const capabilities = getBillingCapabilities();
   if (!capabilities.mercadoPagoEnabled) {
@@ -850,6 +851,7 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   const { error: slotExpiryError } = await supabaseAdmin.rpc("release_expired_mercadopago_recurring_slots", { p_now: isoNow() });
   if (slotExpiryError) fail(slotExpiryError.message);
   const plan = await getPlanForCheckout(input.planSlug, input.userId);
+  await attachReferral(input.userId, input.referralCode);
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
 
@@ -883,12 +885,13 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   }
 }
 
-export async function createPixPayment(input: { userId: string; userEmail: string | null; planSlug: string }) {
+export async function createPixPayment(input: { userId: string; userEmail: string | null; planSlug: string; referralCode?: string }) {
   const capabilities = getBillingCapabilities();
   if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
 
   await expireStaleReservations();
   const plan = await getPlanForCheckout(input.planSlug, input.userId);
+  await attachReferral(input.userId, input.referralCode);
 
   const existing = await reusePendingSubscription(input.userId, plan.id, "pix");
   if (existing?.id) {
@@ -948,10 +951,11 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
 
   const externalReference = buildPaymentReference(String(payment.id), reservation.subscriptionId);
   try {
+    const amountCents = Number(await referralRpc("referral_price_payment", { p_payment: String(payment.id) }));
     const mpPayment = await createMercadoPagoPixPayment({
       externalReference,
       payerEmail,
-      amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
+      amount: centsToMercadoPagoAmount(amountCents),
       description: `Projeto Vetor - ${plan.name}`,
       notificationUrl: getMercadoPagoWebhookUrl(),
       expiresAt,
@@ -981,7 +985,7 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
       subscriptionId: reservation.subscriptionId,
       paymentId: String(payment.id),
       status: mapMercadoPagoPaymentStatus(mpPayment.status, mpPayment.status_detail),
-      amountCents: Number(plan.price_cents),
+      amountCents,
       currency: normalizeCurrency(plan.currency),
       qrCode: transactionData?.qr_code ?? null,
       qrCodeBase64: transactionData?.qr_code_base64 ?? null,
@@ -1000,6 +1004,7 @@ export async function createPrepaidCheckout(input: {
   userId: string;
   userEmail: string | null;
   planSlug: string;
+  referralCode?: string;
   durationMonths: 1 | 2 | 3;
   paymentMethod: "card" | "pix";
 }) {
@@ -1007,6 +1012,7 @@ export async function createPrepaidCheckout(input: {
   if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
   await expireStaleReservations();
   const plan = await getPlanForCheckout(input.planSlug, input.userId);
+  await attachReferral(input.userId, input.referralCode);
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
   const { data: recurring, error: recurringError } = await supabaseAdmin
@@ -1022,7 +1028,7 @@ export async function createPrepaidCheckout(input: {
   if (recurringError) fail(recurringError.message);
 
   const reservation = await reserveCheckout({ userId: input.userId, userEmail: payerEmail, plan, paymentMethod: "pix" });
-  const amountCents = Number(plan.price_cents) * input.durationMonths;
+  let amountCents = Number(plan.price_cents) * input.durationMonths;
   const switchFromRecurringId = recurring?.id ? String(recurring.id) : null;
   await updateSubscriptionOrThrow(reservation.subscriptionId, {
     metadata: {
@@ -1052,6 +1058,7 @@ export async function createPrepaidCheckout(input: {
 
   const externalReference = buildPaymentReference(String(payment.id), reservation.subscriptionId);
   try {
+    amountCents = Number(await referralRpc("referral_price_payment", { p_payment: String(payment.id) }));
     if (input.paymentMethod === "card") {
       const preference = await createPrepaidPreference({
         externalReference, payerEmail, amount: centsToMercadoPagoAmount(amountCents),
@@ -1460,6 +1467,7 @@ async function applyApprovedAccess(input: {
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.payment_id) throw new Error("Falha ao aplicar acesso aprovado.");
+  await referralRpc("referral_reconcile_payment", { p_payment: input.localPayment.id });
   await updatePaymentOrThrow(input.localPayment.id, {
     gateway_reconciliation_status: null,
     gateway_reconciliation_error: null,
@@ -1487,6 +1495,7 @@ async function applyPaymentReversal(input: { localPayment: LocalPayment; payment
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.payment_id) throw new Error("Falha ao recalcular acesso após estorno.");
+  await referralRpc("referral_reconcile_payment", { p_payment: input.localPayment.id });
 }
 
 export async function processApprovedPayment(payment: MercadoPagoPayment) {

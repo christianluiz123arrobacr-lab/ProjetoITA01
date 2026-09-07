@@ -1,3 +1,4 @@
+import AdminReferralProgram from "@/components/admin/AdminReferralProgram";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -643,6 +644,7 @@ export default function AdminBillingPage() {
         title="Assinaturas"
         subtitle="Gerencie planos, preços, limites de vagas, renovações manuais e solicitações de acesso."
       >
+        <AdminReferralProgram />
         <div className="grid gap-4 md:grid-cols-5">
           <Card className="border-slate-200 dark:border-slate-700 p-5">
             <p className="text-sm text-slate-500 dark:text-slate-400">Solicitações</p>

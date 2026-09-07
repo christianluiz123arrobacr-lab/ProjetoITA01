@@ -1,3 +1,4 @@
+import ReferralPage from "./pages/ReferralPage";
 import { Suspense, useEffect, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { Redirect, Route, Switch, useLocation } from "wouter";
@@ -380,6 +381,13 @@ function RootGate() {
   }
 
   return <Landing />;
+}
+
+function MySubscriptionRoute() {
+  const { isAuthenticated, loading } = useSupabaseAuth();
+  if (loading) return <p role="status" className="p-8">Carregando...</p>;
+  if (!isAuthenticated) return <Redirect to="/login" />;
+  return <MinhaAssinaturaPage />;
 }
 
 function PrivateRouter() {
@@ -821,6 +829,8 @@ function Router() {
       {/* Rotas públicas */}
       <Route path="/landing" component={Landing} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/minha-assinatura" component={MySubscriptionRoute} />
+      <Route path="/indique-e-ganhe" component={ReferralPage} />
       <Route path="/cadastro" component={RegisterPage} />
       <Route path="/planos" component={PricingPage} />
       <Route path="/assinatura-pendente" component={SubscriptionPendingPage} />

@@ -1,3 +1,6 @@
+import { referralRouter, attachReferral, referralCodeSchema } from "./billing/referralService.js";
+import { loadPlanCapacity } from "./billing/planCapacity.js";
+import { getPaymentHistory } from "./billing/paymentHistory.js";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -307,16 +310,6 @@ async function getLatestUserBillingSubscription(userId: string) {
   return data ?? null;
 }
 
-function isBlockingBillingSubscription(row: any) {
-  if (!row) return false;
-  if (row.status === "manual_review") return true;
-  if (!["active", "trialing"].includes(row.status)) return false;
-  if (!row.current_period_end) return true;
-
-  const end = new Date(row.current_period_end).getTime();
-  return Number.isFinite(end) && end >= Date.now();
-}
-
 function getBillingPlanSlugCandidates(slug: string) {
   const candidatesBySlug: Record<string, string[]> = {
     "beta-selecionado-5": [
@@ -390,6 +383,7 @@ export const appRouter = router({
     }),
   }),
   system: systemRouter,
+  referrals: referralRouter,
 
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
@@ -397,6 +391,7 @@ export const appRouter = router({
     registerStudent: publicProcedure
       .input(
         z.object({
+          referralCode: referralCodeSchema,
           nome: z.string().min(2, "Nome muito curto"),
           telefone: z.string().min(8, "Digite um telefone válido"),
           billingWhatsappOptIn: z.boolean().optional().default(false),
@@ -469,8 +464,14 @@ export const appRouter = router({
           });
         }
 
+        // Registration must remain usable if attribution is unavailable. The hint
+        // can be retried at checkout; no benefit is granted during registration.
+        let referralWarning: string | null = null;
+        try { await attachReferral(data.user.id, input.referralCode); }
+        catch { referralWarning = "Cadastro criado. A indicação será verificada novamente no checkout."; }
         return {
           success: true,
+          referralWarning,
           userId: data.user.id,
           email,
         } as const;
@@ -630,28 +631,30 @@ export const appRouter = router({
     getCapabilities: publicProcedure.query(() => getBillingCapabilities()),
 
     createCardSubscriptionCheckout: protectedProcedure
-      .input(z.object({ planSlug: z.string().min(1).max(120) }))
+      .input(z.object({ referralCode: referralCodeSchema, planSlug: z.string().min(1).max(120) }))
       .mutation(async ({ ctx, input }) =>
         createCardSubscriptionCheckout({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
+          referralCode: input.referralCode,
         })
       ),
 
     createPixPayment: protectedProcedure
-      .input(z.object({ planSlug: z.string().min(1).max(120) }))
+      .input(z.object({ referralCode: referralCodeSchema, planSlug: z.string().min(1).max(120) }))
       .mutation(async ({ ctx, input }) =>
         createPixPayment({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
+          referralCode: input.referralCode,
         })
       ),
 
     createPrepaidCheckout: protectedProcedure
       .input(z.object({
-        planSlug: z.string().min(1).max(120),
+        referralCode: referralCodeSchema, planSlug: z.string().min(1).max(120),
         durationMonths: z.union([z.literal(1), z.literal(2), z.literal(3)]),
         paymentMethod: z.enum(["card", "pix"]),
       }))
@@ -660,6 +663,7 @@ export const appRouter = router({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
+          referralCode: input.referralCode,
           durationMonths: input.durationMonths,
           paymentMethod: input.paymentMethod,
         })
@@ -669,6 +673,8 @@ export const appRouter = router({
       const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
       return flattenBillingSubscription(latestSubscription);
     }),
+
+    getPaymentHistory: protectedProcedure.input(z.object({ page: z.number().int().min(0).max(100000).default(0) })).query(({ ctx, input }) => getPaymentHistory(ctx.user.id, input.page)),
 
     getMyPayments: protectedProcedure.query(async ({ ctx }) => getMyPayments(ctx.user.id)),
 
@@ -706,8 +712,11 @@ export const appRouter = router({
         const { data: current } = await supabaseAdmin.from("billing_subscriptions").select("plan_id, billing_plans(slug)").eq("user_id", userId).in("status", ["active", "trialing"]).or(`current_period_end.is.null,current_period_end.gte.${now}`).limit(1).maybeSingle();
         currentPlanId = current?.plan_id ? String(current.plan_id) : null;
         currentPlanSlug = pickBillingPlan(current)?.slug ?? null;
+        // Promotional time is access, not a paid plan or an existing recurring contract.
+        if (currentPlanSlug === "referral-promotional-access") currentPlanId = null;
       }
 
+      const capacity = await loadPlanCapacity();
       return Promise.all((data ?? []).map(async (plan: any) => ({
         id: String(plan.id),
         slug: plan.slug,
@@ -718,11 +727,7 @@ export const appRouter = router({
         billing_cycle: plan.billing_cycle,
         is_active: plan.is_active,
         max_active_subscriptions: plan.max_active_subscriptions ?? null,
-        active_subscriptions_count: 0,
-        manual_review_count: 0,
-        used_slots: 0,
-        remaining_slots: plan.max_active_subscriptions ?? null,
-        has_available_slots: true,
+        ...capacity.get(String(plan.id)),
         display_order: Number(plan.display_order ?? 100),
         ...publicPlanAvailability(plan, eligible, currentPlanId === String(plan.id) || isSamePlanFamily(plan.slug, currentPlanSlug), currentPlanId !== null, Boolean(userId && plan.requires_legacy_founder_eligibility && await hasValidPlanInvite(userId, String(plan.id)))),
       })));
@@ -762,27 +767,6 @@ export const appRouter = router({
         }
         await assertUserCanCheckoutPlan(ctx.user.id, billingPlan);
 
-        const { data: existingSubscriptions, error: existingSubscriptionsError } = await supabaseAdmin
-          .from("billing_subscriptions")
-          .select("*")
-          .eq("user_id", ctx.user.id)
-          .in("status", ["manual_review", "active", "trialing"])
-          .order("created_at", { ascending: false })
-          .limit(5);
-
-        if (existingSubscriptionsError) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: existingSubscriptionsError.message });
-        }
-
-        const existingSubscription = (existingSubscriptions ?? []).find(isBlockingBillingSubscription);
-
-        if (existingSubscription) {
-          return {
-            ...existingSubscription,
-            table_used: "billing_subscriptions",
-          };
-        }
-
         const { data: profile } = await supabaseAdmin
           .from("profiles")
           .select("id, nome, telefone, email, role, ativo")
@@ -809,20 +793,10 @@ export const appRouter = router({
           },
         };
 
-        const payload = {
-          user_id: ctx.user.id,
-          plan_id: billingPlan.id,
-          status: "manual_review",
-          gateway: "manual",
-          payment_url: null,
-          metadata,
-        };
-
-        const { data, error } = await supabaseAdmin
-          .from("billing_subscriptions")
-          .insert(payload)
-          .select("*")
-          .single();
+        const { data: reserved, error } = await supabaseAdmin.rpc("reserve_manual_billing_checkout", {
+          p_user_id: ctx.user.id, p_plan_id: billingPlan.id, p_metadata: metadata,
+        });
+        const data = Array.isArray(reserved) ? reserved[0] : reserved;
 
         if (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
@@ -1453,21 +1427,8 @@ export const appRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: plansError.message });
       }
 
-      const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
-        .from("billing_subscriptions")
-        .select("id, plan_id, status");
-
-      if (subscriptionsError) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
-      }
-
+      const capacity = await loadPlanCapacity();
       return (plans ?? []).map((plan: any) => {
-        const planSubscriptions = (subscriptions ?? []).filter((item: any) => String(item.plan_id) === String(plan.id));
-        const activeCount = planSubscriptions.filter((item: any) => ["active", "trialing"].includes(item.status)).length;
-        const manualReviewCount = planSubscriptions.filter((item: any) => item.status === "manual_review").length;
-        const usedSlots = activeCount + manualReviewCount;
-        const maxSlots = plan.max_active_subscriptions ?? null;
-
         return {
           id: String(plan.id),
           slug: plan.slug,
@@ -1482,12 +1443,8 @@ export const appRouter = router({
           display_order: Number(plan.display_order ?? 100),
           updated_at: plan.updated_at ?? null,
           updated_by: plan.updated_by ?? null,
-          max_active_subscriptions: maxSlots,
-          active_subscriptions_count: activeCount,
-          manual_review_count: manualReviewCount,
-          used_slots: usedSlots,
-          remaining_slots: maxSlots == null ? null : Math.max(maxSlots - usedSlots, 0),
-          has_available_slots: maxSlots == null || usedSlots < maxSlots,
+          max_active_subscriptions: plan.max_active_subscriptions ?? null,
+          ...capacity.get(String(plan.id)),
         };
       });
     }),

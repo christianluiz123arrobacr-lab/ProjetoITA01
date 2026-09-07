@@ -1,3 +1,4 @@
+import { getReferralHint } from "@/lib/referralHint";
 import { trpcClient } from "@/lib/trpcClient";
 
 export type BillingPlanSlug = string;
@@ -166,17 +167,17 @@ export async function getBillingCapabilities(): Promise<BillingCapabilities> {
 export async function createCardSubscriptionCheckout(
   planSlug: string
 ): Promise<MercadoPagoCheckoutResult> {
-  return trpcClient.billing.createCardSubscriptionCheckout.mutate({ planSlug });
+  return trpcClient.billing.createCardSubscriptionCheckout.mutate({ planSlug, referralCode: getReferralHint() });
 }
 
 export async function createMercadoPagoPixPayment(
   planSlug: string
 ): Promise<MercadoPagoPixResult> {
-  return trpcClient.billing.createPixPayment.mutate({ planSlug });
+  return trpcClient.billing.createPixPayment.mutate({ planSlug, referralCode: getReferralHint() });
 }
 
 export async function createPrepaidCheckout(planSlug: string, durationMonths: 1 | 2 | 3, paymentMethod: "card" | "pix") {
-  return trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod });
+  return trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod, referralCode: getReferralHint() });
 }
 
 export async function getMySubscription() {

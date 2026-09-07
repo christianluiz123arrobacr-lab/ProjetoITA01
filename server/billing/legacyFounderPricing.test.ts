@@ -79,7 +79,7 @@ describe("preços legados de fundador", () => {
     expect(sql).toContain("then public.billing_plans.price_cents");
   });
 
-  it("checkout recebe somente planSlug; preço e elegibilidade são carregados no servidor", () => {
+  it("checkout recebe plano e referência; preço e elegibilidade são carregados no servidor", () => {
     const router = readFileSync(new URL("../routers.ts", import.meta.url), "utf8");
     const service = readFileSync(new URL("./billingService.ts", import.meta.url), "utf8");
     const eligibility = readFileSync(new URL("./legacyFounderPricing.ts", import.meta.url), "utf8");
@@ -87,7 +87,9 @@ describe("preços legados de fundador", () => {
     expect(router).not.toMatch(/createCardSubscriptionCheckout[\s\S]{0,300}priceCents/);
     expect(service).toContain("await assertUserCanCheckoutPlan(userId, data as BillingPlanRow)");
     expect(eligibility).toContain("await hasValidPlanInvite(userId, plan.id)");
-    expect(service).toContain("amount: centsToMercadoPagoAmount(Number(plan.price_cents))");
+    expect(service).toContain("amount: centsToMercadoPagoAmount(amountCents)");
+    expect(service).toContain('referralRpc("referral_price_payment", { p_payment: String(payment.id) })');
+    expect(service).not.toContain("input.amountCents");
   });
 
   it("frontend mantém o card fundador visível e desabilita seus checkouts quando bloqueado", () => {

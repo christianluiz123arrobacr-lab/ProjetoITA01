@@ -1,3 +1,4 @@
+import { getReferralHint } from "@/lib/referralHint";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -30,6 +31,7 @@ function getRegistrationErrorMessage(error: unknown) {
 export default function RegisterPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
+  const [referralCode] = useState(getReferralHint);
   const registerMutation = trpc.auth.registerStudent.useMutation();
 
   const [nome, setNome] = useState("");
@@ -89,6 +91,7 @@ export default function RegisterPage() {
       setLoading(true);
 
       await registerMutation.mutateAsync({
+        referralCode,
         nome: nomeTrimmed,
         telefone: telefoneTrimmed,
         email: emailTrimmed,

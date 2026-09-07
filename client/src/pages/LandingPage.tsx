@@ -111,6 +111,13 @@ export default function LandingPage() {
                       </button>
                     </Link>
 
+                    <Link href="/indique-e-ganhe">
+                      <button type="button" onClick={() => setProfileMenuOpen(false)} className="w-full rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                        Indique e Ganhe
+                        <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">Convide amigos e ganhe tempo de acesso.</span>
+                      </button>
+                    </Link>
+
                     <Link href="/planos">
                       <button
                         type="button"

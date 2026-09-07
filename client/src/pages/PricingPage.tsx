@@ -1,3 +1,4 @@
+import { getReferralHint } from "@/lib/referralHint";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -291,6 +292,7 @@ function MercadoPagoPixModal({
 }
 
 export default function PricingPage() {
+  useEffect(() => { getReferralHint(); }, []);
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
 
