@@ -24,6 +24,10 @@ describe("documentos legais e consentimentos", () => {
 
   it("bloqueia a área privada até o aceite e permite sair", () => {
     expect(guard).toContain("acceptanceStatus");
+    expect(guard).toContain("accessBootstrap.isSuccess");
+    expect(guard).toContain("!isAdmin && !sessionAccepted");
+    expect(guard).toContain("setSessionAccepted(true)");
+    expect(guard).not.toContain("setTimeout");
     expect(guard).toContain("Atualizamos nossos termos");
     expect(guard).toContain("void signOut()");
   });

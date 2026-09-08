@@ -56,20 +56,25 @@ export async function recordWhatsAppConsent(userId: string, granted: boolean, so
 
 export const legalRouter = router({
   publicConfig: publicProcedure.query(() => getPublicLegalConfig()),
-  acceptanceStatus: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role === "admin" || ctx.user.role === "editor") {
-      return { required: false, acceptedAt: null };
-    }
-    const { data, error } = await supabaseAdmin
-      .from("legal_document_acceptances")
-      .select("accepted_at")
-      .eq("user_id", ctx.user.id)
-      .eq("terms_version", LEGAL_DOCUMENT_VERSIONS.terms)
-      .eq("privacy_version", LEGAL_DOCUMENT_VERSIONS.privacy)
-      .maybeSingle();
-    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível verificar o aceite dos termos." });
-    return { required: !data, acceptedAt: data?.accepted_at ?? null };
-  }),
+  acceptanceStatus: protectedProcedure
+    .input(z.object({ sessionKey: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      if (input.sessionKey !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sessão inválida para consultar o aceite." });
+      }
+      if (ctx.user.role === "admin" || ctx.user.role === "editor") {
+        return { required: false, acceptedAt: null };
+      }
+      const { data, error } = await supabaseAdmin
+        .from("legal_document_acceptances")
+        .select("accepted_at")
+        .eq("user_id", ctx.user.id)
+        .eq("terms_version", LEGAL_DOCUMENT_VERSIONS.terms)
+        .eq("privacy_version", LEGAL_DOCUMENT_VERSIONS.privacy)
+        .maybeSingle();
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível verificar o aceite dos termos." });
+      return { required: !data, acceptedAt: data?.accepted_at ?? null };
+    }),
   acceptCurrent: protectedProcedure
     .input(z.object({ accepted: z.literal(true) }))
     .mutation(async ({ ctx }) => {

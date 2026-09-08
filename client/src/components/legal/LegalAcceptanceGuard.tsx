@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Loader2, LogOut, ShieldCheck } from "lucide-react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
@@ -14,20 +14,47 @@ const documentLinks = [
 
 export default function LegalAcceptanceGuard({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { isAuthenticated, loading, signOut } = useSupabaseAuth();
+  const { isAuthenticated, loading, signOut, user } = useSupabaseAuth();
   const [accepted, setAccepted] = useState(false);
+  const [sessionAccepted, setSessionAccepted] = useState(false);
   const utils = trpc.useUtils();
   const publicConfig = trpc.legal.publicConfig.useQuery();
   const isLegalPage = LEGAL_ROUTES.some(route => location === route);
-  const status = trpc.legal.acceptanceStatus.useQuery(undefined, {
+  const acceptanceInput = { sessionKey: user?.id ?? "00000000-0000-0000-0000-000000000000" };
+  const accessBootstrap = trpc.auth.getAccessStatus.useQuery(undefined, {
     enabled: isAuthenticated && !loading && !isLegalPage,
     retry: false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+  });
+  const isAdmin = accessBootstrap.data?.role === "admin" || accessBootstrap.data?.role === "editor";
+  const status = trpc.legal.acceptanceStatus.useQuery(acceptanceInput, {
+    enabled: isAuthenticated && !loading && !isLegalPage && accessBootstrap.isSuccess && !isAdmin && !sessionAccepted,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
   const accept = trpc.legal.acceptCurrent.useMutation({
-    onSuccess: () => utils.legal.acceptanceStatus.invalidate(),
+    onSuccess: () => {
+      setSessionAccepted(true);
+      utils.legal.acceptanceStatus.setData(acceptanceInput, { required: false, acceptedAt: new Date().toISOString() });
+    },
   });
 
-  if (loading || !isAuthenticated || isLegalPage || status.data?.required === false) return <>{children}</>;
+  useEffect(() => {
+    setAccepted(false);
+    setSessionAccepted(false);
+  }, [user?.id]);
+
+  if (loading || !isAuthenticated || isLegalPage) return <>{children}</>;
+  if (accessBootstrap.isLoading || (accessBootstrap.isFetching && !accessBootstrap.data)) return <>{children}</>;
+  if (accessBootstrap.isError || isAdmin || sessionAccepted || status.data?.required === false) return <>{children}</>;
+
+  if (status.isLoading) {
+    return <div className="theme-page flex min-h-screen items-center justify-center bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100" role="status"><div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold shadow-lg dark:border-slate-700 dark:bg-slate-900"><Loader2 className="h-5 w-5 animate-spin text-cyan-600 dark:text-cyan-300" />Verificando os termos da sua conta...</div></div>;
+  }
 
   return (
     <div className="theme-page flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10 text-slate-900 dark:bg-slate-950 dark:text-slate-100">

@@ -186,8 +186,8 @@ export default function LandingPage() {
       <section className="px-6 pb-16">
         <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-5">
           {/* Matemática */}
-          <div className="vetor-surface overflow-hidden border-blue-100 dark:border-blue-900">
-            <div className="bg-blue-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between dark:bg-blue-950/50 dark:text-slate-100">
+          <div className="vetor-surface flex h-full flex-col overflow-hidden border-blue-100 dark:border-blue-900">
+            <div className="flex min-h-56 flex-1 flex-col justify-between bg-blue-50 p-8 text-slate-900 dark:bg-blue-950/50 dark:text-slate-100">
               <div>
                 <Calculator className="w-9 h-9 mb-5 text-blue-600" />
                 <h3 className="text-3xl font-bold mb-3">Matemática</h3>
@@ -198,14 +198,14 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="mt-auto shrink-0 p-6">
               <div className="flex items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300"><span>Em desenvolvimento</span></div>
             </div>
           </div>
 
           {/* Física */}
-          <div className="vetor-surface overflow-hidden transition hover:-translate-y-0.5 hover:border-violet-200 dark:border-violet-900">
-            <div className="bg-violet-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between dark:bg-violet-950/50 dark:text-slate-100">
+          <div className="vetor-surface flex h-full flex-col overflow-hidden transition hover:-translate-y-0.5 hover:border-violet-200 dark:border-violet-900">
+            <div className="flex min-h-56 flex-1 flex-col justify-between bg-violet-50 p-8 text-slate-900 dark:bg-violet-950/50 dark:text-slate-100">
               <div>
                 <BookOpen className="w-9 h-9 mb-5 text-violet-600" />
                 <h3 className="text-3xl font-bold mb-3">Física</h3>
@@ -216,7 +216,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="mt-auto shrink-0 p-6">
               <Link href="/fisica">
                 <Button className="w-full vetor-action-primary font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
                   Explorar Física <ArrowRight className="w-4 h-4" />
@@ -226,8 +226,8 @@ export default function LandingPage() {
           </div>
 
           {/* Química */}
-          <div className="vetor-surface overflow-hidden border-amber-100 dark:border-amber-900">
-            <div className="bg-amber-50 p-8 text-slate-900 min-h-56 flex flex-col justify-between dark:bg-amber-950/40 dark:text-slate-100">
+          <div className="vetor-surface flex h-full flex-col overflow-hidden border-amber-100 dark:border-amber-900">
+            <div className="flex min-h-56 flex-1 flex-col justify-between bg-amber-50 p-8 text-slate-900 dark:bg-amber-950/40 dark:text-slate-100">
               <div>
                 <Beaker className="w-9 h-9 mb-5 text-amber-600" />
                 <h3 className="text-3xl font-bold mb-3">Química</h3>
@@ -237,7 +237,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="mt-auto shrink-0 p-6">
               <div className="flex items-center justify-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"><span>Em desenvolvimento</span></div>
             </div>
           </div>
