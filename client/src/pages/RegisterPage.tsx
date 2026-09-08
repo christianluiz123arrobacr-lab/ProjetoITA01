@@ -1,4 +1,4 @@
-import { getReferralHint } from "@/lib/referralHint";
+import { clearReferralHint, getReferralHint } from "@/lib/referralHint";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -97,7 +97,7 @@ export default function RegisterPage() {
     try {
       setLoading(true);
 
-      await registerMutation.mutateAsync({
+      const registration = await registerMutation.mutateAsync({
         referralCode,
         nome: nomeTrimmed,
         telefone: telefoneTrimmed,
@@ -106,6 +106,9 @@ export default function RegisterPage() {
         legalAccepted: true,
         billingWhatsappOptIn: legalConfig.data?.whatsappConsentAvailable ? billingWhatsappOptIn : false,
       });
+      if (registration.referralStatus !== "unavailable") clearReferralHint();
+
+      if (registration.referralWarning) setSuccess(registration.referralWarning);
 
       const { error } = await supabase.auth.signInWithPassword({
         email: emailTrimmed,

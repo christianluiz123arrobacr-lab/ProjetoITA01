@@ -1,4 +1,4 @@
-import { referralRouter, attachReferral, referralCodeSchema } from "./billing/referralService.js";
+import { referralRouter, registerReferralAttribution, referralCodeSchema } from "./billing/referralService.js";
 import { loadPlanCapacity } from "./billing/planCapacity.js";
 import { getPaymentHistory } from "./billing/paymentHistory.js";
 import { randomUUID } from "node:crypto";
@@ -480,13 +480,28 @@ export const appRouter = router({
           });
         }
 
-        // Registration must remain usable if attribution is unavailable. The hint
-        // can be retried at checkout; no benefit is granted during registration.
+        let referralStatus: "missing" | "attached" | "pending" | "rejected" | "unavailable" = "missing";
         let referralWarning: string | null = null;
-        try { await attachReferral(data.user.id, input.referralCode); }
-        catch { referralWarning = "Cadastro criado. A indicação será verificada novamente no checkout."; }
+        if (input.referralCode) {
+          try {
+            const attribution = await registerReferralAttribution(data.user.id, input.referralCode);
+            referralStatus = attribution.status === "attached"
+              ? "attached"
+              : attribution.status === "queued" || attribution.status === "pending"
+                ? "pending"
+                : "rejected";
+            if (referralStatus === "rejected")
+              referralWarning = "A conta foi criada, mas este convite não pôde ser vinculado.";
+            if (referralStatus === "pending")
+              referralWarning = "A conta foi criada e a indicação ficou pendente para nova verificação após o login.";
+          } catch {
+            referralStatus = "unavailable";
+            referralWarning = "A conta foi criada, mas não foi possível registrar o convite. Tente novamente mais tarde.";
+          }
+        }
         return {
           success: true,
+          referralStatus,
           referralWarning,
           userId: data.user.id,
           email,
@@ -645,30 +660,28 @@ export const appRouter = router({
     getCapabilities: publicProcedure.query(() => getBillingCapabilities()),
 
     createCardSubscriptionCheckout: protectedProcedure
-      .input(z.object({ referralCode: referralCodeSchema, planSlug: z.string().min(1).max(120) }))
+      .input(z.object({ planSlug: z.string().min(1).max(120) }))
       .mutation(async ({ ctx, input }) =>
         createCardSubscriptionCheckout({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
-          referralCode: input.referralCode,
         })
       ),
 
     createPixPayment: protectedProcedure
-      .input(z.object({ referralCode: referralCodeSchema, planSlug: z.string().min(1).max(120) }))
+      .input(z.object({ planSlug: z.string().min(1).max(120) }))
       .mutation(async ({ ctx, input }) =>
         createPixPayment({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
-          referralCode: input.referralCode,
         })
       ),
 
     createPrepaidCheckout: protectedProcedure
       .input(z.object({
-        referralCode: referralCodeSchema, planSlug: z.string().min(1).max(120),
+        planSlug: z.string().min(1).max(120),
         durationMonths: z.union([z.literal(1), z.literal(2), z.literal(3)]),
         paymentMethod: z.enum(["card", "pix"]),
       }))
@@ -677,7 +690,6 @@ export const appRouter = router({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
-          referralCode: input.referralCode,
           durationMonths: input.durationMonths,
           paymentMethod: input.paymentMethod,
         })

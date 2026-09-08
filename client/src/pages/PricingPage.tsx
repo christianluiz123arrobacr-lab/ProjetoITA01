@@ -1,4 +1,3 @@
-import { getReferralHint } from "@/lib/referralHint";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -25,12 +24,14 @@ import {
   createMercadoPagoPixPayment,
   formatPlanPrice,
   getBillingCapabilities,
+  getReferralPricingPreview,
   loadPublicBillingPlans,
   PIX_PAYMENT_INFO,
   requestManualSubscription,
   type BillingCapabilities,
   type BillingPlan,
   type MercadoPagoPixResult,
+  type ReferralPricingPreview,
 } from "@/services/billing.service";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
@@ -292,7 +293,6 @@ function MercadoPagoPixModal({
 }
 
 export default function PricingPage() {
-  useEffect(() => { getReferralHint(); }, []);
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
 
@@ -301,6 +301,7 @@ export default function PricingPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<"card" | "pix" | "manual" | null>(null);
   const [capabilities, setCapabilities] = useState<BillingCapabilities | null>(null);
+  const [referralPreview, setReferralPreview] = useState<ReferralPricingPreview | null>(null);
   const [paymentPlan, setPaymentPlan] = useState<BillingPlan | null>(null);
   const [durationMonths, setDurationMonths] = useState<1 | 2 | 3>(1);
   const [pixPayment, setPixPayment] = useState<MercadoPagoPixResult | null>(null);
@@ -318,14 +319,16 @@ export default function PricingPage() {
     async function loadPlans() {
       try {
         setPlansLoading(true);
-        const [loadedPlans, loadedCapabilities] = await Promise.all([
+        const [loadedPlans, loadedCapabilities, loadedReferralPreview] = await Promise.all([
           loadPublicBillingPlans(),
           getBillingCapabilities(),
+          isAuthenticated ? getReferralPricingPreview().catch(() => null) : Promise.resolve(null),
         ]);
 
         if (mounted) {
           setPlans(loadedPlans);
           setCapabilities(loadedCapabilities);
+          setReferralPreview(loadedReferralPreview);
         }
       } catch (error) {
         console.warn("Não foi possível carregar planos públicos:", error);
@@ -339,7 +342,7 @@ export default function PricingPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [authLoading, isAuthenticated]);
 
   async function handleSubscribe(plan: BillingPlan, method: "card" | "pix" | "manual", prepaid = false) {
     setErro("");
@@ -500,6 +503,13 @@ export default function PricingPage() {
                 const isFull = plan.hasAvailableSlots === false;
                 const isFounderLocked = plan.checkoutBlockReason === "legacy_founder_required";
                 const checkoutDisabled = !plan.canCheckout || isFull;
+                const referralPrice = referralPreview?.eligible
+                  ? referralPreview.plans.find(item => item.planId === plan.id || item.slug === plan.slug)
+                  : null;
+                const prepaidReferralPrice = referralPrice?.prepaid.find(item => item.months === durationMonths);
+                const referralDiscountText = referralPreview?.discountPercent != null
+                  ? `${referralPreview.discountPercent}% de desconto no primeiro pagamento via Pix ou pacote pré-pago.`
+                  : "Desconto de indicação no primeiro pagamento via Pix ou pacote pré-pago.";
                 const limitText = maxSlots
                   ? `Limitado a ${maxSlots} assinaturas ativas/em análise`
                   : visual.limitFallback;
@@ -548,9 +558,19 @@ export default function PricingPage() {
                     </div>
 
                     <div className="mt-8">
-                      <p className="text-4xl font-black tracking-tight text-white">
-                        {formatPlanPrice(plan.amountCents)}
-                      </p>
+                      {referralPrice && referralPrice.pixCents < plan.amountCents ? (
+                        <>
+                          <p className="text-sm font-bold text-slate-400 line-through">{formatPlanPrice(plan.amountCents)}</p>
+                          <p className="mt-1 text-4xl font-black tracking-tight text-white">{formatPlanPrice(referralPrice.pixCents)}</p>
+                          <p className="mt-2 text-sm font-bold leading-6 text-emerald-200">
+                            {referralDiscountText}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-4xl font-black tracking-tight text-white">
+                          {formatPlanPrice(plan.amountCents)}
+                        </p>
+                      )}
                       <p className="mt-1 text-sm font-semibold text-slate-400">
                         acesso mensal durante a fase beta
                       </p>
@@ -633,6 +653,12 @@ export default function PricingPage() {
                         {plan.isCurrentPlan ? "Plano atual" : isFounderLocked ? "Exclusivo para fundadores" : isFull ? "Plano indisponível" : "Assinar com cartão"}
                       </button>
 
+                      {referralPrice && (
+                        <p className="text-center text-xs leading-5 text-slate-400">
+                          A indicação não se aplica à assinatura mensal recorrente no cartão, que permanece em {formatPlanPrice(referralPrice.recurringCardCents)}.
+                        </p>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => handleSubscribe(plan, "pix")}
@@ -660,7 +686,11 @@ export default function PricingPage() {
                         <div className="mt-3 grid grid-cols-3 gap-2">
                           {([1, 2, 3] as const).map(months => <button key={months} type="button" onClick={() => setDurationMonths(months)} className={`rounded-xl px-2 py-2 text-xs font-black ${durationMonths === months ? "bg-cyan-300 text-slate-950" : "bg-white/10 text-slate-200"}`}>{months} {months === 1 ? "mês" : "meses"}</button>)}
                         </div>
-                        <p className="mt-3 text-sm text-slate-200">{formatPlanPrice(plan.amountCents * durationMonths)} · acesso por {durationMonths} {durationMonths === 1 ? "mês" : "meses"} de calendário.</p>
+                        <p className="mt-3 text-sm text-slate-200">
+                          {prepaidReferralPrice && prepaidReferralPrice.discountedCents < prepaidReferralPrice.originalCents ? (
+                            <><span className="mr-2 text-slate-400 line-through">{formatPlanPrice(prepaidReferralPrice.originalCents)}</span><span className="font-black text-emerald-200">{formatPlanPrice(prepaidReferralPrice.discountedCents)}</span></>
+                          ) : formatPlanPrice(plan.amountCents * durationMonths)} · acesso por {durationMonths} {durationMonths === 1 ? "mês" : "meses"} de calendário.
+                        </p>
                         {plan.isCurrentPlan ? <p className="mt-2 text-xs text-amber-100">Ao confirmar o pacote pré-pago, a renovação automática será cancelada após a aprovação. Seu acesso atual será preservado.</p> : null}
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           <button type="button" onClick={() => handleSubscribe(plan, "card", true)} disabled={isLoading || isFounderLocked || isFull || capabilities?.mercadoPagoEnabled === false} className="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-60">{plan.isCurrentPlan ? `Trocar por pacote de ${durationMonths} meses` : `Garantir acesso por ${durationMonths} meses`}</button>

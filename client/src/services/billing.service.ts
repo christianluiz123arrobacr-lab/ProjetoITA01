@@ -1,4 +1,3 @@
-import { getReferralHint } from "@/lib/referralHint";
 import { trpcClient } from "@/lib/trpcClient";
 
 export type BillingPlanSlug = string;
@@ -54,6 +53,21 @@ export type BillingCapabilities = {
   mode: "mercadopago" | "manual";
   mercadoPagoEnabled: boolean;
   manualPixFallbackEnabled: boolean;
+};
+
+export type ReferralPricingPreview = {
+  linked: boolean;
+  eligible: boolean;
+  discountPercent: number | null;
+  eligibleMethods: Array<"pix" | "prepaid_card" | "prepaid_pix">;
+  plans: Array<{
+    planId: string;
+    slug: string;
+    originalCents: number;
+    pixCents: number;
+    recurringCardCents: number;
+    prepaid: Array<{ months: 1 | 2 | 3; originalCents: number; discountedCents: number }>;
+  }>;
 };
 
 export type MercadoPagoPixResult = {
@@ -167,17 +181,21 @@ export async function getBillingCapabilities(): Promise<BillingCapabilities> {
 export async function createCardSubscriptionCheckout(
   planSlug: string
 ): Promise<MercadoPagoCheckoutResult> {
-  return trpcClient.billing.createCardSubscriptionCheckout.mutate({ planSlug, referralCode: getReferralHint() });
+  return trpcClient.billing.createCardSubscriptionCheckout.mutate({ planSlug });
 }
 
 export async function createMercadoPagoPixPayment(
   planSlug: string
 ): Promise<MercadoPagoPixResult> {
-  return trpcClient.billing.createPixPayment.mutate({ planSlug, referralCode: getReferralHint() });
+  return trpcClient.billing.createPixPayment.mutate({ planSlug });
 }
 
 export async function createPrepaidCheckout(planSlug: string, durationMonths: 1 | 2 | 3, paymentMethod: "card" | "pix") {
-  return trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod, referralCode: getReferralHint() });
+  return trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod });
+}
+
+export async function getReferralPricingPreview(): Promise<ReferralPricingPreview> {
+  return trpcClient.referrals.pricingPreview.query() as Promise<ReferralPricingPreview>;
 }
 
 export async function getMySubscription() {

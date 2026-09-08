@@ -12,14 +12,56 @@ export async function referralRpc(name: string, args: Record<string, unknown>) {
     throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
   return data;
 }
-export async function attachReferral(userId: string, code?: string) {
-  if (!code) return;
+
+type ReferralAttributionResult = {
+  status: "queued" | "attached" | "rejected" | "missing" | "pending";
+  reason?: string;
+  referral_id?: string;
+};
+
+function attributionResult(value: unknown): ReferralAttributionResult {
+  if (!value || typeof value !== "object" || !("status" in value))
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "A atribuição da indicação retornou uma resposta inválida.",
+    });
+  return value as ReferralAttributionResult;
+}
+
+export async function registerReferralAttribution(userId: string, code?: string) {
+  if (!code) return { status: "missing" } as const;
   await assertRateLimit({
     key: `referral:attach:${userId}`,
     limit: 30,
     windowMs: 60 * 60 * 1000,
   });
-  await referralRpc("referral_attach", { p_user: userId, p_code: code });
+  const queued = attributionResult(
+    await referralRpc("referral_queue_attribution", {
+      p_user: userId,
+      p_code: code,
+    })
+  );
+  if (queued.status === "rejected") return queued;
+  try {
+    return attributionResult(
+      await referralRpc("referral_finalize_attribution", { p_user: userId })
+    );
+  } catch {
+    // The queue RPC committed first, so a later authenticated request can
+    // finalize this attribution without the browser hint.
+    return { status: "pending" } as const;
+  }
+}
+
+export async function finalizePendingReferral(userId: string) {
+  return attributionResult(
+    await referralRpc("referral_finalize_attribution", { p_user: userId })
+  );
+}
+
+export async function getReferralPricingPreview(userId: string) {
+  await finalizePendingReferral(userId);
+  return referralRpc("referral_pricing_preview", { p_user: userId });
 }
 export const referralCodeSchema = z
   .string()
@@ -44,9 +86,9 @@ export const referralRouter = router({
       p_admin: false,
     });
   }),
-  attach: protectedProcedure
-    .input(z.object({ code: referralCodeSchema }))
-    .mutation(({ ctx, input }) => attachReferral(ctx.user.id, input.code)),
+  pricingPreview: protectedProcedure.query(({ ctx }) =>
+    getReferralPricingPreview(ctx.user.id)
+  ),
   admin: adminProcedure.query(({ ctx }) =>
     referralRpc("referral_dashboard", { p_user: ctx.user.id, p_admin: true })
   ),

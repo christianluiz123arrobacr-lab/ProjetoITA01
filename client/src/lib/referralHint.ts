@@ -10,3 +10,11 @@ export function getReferralHint(): string | undefined {
     return undefined;
   }
 }
+
+export function clearReferralHint() {
+  try {
+    sessionStorage.removeItem("vetor-referral");
+  } catch {
+    // Storage may be unavailable; attribution has already been handled by the backend.
+  }
+}

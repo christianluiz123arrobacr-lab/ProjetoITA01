@@ -489,6 +489,67 @@ try {
     10,
     "Versão nova preserva recompensa anterior"
   );
+
+  // Real checkout regression: R$ 11,00 must become R$ 9,35 for a newly
+  // registered referee, while recurring card remains at full price.
+  await campaign({ discount: 15, goal: 3, reward_days: 30 });
+  const plan11 = (
+    await one("insert into billing_plans(slug,name,price_cents,max_active_subscriptions,display_order) values('plano-11','Plano R$ 11',1100,100,99) returning id")
+  ).id;
+  const referrer11 = await user("referrer-11@example.test");
+  const code11 = randomUUID().replaceAll("-", "");
+  await db.query("insert into referral_codes values($1,$2,now())", [referrer11, code11]);
+  const referee11 = await user("new-referee-11@example.test");
+  ok(
+    (await one("select referral_queue_attribution($1,$2) as result", [referee11, code11])).result.status,
+    "queued",
+    "Cadastro grava pendência confiável no backend"
+  );
+  ok(
+    (await one("select referral_finalize_attribution($1) as result", [referee11])).result.status,
+    "attached",
+    "Login finaliza vínculo persistido de modo idempotente"
+  );
+  ok(
+    (await one("select count(*)::int as n from student_referrals where referee_id=$1", [referee11])).n,
+    1,
+    "Conta nova possui vínculo em student_referrals"
+  );
+  const preview11 = (await one("select referral_pricing_preview($1) as result", [referee11])).result;
+  const previewPlan11 = preview11.plans.find(item => item.planId === plan11);
+  ok([preview11.linked, preview11.eligible, preview11.discountPercent, previewPlan11.pixCents], [true, true, 15, 935], "Prévia autenticada mostra R$ 9,35");
+
+  const sub11 = await sub(referee11);
+  const pix11 = (
+    await one("insert into billing_payments(user_id,subscription_id,original_subscription_id,plan_id,status,gateway,payment_method,amount_cents,access_duration_value,access_duration_unit,metadata) values($1,$2,$2,$3,'pending','mercadopago','mercadopago_pix',1100,30,'days','{}') returning id", [referee11, sub11, plan11])
+  ).id;
+  ok((await one("select referral_price_payment($1) as cents", [pix11])).cents, 935, "Pix envia 935 centavos ao gateway");
+  ok((await one("select amount_cents as cents from billing_payments where id=$1", [pix11])).cents, 935, "Pagamento local preserva os mesmos 935 centavos");
+
+  const second11 = (
+    await one("insert into billing_payments(user_id,subscription_id,original_subscription_id,plan_id,status,gateway,payment_method,amount_cents,access_duration_value,access_duration_unit,metadata) values($1,$2,$2,$3,'pending','mercadopago','mercadopago_pix',1100,30,'days','{}') returning id", [referee11, await sub(referee11), plan11])
+  ).id;
+  ok((await one("select referral_price_payment($1) as cents", [second11])).cents, 1100, "Segundo pagamento não reutiliza o desconto");
+
+  const recurringUser = await user("recurring-referee@example.test");
+  await db.query("select referral_attach($1,$2)", [recurringUser, code11]);
+  const recurringPayment = (
+    await one("insert into billing_payments(user_id,subscription_id,original_subscription_id,plan_id,status,gateway,payment_method,amount_cents,access_duration_value,access_duration_unit,metadata) values($1,$2,$2,$3,'pending','mercadopago','mercadopago_card',1100,1,'months','{}') returning id", [recurringUser, await sub(recurringUser), plan11])
+  ).id;
+  ok((await one("select referral_price_payment($1) as cents", [recurringPayment])).cents, 1100, "Cartão mensal recorrente permanece em R$ 11,00");
+
+  const packageUser = await user("package-referee@example.test");
+  await db.query("select referral_attach($1,$2)", [packageUser, code11]);
+  const packagePayment = (
+    await one("insert into billing_payments(user_id,subscription_id,original_subscription_id,plan_id,status,gateway,payment_method,amount_cents,access_duration_value,access_duration_unit,metadata) values($1,$2,$2,$3,'pending','mercadopago','mercadopago_card',3300,3,'months','{\"prepaid_package\":true}') returning id", [packageUser, await sub(packageUser), plan11])
+  ).id;
+  ok((await one("select referral_price_payment($1) as cents", [packagePayment])).cents, 2805, "Pacote pré-pago de três meses recebe 15%");
+
+  const oldAccount = await user("old-account@example.test");
+  await db.query("update auth.users set created_at=now()-interval '3 hours' where id=$1", [oldAccount]);
+  ok((await one("select referral_queue_attribution($1,$2) as result", [oldAccount, code11])).result.reason, "account_not_new", "Conta antiga não pode aproveitar link aberto depois");
+  ok((await one("select referral_queue_attribution($1,$2) as result", [await user(), "00000000000000000000000000000000"])).result.reason, "invalid_code", "Código inválido é rejeitado");
+
   await db.exec("set role authenticated");
   await assert.rejects(
     db.query("select referral_reconcile_payment($1)", [p1]),
@@ -501,6 +562,9 @@ try {
   );
   checks++;
   await db.exec("reset role");
+  await db.exec(
+    readFileSync("supabase/rollbacks/202609080001_referral_checkout_fix.sql", "utf8")
+  );
   await db.exec(
     readFileSync("supabase/rollbacks/202609060002_referral_program.sql", "utf8")
   );
