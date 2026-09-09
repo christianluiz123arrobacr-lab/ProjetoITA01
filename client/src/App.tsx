@@ -89,9 +89,9 @@ const AdminGestureLabPage = lazyWithRetry(
   "AdminGestureLabPage",
   () => import("./pages/AdminGestureLabPage")
 );
-const AdminSpatialGeometryPrototypePage = lazyWithRetry(
-  "AdminSpatialGeometryPrototypePage",
-  () => import("./pages/AdminSpatialGeometryPrototypePage")
+const AdminSpatialGestureWorkspacePage = lazyWithRetry(
+  "AdminSpatialGestureWorkspacePage",
+  () => import("./pages/AdminSpatialGestureWorkspacePage")
 );
 const AdminMolecularGeometryPrototypePage = lazyWithRetry(
   "AdminMolecularGeometryPrototypePage",
@@ -475,7 +475,7 @@ function PrivateRouter() {
             />
             <Route
               path="/admin/matematica/geometria-espacial"
-              component={AdminSpatialGeometryPrototypePage}
+              component={AdminSpatialGestureWorkspacePage}
             />
             <Route
               path="/admin/quimica/geometria-molecular"

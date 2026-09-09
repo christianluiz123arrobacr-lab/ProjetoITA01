@@ -4,6 +4,7 @@ export type SpatialHandGesture =
   | "open"
   | "indexPinch"
   | "middlePinch"
+  | "pinkyPinch"
   | "fist"
   | "none";
 
@@ -14,6 +15,7 @@ export type SpatialHand = {
   depth: number;
   roll: number;
   indexPinch: Point;
+  pinchRatios: { index: number; middle: number; pinky: number };
 };
 
 export type Vec3 = { x: number; y: number; z: number };
@@ -40,7 +42,10 @@ const cosine = (a: Point, b: Point, c: Point) => {
   );
 };
 
-export function analyzeSpatialHand(points: Point[]): SpatialHand | null {
+export function analyzeSpatialHand(
+  points: Point[],
+  sensitivity = 1
+): SpatialHand | null {
   if (
     points.length !== 21 ||
     points.some(point => ![point.x, point.y, point.z].every(Number.isFinite))
@@ -54,6 +59,7 @@ export function analyzeSpatialHand(points: Point[]): SpatialHand | null {
 
   const indexRatio = distance(points[4], points[8]) / scale;
   const middleRatio = distance(points[4], points[12]) / scale;
+  const pinkyRatio = distance(points[4], points[20]) / scale;
   const fingers = [5, 9, 13, 17].map(
     base =>
       cosine(points[base], points[base + 1], points[base + 3]) < -0.68 &&
@@ -71,10 +77,29 @@ export function analyzeSpatialHand(points: Point[]): SpatialHand | null {
     [8, 12, 16, 20].every(
       tip => distance(points[tip], points[0]) < scale * 1.4
     );
+  const threshold = Math.max(0.22, Math.min(0.38, 0.29 * sensitivity));
+  const closestPinch = Math.min(indexRatio, middleRatio, pinkyRatio);
+  const separated = (candidate: number, others: number[]) =>
+    candidate === closestPinch && others.every(value => candidate < value * 0.84);
+
   if (fist) gesture = "fist";
-  else if (middleRatio < 0.3 && indexRatio > 0.22) gesture = "middlePinch";
-  else if (indexRatio < 0.29) gesture = "indexPinch";
-  else if (thumb && fingers.every(Boolean)) gesture = "open";
+  else if (
+    pinkyRatio < threshold * 1.08 &&
+    separated(pinkyRatio, [indexRatio, middleRatio])
+  )
+    gesture = "pinkyPinch";
+  else if (
+    middleRatio < threshold &&
+    separated(middleRatio, [indexRatio, pinkyRatio])
+  )
+    gesture = "middlePinch";
+  else if (
+    indexRatio < threshold &&
+    separated(indexRatio, [middleRatio, pinkyRatio])
+  )
+    gesture = "indexPinch";
+  else if (thumb && fingers.every(Boolean) && closestPinch > threshold)
+    gesture = "open";
 
   const palmZ =
     (points[0].z + points[5].z + points[9].z + points[13].z + points[17].z) / 5;
@@ -86,6 +111,11 @@ export function analyzeSpatialHand(points: Point[]): SpatialHand | null {
     depth: palmWidth + Math.abs(points[9].z - palmZ) * 0.35,
     roll: Math.atan2(points[5].y - points[17].y, points[5].x - points[17].x),
     indexPinch: midpoint(points[4], points[8]),
+    pinchRatios: {
+      index: indexRatio,
+      middle: middleRatio,
+      pinky: pinkyRatio,
+    },
   };
 }
 

@@ -108,6 +108,9 @@ describe("spatial gesture math", () => {
     const middle = openHand();
     middle[4] = { ...middle[12] };
     expect(analyzeSpatialHand(middle)?.gesture).toBe("middlePinch");
+    const pinky = openHand();
+    pinky[4] = { ...pinky[20] };
+    expect(analyzeSpatialHand(pinky)?.gesture).toBe("pinkyPinch");
     const fist = openHand();
     [8, 12, 16, 20].forEach(id => {
       fist[id] = p(0.5, 0.76);
