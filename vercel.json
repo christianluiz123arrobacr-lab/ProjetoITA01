@@ -37,7 +37,7 @@
       ]
     },
     {
-      "source": "/((?!(admin/laboratorio-gestos|admin/matematica/geometria-espacial)/?$).*)",
+      "source": "/((?!admin/laboratorio-gestos/?$)(?!admin/matematica/geometria-espacial/?$).*)",
       "headers": [
         {
           "key": "Permissions-Policy",
