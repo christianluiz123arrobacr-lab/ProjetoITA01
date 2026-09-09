@@ -85,6 +85,10 @@ const AdminProfilesPage = lazyWithRetry(
   "AdminProfilesPage",
   () => import("./pages/AdminProfilesPage")
 );
+const AdminGestureLabPage = lazyWithRetry(
+  "AdminGestureLabPage",
+  () => import("./pages/AdminGestureLabPage")
+);
 const AdminSpatialGeometryPrototypePage = lazyWithRetry(
   "AdminSpatialGeometryPrototypePage",
   () => import("./pages/AdminSpatialGeometryPrototypePage")
@@ -465,6 +469,10 @@ function PrivateRouter() {
             <Route path="/admin/uploads" component={AdminUploadsPage} />
             <Route path="/admin/vet" component={AdminVetPage} />
             <Route path="/admin/logs" component={AdminLogsPage} />
+            <Route
+              path="/admin/laboratorio-gestos"
+              component={AdminGestureLabPage}
+            />
             <Route
               path="/admin/matematica/geometria-espacial"
               component={AdminSpatialGeometryPrototypePage}

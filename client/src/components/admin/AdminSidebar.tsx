@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   MessageSquareWarning,
   CreditCard,
-  Box,
+  Hand,
 } from "lucide-react";
 
 const adminItems = [
@@ -19,11 +19,19 @@ const adminItems = [
   { href: "/admin/assinaturas", label: "Assinaturas", icon: CreditCard },
   { href: "/admin/questoes", label: "Questões", icon: FileText },
   { href: "/admin/resolucoes", label: "Resoluções", icon: Blocks },
-  { href: "/admin/reports", label: "Erros reportados", icon: MessageSquareWarning },
+  {
+    href: "/admin/reports",
+    label: "Erros reportados",
+    icon: MessageSquareWarning,
+  },
   { href: "/admin/uploads", label: "Uploads", icon: Image },
   { href: "/admin/vet", label: "VET", icon: BrainCircuit },
   { href: "/admin/logs", label: "Logs", icon: ScrollText },
-  { href: "/admin/matematica/geometria-espacial", label: "Geometria 3D", icon: Box },
+  {
+    href: "/admin/laboratorio-gestos",
+    label: "Laboratório de Gestos",
+    icon: Hand,
+  },
 ];
 
 export default function AdminSidebar() {
@@ -38,18 +46,41 @@ export default function AdminSidebar() {
           </div>
 
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Painel ADM</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Controle administrativo</p>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              Painel ADM
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Controle administrativo
+            </p>
           </div>
         </div>
 
         <nav className="space-y-2">
-          {adminItems.map((item) => {
+          {adminItems.map(item => {
             const Icon = item.icon;
             const active =
               location === item.href ||
               (item.href !== "/admin" && location.startsWith(item.href));
 
+            // Full document navigation applies the camera policy scoped to this route.
+            if (item.href === "/admin/laboratorio-gestos")
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500 ${active ? "border-slate-700 bg-slate-900 text-white dark:bg-slate-700" : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800"}`}
+                >
+                  <Hand className="h-4 w-4 shrink-0" />
+                  <span>
+                    <span className="block text-sm font-semibold">
+                      {item.label}
+                    </span>
+                    <span className="mt-1 block text-xs">
+                      Controle simuladores com a câmera e movimentos da mão.
+                    </span>
+                  </span>
+                </a>
+              );
             return (
               <Link key={item.href} href={item.href}>
                 <button
