@@ -138,13 +138,13 @@ export default function AdminResolutionsPage() {
         title="Resoluções ADM"
         subtitle="Gerencie os blocos de resolução das questões, incluindo texto, latex e imagem."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">
                 Editor administrativo de resoluções
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Total carregado: {filteredQuestions.length} de {questions.length} questões
               </p>
             </div>
@@ -156,7 +156,7 @@ export default function AdminResolutionsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar por código, enunciado, disciplina, conteúdo..."
-                className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-11 pr-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               />
             </div>
           </div>
@@ -164,28 +164,28 @@ export default function AdminResolutionsPage() {
 
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando resoluções...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando resoluções...</p>
           </Card>
         ) : error ? (
-          <Card className="p-8 border-red-200 bg-red-50">
+          <Card className="p-8 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">
                   Erro ao carregar resoluções
                 </h2>
-                <p className="text-red-600">{error}</p>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : filteredQuestions.length === 0 ? (
           <Card className="p-10 text-center">
             <FileText className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-            <h2 className="text-lg font-bold text-slate-900 mb-2">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Nenhuma questão encontrada
             </h2>
-            <p className="text-slate-500">
+            <p className="text-slate-500 dark:text-slate-400">
               Tente outro termo de busca.
             </p>
           </Card>
@@ -200,7 +200,7 @@ export default function AdminResolutionsPage() {
               return (
                 <Card
                   key={question.id}
-                  className="p-5 bg-white border-slate-200 shadow-sm"
+                  className="p-5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm"
                 >
                   <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -209,45 +209,45 @@ export default function AdminResolutionsPage() {
                           {question.codigo || "Sem código"}
                         </span>
 
-                        <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold border border-blue-200">
+                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-200 dark:border-blue-800">
                           {normalizarDisciplina(question)}
                         </span>
 
-                        <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold border border-purple-200">
+                        <span className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-xs font-semibold border border-purple-200 dark:border-purple-800">
                           {question.conteudo || "Sem conteúdo"}
                         </span>
                       </div>
 
-                      <p className="text-base font-semibold text-slate-900 mb-2">
+                      <p className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">
                         {textoCurto(question.enunciado, 150)}
                       </p>
 
-                      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm text-slate-600">
+                      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm text-slate-600 dark:text-slate-300">
                         <p>
-                          <span className="font-semibold text-slate-800">Assunto:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Assunto:</span>{" "}
                           {question.assunto || "—"}
                         </p>
                         <p>
-                          <span className="font-semibold text-slate-800">Banca:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Banca:</span>{" "}
                           {question.banca || "—"}
                         </p>
                         <p>
-                          <span className="font-semibold text-slate-800">Ano:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Ano:</span>{" "}
                           {question.ano || "—"}
                         </p>
                         <p>
-                          <span className="font-semibold text-slate-800">ID:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">ID:</span>{" "}
                           {question.id}
                         </p>
                       </div>
 
                       <div className="flex flex-wrap gap-3 mt-4">
-                        <div className="inline-flex items-center gap-2 rounded-2xl bg-orange-50 border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700">
+                        <div className="inline-flex items-center gap-2 rounded-2xl bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 px-3 py-2 text-sm font-semibold text-orange-700 dark:text-orange-300">
                           <Blocks className="w-4 h-4" />
                           {summary.totalBlocks} bloco(s)
                         </div>
 
-                        <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700">
+                        <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                           <Image className="w-4 h-4" />
                           {summary.totalImages} imagem(ns)
                         </div>

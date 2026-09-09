@@ -30,6 +30,11 @@ const guard = readFileSync(
   new URL("../client/src/components/SubscriptionGuard.tsx", import.meta.url),
   "utf8"
 );
+const adminGuard = readFileSync(
+  new URL("../client/src/components/admin/AdminGuard.tsx", import.meta.url),
+  "utf8"
+);
+const app = readFileSync(new URL("../client/src/App.tsx", import.meta.url), "utf8");
 const router = readFileSync(new URL("./routers.ts", import.meta.url), "utf8");
 const paymentMigration = readFileSync(
   new URL(
@@ -134,6 +139,12 @@ describe("integração da tela pendente e do guard", () => {
     );
   });
 
+  it("consulta o Mercado Pago automaticamente enquanto a assinatura está pendente", () => {
+    expect(pendingPage).toContain("loadLatestSubscription(false, true)");
+    expect(pendingPage).toContain("syncGateway = showRefreshing");
+    expect(pendingPage).toContain("const refreshed = syncGateway");
+  });
+
   it("mantém erro temporário no guard e oferece nova tentativa sem redirecionar", () => {
     expect(guard).toContain('setAccessState("error")');
     expect(guard).toContain("Tentar novamente");
@@ -141,6 +152,14 @@ describe("integração da tela pendente e do guard", () => {
     expect(guard).not.toMatch(
       /if \(accessStatusQuery\.error\)[\s\S]{0,180}setAccessState\("blocked"\)/
     );
+  });
+
+  it("mantém erros estáveis e não submete rotas administrativas à assinatura", () => {
+    expect(guard).toContain("accessStatusQuery.error && !accessStatusQuery.data");
+    expect(adminGuard).toContain("meQuery.error && !meQuery.data");
+    expect(guard).toContain("refetchOnReconnect: false");
+    expect(adminGuard).toContain("refetchOnReconnect: false");
+    expect(app).toContain("<SubscriptionGuard bypass={isAdminRoute}>");
   });
 
   it("usa exclusivamente a RPC canônica para estudantes e preserva acesso por papel", () => {

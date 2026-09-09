@@ -223,7 +223,19 @@ describe("produção de billing orchestration", () => {
     );
     expect(processGatewayPayment).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ success: true, paymentStatus: "approved", accessApplied: true, subscriptionId: local.subscription_id });
-    expect(writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ admin_user_id: "admin-1", entity_id: local.id }));
+    expect(writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ actor_user_id: "admin-1", entity_id: local.id }));
+  });
+
+  it("não transforma pagamento aprovado em erro quando apenas a auditoria falha", async () => {
+    const local = { id: "11111111-1111-4111-8111-111111111111", subscription_id: "22222222-2222-4222-8222-222222222222", gateway: "mercadopago", gateway_payment_id: "9001", status: "pending" };
+    const result = await reconcileMercadoPagoPaymentByAdmin({ billingPaymentId: local.id, adminUserId: "admin-1" }, {
+      loadLocalPayment: vi.fn().mockResolvedValue(local),
+      getGatewayPayment: vi.fn().mockResolvedValue({ id: 9001, status: "approved" }),
+      processGatewayPayment: vi.fn().mockResolvedValue({ paymentStatus: "approved", kind: "pix" }),
+      reloadLocalPayment: vi.fn().mockResolvedValue({ ...local, status: "approved", access_applied_at: "2026-07-28T00:00:00Z" }),
+      writeAuditLog: vi.fn().mockRejectedValue(new Error("schema cache")),
+    } as any);
+    expect(result).toMatchObject({ success: true, paymentStatus: "approved", accessApplied: true });
   });
 
   it("reconciliação administrativa repetida preserva a idempotência do aplicador", async () => {

@@ -44,6 +44,8 @@ import { isMultitouchGesture, shouldNavigateInsteadOfDraw } from "./studyCanvasP
 import { getPaperDimensions, getPaperViewportStyle } from "./studyCanvasPaper";
 import { PaperViewport } from "./PaperViewport";
 import { BRUSH_RENDERING } from "./studyCanvasBrush";
+import { calculateImmediatePointWidth, getSafeCanvasPixelRatio, normalizePointerPressure } from "./studyCanvasInk";
+import { getShapeVertices, recognizePerfectShape } from "./studyCanvasShapes";
 import { buildVectorStudyCanvasPdf, safePdfFileName, type PrintPaperSize } from "@/lib/studyCanvasPdf";
 
 export type StudyCanvasPage = {
@@ -538,15 +540,7 @@ function eraseWholeStrokes(
   return strokes.filter((stroke) => stroke.tool === "meta" || !isStrokeTouchedByPath(stroke, path, radius));
 }
 
-function normalizePressure(pressure: number | undefined, pointerType: string) {
-  if (pointerType === "mouse") return 0.65;
-
-  if (typeof pressure !== "number" || pressure <= 0) {
-    return pointerType === "touch" ? 0.55 : 0.5;
-  }
-
-  return clamp(pressure, 0.08, 1);
-}
+const normalizePressure = normalizePointerPressure;
 
 function getFallbackWidth(point: ScratchpadPoint, stroke: ScratchpadStroke) {
   const pressure = clamp(point.pressure ?? 0.5, 0.08, 1);
@@ -570,44 +564,7 @@ function getPointWidth(point: ScratchpadPoint, stroke: ScratchpadStroke) {
   return getFallbackWidth(point, stroke);
 }
 
-function calculatePointWidth({
-  point,
-  previousPoint,
-  size,
-  brush,
-}: {
-  point: ScratchpadPoint;
-  previousPoint?: ScratchpadPoint;
-  size: number;
-  brush: ScratchpadBrush;
-}) {
-  const pressure = clamp(point.pressure ?? 0.5, 0.08, 1);
-
-  if (brush === "highlighter") {
-    return clamp(size * 2.4, 6, 40);
-  }
-
-  const pressureFactor =
-    brush === "brush" ? 0.18 + pressure * 1.7 : 0.46 + pressure * 0.9;
-
-  let speedFactor = 1;
-
-  if (previousPoint?.time && point.time && point.time > previousPoint.time) {
-    const distanceBetweenPoints = distance(point, previousPoint);
-    const deltaTime = point.time - previousPoint.time;
-    const velocity = distanceBetweenPoints / Math.max(deltaTime, 1);
-
-    speedFactor = clamp(1.12 - velocity * 0.35, 0.62, 1.12);
-  }
-
-  const rawWidth = clamp(size * pressureFactor * speedFactor, 0.65, size * 2.05);
-
-  if (typeof previousPoint?.width === "number") {
-    return previousPoint.width * 0.72 + rawWidth * 0.28;
-  }
-
-  return rawWidth;
-}
+const calculatePointWidth = calculateImmediatePointWidth;
 
 function shouldAppendPoint(
   previousPoint: ScratchpadPoint | undefined,
@@ -792,6 +749,80 @@ function drawRoundDot(
   ctx.fill();
 }
 
+function getRenderingWidth(
+  point: ScratchpadPoint,
+  stroke: ScratchpadStroke,
+  startDistance: number,
+  remainingDistance: number,
+  last: ScratchpadPoint,
+  previous: ScratchpadPoint
+) {
+  const width = getPointWidth(point, stroke);
+  if (stroke.brush === "highlighter") return width;
+
+  const startTaperLength = Math.max(7, stroke.size * 2.6);
+  const startTaper = clamp(0.28 + (startDistance / startTaperLength) * 0.72, 0.28, 1);
+
+  const isLightRelease = (last.pressure ?? 0.5) < 0.42 || getPointWidth(last, stroke) < getPointWidth(previous, stroke) * 0.86;
+  const endTaperLength = Math.max(6, stroke.size * 2.2);
+  const endTarget = isLightRelease ? 0.22 : 0.9;
+  const endTaper = clamp(endTarget + (remainingDistance / endTaperLength) * (1 - endTarget), endTarget, 1);
+
+  return width * Math.min(startTaper, endTaper);
+}
+
+function getStrokeOutline(stroke: ScratchpadStroke) {
+  const points = stroke.points;
+  const left: Array<{ x: number; y: number }> = [];
+  const right: Array<{ x: number; y: number }> = [];
+  const distancesFromStart = new Array<number>(points.length).fill(0);
+
+  for (let index = 1; index < points.length; index += 1) {
+    distancesFromStart[index] = distancesFromStart[index - 1] + distance(points[index - 1], points[index]);
+  }
+
+  const totalDistance = distancesFromStart[distancesFromStart.length - 1] ?? 0;
+  const last = points[points.length - 1];
+  const penultimate = points[Math.max(0, points.length - 2)];
+
+  points.forEach((point, index) => {
+    const previous = points[Math.max(0, index - 1)];
+    const next = points[Math.min(points.length - 1, index + 1)];
+    const angle = Math.atan2(next.y - previous.y, next.x - previous.x);
+    const radius = getRenderingWidth(
+      point,
+      stroke,
+      distancesFromStart[index],
+      totalDistance - distancesFromStart[index],
+      last,
+      penultimate
+    ) / 2;
+    const normalX = -Math.sin(angle) * radius;
+    const normalY = Math.cos(angle) * radius;
+    left.push({ x: point.x + normalX, y: point.y + normalY });
+    right.push({ x: point.x - normalX, y: point.y - normalY });
+  });
+
+  return [...left, ...right.reverse()];
+}
+
+function traceSmoothClosedPath(
+  ctx: CanvasRenderingContext2D,
+  points: Array<{ x: number; y: number }>
+) {
+  if (points.length < 3) return;
+  const firstMidpoint = midpoint(points[points.length - 1], points[0]);
+  ctx.beginPath();
+  ctx.moveTo(firstMidpoint.x, firstMidpoint.y);
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const nextMidpoint = midpoint(current, next);
+    ctx.quadraticCurveTo(current.x, current.y, nextMidpoint.x, nextMidpoint.y);
+  }
+  ctx.closePath();
+}
+
 function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
   if (stroke.points.length === 0) return;
 
@@ -815,39 +846,26 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
     return;
   }
 
-  if (stroke.points.length === 2) {
-    const previous = stroke.points[0];
-    const current = stroke.points[1];
+  if (stroke.brush === "highlighter") {
+    const points = stroke.points;
     ctx.beginPath();
-    ctx.moveTo(previous.x, previous.y);
-    ctx.lineTo(current.x, current.y);
-    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke)) / 2;
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const current = points[index];
+      const nextMidpoint = midpoint(current, points[index + 1]);
+      ctx.quadraticCurveTo(current.x, current.y, nextMidpoint.x, nextMidpoint.y);
+    }
+    const last = points[points.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.lineWidth = getPointWidth(last, stroke);
     ctx.stroke();
     ctx.restore();
     return;
   }
 
-  const points = stroke.points;
-
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const previous = points[i - 1];
-    const current = points[i];
-    const next = points[i + 1];
-    const startMid = {
-      x: (previous.x + current.x) / 2,
-      y: (previous.y + current.y) / 2,
-    };
-    const endMid = {
-      x: (current.x + next.x) / 2,
-      y: (current.y + next.y) / 2,
-    };
-
-    ctx.beginPath();
-    ctx.moveTo(startMid.x, startMid.y);
-    ctx.quadraticCurveTo(current.x, current.y, endMid.x, endMid.y);
-    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke) + getPointWidth(next, stroke)) / 3;
-    ctx.stroke();
-  }
+  traceSmoothClosedPath(ctx, getStrokeOutline(stroke));
+  ctx.fillStyle = stroke.color;
+  ctx.fill();
 
   ctx.restore();
 }
@@ -880,10 +898,17 @@ function drawShapeStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke
 
   const start = stroke.points[0];
   const end = stroke.points[stroke.points.length - 1];
-  const x = Math.min(start.x, end.x);
-  const y = Math.min(start.y, end.y);
-  const width = Math.abs(end.x - start.x);
-  const height = Math.abs(end.y - start.y);
+  let x = Math.min(start.x, end.x);
+  let y = Math.min(start.y, end.y);
+  let width = Math.abs(end.x - start.x);
+  let height = Math.abs(end.y - start.y);
+  if (stroke.shape === "square" || stroke.shape === "circle") {
+    const side = Math.max(width, height);
+    x = (start.x + end.x) / 2 - side / 2;
+    y = (start.y + end.y) / 2 - side / 2;
+    width = side;
+    height = side;
+  }
 
   ctx.save();
   ctx.globalAlpha = stroke.opacity ?? 1;
@@ -892,20 +917,20 @@ function drawShapeStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  if (stroke.shape === "rectangle" || stroke.shape === "ellipse" || stroke.shape === "triangle") {
+  if (!["line", "arrow"].includes(stroke.shape ?? "")) {
     const centerX = x + width / 2;
     const centerY = y + height / 2;
 
     ctx.translate(centerX, centerY);
     ctx.rotate(stroke.rotation ?? 0);
 
-    if (stroke.shape === "rectangle") {
+    if (stroke.shape === "rectangle" || stroke.shape === "square") {
       ctx.strokeRect(-width / 2, -height / 2, width, height);
-    } else if (stroke.shape === "triangle") {
+    } else if (stroke.shape === "triangle" || stroke.shape === "diamond" || stroke.shape === "pentagon") {
+      const vertices = getShapeVertices(stroke.shape, { x: -width / 2, y: -height / 2 }, { x: width / 2, y: height / 2 });
       ctx.beginPath();
-      ctx.moveTo(0, -height / 2);
-      ctx.lineTo(width / 2, height / 2);
-      ctx.lineTo(-width / 2, height / 2);
+      ctx.moveTo(vertices[0].x, vertices[0].y);
+      vertices.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
       ctx.closePath();
       ctx.stroke();
     } else {
@@ -1314,7 +1339,7 @@ function rotatePointAround(point: ScratchpadPoint, center: ScratchpadPoint, angl
 }
 
 function rotateStroke(stroke: ScratchpadStroke, center: ScratchpadPoint, angle: number): ScratchpadStroke {
-  if (stroke.tool === "shape" && (stroke.shape === "rectangle" || stroke.shape === "ellipse")) {
+  if (stroke.tool === "shape" && !["line", "arrow"].includes(stroke.shape ?? "")) {
     return {
       ...stroke,
       rotation: (stroke.rotation ?? 0) + angle,
@@ -1373,8 +1398,10 @@ function transformStrokeToPerfectShape(
     }
   }
 
-  const width = Math.max(bounds.maxX - bounds.minX, 8);
-  const height = Math.max(bounds.maxY - bounds.minY, 8);
+  let width = Math.max(bounds.maxX - bounds.minX, 8);
+  let height = Math.max(bounds.maxY - bounds.minY, 8);
+  if (shape === "circle" || shape === "square") width = height = Math.max(width, height);
+  const center = getBoundsCenter(bounds);
   const size = Math.max(2, stroke.size);
 
   return {
@@ -1384,8 +1411,8 @@ function transformStrokeToPerfectShape(
     opacity: stroke.opacity ?? 1,
     size,
     points: [
-      { x: bounds.minX, y: bounds.minY, pressure: 0.6, width: size },
-      { x: bounds.minX + width, y: bounds.minY + height, pressure: 0.6, width: size },
+      { x: center.x - width / 2, y: center.y - height / 2, pressure: 0.6, width: size },
+      { x: center.x + width / 2, y: center.y + height / 2, pressure: 0.6, width: size },
     ],
   };
 }
@@ -1460,12 +1487,14 @@ function getStrokeShapeMetrics(stroke: ScratchpadStroke) {
   };
 }
 
-function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
+function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape | null {
   if (stroke.tool === "shape" && stroke.shape) return stroke.shape;
 
   const metrics = getStrokeShapeMetrics(stroke);
 
-  if (!metrics) return "line";
+  const recognized = recognizePerfectShape(stroke);
+  if (recognized && recognized.confidence >= 0.7) return recognized.shape;
+  if (!metrics) return null;
 
   const { aspect, closedness, straightness, ellipseScore, rectangleScore, triangleScore } = metrics;
 
@@ -1507,8 +1536,7 @@ function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
   if (rectangleClearlyBetter) return "rectangle";
   if (triangleClearlyBetter) return "triangle";
 
-  if (aspectLooksCircular) return "ellipse";
-  return rectangleScore <= ellipseScore ? "rectangle" : "ellipse";
+  return null;
 }
 
 function shouldAutoPerfectStroke(stroke: ScratchpadStroke, pointerUpTime?: number) {
@@ -1543,14 +1571,9 @@ function smoothFreehandStroke(stroke: ScratchpadStroke): ScratchpadStroke {
       ...point,
       x: previous.x * 0.18 + point.x * 0.64 + next.x * 0.18,
       y: previous.y * 0.18 + point.y * 0.64 + next.y * 0.18,
-      width:
-        typeof point.width === "number"
-          ? ((previous.width ?? point.width) * 0.2 + point.width * 0.6 + (next.width ?? point.width) * 0.2)
-          : point.width,
-      pressure:
-        typeof point.pressure === "number"
-          ? ((previous.pressure ?? point.pressure) * 0.2 + point.pressure * 0.6 + (next.pressure ?? point.pressure) * 0.2)
-          : point.pressure,
+      // Width and pressure stay attached to the physical sample that produced them.
+      width: point.width,
+      pressure: point.pressure,
     };
   });
 
@@ -1619,37 +1642,16 @@ function isPointNearStroke(point: ScratchpadPoint, stroke: ScratchpadStroke, rad
       return distancePointToSegment(point, start, end) <= radius + stroke.size;
     }
 
-    if (stroke.shape === "rectangle") {
-      const corners = [
-        { x: box.minX, y: box.minY },
-        { x: box.maxX, y: box.minY },
-        { x: box.maxX, y: box.maxY },
-        { x: box.minX, y: box.maxY },
-      ];
+    if (["rectangle", "square", "triangle", "diamond", "pentagon"].includes(stroke.shape ?? "")) {
+      const corners = getShapeVertices(stroke.shape!, start, end);
 
       return (
         isPointInsideBounds(point, box) ||
-        distancePointToSegment(point, corners[0], corners[1]) <= radius + stroke.size ||
-        distancePointToSegment(point, corners[1], corners[2]) <= radius + stroke.size ||
-        distancePointToSegment(point, corners[2], corners[3]) <= radius + stroke.size ||
-        distancePointToSegment(point, corners[3], corners[0]) <= radius + stroke.size
+        corners.some((corner, index) => distancePointToSegment(point, corner, corners[(index + 1) % corners.length]) <= radius + stroke.size)
       );
     }
 
-    if (stroke.shape === "triangle") {
-      const top = { x: (box.minX + box.maxX) / 2, y: box.minY };
-      const right = { x: box.maxX, y: box.maxY };
-      const left = { x: box.minX, y: box.maxY };
-
-      return (
-        isPointInsideBounds(point, box) ||
-        distancePointToSegment(point, top, right) <= radius + stroke.size ||
-        distancePointToSegment(point, right, left) <= radius + stroke.size ||
-        distancePointToSegment(point, left, top) <= radius + stroke.size
-      );
-    }
-
-    if (stroke.shape === "ellipse") {
+    if (stroke.shape === "ellipse" || stroke.shape === "circle") {
       const centerX = (start.x + end.x) / 2;
       const centerY = (start.y + end.y) / 2;
       const rx = Math.max(Math.abs(end.x - start.x) / 2, 1);
@@ -1752,12 +1754,12 @@ function straightenStroke(stroke: ScratchpadStroke): ScratchpadStroke {
   };
 }
 
-function getCanvasPixelRatio() {
-  return Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+function getCanvasPixelRatio(width = CANVAS_WIDTH, height = CANVAS_HEIGHT) {
+  return getSafeCanvasPixelRatio(window.devicePixelRatio || 1, width, height);
 }
 
 function ensureCanvasBitmap(canvas: HTMLCanvasElement, canvasWidth = CANVAS_WIDTH, canvasHeight = CANVAS_HEIGHT) {
-  const pixelRatio = getCanvasPixelRatio();
+  const pixelRatio = getCanvasPixelRatio(canvasWidth, canvasHeight);
   const nextWidth = Math.round(canvasWidth * pixelRatio);
   const nextHeight = Math.round(canvasHeight * pixelRatio);
 
@@ -1967,6 +1969,8 @@ export function StudyCanvasWorkspace({
   const inkPreviewFrameRef = useRef<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
+  const heldShapePreviewRef = useRef<ScratchpadStroke | null>(null);
+  const shapeHoldTimerRef = useRef<number | null>(null);
   const shapeStrokeRef = useRef<ScratchpadStroke | null>(null);
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
   const eraserFrameRef = useRef<number | null>(null);
@@ -1990,6 +1994,7 @@ export function StudyCanvasWorkspace({
   const historyRef = useRef<ScratchpadStroke[][]>([]);
   const redoHistoryRef = useRef<ScratchpadStroke[][]>([]);
   const clipboardRef = useRef<ScratchpadStroke[]>([]);
+  const processedSaveRequestRef = useRef(0);
   const viewRef = useRef<CanvasView>({
     zoom: 1,
     offsetX: 0,
@@ -2659,7 +2664,9 @@ export function StudyCanvasWorkspace({
   }, [autosaveIntervalMs, handleSave, persistence]);
 
   useEffect(() => {
-    if (saveRequest > 0) void handleSave();
+    if (saveRequest <= processedSaveRequestRef.current) return;
+    processedSaveRequestRef.current = saveRequest;
+    void handleSave();
   }, [handleSave, saveRequest]);
 
   useEffect(() => {
@@ -2712,6 +2719,9 @@ export function StudyCanvasWorkspace({
     strokesBeforeInteractionRef.current = null;
     selectionMovedRef.current = false;
     currentStrokeRef.current = null;
+    heldShapePreviewRef.current = null;
+    if (shapeHoldTimerRef.current !== null) window.clearTimeout(shapeHoldTimerRef.current);
+    shapeHoldTimerRef.current = null;
     shapeStrokeRef.current = null;
     if (eraserFrameRef.current !== null) {
       window.cancelAnimationFrame(eraserFrameRef.current);
@@ -2769,11 +2779,13 @@ export function StudyCanvasWorkspace({
     const currentCenterRaw = midpoint(firstRawPoint, secondRawPoint);
     const currentDistance = Math.max(distanceXY(firstRawPoint, secondRawPoint), 1);
 
-    const nextZoom = clamp(
+    const measuredZoom = clamp(
       gesture.initialZoom * (currentDistance / gesture.initialDistance),
       MIN_ZOOM,
       MAX_ZOOM
     );
+    const currentZoom = viewRef.current.zoom;
+    const nextZoom = currentZoom + (measuredZoom - currentZoom) * 0.42;
 
     updateView({
       zoom: nextZoom,
@@ -2874,6 +2886,19 @@ export function StudyCanvasWorkspace({
       const extraStroke = extraStrokeGetter();
       redrawCanvas(extraStroke);
     });
+  }
+
+  function restartShapeHoldPreview() {
+    if (shapeHoldTimerRef.current !== null) window.clearTimeout(shapeHoldTimerRef.current);
+    heldShapePreviewRef.current = null;
+    shapeHoldTimerRef.current = window.setTimeout(() => {
+      const stroke = currentStrokeRef.current;
+      if (!stroke) return;
+      const recognition = recognizePerfectShape(stroke);
+      if (!recognition || recognition.confidence < 0.7) return;
+      heldShapePreviewRef.current = transformStrokeToPerfectShape(stroke, recognition.shape);
+      redrawCanvas(heldShapePreviewRef.current);
+    }, AUTO_SHAPE_HOLD_MS);
   }
 
   function appendPointsToCurrentStroke(points: ScratchpadPoint[]) {
@@ -3078,6 +3103,7 @@ export function StudyCanvasWorkspace({
       };
 
       currentStrokeRef.current = stroke;
+      restartShapeHoldPreview();
       setSelectedIds([]);
       redrawCanvas(stroke);
       return;
@@ -3247,7 +3273,8 @@ export function StudyCanvasWorkspace({
 
     if (mode === "stroke" && currentStrokeRef.current) {
       appendPointsToCurrentStroke(points);
-      scheduleInkPreview(() => currentStrokeRef.current);
+      restartShapeHoldPreview();
+      scheduleInkPreview(() => heldShapePreviewRef.current ?? currentStrokeRef.current);
       return;
     }
 
@@ -3362,12 +3389,13 @@ export function StudyCanvasWorkspace({
     const mode = interactionModeRef.current;
 
     if (mode === "stroke" && currentStrokeRef.current) {
-      let finishedStroke = smoothFreehandStroke(currentStrokeRef.current);
+      let finishedStroke = heldShapePreviewRef.current ?? smoothFreehandStroke(currentStrokeRef.current);
       const previous = strokesRef.current;
       const pointerUpTime = event?.nativeEvent.timeStamp;
 
       if (shouldAutoPerfectStroke(finishedStroke, pointerUpTime)) {
-        finishedStroke = transformStrokeToPerfectShape(finishedStroke, guessPerfectShape(finishedStroke));
+        const recognizedShape = guessPerfectShape(finishedStroke);
+        if (recognizedShape) finishedStroke = transformStrokeToPerfectShape(finishedStroke, recognizedShape);
       }
 
       currentStrokeRef.current = null;
@@ -3404,6 +3432,9 @@ export function StudyCanvasWorkspace({
     }
 
     currentStrokeRef.current = null;
+    heldShapePreviewRef.current = null;
+    if (shapeHoldTimerRef.current !== null) window.clearTimeout(shapeHoldTimerRef.current);
+    shapeHoldTimerRef.current = null;
     shapeStrokeRef.current = null;
     eraserPathRef.current = [];
     lassoPathRef.current = [];
@@ -3531,8 +3562,12 @@ export function StudyCanvasWorkspace({
     if (shapeTool === "line") return "Reta";
     if (shapeTool === "arrow") return "Seta";
     if (shapeTool === "rectangle") return "Retângulo";
-    if (shapeTool === "ellipse") return "Círculo";
+    if (shapeTool === "square") return "Quadrado";
+    if (shapeTool === "ellipse") return "Elipse";
+    if (shapeTool === "circle") return "Círculo";
     if (shapeTool === "triangle") return "Triângulo";
+    if (shapeTool === "diamond") return "Losango";
+    if (shapeTool === "pentagon") return "Pentágono";
     return "Forma";
   }
 
@@ -3587,7 +3622,7 @@ export function StudyCanvasWorkspace({
 
     event.preventDefault();
 
-    const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+    const factor = Math.exp(-event.deltaY * 0.0015);
     const nextZoom = clamp(viewRef.current.zoom * factor, MIN_ZOOM, MAX_ZOOM);
     const rawPoint = getRawCanvasPoint(event.clientX, event.clientY);
 
@@ -3673,7 +3708,16 @@ export function StudyCanvasWorkspace({
   }
 
   function autoPerfectSelection() {
-    applyTransformToSelection((stroke) => transformStrokeToPerfectShape(stroke, guessPerfectShape(stroke)));
+    const shapes = selectedIds.map((id) => strokesRef.current.find((stroke) => stroke.id === id)).filter(Boolean)
+      .map((stroke) => guessPerfectShape(stroke!));
+    if (!shapes.some(Boolean)) {
+      setStatus("Não foi possível identificar uma forma com segurança");
+      return;
+    }
+    applyTransformToSelection((stroke) => {
+      const shape = guessPerfectShape(stroke);
+      return shape ? transformStrokeToPerfectShape(stroke, shape) : stroke;
+    });
   }
 
   function deleteSelection() {
@@ -4152,7 +4196,7 @@ export function StudyCanvasWorkspace({
 
       {open ? (
         <div className={`${fullscreen ? "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden bg-black p-0" : compactMode ? "h-full p-0" : "border-t border-violet-100 p-4 md:p-5"}`}>
-          {!userId ? (
+          {!userId && !persistence ? (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               <p>
@@ -4462,8 +4506,8 @@ export function StudyCanvasWorkspace({
                       <button type="button" onClick={() => transformSelectionToPerfectShape("line")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Reta</button>
                       <button type="button" onClick={() => transformSelectionToPerfectShape("arrow")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Seta</button>
                       <button type="button" onClick={() => transformSelectionToPerfectShape("rectangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Retângulo</button>
-                      <button type="button" onClick={() => transformSelectionToPerfectShape("ellipse")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Círculo</button>
-                      <button type="button" onClick={() => transformSelectionToPerfectShape("triangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Triângulo</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("circle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Círculo</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("triangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Triângulo</button><button type="button" onClick={() => transformSelectionToPerfectShape("square")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Quadrado</button><button type="button" onClick={() => transformSelectionToPerfectShape("diamond")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Losango</button><button type="button" onClick={() => transformSelectionToPerfectShape("pentagon")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Pentágono</button>
                       <button type="button" onClick={() => rotateSelectionBy(-Math.PI / 18)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Girar -</button>
                       <button type="button" onClick={() => rotateSelectionBy(Math.PI / 18)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Girar +</button>
                       <button type="button" onClick={duplicateSelection} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Duplicar</button>
@@ -4568,6 +4612,10 @@ export function StudyCanvasWorkspace({
               <button type="button" onClick={() => activateShape("triangle")} className={toolButtonClass(tool === "shape" && shapeTool === "triangle")}> 
                 <Triangle className="h-4 w-4" /> Triângulo
               </button>
+              <button type="button" onClick={() => activateShape("square")} className={toolButtonClass(tool === "shape" && shapeTool === "square")}>Quadrado</button>
+              <button type="button" onClick={() => activateShape("circle")} className={toolButtonClass(tool === "shape" && shapeTool === "circle")}>Círculo</button>
+              <button type="button" onClick={() => activateShape("diamond")} className={toolButtonClass(tool === "shape" && shapeTool === "diamond")}>Losango</button>
+              <button type="button" onClick={() => activateShape("pentagon")} className={toolButtonClass(tool === "shape" && shapeTool === "pentagon")}>Pentágono</button>
             </ToolbarGroup>
 
             <ToolbarGroup label="Cores">
@@ -4726,12 +4774,12 @@ export function StudyCanvasWorkspace({
               <button type="button" onClick={() => transformSelectionToPerfectShape("rectangle")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Square className="h-4 w-4" /> Retângulo
               </button>
-              <button type="button" onClick={() => transformSelectionToPerfectShape("ellipse")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+              <button type="button" onClick={() => transformSelectionToPerfectShape("circle")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Circle className="h-4 w-4" /> Círculo
               </button>
               <button type="button" onClick={() => transformSelectionToPerfectShape("triangle")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Triangle className="h-4 w-4" /> Triângulo
-              </button>
+              </button><button type="button" onClick={() => transformSelectionToPerfectShape("square")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">Quadrado</button><button type="button" onClick={() => transformSelectionToPerfectShape("diamond")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">Losango</button><button type="button" onClick={() => transformSelectionToPerfectShape("pentagon")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">Pentágono</button>
               <button type="button" onClick={() => rotateSelectionBy(-Math.PI / 18)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <RotateCw className="h-4 w-4 -scale-x-100" /> Girar -
               </button>
@@ -4811,7 +4859,7 @@ export function StudyCanvasWorkspace({
                     <button type="button" onClick={() => { setTool("select"); setCompactPanel(null); }} className={toolButtonClass(tool === "select")}><MousePointer2 className="h-4 w-4" /> Selecionar</button>
                     <button type="button" onClick={() => { setTool("text"); setCompactPanel(null); }} className={toolButtonClass(tool === "text")}><Type className="h-4 w-4" /> Texto</button>
                     <button type="button" onClick={() => { setTool("pan"); setCompactPanel(null); }} className={toolButtonClass(tool === "pan")}><Move className="h-4 w-4" /> Mover</button>
-                    {(["line", "arrow", "ellipse", "rectangle", "triangle"] as const).map(shape => <button key={shape} type="button" onClick={() => { activateShape(shape); setCompactPanel(null); }} className={toolButtonClass(tool === "shape" && shapeTool === shape)}>{shape}</button>)}
+                    {(["line", "arrow", "ellipse", "circle", "rectangle", "square", "triangle", "diamond", "pentagon"] as const).map(shape => <button key={shape} type="button" onClick={() => { activateShape(shape); setCompactPanel(null); }} className={toolButtonClass(tool === "shape" && shapeTool === shape)}>{shape}</button>)}
                   </div> : null}
                   {compactPanel === "style" ? <div className="flex flex-wrap items-center gap-3">
                     {COLORS.map(item => <button key={item} type="button" aria-label={`Cor ${item}`} onClick={() => setColor(item)} className={`h-8 w-8 rounded-full ring-2 ${color === item ? "ring-cyan-300" : "ring-transparent"}`} style={{ backgroundColor: item }} />)}

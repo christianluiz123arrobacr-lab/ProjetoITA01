@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { getDifficultyLabel, getDifficultyOrder } from "@shared/difficulty";
 import {
   Search,
   Plus,
@@ -18,6 +19,8 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Link2,
+  Copy,
 } from "lucide-react";
 
 type AdminQuestionRow = {
@@ -36,6 +39,9 @@ type AdminQuestionRow = {
   publicada?: boolean | null;
   enunciado?: string | null;
   created_at?: string | null;
+  is_public?: boolean | null;
+  public_slug?: string | null;
+  public_noindex?: boolean | null;
 };
 
 type ResolutionRow = {
@@ -98,38 +104,42 @@ function corDificuldade(dificuldade?: string | null) {
   const valor = (dificuldade || "").toLowerCase().trim();
 
   if (valor === "facil") {
-    return "bg-green-100 text-green-700 border-green-200";
+    return "bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800";
   }
 
   if (valor === "medio") {
-    return "bg-yellow-100 text-yellow-700 border-yellow-200";
+    return "bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800";
   }
 
   if (valor === "dificil") {
-    return "bg-red-100 text-red-700 border-red-200";
+    return "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800";
   }
 
-  return "bg-slate-100 text-slate-700 border-slate-200";
+  if (valor === "muito_dificil") {
+    return "bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800";
+  }
+
+  return "bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700";
 }
 
 function statusResolucao(summary?: ResolutionSummary) {
   if (!summary || summary.totalBlocks === 0) {
     return {
       label: "Sem resolução",
-      className: "bg-red-100 text-red-700 border-red-200",
+      className: "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800",
     };
   }
 
   if (summary.totalBlocks <= 2) {
     return {
       label: "Resolução inicial",
-      className: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      className: "bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
     };
   }
 
   return {
     label: "Com resolução",
-    className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    className: "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
   };
 }
 
@@ -137,6 +147,7 @@ export default function AdminQuestionsPage() {
   const listQuestionsQuery = trpc.admin.listQuestions.useQuery();
   const setQuestionPublishedMutation = trpc.admin.setQuestionPublished.useMutation();
   const deleteQuestionMutation = trpc.admin.deleteQuestion.useMutation();
+  const setPublicQuestionPublicationMutation = trpc.admin.setPublicQuestionPublication.useMutation();
 
   const [questions, setQuestions] = useState<AdminQuestionRow[]>([]);
   const [resolutions, setResolutions] = useState<ResolutionRow[]>([]);
@@ -214,7 +225,7 @@ export default function AdminQuestionsPage() {
   const dificuldadesDisponiveis = useMemo(() => {
     return Array.from(
       new Set(questions.map((q) => (q.dificuldade || "").trim()).filter(Boolean))
-    ).sort((a, b) => a.localeCompare(b));
+    ).sort((a, b) => getDifficultyOrder(a) - getDifficultyOrder(b));
   }, [questions]);
 
   const instituicoesDisponiveis = useMemo(() => {
@@ -349,19 +360,38 @@ export default function AdminQuestionsPage() {
     }
   }
 
+  async function alternarPaginaPublica(question: AdminQuestionRow) {
+    try {
+      setBusyQuestionId(question.id);
+      setError("");
+      const result = await setPublicQuestionPublicationMutation.mutateAsync({ id: question.id, publish: question.is_public !== true });
+      setQuestions((prev) => prev.map((item) => item.id === question.id ? {
+        ...item,
+        is_public: result.isPublic,
+        public_slug: result.publicSlug,
+        public_noindex: result.publicNoindex,
+      } : item));
+    } catch (err) {
+      console.error("Erro ao alterar página pública:", err);
+      setError(err instanceof Error ? err.message : "Não foi possível alterar a página pública.");
+    } finally {
+      setBusyQuestionId(null);
+    }
+  }
+
   return (
     <AdminGuard>
       <AdminLayout
         title="Questões ADM"
         subtitle="Gerencie as questões do banco com filtros, leitura rápida e acesso direto à resolução."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">
                 Banco de questões administrativo
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Total carregado: {filteredQuestions.length} de {questions.length}{" "}
                 questões
               </p>
@@ -375,7 +405,7 @@ export default function AdminQuestionsPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar por código, disciplina, conteúdo, assunto, banca..."
-                  className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-11 pr-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 />
               </div>
 
@@ -396,16 +426,16 @@ export default function AdminQuestionsPage() {
           </div>
         </Card>
 
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Disciplina
               </label>
               <select
                 value={disciplinaFiltro}
                 onChange={(e) => setDisciplinaFiltro(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todas</option>
                 {disciplinasDisponiveis.map((disciplina) => (
@@ -417,25 +447,25 @@ export default function AdminQuestionsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Dificuldade
               </label>
               <select
                 value={dificuldadeFiltro}
                 onChange={(e) => setDificuldadeFiltro(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todas</option>
                 {dificuldadesDisponiveis.map((dificuldade) => (
                   <option key={dificuldade} value={dificuldade}>
-                    {dificuldade}
+                    {getDifficultyLabel(dificuldade)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Publicação
               </label>
               <select
@@ -443,7 +473,7 @@ export default function AdminQuestionsPage() {
                 onChange={(e) =>
                   setPublicacaoFiltro(e.target.value as PublishFilter)
                 }
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="todas">Todas</option>
                 <option value="publicadas">Publicadas</option>
@@ -452,13 +482,13 @@ export default function AdminQuestionsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Instituição
               </label>
               <select
                 value={instituicaoFiltro}
                 onChange={(e) => setInstituicaoFiltro(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todas</option>
                 {instituicoesDisponiveis.map((instituicao) => (
@@ -470,13 +500,13 @@ export default function AdminQuestionsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Ano
               </label>
               <select
                 value={anoFiltro}
                 onChange={(e) => setAnoFiltro(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todos</option>
                 {anosDisponiveis.map((ano) => (
@@ -501,28 +531,28 @@ export default function AdminQuestionsPage() {
 
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando questões...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando questões...</p>
           </Card>
         ) : error ? (
-          <Card className="p-8 border-red-200 bg-red-50">
+          <Card className="p-8 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">
                   Erro ao carregar questões
                 </h2>
-                <p className="text-red-600">{error}</p>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : filteredQuestions.length === 0 ? (
           <Card className="p-10 text-center">
             <FileText className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-            <h2 className="text-lg font-bold text-slate-900 mb-2">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Nenhuma questão encontrada
             </h2>
-            <p className="text-slate-500">
+            <p className="text-slate-500 dark:text-slate-400">
               Ajuste os filtros ou tente outro termo de busca.
             </p>
           </Card>
@@ -536,16 +566,16 @@ export default function AdminQuestionsPage() {
               return (
                 <Card
                   key={question.id}
-                  className="p-5 bg-white border-slate-200 shadow-sm"
+                  className="p-5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm"
                 >
-                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-                    <div className="flex-1 min-w-0">
+                  <div className="space-y-5">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-3">
                         <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">
                           {question.codigo || "Sem código"}
                         </span>
 
-                        <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold border border-blue-200">
+                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-200 dark:border-blue-800">
                           {normalizarDisciplina(question)}
                         </span>
 
@@ -554,17 +584,21 @@ export default function AdminQuestionsPage() {
                             question.dificuldade
                           )}`}
                         >
-                          {question.dificuldade || "sem dificuldade"}
+                          {question.dificuldade ? getDifficultyLabel(question.dificuldade) : "Sem dificuldade"}
                         </span>
 
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold border ${
                             question.publicada
-                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                              : "bg-slate-100 text-slate-600 border-slate-200"
+                              ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                              : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                           }`}
                         >
                           {question.publicada ? "Publicada" : "Não publicada"}
+                        </span>
+
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${question.is_public ? "bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800" : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"}`}>
+                          {question.is_public ? (question.public_noindex ? "Página pública · noindex" : "Página pública · indexável") : "Fora do Google"}
                         </span>
 
                         <span
@@ -574,48 +608,48 @@ export default function AdminQuestionsPage() {
                         </span>
                       </div>
 
-                      <p className="text-base font-semibold text-slate-900 mb-2">
+                      <p className="max-w-4xl text-base font-semibold leading-relaxed text-slate-900 dark:text-slate-100 mb-3 break-words">
                         {textoCurto(question.enunciado, 140)}
                       </p>
 
-                      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600">
-                        <p>
-                          <span className="font-semibold text-slate-800">
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm text-slate-600 dark:text-slate-300">
+                        <p className="min-w-0 break-words">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
                             Conteúdo:
                           </span>{" "}
                           {textoLista(listarConteudos(question))}
                         </p>
 
                         <p>
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
                             Assunto:
                           </span>{" "}
                           {textoLista(listarAssuntos(question))}
                         </p>
 
                         <p>
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
                             Banca:
                           </span>{" "}
                           {question.banca || "—"}
                         </p>
 
                         <p>
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
                             Ano:
                           </span>{" "}
                           {question.ano || "—"}
                         </p>
 
                         <p>
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
                             Instituição:
                           </span>{" "}
                           {question.instituição || "—"}
                         </p>
 
                         <p>
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
                             ID:
                           </span>{" "}
                           {question.id}
@@ -623,19 +657,42 @@ export default function AdminQuestionsPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-3 mt-4">
-                        <div className="inline-flex items-center gap-2 rounded-2xl bg-orange-50 border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700">
+                        <div className="inline-flex items-center gap-2 rounded-2xl bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 px-3 py-2 text-sm font-semibold text-orange-700 dark:text-orange-300">
                           <Blocks className="w-4 h-4" />
                           {summary?.totalBlocks || 0} bloco(s)
                         </div>
 
-                        <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700">
+                        <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                           <Image className="w-4 h-4" />
                           {summary?.totalImages || 0} imagem(ns)
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <div className="flex w-full flex-wrap items-center gap-3 border-t border-slate-100 dark:border-slate-700 pt-4 xl:justify-end">
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950"
+                        onClick={() => alternarPaginaPublica(question)}
+                        disabled={busy}
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
+                        {question.is_public ? "Remover da página pública" : "Publicar no Google"}
+                      </Button>
+
+                      {question.is_public && question.public_slug ? (
+                        <>
+                          <Button asChild variant="outline" className="rounded-2xl">
+                            <a href={`https://www.projetovetor.com/questoes/${question.public_slug}`} target="_blank" rel="noreferrer">
+                              <Eye className="w-4 h-4 mr-2" />Visualizar URL pública
+                            </a>
+                          </Button>
+                          <Button variant="outline" className="rounded-2xl" onClick={() => navigator.clipboard.writeText(`https://www.projetovetor.com/questoes/${question.public_slug}`)}>
+                            <Copy className="w-4 h-4 mr-2" />Copiar URL pública
+                          </Button>
+                        </>
+                      ) : null}
+
                       <Button
                         variant="outline"
                         className="rounded-2xl"
@@ -668,7 +725,7 @@ export default function AdminQuestionsPage() {
 
                       <Button
                         variant="outline"
-                        className="rounded-2xl border-red-200 text-red-600 hover:bg-red-50"
+                        className="rounded-2xl border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
                         onClick={() => excluirQuestao(question)}
                         disabled={busy}
                       >

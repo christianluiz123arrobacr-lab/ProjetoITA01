@@ -44,6 +44,12 @@ export const mercadoPagoPreapprovalSchema = z.object({
   sandbox_init_point: z.string().nullable().optional(),
 }).passthrough();
 
+export const mercadoPagoPreferenceSchema = z.object({
+  id: z.string().optional(),
+  init_point: z.string().nullable().optional(),
+  sandbox_init_point: z.string().nullable().optional(),
+}).passthrough();
+
 export const mercadoPagoAuthorizedPaymentSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   status: z.string().nullable().optional(),
@@ -181,6 +187,31 @@ export async function createPixPayment(input: {
   });
 
   return mercadoPagoPaymentSchema.parse(json);
+}
+
+/** Hosted, one-time checkout. Card details never reach Projeto Vetor. */
+export async function createPrepaidPreference(input: {
+  externalReference: string;
+  payerEmail: string;
+  amount: number;
+  title: string;
+  notificationUrl: string;
+  backUrl: string;
+  idempotencyKey: string;
+}) {
+  const json = await mercadoPagoFetch("/checkout/preferences", {
+    method: "POST",
+    body: JSON.stringify({
+      items: [{ title: input.title, quantity: 1, unit_price: input.amount, currency_id: "BRL" }],
+      payer: { email: input.payerEmail },
+      external_reference: input.externalReference,
+      notification_url: input.notificationUrl,
+      back_urls: { success: input.backUrl, pending: input.backUrl, failure: input.backUrl },
+      auto_return: "approved",
+    }),
+    idempotencyKey: input.idempotencyKey,
+  });
+  return mercadoPagoPreferenceSchema.parse(json);
 }
 
 export async function getPayment(id: string) {

@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 
 type SubscriptionGuardProps = {
   children: ReactNode;
+  bypass?: boolean;
 };
 
 type AccessState = "checking" | "allowed" | "blocked" | "error" | "unauthenticated";
@@ -14,24 +15,29 @@ type AccessState = "checking" | "allowed" | "blocked" | "error" | "unauthenticat
 const ACCESS_RECHECK_MS = 5 * 60 * 1000;
 const ACCESS_CACHE_MS = 30 * 60 * 1000;
 
-export default function SubscriptionGuard({ children }: SubscriptionGuardProps) {
+export default function SubscriptionGuard({ children, bypass = false }: SubscriptionGuardProps) {
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
 
   const [accessState, setAccessState] = useState<AccessState>("checking");
 
   const accessStatusQuery = trpc.auth.getAccessStatus.useQuery(undefined, {
-    enabled: !authLoading && isAuthenticated,
+    enabled: !bypass && !authLoading && isAuthenticated,
     retry: false,
     staleTime: ACCESS_RECHECK_MS,
     gcTime: ACCESS_CACHE_MS,
     refetchOnMount: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     refetchInterval: ACCESS_RECHECK_MS,
     refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
+    if (bypass) {
+      setAccessState("allowed");
+      return;
+    }
+
     if (authLoading) {
       setAccessState("checking");
       return;
@@ -42,17 +48,14 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
       return;
     }
 
-    if (
-      accessStatusQuery.isLoading ||
-      (accessStatusQuery.isFetching && !accessStatusQuery.data)
-    ) {
-      setAccessState("checking");
+    if (accessStatusQuery.error && !accessStatusQuery.data) {
+      console.error("Erro ao verificar assinatura:", accessStatusQuery.error);
+      setAccessState("error");
       return;
     }
 
-    if (accessStatusQuery.error) {
-      console.error("Erro ao verificar assinatura:", accessStatusQuery.error);
-      setAccessState("error");
+    if (accessStatusQuery.isLoading || (accessStatusQuery.isFetching && !accessStatusQuery.data)) {
+      setAccessState("checking");
       return;
     }
 
@@ -65,8 +68,11 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
     accessStatusQuery.isFetching,
     accessStatusQuery.isLoading,
     authLoading,
+    bypass,
     isAuthenticated,
   ]);
+
+  if (bypass) return <>{children}</>;
 
   if (authLoading || accessState === "checking") {
     return (
