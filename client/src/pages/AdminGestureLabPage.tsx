@@ -119,7 +119,7 @@ export function GestureLaboratory() {
   actions.current = (id: string) => {
     if (id === "spatial") {
       release();
-      navigate("/simuladores/geometria-espacial");
+      navigate("/admin/matematica/geometria-espacial");
     } else if (id === "close") closeMenu();
     else setFeedback("Este módulo entrará nas próximas demonstrações.");
   };

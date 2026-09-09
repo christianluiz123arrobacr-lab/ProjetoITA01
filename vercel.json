@@ -37,7 +37,7 @@
       ]
     },
     {
-      "source": "/((?!admin/laboratorio-gestos/?$).*)",
+      "source": "/((?!(admin/laboratorio-gestos|admin/matematica/geometria-espacial)/?$).*)",
       "headers": [
         {
           "key": "Permissions-Policy",
@@ -51,6 +51,19 @@
     },
     {
       "source": "/admin/laboratorio-gestos(/?)",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co wss://*.supabase.co https://api.openai.com https://*.googleapis.com https://*.gstatic.com;"
+        }
+      ]
+    },
+    {
+      "source": "/admin/matematica/geometria-espacial(/?)",
       "headers": [
         {
           "key": "Permissions-Policy",

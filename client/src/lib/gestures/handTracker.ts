@@ -26,7 +26,9 @@ interface VisionModule {
     ): Promise<HandTracker>;
   };
 }
-export async function createHandTracker(): Promise<HandTracker> {
+export async function createHandTracker(
+  options: { numHands?: 1 | 2 } = {}
+): Promise<HandTracker> {
   const root = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21";
   const url = `${root}/vision_bundle.mjs`;
   const vision: VisionModule = await import(/* @vite-ignore */ url);
@@ -38,7 +40,7 @@ export async function createHandTracker(): Promise<HandTracker> {
       delegate: "CPU",
     },
     runningMode: "VIDEO",
-    numHands: 1,
+    numHands: options.numHands ?? 1,
     minHandDetectionConfidence: 0.75,
     minHandPresenceConfidence: 0.75,
     minTrackingConfidence: 0.75,
