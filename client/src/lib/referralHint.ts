@@ -1,7 +1,12 @@
 // This is an untrusted attribution hint. All eligibility is checked by SQL.
 export function getReferralHint(): string | undefined {
   try {
-    const query = new URLSearchParams(window.location.search).get("ref");
+    const query = new URLSearchParams(window.location.search)
+      .get("ref")
+      ?.trim()
+      .toLowerCase()
+      // Messaging apps sometimes include sentence punctuation in the URL.
+      .replace(/[.,;:!?]+$/, "");
     if (query && /^[a-f0-9]{32}$/.test(query))
       sessionStorage.setItem("vetor-referral", query);
     const code = sessionStorage.getItem("vetor-referral");

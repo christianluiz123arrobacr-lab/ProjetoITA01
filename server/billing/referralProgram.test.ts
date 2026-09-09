@@ -102,4 +102,13 @@ describe("configuração de indicação no backend", () => {
       )
     ).toBe("{link}: https://example.test/cadastro?ref=abc");
   });
+  it("separa o link da pontuação para que o código não seja perdido no compartilhamento", () => {
+    expect(
+      referralShareMessage(
+        { ...defaultReferralCampaign, whatsapp_message: "Acesse {link}. Depois aproveite." },
+        "Aluno",
+        "https://example.test/cadastro?ref=abc"
+      )
+    ).toBe("Acesse https://example.test/cadastro?ref=abc Depois aproveite.");
+  });
 });

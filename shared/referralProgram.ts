@@ -75,7 +75,7 @@ export const defaultReferralCampaign: ReferralCampaignConfig = {
   allow_stacking: false,
   whatsapp_label: "Compartilhar no WhatsApp",
   whatsapp_message:
-    "Olá! Conheça o Projeto Vetor pelo meu link: {link}. {beneficio_indicado}",
+    "Olá! Conheça o Projeto Vetor pelo meu link:\n\n{link}\n\n{beneficio_indicado}",
 };
 export function referralBenefitText(c: ReferralCampaignConfig) {
   return c.benefit === "percent"
@@ -98,8 +98,10 @@ export function referralShareMessage(
     recompensa_indicador: `${c.reward_days} dias de acesso`,
     meta_indicacoes: String(c.goal),
   };
-  return c.whatsapp_message.replace(
+  const message = c.whatsapp_message.replace(
     /\{([^{}]*)\}/g,
     (match, key) => values[key] ?? match
   );
+  // Prevent a sentence-ending period from becoming part of the copied URL.
+  return message.replace(/(https?:\/\/\S*?)[.,;:!?]+(?=\s|$)/g, "$1");
 }
