@@ -1,0 +1,83 @@
+{
+  "metadata": {
+    "title": "Bases da Cinemática — Experimental",
+    "slug": "bases-da-cinematica-experimental",
+    "description": "Aula estruturada sobre os conceitos iniciais do movimento.",
+    "discipline": "fisica",
+    "content": "Cinemática",
+    "subject": "Movimento Uniforme",
+    "level": "Intermediário",
+    "displayOrder": 10
+  },
+  "lesson": {
+    "schemaVersion": 1,
+    "blocks": [
+      {
+        "id": "introducao",
+        "type": "text",
+        "visible": true,
+        "title": "O que a Cinemática descreve?",
+        "content": "A **Cinemática** estuda como a posição muda com o tempo."
+      },
+      {
+        "id": "velocidade-media",
+        "type": "formula",
+        "visible": true,
+        "latex": "v_m = \\frac{\\Delta s}{\\Delta t}",
+        "caption": "Velocidade média no intervalo",
+        "align": "center"
+      },
+      {
+        "id": "conceito-chave",
+        "type": "highlight",
+        "visible": true,
+        "variant": "key_concept",
+        "title": "Conceito-chave",
+        "content": "Movimento e repouso dependem do **referencial** adotado."
+      },
+      {
+        "id": "intuicao",
+        "type": "intuition",
+        "visible": true,
+        "title": "Pense no trem",
+        "content": "Para quem está no vagão, a mochila está em repouso; para quem observa da plataforma, ela se move."
+      },
+      {
+        "id": "erro-comum",
+        "type": "common_mistake",
+        "visible": true,
+        "title": "Erro comum",
+        "content": "Não confunda distância percorrida com deslocamento."
+      },
+      {
+        "id": "exemplo",
+        "type": "example",
+        "visible": true,
+        "problem": "Um móvel percorre $120\\,m$ em $10\\,s$. Qual é sua velocidade média?",
+        "solution": "Usando $v_m = \\Delta s / \\Delta t$, temos $v_m = 120/10 = 12\\,m/s$.",
+        "conclusion": "A velocidade média é $12\\,m/s$."
+      },
+      {
+        "id": "imagem",
+        "type": "image",
+        "visible": true,
+        "storagePath": "cinematica/referencial.webp",
+        "alt": "Observadores em referenciais diferentes analisam o mesmo móvel",
+        "caption": "O movimento depende do referencial.",
+        "align": "center",
+        "size": "large"
+      },
+      {
+        "id": "resumo",
+        "type": "summary",
+        "visible": true,
+        "title": "Resumo",
+        "points": [
+          "Todo movimento depende de um referencial.",
+          "Deslocamento e distância são grandezas diferentes.",
+          "Velocidade média relaciona deslocamento e tempo."
+        ]
+      }
+    ]
+  }
+}

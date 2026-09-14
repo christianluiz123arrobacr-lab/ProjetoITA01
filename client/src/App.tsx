@@ -97,6 +97,18 @@ const AdminMolecularGeometryPrototypePage = lazyWithRetry(
   "AdminMolecularGeometryPrototypePage",
   () => import("./pages/AdminMolecularGeometryPrototypePage")
 );
+const AdminLessonsPage = lazyWithRetry(
+  "AdminLessonsPage",
+  () => import("./pages/AdminLessonsPage")
+);
+const AdminLessonEditorPage = lazyWithRetry(
+  "AdminLessonEditorPage",
+  () => import("./pages/AdminLessonEditorPage")
+);
+const LessonPage = lazyWithRetry(
+  "LessonPage",
+  () => import("./pages/LessonPage")
+);
 
 import Home from "./pages/Home";
 import DinamicaHome from "./pages/DinamicaHome";
@@ -438,6 +450,8 @@ function PrivateRouter() {
             <Route path="/admin/usuarios" component={AdminUsersPage} />
             <Route path="/admin/profiles" component={AdminProfilesPage} />
             <Route path="/admin/assinaturas" component={AdminBillingPage} />
+            <Route path="/admin/aulas/:id" component={AdminLessonEditorPage} />
+            <Route path="/admin/aulas" component={AdminLessonsPage} />
 
             <Route path="/admin/questoes" component={AdminQuestionsPage} />
             <Route
@@ -484,6 +498,7 @@ function PrivateRouter() {
 
             {/* Entrada geral da plataforma */}
             <Route path="/plataforma" component={LandingPage} />
+            <Route path="/aulas/:slug" component={LessonPage} />
 
             {/* Seletor de Física */}
             <Route path="/fisica" component={FisicaSelector} />

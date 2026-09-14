@@ -11,12 +11,14 @@ import {
   MessageSquareWarning,
   CreditCard,
   Hand,
+  BookOpen,
 } from "lucide-react";
 
 const adminItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/usuarios", label: "Alunos e acessos", icon: Users },
   { href: "/admin/assinaturas", label: "Assinaturas", icon: CreditCard },
+  { href: "/admin/aulas", label: "Aulas", icon: BookOpen },
   { href: "/admin/questoes", label: "Questões", icon: FileText },
   { href: "/admin/resolucoes", label: "Resoluções", icon: Blocks },
   {
@@ -82,7 +84,9 @@ export default function AdminSidebar() {
                 </a>
               );
             return (
-              <Link key={item.href} href={item.href}>
+              <div key={item.href}>
+              {item.href === "/admin/aulas" && <p className="mb-2 mt-4 px-4 text-[11px] font-bold uppercase tracking-widest text-slate-400">Conteúdo</p>}
+              <Link href={item.href}>
                 <button
                   type="button"
                   className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all ${
@@ -95,6 +99,7 @@ export default function AdminSidebar() {
                   {item.label}
                 </button>
               </Link>
+              </div>
             );
           })}
         </nav>

@@ -48,6 +48,7 @@ import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetCon
 import { fetchAllQuestionPages } from "./questions/questionPagination.js";
 import { setPublicQuestionPublication } from "./publicQuestions.js";
 import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
+import { lessonRouter } from "./lessons/lessonRouter.js";
 
 const notebookPaperSchema = z.object({ size: z.enum(["a5", "a4", "a3", "infinite"]), lined: z.boolean() });
 const stableVetOrder = (seed: string, value: string) => Array.from(`${seed}:${value}`).reduce((hash, char) => ((hash * 31) ^ char.charCodeAt(0)) >>> 0, 2166136261);
@@ -386,6 +387,7 @@ export const appRouter = router({
   system: systemRouter,
   referrals: referralRouter,
   legal: legalRouter,
+  lessons: lessonRouter,
 
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
