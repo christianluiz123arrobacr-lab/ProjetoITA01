@@ -9,3 +9,8 @@ it.skipIf(!installed)("executa publicação, imutabilidade, RLS, restauração e
   const { stdout } = await promisify(execFile)(process.execPath, ["server/lessons/tests/runLessonSqlTests.mjs"], { maxBuffer: 2 * 1024 * 1024 });
   expect(stdout).toContain("verificações concluídas");
 }, 60000);
+
+it.skipIf(!installed)("executa RLS por assinatura e publicação v2 em PostgreSQL local", async () => {
+  const { stdout } = await promisify(execFile)(process.execPath, ["server/lessons/tests/runLessonPhase1SqlTests.mjs"], { maxBuffer: 2 * 1024 * 1024 });
+  expect(stdout).toContain("verificações fase 1 concluídas");
+}, 60000);

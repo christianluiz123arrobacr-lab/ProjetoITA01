@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLessonImportJson, lessonJsonSchema } from "../../shared/lessonSchema.js";
+import { convertLessonV1ToV2, parseLessonImportJson, lessonJsonSchema } from "../../shared/lessonSchema.js";
 import { validateLessonContent, validateLessonImport } from "./lessonValidation.js";
 import { buildCanonicalLessonTaxonomy, resolveLessonTaxonomy } from "./lessonRouter.js";
 
@@ -49,6 +49,43 @@ describe("lesson schema and import", () => {
   it("rejects duplicate stable block IDs", () => {
     const block = validLesson.blocks[0];
     expect(lessonJsonSchema.safeParse({ schemaVersion: 1, blocks: [block, block] }).success).toBe(false);
+  });
+});
+
+describe("lesson schema v2", () => {
+  const derivation = { id: "derivacao", type: "derivation" as const, visible: true, title: "Da definição à fórmula", initiallyOpen: false, steps: [{ id: "passo-1", text: "Partimos da definição.", latex: "v_m = \\frac{\\Delta s}{\\Delta t}" }] };
+  const formulaCard = { id: "formula-card", type: "formula_card" as const, visible: true, title: "Velocidade média", latex: "v_m = \\frac{\\Delta s}{\\Delta t}", terms: [{ symbol: "v_m", meaning: "velocidade média", unit: "m/s" }], observations: ["Use unidades compatíveis."], validityConditions: ["Intervalo de tempo não nulo."], variant: "primary" as const };
+
+  it("accepts sections, responsive grids, FormulaCard and DerivationBlock", () => {
+    const lesson = { schemaVersion: 2, blocks: [{ id: "secao", type: "section", visible: true, title: "Movimento", anchor: "movimento", blocks: [{ id: "grid", type: "grid", visible: true, preset: "two", columns: [{ id: "coluna-a", blocks: [formulaCard] }, { id: "coluna-b", blocks: [derivation] }] }] }] };
+    expect(validateLessonContent(lesson).success).toBe(true);
+  });
+
+  it("blocks nested containers and invalid grid presets", () => {
+    const nested = { schemaVersion: 2, blocks: [{ id: "grid", type: "grid", visible: true, preset: "one", columns: [{ id: "coluna", blocks: [{ id: "outro-grid", type: "grid", visible: true, preset: "one", columns: [] }] }] }] };
+    const wrongColumns = { schemaVersion: 2, blocks: [{ id: "grid", type: "grid", visible: true, preset: "four", columns: [{ id: "coluna", blocks: [] }] }] };
+    expect(validateLessonContent(nested).success).toBe(false);
+    expect(validateLessonContent(wrongColumns).success).toBe(false);
+  });
+
+  it("rejects duplicate IDs across nested blocks and derivation steps", () => {
+    const lesson = { schemaVersion: 2, blocks: [{ id: "secao", type: "section", visible: true, title: "Seção", anchor: "secao", blocks: [{ ...derivation, steps: [{ id: "secao", text: "ID repetido." }] }] }] };
+    const result = validateLessonContent(lesson);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.issues.some(issue => issue.path.includes("steps[0].id"))).toBe(true);
+  });
+
+  it("validates FormulaCard and derivation LaTeX by the exact nested path", () => {
+    const lesson = { schemaVersion: 2, blocks: [{ ...formulaCard, latex: "\\frac{" }, { ...derivation, id: "derivacao-2", steps: [{ id: "passo-2", latex: "\\sqrt{" }] }] };
+    const result = validateLessonContent(lesson);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.issues.map(issue => issue.path)).toEqual(expect.arrayContaining(["blocks[0].latex", "blocks[1].steps[0].latex"]));
+  });
+
+  it("keeps v1 unchanged until an explicit lossless conversion", () => {
+    const parsed = lessonJsonSchema.parse(validLesson);
+    expect(parsed.schemaVersion).toBe(1);
+    if (parsed.schemaVersion === 1) expect(convertLessonV1ToV2(parsed)).toEqual({ ...parsed, schemaVersion: 2 });
   });
 });
 

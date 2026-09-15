@@ -49,6 +49,7 @@ import { fetchAllQuestionPages } from "./questions/questionPagination.js";
 import { setPublicQuestionPublication } from "./publicQuestions.js";
 import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
 import { lessonRouter } from "./lessons/lessonRouter.js";
+import { getPlatformAccessDecision } from "./_core/platformAccess.js";
 
 const notebookPaperSchema = z.object({ size: z.enum(["a5", "a4", "a3", "infinite"]), lined: z.boolean() });
 const stableVetOrder = (seed: string, value: string) => Array.from(`${seed}:${value}`).reduce((hash, char) => ((hash * 31) ^ char.charCodeAt(0)) >>> 0, 2166136261);
@@ -551,13 +552,11 @@ export const appRouter = router({
 
 
     getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
-      // The canonical role was already resolved from admin_users by the
-      // authenticated request context. Admin access must not depend on student
-      // profile columns or subscription infrastructure.
-      if (ctx.user.role === "admin" || ctx.user.role === "editor") {
+      const access = await getPlatformAccessDecision(ctx.user);
+      if (access.source === "role") {
         return {
           accessState: "allowed",
-          role: ctx.user.role,
+          role: access.role,
           ativo: true,
           hasActiveSubscription: true,
           subscriptionStatus: "admin_override",
@@ -567,40 +566,11 @@ export const appRouter = router({
           source: "role",
         } as const;
       }
-      const { data: profile, error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .select("role, ativo")
-        .eq("id", ctx.user.id)
-        .maybeSingle();
-
-      if (profileError) throw new TRPCError({ code: "BAD_REQUEST", message: profileError.message });
-
-      const profileRole = (profile as any)?.role;
-      const role =
-        ctx.user.role === "admin" || ctx.user.role === "editor"
-          ? ctx.user.role
-          : profileRole ?? ctx.user.role;
-      const ativo = (profile as any)?.ativo;
-
-      if (role === "admin" || role === "editor") {
-        return {
-          accessState: "allowed",
-          role,
-          ativo: ativo ?? true,
-          hasActiveSubscription: true,
-          subscriptionStatus: "admin_override",
-          currentPeriodEnd: null,
-          planName: null,
-          blockReason: null,
-          source: "role",
-        } as const;
-      }
-
-      if (ativo === false) {
+      if (!access.profileActive) {
         return {
           accessState: "blocked",
-          role,
-          ativo,
+          role: access.role,
+          ativo: false,
           hasActiveSubscription: false,
           subscriptionStatus: null,
           currentPeriodEnd: null,
@@ -613,31 +583,19 @@ export const appRouter = router({
       const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
       const latestSubscriptionDetails = flattenBillingSubscription(latestSubscription);
 
-      const rpcResponse = await supabaseAdmin.rpc("user_has_active_subscription", {
-        target_user_id: ctx.user.id,
-      });
-
-      if (rpcResponse.error || typeof rpcResponse.data !== "boolean") {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Não foi possível validar o acesso canônico à plataforma.",
-          cause: rpcResponse.error ?? new Error("Resposta inválida de user_has_active_subscription."),
-        });
-      }
-
       const localStatus = latestSubscriptionDetails?.status ?? null;
       const localSubscriptionLooksActive =
         localStatus === "active" || localStatus === "trialing";
 
       return {
-        accessState: rpcResponse.data ? "allowed" : "blocked",
-        role,
-        ativo: ativo ?? true,
-        hasActiveSubscription: rpcResponse.data,
+        accessState: access.allowed ? "allowed" : "blocked",
+        role: access.role,
+        ativo: true,
+        hasActiveSubscription: access.allowed,
         subscriptionStatus: localStatus,
         currentPeriodEnd: latestSubscriptionDetails?.current_period_end ?? null,
         planName: latestSubscriptionDetails?.plan_name ?? null,
-        blockReason: rpcResponse.data
+        blockReason: access.allowed
           ? null
           : localSubscriptionLooksActive
             ? "access_processing"

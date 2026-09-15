@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { LESSON_SCHEMA_VERSION, lessonJsonSchema, lessonMetadataSchema } from "../../shared/lessonSchema.js";
-import { adminProcedure, protectedProcedure, router } from "../_core/trpc.js";
+import { adminProcedure, platformAccessProcedure, router } from "../_core/trpc.js";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
 import { validateLessonContent, validateLessonForPublication, validateLessonImport } from "./lessonValidation.js";
 
@@ -108,7 +108,7 @@ export const lessonRouter = router({
     }).select("id").single();
     if (error || !lesson) throw new TRPCError({ code: error?.code === "23505" ? "CONFLICT" : "BAD_REQUEST", message: error?.code === "23505" ? "Este slug já está em uso." : "Não foi possível criar a aula." });
     const empty = { schemaVersion: LESSON_SCHEMA_VERSION, blocks: [] };
-    const { error: draftError } = await supabaseAdmin.from("lesson_drafts").insert({ lesson_id: lesson.id, schema_version: 1, content_json: empty, updated_by: ctx.user.id });
+    const { error: draftError } = await supabaseAdmin.from("lesson_drafts").insert({ lesson_id: lesson.id, schema_version: LESSON_SCHEMA_VERSION, content_json: empty, updated_by: ctx.user.id });
     if (draftError) {
       await supabaseAdmin.from("lessons").delete().eq("id", lesson.id);
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível criar o rascunho da aula." });
@@ -136,7 +136,7 @@ export const lessonRouter = router({
       level: metadata.level ?? null, display_order: metadata.displayOrder,
     }).eq("id", input.lessonId).is("archived_at", null);
     if (lessonError) throw new TRPCError({ code: lessonError.code === "23505" ? "CONFLICT" : "BAD_REQUEST", message: lessonError.code === "23505" ? "Este slug já está em uso." : "Não foi possível salvar os metadados." });
-    const { error } = await supabaseAdmin.from("lesson_drafts").update({ schema_version: 1, content_json: validated.data, updated_by: ctx.user.id, updated_at: new Date().toISOString() }).eq("lesson_id", input.lessonId);
+    const { error } = await supabaseAdmin.from("lesson_drafts").update({ schema_version: validated.data.schemaVersion, content_json: validated.data, updated_by: ctx.user.id, updated_at: new Date().toISOString() }).eq("lesson_id", input.lessonId);
     if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível salvar o rascunho." });
     return { success: true, updatedAt: new Date().toISOString() };
   }),
@@ -195,7 +195,7 @@ export const lessonRouter = router({
     return { success: true };
   }),
 
-  published: protectedProcedure.input(z.object({ slug: z.string().trim().min(1).max(180) })).query(async ({ input }) => {
+  published: platformAccessProcedure.input(z.object({ slug: z.string().trim().min(1).max(180) })).query(async ({ input }) => {
     const { data: lesson, error } = await supabaseAdmin.from("lessons").select("id,slug,title,description,discipline,content,subject,level,current_published_version_id").eq("slug", input.slug).is("archived_at", null).not("current_published_version_id", "is", null).maybeSingle();
     if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível carregar a aula." });
     if (!lesson?.current_published_version_id) throw new TRPCError({ code: "NOT_FOUND", message: "Aula publicada não encontrada." });

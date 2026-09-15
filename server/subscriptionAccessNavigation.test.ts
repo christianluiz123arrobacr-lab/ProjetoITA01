@@ -36,6 +36,7 @@ const adminGuard = readFileSync(
 );
 const app = readFileSync(new URL("../client/src/App.tsx", import.meta.url), "utf8");
 const router = readFileSync(new URL("./routers.ts", import.meta.url), "utf8");
+const platformAccess = readFileSync(new URL("./_core/platformAccess.ts", import.meta.url), "utf8");
 const paymentMigration = readFileSync(
   new URL(
     "../supabase/migrations/202607280002_fix_active_subscription_conflict.sql",
@@ -167,11 +168,12 @@ describe("integração da tela pendente e do guard", () => {
     const end = router.indexOf("logout: publicProcedure", start);
     const procedure = router.slice(start, end);
 
-    expect(procedure).toContain('role === "admin" || role === "editor"');
-    expect(procedure).toContain('rpc("user_has_active_subscription"');
+    expect(procedure).toContain("getPlatformAccessDecision(ctx.user)");
+    expect(platformAccess).toContain('user.role === "admin" || user.role === "editor"');
+    expect(platformAccess).toContain('rpc("user_has_active_subscription"');
     expect(procedure).not.toContain('source: "fallback"');
     expect(procedure).not.toContain('.in("status", ["active", "trialing"])');
-    expect(procedure).toContain('code: "INTERNAL_SERVER_ERROR"');
+    expect(platformAccess).toContain('code: "INTERNAL_SERVER_ERROR"');
   });
 
   it("mantém aplicação aprovada transacional antes de marcar acesso ativo", () => {
