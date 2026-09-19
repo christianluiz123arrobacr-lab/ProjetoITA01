@@ -79,25 +79,25 @@ function StatCard({
   helper?: string;
 }) {
   const tones = {
-    blue: "from-blue-50 to-blue-100 border-blue-200 text-blue-700",
-    purple: "from-purple-50 to-purple-100 border-purple-200 text-purple-700",
-    orange: "from-orange-50 to-orange-100 border-orange-200 text-orange-700",
-    emerald: "from-emerald-50 to-emerald-100 border-emerald-200 text-emerald-700",
-    red: "from-red-50 to-red-100 border-red-200 text-red-700",
-    slate: "from-slate-50 to-slate-100 border-slate-200 text-slate-700",
-    indigo: "from-indigo-50 to-indigo-100 border-indigo-200 text-indigo-700",
+    blue: "from-blue-50 dark:from-blue-950 to-blue-100 dark:to-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300",
+    purple: "from-purple-50 dark:from-purple-950 to-purple-100 dark:to-purple-950 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300",
+    orange: "from-orange-50 dark:from-orange-950 to-orange-100 dark:to-orange-950 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300",
+    emerald: "from-emerald-50 dark:from-emerald-950 to-emerald-100 dark:to-emerald-950 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300",
+    red: "from-red-50 dark:from-red-950 to-red-100 dark:to-red-950 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300",
+    slate: "from-slate-50 dark:from-slate-900 to-slate-100 dark:to-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300",
+    indigo: "from-indigo-50 dark:from-indigo-950 to-indigo-100 dark:to-indigo-950 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300",
   };
 
   return (
     <Card className={`p-6 bg-gradient-to-br ${tones[tone]}`}>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm text-slate-600 mb-1">{title}</p>
-          <p className="text-3xl font-bold text-slate-900">{value}</p>
-          {helper ? <p className="text-xs text-slate-500 mt-2">{helper}</p> : null}
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">{title}</p>
+          <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
+          {helper ? <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">{helper}</p> : null}
         </div>
 
-        <div className="w-12 h-12 rounded-2xl bg-white/70 flex items-center justify-center">
+        <div className="w-12 h-12 rounded-2xl bg-white/70 dark:bg-slate-900/70 flex items-center justify-center">
           <Icon className="w-5 h-5" />
         </div>
       </div>
@@ -116,11 +116,11 @@ function QuickLinkCard({
 }) {
   return (
     <Link href={href}>
-      <button className="w-full text-left rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md hover:border-slate-300 transition-all">
+      <button className="w-full text-left rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
-            <p className="text-sm text-slate-500 leading-relaxed">{description}</p>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">{title}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{description}</p>
           </div>
           <ArrowRight className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
         </div>
@@ -204,16 +204,16 @@ export default function AdminDashboardPage() {
       >
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando dados reais do dashboard...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando dados reais do dashboard...</p>
           </Card>
         ) : error ? (
-          <Card className="p-8 border-red-200 bg-red-50">
+          <Card className="p-8 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">Erro no dashboard</h2>
-                <p className="text-red-600">{error}</p>
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">Erro no dashboard</h2>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
@@ -272,10 +272,10 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="grid xl:grid-cols-2 gap-6">
-              <Card className="p-6 bg-white border-slate-200">
+              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
-                  <Clock3 className="w-5 h-5 text-slate-500" />
-                  <h2 className="text-xl font-bold text-slate-900">Últimas questões</h2>
+                  <Clock3 className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Últimas questões</h2>
                 </div>
 
                 {latestQuestions.length > 0 ? (
@@ -283,28 +283,28 @@ export default function AdminDashboardPage() {
                     {latestQuestions.map((question) => (
                       <div
                         key={question.id}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4"
                       >
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div>
-                            <p className="font-bold text-slate-900">
+                            <p className="font-bold text-slate-900 dark:text-slate-100">
                               {question.codigo || "Sem código"}
                             </p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                               {question.banca || "Sem banca"} • {question.ano || "Sem ano"}
                             </p>
                           </div>
 
-                          <span className="text-xs text-slate-500 whitespace-nowrap">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                             {formatDate(question.created_at)}
                           </span>
                         </div>
 
-                        <p className="text-sm text-slate-600 leading-relaxed mb-2">
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-2">
                           {truncateText(question.enunciado)}
                         </p>
 
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           Status:{" "}
                           <span className="font-semibold">
                             {question.publicada ? "Publicada" : "Não publicada"}
@@ -314,14 +314,14 @@ export default function AdminDashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">Nenhuma questão cadastrada ainda.</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Nenhuma questão cadastrada ainda.</p>
                 )}
               </Card>
 
-              <Card className="p-6 bg-white border-slate-200">
+              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
-                  <Clock3 className="w-5 h-5 text-slate-500" />
-                  <h2 className="text-xl font-bold text-slate-900">
+                  <Clock3 className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
                     Últimos blocos de resolução
                   </h2>
                 </div>
@@ -331,24 +331,24 @@ export default function AdminDashboardPage() {
                     {latestResolutions.map((resolution) => (
                       <div
                         key={resolution.id}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4"
                       >
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div>
-                            <p className="font-bold text-slate-900">
+                            <p className="font-bold text-slate-900 dark:text-slate-100">
                               {resolution.codigo_resolucao || "Sem código"}
                             </p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                               Questão: {resolution.questao_id}
                             </p>
                           </div>
 
-                          <span className="text-xs text-slate-500 whitespace-nowrap">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                             {formatDate(resolution.created_at)}
                           </span>
                         </div>
 
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
                           Tipo:{" "}
                           <span className="font-semibold">
                             {resolution.tipo || "não informado"}
@@ -360,7 +360,7 @@ export default function AdminDashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     Nenhum bloco de resolução cadastrado ainda.
                   </p>
                 )}
@@ -368,10 +368,10 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="grid xl:grid-cols-2 gap-6">
-              <Card className="p-6 bg-white border-slate-200">
+              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
-                  <Users className="w-5 h-5 text-slate-500" />
-                  <h2 className="text-xl font-bold text-slate-900">Últimos usuários</h2>
+                  <Users className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Últimos usuários</h2>
                 </div>
 
                 {latestUsers.length > 0 ? (
@@ -379,24 +379,24 @@ export default function AdminDashboardPage() {
                     {latestUsers.map((user) => (
                       <div
                         key={user.id}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4"
                       >
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div>
-                            <p className="font-bold text-slate-900">
+                            <p className="font-bold text-slate-900 dark:text-slate-100">
                               {user.nome || "Sem nome"}
                             </p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                               {user.email || "Sem email"}
                             </p>
                           </div>
 
-                          <span className="text-xs text-slate-500 whitespace-nowrap">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                             {formatDate(user.created_at)}
                           </span>
                         </div>
 
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
                           Role: <span className="font-semibold">{user.role || "sem role"}</span> •{" "}
                           Status:{" "}
                           <span className="font-semibold">
@@ -407,14 +407,14 @@ export default function AdminDashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">Nenhum usuário cadastrado ainda.</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum usuário cadastrado ainda.</p>
                 )}
               </Card>
 
-              <Card className="p-6 bg-white border-slate-200">
+              <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
-                  <BookOpenCheck className="w-5 h-5 text-slate-500" />
-                  <h2 className="text-xl font-bold text-slate-900">
+                  <BookOpenCheck className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
                     Últimas questões sem resolução
                   </h2>
                 </div>
@@ -424,40 +424,40 @@ export default function AdminDashboardPage() {
                     {latestQuestionsWithoutResolution.map((question) => (
                       <div
                         key={question.id}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4"
                       >
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div>
-                            <p className="font-bold text-slate-900">
+                            <p className="font-bold text-slate-900 dark:text-slate-100">
                               {question.codigo || "Sem código"}
                             </p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
                               {question.banca || "Sem banca"} • {question.ano || "Sem ano"}
                             </p>
                           </div>
 
-                          <span className="text-xs text-slate-500 whitespace-nowrap">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                             {formatDate(question.created_at)}
                           </span>
                         </div>
 
-                        <p className="text-sm text-slate-600 leading-relaxed">
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                           {truncateText(question.enunciado)}
                         </p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     Todas as questões já têm resolução cadastrada.
                   </p>
                 )}
               </Card>
             </div>
 
-            <Card className="p-6 bg-white border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-2">Ações rápidas</h2>
-              <p className="text-sm text-slate-500 mb-6">
+            <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Ações rápidas</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
                 Esse painel centraliza o núcleo do sistema administrativo e destaca o que
                 ainda está pendente no banco.
               </p>

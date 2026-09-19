@@ -101,6 +101,9 @@ jspm_packages/
 tmp/
 temp/
 
+# Generated PDF test artifacts
+output/pdf/*.pdf
+
 # Database
 *.db
 *.sqlite

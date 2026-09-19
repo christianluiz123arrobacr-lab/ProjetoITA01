@@ -56,7 +56,7 @@ function getLevelMeta(level?: string | null) {
   if (normalized === "error") {
     return {
       label: "Erro",
-      className: "bg-red-100 text-red-700 border-red-200",
+      className: "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800",
       icon: ShieldAlert,
     };
   }
@@ -64,14 +64,14 @@ function getLevelMeta(level?: string | null) {
   if (normalized === "warning") {
     return {
       label: "Aviso",
-      className: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      className: "bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
       icon: TriangleAlert,
     };
   }
 
   return {
     label: "Info",
-    className: "bg-blue-100 text-blue-700 border-blue-200",
+    className: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800",
     icon: Info,
   };
 }
@@ -168,13 +168,13 @@ export default function AdminLogsPage() {
         title="Logs ADM"
         subtitle="Acompanhamento real das ações administrativas registradas no sistema."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">
                 Histórico administrativo
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Exibindo {filteredLogs.length} de {logs.length} logs carregados
               </p>
             </div>
@@ -186,22 +186,22 @@ export default function AdminLogsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar por ação, entidade, descrição, email..."
-                className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-11 pr-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               />
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="grid md:grid-cols-3 xl:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Ação
               </label>
               <select
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todas</option>
                 {actionOptions.map((action) => (
@@ -213,13 +213,13 @@ export default function AdminLogsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Entidade
               </label>
               <select
                 value={entityFilter}
                 onChange={(e) => setEntityFilter(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todas</option>
                 {entityOptions.map((entity) => (
@@ -231,13 +231,13 @@ export default function AdminLogsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Nível
               </label>
               <select
                 value={levelFilter}
                 onChange={(e) => setLevelFilter(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todos</option>
                 {levelOptions.map((level) => (
@@ -262,28 +262,28 @@ export default function AdminLogsPage() {
 
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando logs administrativos...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando logs administrativos...</p>
           </Card>
         ) : error ? (
-          <Card className="p-8 border-red-200 bg-red-50">
+          <Card className="p-8 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">
                   Erro ao carregar logs
                 </h2>
-                <p className="text-red-600">{error}</p>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : filteredLogs.length === 0 ? (
           <Card className="p-10 text-center">
             <Database className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-            <h2 className="text-lg font-bold text-slate-900 mb-2">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Nenhum log encontrado
             </h2>
-            <p className="text-slate-500">
+            <p className="text-slate-500 dark:text-slate-400">
               Ajuste os filtros ou gere novas ações administrativas.
             </p>
           </Card>
@@ -302,7 +302,7 @@ export default function AdminLogsPage() {
               return (
                 <Card
                   key={log.id}
-                  className="p-5 bg-white border-slate-200 shadow-sm"
+                  className="p-5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm"
                 >
                   <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -314,51 +314,51 @@ export default function AdminLogsPage() {
                           {levelMeta.label}
                         </span>
 
-                        <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+                        <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700">
                           {prettify(log.action)}
                         </span>
 
-                        <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold border border-blue-200">
+                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-200 dark:border-blue-800">
                           {prettify(log.entity_type)}
                         </span>
                       </div>
 
-                      <p className="text-base font-semibold text-slate-900 mb-2">
+                      <p className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">
                         {log.description}
                       </p>
 
-                      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600">
+                      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600 dark:text-slate-300">
                         <p>
-                          <span className="font-semibold text-slate-800">Data:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Data:</span>{" "}
                           {formatDate(log.created_at)}
                         </p>
                         <p>
-                          <span className="font-semibold text-slate-800">Email:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Email:</span>{" "}
                           {log.actor_email || "Não informado"}
                         </p>
                         <p>
-                          <span className="font-semibold text-slate-800">Entidade ID:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Entidade ID:</span>{" "}
                           {log.entity_id || "—"}
                         </p>
                         <p className="md:col-span-2 xl:col-span-3">
-                          <span className="font-semibold text-slate-800">Log ID:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Log ID:</span>{" "}
                           {log.id}
                         </p>
                       </div>
 
                       {metadataEntries.length > 0 ? (
-                        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
                           <div className="flex items-center gap-2 mb-3">
-                            <Clock3 className="w-4 h-4 text-slate-500" />
-                            <p className="text-sm font-semibold text-slate-700">
+                            <Clock3 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                               Metadata
                             </p>
                           </div>
 
-                          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600">
+                          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-slate-600 dark:text-slate-300">
                             {metadataEntries.map(([key, value]) => (
                               <p key={key}>
-                                <span className="font-semibold text-slate-800">
+                                <span className="font-semibold text-slate-800 dark:text-slate-100">
                                   {prettify(key)}:
                                 </span>{" "}
                                 {typeof value === "object"

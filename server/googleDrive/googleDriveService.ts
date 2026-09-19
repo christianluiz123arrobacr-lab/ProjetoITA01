@@ -10,13 +10,17 @@ import type { ServerResponse } from "node:http";
 import { TRPCError } from "@trpc/server";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
 
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-const NOTEBOOK_MIME = "application/json";
-const LEGACY_NOTEBOOK_MIME = "application/vnd.projeto-vetor.notebook+json";
+export const DRIVE_SCOPES = [
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive.appdata",
+] as const;
+const NOTEBOOK_MIME = "application/vnd.projeto-vetor.notebook+json";
+const LEGACY_NOTEBOOK_MIME = "application/json";
 const FOLDER_NAME = "Projeto Vetor - Cadernos";
 const APP_PROPERTIES = {
   projetoVetorType: "notebook",
   projetoVetorVersion: "1",
+  storageSpace: "appDataFolder",
 };
 const MAX_DOCUMENT_BYTES = 8_000_000;
 const OAUTH_COOKIE = "pv_google_drive_pkce";
@@ -26,6 +30,7 @@ type ConnectionRow = {
   encrypted_refresh_token: string;
   google_account_email: string | null;
   folder_id: string | null;
+  appdata_enabled_at: string | null;
 };
 export type NotebookDocument = {
   version: 1;
@@ -158,7 +163,7 @@ export function createGoogleDriveConnectUrl(
     client_id: required("GOOGLE_DRIVE_CLIENT_ID"),
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: DRIVE_SCOPE,
+    scope: DRIVE_SCOPES.join(" "),
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
@@ -217,6 +222,7 @@ export async function handleGoogleDriveCallback(
       token_expiry: new Date(
         Date.now() + (tokens.expires_in ?? 3600) * 1000
       ).toISOString(),
+      appdata_enabled_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" }
@@ -226,7 +232,7 @@ export async function handleGoogleDriveCallback(
 async function connection(userId: string): Promise<ConnectionRow> {
   const { data, error } = await supabaseAdmin
     .from("google_drive_connections")
-    .select("user_id, encrypted_refresh_token, google_account_email, folder_id")
+    .select("user_id, encrypted_refresh_token, google_account_email, folder_id, appdata_enabled_at")
     .eq("user_id", userId)
     .maybeSingle();
   if (error || !data)
@@ -268,10 +274,10 @@ async function driveFetch(token: string, url: string, init: RequestInit = {}) {
       reason = payload.error?.errors?.[0]?.reason ?? payload.error?.status ?? reason;
     } catch { /* resposta não JSON; não registrar o corpo potencialmente sensível */ }
     console.error("[google-drive] operação falhou", { operation: `${init.method ?? "GET"} ${new URL(url).pathname}`, status: response.status, reason, requestId });
-    if (response.status === 401)
+    if (response.status === 401 || (response.status === 403 && ["insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT"].includes(reason)))
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
-        message: "Reconecte seu Google Drive.",
+        message: "Reconecte seu Google Drive para autorizar o armazenamento privado dos cadernos.",
       });
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -328,6 +334,27 @@ export function safeNotebookName(name: string) {
     });
   return normalized;
 }
+export function notebookListUrl(space: "drive" | "appDataFolder", query: string, fields: string) {
+  return `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=${space}&fields=${fields}&orderBy=modifiedTime desc`;
+}
+
+export function editableNotebookMetadata(name: string, paper: NotebookDocument["paper"], extra: Record<string, string> = {}) {
+  return {
+    name: `${safeNotebookName(name)}.projeto-vetor`,
+    parents: ["appDataFolder"],
+    mimeType: NOTEBOOK_MIME,
+    appProperties: { ...APP_PROPERTIES, paperSize: paper.size, lined: String(paper.lined), ...extra },
+  };
+}
+
+export function visibleNotebookPdfMetadata(name: string, folderId: string, sourceNotebookId: string, updating: boolean) {
+  return {
+    name: `${safeNotebookName(name)} - Projeto Vetor.pdf`,
+    ...(updating ? {} : { parents: [folderId] }),
+    mimeType: "application/pdf",
+    appProperties: { projetoVetorType: "notebook-export", sourceNotebookId },
+  };
+}
 function assertDocumentSize(document: NotebookDocument) {
   const body = JSON.stringify(document);
   if (Buffer.byteLength(body, "utf8") > MAX_DOCUMENT_BYTES)
@@ -349,29 +376,48 @@ export function isProjectVetorNotebookMetadata(metadata: {
     metadata.appProperties?.projetoVetorVersion === "1"
   );
 }
-async function ownedFile(userId: string, fileId: string) {
-  if (!/^[A-Za-z0-9_-]{10,200}$/.test(fileId))
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Caderno inválido." });
-  const { token } = await accessToken(userId);
-  const metadata = (await (
+type DriveNotebookMetadata = {
+  id: string;
+  name: string;
+  mimeType: string;
+  appProperties?: Record<string, string>;
+  modifiedTime: string;
+  trashed?: boolean;
+  parents?: string[];
+};
+
+async function fileMetadata(token: string, fileId: string): Promise<DriveNotebookMetadata> {
+  return (await (
     await driveFetch(
       token,
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,appProperties,modifiedTime,trashed,parents`
     )
-  ).json()) as {
-    id: string;
-    mimeType: string;
-    appProperties?: Record<string, string>;
-    modifiedTime: string;
-    trashed?: boolean;
-    parents?: string[];
-  };
+  ).json()) as DriveNotebookMetadata;
+}
+
+function isAppDataNotebook(metadata: DriveNotebookMetadata) {
+  return metadata.appProperties?.storageSpace === "appDataFolder" || metadata.parents?.includes("appDataFolder");
+}
+
+async function ownedFile(userId: string, fileId: string) {
+  if (!/^[A-Za-z0-9_-]{10,200}$/.test(fileId))
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Caderno inválido." });
+  const { token } = await accessToken(userId);
+  let metadata = await fileMetadata(token, fileId);
   if (!isProjectVetorNotebookMetadata(metadata))
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Este arquivo não é um caderno válido do Projeto Vetor.",
     });
-  return { token, metadata };
+  const migratedId = metadata.appProperties?.migratedEditableFileId;
+  if (migratedId) {
+    const migrated = await fileMetadata(token, migratedId);
+    if (!isProjectVetorNotebookMetadata(migrated) || !isAppDataNotebook(migrated) || migrated.appProperties?.legacySourceFileId !== fileId) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "A migração deste caderno é inválida." });
+    }
+    metadata = migrated;
+  }
+  return { token, metadata, requestedFileId: fileId };
 }
 function multipart(metadata: object, body: string) {
   const boundary = `pv-${randomBytes(12).toString("hex")}`;
@@ -386,6 +432,43 @@ function multipartPdf(metadata: object, body: Buffer) {
   const prefix = Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`);
   return { contentType: `multipart/related; boundary=${boundary}`, body: Buffer.concat([prefix, body, Buffer.from(`\r\n--${boundary}--`)]) };
 }
+
+async function notebookBody(token: string, fileId: string): Promise<NotebookDocument> {
+  const response = await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`);
+  return await response.json() as NotebookDocument;
+}
+
+async function migrateLegacyNotebook(
+  token: string,
+  legacy: DriveNotebookMetadata,
+  document: NotebookDocument
+) {
+  if (isAppDataNotebook(legacy)) return legacy;
+  const legacyId = legacy.id;
+  const query = encodeURIComponent(
+    `appProperties has { key='legacySourceFileId' and value='${legacyId}' } and trashed=false`
+  );
+  const existing = await driveFetch(token, `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder&fields=files(id)&pageSize=1`).then(response => response.json()) as { files?: Array<{ id: string }> };
+  let migrated: DriveNotebookMetadata;
+  if (existing.files?.[0]?.id) {
+    migrated = await fileMetadata(token, existing.files[0].id);
+  } else {
+    const upload = multipart(editableNotebookMetadata(document.name, document.paper, {
+      legacySourceFileId: legacyId,
+      ...(legacy.appProperties?.pdfFileId ? { pdfFileId: legacy.appProperties.pdfFileId } : {}),
+    }), assertDocumentSize(document));
+    const created = await driveFetch(token, "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+      method: "POST", headers: { "content-type": upload.contentType }, body: upload.body,
+    }).then(response => response.json()) as { id: string };
+    migrated = await fileMetadata(token, created.id);
+  }
+  await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(legacyId)}?fields=id`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ appProperties: { ...(legacy.appProperties ?? {}), migratedEditableFileId: migrated.id } }),
+  });
+  return migrated;
+}
 export function notebookPdfUploadTarget(pdfFileId?: string | null) {
   return pdfFileId
     ? { method: "PATCH" as const, path: `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(pdfFileId)}?uploadType=multipart&fields=id,webViewLink` }
@@ -393,14 +476,21 @@ export function notebookPdfUploadTarget(pdfFileId?: string | null) {
 }
 
 export async function googleDriveStatus(userId: string) {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("google_drive_connections")
-    .select("google_account_email, updated_at")
+    .select("google_account_email, updated_at, appdata_enabled_at")
     .eq("user_id", userId)
     .maybeSingle();
+  if (error && ["42703", "PGRST204"].includes(error.code ?? "")) {
+    const legacy = await supabaseAdmin.from("google_drive_connections")
+      .select("google_account_email, updated_at").eq("user_id", userId).maybeSingle();
+    return { connected: Boolean(legacy.data), accountEmail: legacy.data?.google_account_email ?? null, requiresReconnect: Boolean(legacy.data) };
+  }
+  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível verificar sua conexão com o Google Drive." });
   return {
     connected: Boolean(data),
     accountEmail: data?.google_account_email ?? null,
+    requiresReconnect: Boolean(data && !data.appdata_enabled_at),
   };
 }
 export async function disconnectGoogleDrive(userId: string) {
@@ -417,20 +507,24 @@ export async function listNotebooks(
   const query = encodeURIComponent(
     `appProperties has { key='projetoVetorType' and value='notebook' } and trashed=false`
   );
-  const data = (await (
-    await driveFetch(
-      token,
-      `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive&fields=files(id,name,modifiedTime,appProperties)&orderBy=modifiedTime desc`
-    )
-  ).json()) as {
+  const fields = "files(id,name,mimeType,modifiedTime,appProperties,parents)";
+  const [appData, legacyData] = await Promise.all([
+    driveFetch(token, notebookListUrl("appDataFolder", query, fields)).then(response => response.json()),
+    driveFetch(token, notebookListUrl("drive", query, fields)).then(response => response.json()),
+  ]) as Array<{
     files?: Array<{
       id: string;
       name: string;
+      mimeType?: string;
       modifiedTime: string;
       appProperties?: Record<string, string>;
+      parents?: string[];
     }>;
-  };
-  return (data.files ?? []).map(file => ({
+  }>;
+  const legacyFiles = (legacyData.files ?? []).filter(file => !file.appProperties?.migratedEditableFileId);
+  const files = [...(appData.files ?? []), ...legacyFiles]
+    .sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime));
+  return files.map(file => ({
     id: file.id,
     name: file.name.replace(/\.projeto-vetor(?:\.json)?$/, ""),
     modifiedTime: file.modifiedTime,
@@ -450,8 +544,7 @@ export async function createNotebook(
   linkedQuestions: NotebookDocument["linkedQuestions"] = []
 ) {
   const safe = safeNotebookName(name);
-  const { token, row } = await accessToken(userId);
-  const folderId = await ensureFolder(userId, token, row);
+  const { token } = await accessToken(userId);
   const now = new Date().toISOString();
   const document: NotebookDocument = {
     version: 1,
@@ -463,16 +556,7 @@ export async function createNotebook(
     linkedQuestions,
   };
   const upload = multipart(
-    {
-      name: `${safe}.projeto-vetor`,
-      parents: [folderId],
-      mimeType: NOTEBOOK_MIME,
-      appProperties: {
-        ...APP_PROPERTIES,
-        paperSize: paper.size,
-        lined: String(paper.lined),
-      },
-    },
+    editableNotebookMetadata(safe, paper),
     assertDocumentSize(document)
   );
   const created = (await (
@@ -491,21 +575,21 @@ export async function createNotebook(
 
 export async function uploadNotebookPdf(userId: string, notebookId: string, name: string, pdfBase64: string) {
   const { token, metadata } = await ownedFile(userId, notebookId);
+  const row = await connection(userId);
+  const folderId = await ensureFolder(userId, token, row);
+  const canonicalNotebookId = metadata.id;
   const bytes = Buffer.from(pdfBase64, "base64");
   if (bytes.length < 5 || bytes.length > 12_000_000 || bytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
     throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo gerado não é um PDF válido." });
   }
   const pdfFileId = metadata.appProperties?.pdfFileId;
-  const pdfMetadata = {
-    name: `${safeNotebookName(name)} - Projeto Vetor.pdf`,
-    ...(pdfFileId ? {} : { parents: metadata.parents }),
-    mimeType: "application/pdf",
-    appProperties: { projetoVetorType: "notebook-export", sourceNotebookId: notebookId },
-  };
+  const pdfMetadata = visibleNotebookPdfMetadata(name, folderId, canonicalNotebookId, Boolean(pdfFileId));
   if (pdfFileId) {
     const existing = await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(pdfFileId)}?fields=id,mimeType,appProperties,trashed`);
     const existingMetadata = await existing.json() as { mimeType?: string; appProperties?: Record<string, string>; trashed?: boolean };
-    if (existingMetadata.trashed || existingMetadata.mimeType !== "application/pdf" || existingMetadata.appProperties?.sourceNotebookId !== notebookId) {
+    const validSources = [canonicalNotebookId, metadata.appProperties?.legacySourceFileId].filter((value): value is string => Boolean(value));
+    const existingSource = existingMetadata.appProperties?.sourceNotebookId;
+    if (existingMetadata.trashed || existingMetadata.mimeType !== "application/pdf" || !existingSource || !validSources.includes(existingSource)) {
       throw new TRPCError({ code: "FORBIDDEN", message: "O PDF vinculado não pertence a este caderno." });
     }
   }
@@ -513,27 +597,33 @@ export async function uploadNotebookPdf(userId: string, notebookId: string, name
   const target = notebookPdfUploadTarget(pdfFileId);
   const result = await driveFetch(token, target.path, { method: target.method, headers: { "content-type": upload.contentType }, body: upload.body });
   const saved = await result.json() as { id: string; webViewLink?: string };
+  let notebookModifiedTime = metadata.modifiedTime;
   if (!pdfFileId) {
-    await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(notebookId)}?fields=id`, {
+    const linkedNotebook = await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(canonicalNotebookId)}?fields=id,modifiedTime`, {
       method: "PATCH", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ appProperties: { ...APP_PROPERTIES, paperSize: metadata.appProperties?.paperSize ?? "a4", lined: metadata.appProperties?.lined ?? "false", pdfFileId: saved.id } }),
+      body: JSON.stringify({ appProperties: {
+        ...(metadata.appProperties ?? {}),
+        projetoVetorType: "notebook",
+        projetoVetorVersion: "1",
+        paperSize: metadata.appProperties?.paperSize ?? "a4",
+        lined: metadata.appProperties?.lined ?? "false",
+        pdfFileId: saved.id,
+      } }),
     });
+    const linkedMetadata = await linkedNotebook.json() as { modifiedTime: string };
+    notebookModifiedTime = linkedMetadata.modifiedTime;
   }
-  return { ...saved, updated: Boolean(pdfFileId) };
+  return { ...saved, updated: Boolean(pdfFileId), notebookModifiedTime };
 }
 export async function getNotebook(userId: string, fileId: string) {
   const { token, metadata } = await ownedFile(userId, fileId);
-  const response = await driveFetch(
-    token,
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`
-  );
-  const document = (await response.json()) as NotebookDocument;
+  const document = await notebookBody(token, metadata.id);
   if (document.version !== 1 || !Array.isArray(document.pages))
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "O caderno possui um formato incompatível.",
     });
-  return { document, modifiedTime: metadata.modifiedTime };
+  return { id: metadata.id, document, modifiedTime: metadata.modifiedTime, migrated: metadata.id !== fileId };
 }
 export async function updateNotebook(
   userId: string,
@@ -554,6 +644,7 @@ export async function updateNotebook(
     name: safeNotebookName(document.name),
     modifiedAt: now,
   };
+  const targetMetadata = await migrateLegacyNotebook(token, metadata, updated);
   const upload = multipart(
     {
       name: `${updated.name}.projeto-vetor`,
@@ -562,7 +653,8 @@ export async function updateNotebook(
         ...APP_PROPERTIES,
         paperSize: updated.paper.size,
         lined: String(updated.paper.lined),
-        ...(metadata.appProperties?.pdfFileId ? { pdfFileId: metadata.appProperties.pdfFileId } : {}),
+        ...(targetMetadata.appProperties?.pdfFileId ? { pdfFileId: targetMetadata.appProperties.pdfFileId } : {}),
+        ...(targetMetadata.appProperties?.legacySourceFileId ? { legacySourceFileId: targetMetadata.appProperties.legacySourceFileId } : {}),
       },
     },
     assertDocumentSize(updated)
@@ -570,7 +662,7 @@ export async function updateNotebook(
   const result = (await (
     await driveFetch(
       token,
-      `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=multipart&fields=id,modifiedTime`,
+      `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(targetMetadata.id)}?uploadType=multipart&fields=id,modifiedTime`,
       {
         method: "PATCH",
         headers: { "content-type": upload.contentType },
@@ -589,29 +681,36 @@ export async function renameNotebook(
   fileId: string,
   name: string
 ) {
-  const { token } = await ownedFile(userId, fileId);
+  const { token, metadata } = await ownedFile(userId, fileId);
   const safe = safeNotebookName(name);
-  await driveFetch(
-    token,
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: `${safe}.projeto-vetor`, mimeType: NOTEBOOK_MIME }),
-    }
-  );
-  return { id: fileId, name: safe };
+  const currentDocument = await notebookBody(token, metadata.id);
+  const targetMetadata = await migrateLegacyNotebook(token, metadata, { ...currentDocument, name: safe, modifiedAt: new Date().toISOString() });
+  const renamedDocument = { ...currentDocument, name: safe, modifiedAt: new Date().toISOString() };
+  const upload = multipart({
+    name: `${safe}.projeto-vetor`, mimeType: NOTEBOOK_MIME,
+    appProperties: {
+      ...APP_PROPERTIES,
+      paperSize: renamedDocument.paper.size,
+      lined: String(renamedDocument.paper.lined),
+      ...(targetMetadata.appProperties?.pdfFileId ? { pdfFileId: targetMetadata.appProperties.pdfFileId } : {}),
+      ...(targetMetadata.appProperties?.legacySourceFileId ? { legacySourceFileId: targetMetadata.appProperties.legacySourceFileId } : {}),
+    },
+  }, assertDocumentSize(renamedDocument));
+  await driveFetch(token, `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(targetMetadata.id)}?uploadType=multipart&fields=id,name`, {
+    method: "PATCH", headers: { "content-type": upload.contentType }, body: upload.body,
+  });
+  return { id: targetMetadata.id, name: safe, migrated: targetMetadata.id !== fileId };
 }
 export async function trashNotebook(userId: string, fileId: string) {
-  const { token } = await ownedFile(userId, fileId);
+  const { token, metadata } = await ownedFile(userId, fileId);
   await driveFetch(
     token,
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,trashed`,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(metadata.id)}?fields=id,trashed`,
     {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ trashed: true }),
     }
   );
-  return { id: fileId, trashed: true };
+  return { id: metadata.id, trashed: true };
 }

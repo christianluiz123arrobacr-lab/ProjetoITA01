@@ -1,0 +1,345 @@
+.gesture-workspace-toolbar {
+  position: relative;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(420px, 1.6fr);
+  gap: 12px 18px;
+  padding: 14px 18px;
+  border: 1px solid rgba(71, 85, 105, 0.75);
+  border-radius: 20px;
+  color: #e2e8f0;
+  background: rgba(7, 16, 30, 0.94);
+  box-shadow: 0 16px 42px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(18px);
+}
+.gesture-workspace-toolbar__brand span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #67e8f9;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.gesture-workspace-toolbar__brand p {
+  margin-top: 5px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+.gesture-workspace-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.gesture-workspace-toolbar button,
+.gesture-settings-panel button,
+.gesture-help-panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid #334155;
+  border-radius: 11px;
+  padding: 7px 10px;
+  color: #dbeafe;
+  background: #111f34;
+  font-size: 11px;
+  font-weight: 800;
+  transition: 150ms ease;
+}
+.gesture-workspace-toolbar button:hover:not(:disabled),
+.gesture-workspace-toolbar button[aria-pressed="true"] {
+  border-color: #22d3ee;
+  color: #ecfeff;
+  background: #164e63;
+}
+.gesture-workspace-toolbar button:focus-visible,
+.gesture-command-menu button:focus-visible,
+.gesture-settings-panel button:focus-visible,
+.gesture-help-panel button:focus-visible {
+  outline: 3px solid #67e8f9;
+  outline-offset: 2px;
+}
+.gesture-workspace-toolbar button:disabled { opacity: 0.42; }
+.gesture-workspace-toolbar__status {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.gesture-workspace-toolbar__status span {
+  flex: none;
+  border: 1px solid #263750;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.75);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+.gesture-workspace-toolbar__status span[data-active="true"] { color: #86efac; border-color: #166534; }
+.gesture-workspace-toolbar__status span[data-mode="object_rotating"] { color: #c4b5fd; border-color: #7c3aed; }
+.gesture-workspace-toolbar__status span[data-mode="menu_open"],
+.gesture-workspace-toolbar__status span[data-mode="menu_dragging"] { color: #67e8f9; border-color: #0891b2; }
+.gesture-workspace-toolbar__status strong {
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gesture-settings-panel,
+.gesture-help-panel {
+  position: fixed;
+  top: 96px;
+  right: 24px;
+  z-index: 10080;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  border: 1px solid #475569;
+  border-radius: 20px;
+  padding: 18px;
+  color: #e2e8f0;
+  background: rgba(7, 16, 30, 0.98);
+  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.66);
+}
+.gesture-help-panel { right: 400px; }
+.gesture-settings-panel > div,
+.gesture-help-panel > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.gesture-settings-panel h2,
+.gesture-help-panel h2 { font-size: 16px; font-weight: 900; }
+.gesture-settings-panel > div button,
+.gesture-help-panel > div button { width: 32px; min-height: 32px; padding: 4px; }
+.gesture-settings-panel label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-top: 14px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+}
+.gesture-settings-panel input,
+.gesture-settings-panel select { grid-column: 1 / -1; width: 100%; }
+.gesture-settings-panel select {
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 9px;
+  color: #e2e8f0;
+  background: #111f34;
+}
+.gesture-settings-panel output { color: #67e8f9; }
+.gesture-settings-panel .gesture-panel-reset { width: 100%; margin-top: 18px; }
+.gesture-settings-panel > p,
+.gesture-help-panel p { margin-top: 12px; color: #94a3b8; font-size: 11px; line-height: 1.55; }
+.gesture-command-menu {
+  position: fixed;
+  z-index: 10040;
+  width: min(560px, calc(100vw - 28px));
+  max-height: min(650px, calc(100vh - 28px));
+  overflow: auto;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(103, 232, 249, 0.48);
+  border-radius: 30px;
+  padding: 14px;
+  color: #e2e8f0;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(8, 145, 178, 0.2), transparent 38%),
+    rgba(5, 13, 25, 0.985);
+  box-shadow:
+    0 0 0 100vmax rgba(2, 6, 23, 0.68),
+    0 32px 100px rgba(0, 0, 0, 0.72),
+    0 0 55px rgba(34, 211, 238, 0.15);
+}
+.gesture-command-menu[data-state="menu_dragging"] { border-color: #facc15; }
+.gesture-command-menu__grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  padding: 7px;
+  color: #64748b;
+  background: rgba(30, 41, 59, 0.7);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: grab;
+}
+.gesture-command-menu__grip[data-highlight="true"],
+.gesture-command-menu__grip:hover { color: #fde047; background: #422006; }
+.gesture-command-menu__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 8px 12px;
+}
+.gesture-command-menu__heading small { color: #67e8f9; font-size: 9px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
+.gesture-command-menu__heading h2 { margin-top: 3px; font-size: 21px; font-weight: 950; }
+.gesture-command-menu__heading button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  color: #cbd5e1;
+  background: #111f34;
+}
+.gesture-command-menu__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.gesture-command-menu__grid button {
+  display: flex;
+  min-height: 86px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  border: 1px solid #334155;
+  border-radius: 18px;
+  padding: 13px;
+  text-align: left;
+  color: #e2e8f0;
+  background: linear-gradient(145deg, #101d31, #13243c);
+  transition: 140ms ease;
+}
+.gesture-command-menu__grid button span { font-size: 13px; font-weight: 900; }
+.gesture-command-menu__grid button small { margin-top: 5px; color: #64748b; font-size: 9px; }
+.gesture-command-menu button[data-highlight="true"],
+.gesture-command-menu__grid button:hover:not(:disabled) {
+  border-color: #67e8f9;
+  color: #ecfeff;
+  background: #155e75;
+  box-shadow: 0 0 25px rgba(34, 211, 238, 0.3);
+}
+.gesture-command-menu button:disabled { opacity: 0.36; }
+.gesture-command-menu footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  color: #64748b;
+  font-size: 10px;
+}
+.gesture-command-menu footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #cbd5e1;
+  background: #111f34;
+  font-size: 10px;
+  font-weight: 800;
+}
+.gesture-air-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10120;
+  width: 25px;
+  height: 25px;
+  margin: -12px;
+  pointer-events: none;
+  border: 2px solid #67e8f9;
+  border-radius: 50%;
+  box-shadow: 0 0 19px #22d3ee;
+}
+.gesture-air-cursor[data-hover="true"] { border-color: #fde047; background: rgba(250, 204, 21, 0.3); }
+.gesture-air-cursor[data-mode="object_dragging"],
+.gesture-air-cursor[data-mode="object_rotating"],
+.gesture-air-cursor[data-mode="object_scaling"] { border-color: #a7f3d0; background: #059669; }
+.gesture-air-cursor[hidden] { display: none; }
+.gesture-mode-indicator {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 10055;
+  transform: translateX(-50%);
+  border: 1px solid #0e7490;
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #cffafe;
+  background: rgba(8, 47, 73, 0.94);
+  box-shadow: 0 12px 36px rgba(2, 6, 23, 0.5);
+  font-size: 11px;
+  font-weight: 900;
+}
+.gesture-mode-indicator--rotation { border-color: #7c3aed; color: #ede9fe; background: rgba(46, 16, 101, 0.94); }
+.gesture-mode-indicator b { margin-left: 7px; color: #67e8f9; }
+.gesture-webcam {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10030;
+  width: 176px;
+  overflow: visible;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  color: #a5f3fc;
+  background: #07111f;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.46);
+}
+.gesture-webcam > button {
+  position: absolute;
+  top: -12px;
+  right: -10px;
+  z-index: 2;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid #475569;
+  border-radius: 50%;
+  color: #cbd5e1;
+  background: #0f172a;
+}
+.gesture-webcam > button svg { width: 14px; }
+.gesture-webcam > div { position: relative; display: none; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 15px 15px 0 0; }
+.gesture-webcam[data-active="true"][data-visible="true"] > div { display: block; }
+.gesture-webcam[data-visible="false"] { width: 46px; }
+.gesture-webcam[data-visible="false"] p { display: none; }
+.gesture-webcam video,
+.gesture-webcam canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gesture-webcam video { object-fit: cover; transform: scaleX(-1); }
+.gesture-webcam canvas { pointer-events: none; }
+.gesture-webcam canvas[hidden] { display: none; }
+.gesture-webcam p { padding: 7px 9px; font-size: 9px; }
+
+@media (max-width: 1000px) {
+  .gesture-workspace-toolbar { grid-template-columns: 1fr; }
+  .gesture-workspace-toolbar__actions { justify-content: flex-start; }
+  .gesture-workspace-toolbar__status { flex-wrap: wrap; }
+  .gesture-workspace-toolbar__status strong { width: 100%; white-space: normal; }
+  .gesture-help-panel { right: 24px; top: 130px; }
+}
+@media (max-width: 620px) {
+  .gesture-workspace-toolbar { padding: 12px; border-radius: 16px; }
+  .gesture-workspace-toolbar__actions button { flex: 1 1 130px; }
+  .gesture-command-menu { border-radius: 22px; }
+  .gesture-command-menu__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gesture-command-menu__grid button { min-height: 70px; }
+  .gesture-settings-panel,
+  .gesture-help-panel { top: 16px; right: 16px; }
+  .gesture-webcam { right: 10px; bottom: 10px; width: 130px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gesture-workspace-toolbar button,
+  .gesture-command-menu__grid button { transition: none; }
+}

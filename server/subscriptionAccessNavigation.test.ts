@@ -30,7 +30,13 @@ const guard = readFileSync(
   new URL("../client/src/components/SubscriptionGuard.tsx", import.meta.url),
   "utf8"
 );
+const adminGuard = readFileSync(
+  new URL("../client/src/components/admin/AdminGuard.tsx", import.meta.url),
+  "utf8"
+);
+const app = readFileSync(new URL("../client/src/App.tsx", import.meta.url), "utf8");
 const router = readFileSync(new URL("./routers.ts", import.meta.url), "utf8");
+const platformAccess = readFileSync(new URL("./_core/platformAccess.ts", import.meta.url), "utf8");
 const paymentMigration = readFileSync(
   new URL(
     "../supabase/migrations/202607280002_fix_active_subscription_conflict.sql",
@@ -123,7 +129,7 @@ describe("integração da tela pendente e do guard", () => {
   it("sincroniza no clique e confirma o acesso canônico sem redirecionar por status local", () => {
     const syncPosition = pendingPage.indexOf("syncMyMercadoPagoPaymentStatus()");
     const canonicalPosition = pendingPage.indexOf(
-      "confirmCanonicalAccess(normalizedSubscription)"
+      "confirmCanonicalAccess(normalizedSubscription, hasPendingMercadoPagoPayment)"
     );
 
     expect(syncPosition).toBeGreaterThan(-1);
@@ -132,6 +138,34 @@ describe("integração da tela pendente e do guard", () => {
     expect(pendingPage).not.toMatch(
       /\["active",\s*"trialing"\]\.includes\(data\.status\)[\s\S]{0,250}location\.replace/
     );
+  });
+
+  it("consulta o Mercado Pago automaticamente enquanto a assinatura está pendente", () => {
+    expect(pendingPage).toContain("loadLatestSubscription(false, true)");
+    expect(pendingPage).toContain("syncGateway = showRefreshing");
+    expect(pendingPage).toContain("refreshed = await syncMyMercadoPagoPaymentStatus()");
+    expect(pendingPage).toContain("MAX_AUTOMATIC_SYNC_ATTEMPTS");
+    expect(pendingPage).toContain('latestPayment?.status === "pending"');
+    expect(pendingPage).not.toContain("localStorage");
+    expect(pendingPage).not.toContain("sessionStorage");
+    expect(pendingPage).toContain("PAYMENT_CONFIRMATION_MESSAGE");
+  });
+
+  it("distingue pagamento pendente de indisponibilidade real da RPC", () => {
+    const pendingBranch = platformAccess.indexOf("if (hasPendingPayment)");
+    const pendingBranchEnd = platformAccess.indexOf(
+      'logAccess({ correlationId, stage: "canonical_rpc", outcome: "error"',
+      pendingBranch,
+    );
+    const technicalFailure = platformAccess.indexOf("throw new TRPCError", pendingBranchEnd);
+    const pendingCode = platformAccess.slice(pendingBranch, pendingBranchEnd);
+
+    expect(pendingBranch).toBeGreaterThan(-1);
+    expect(pendingBranchEnd).toBeGreaterThan(pendingBranch);
+    expect(technicalFailure).toBeGreaterThan(pendingBranch);
+    expect(pendingCode).toContain('allowed: false');
+    expect(pendingCode).toContain("hasPendingPayment");
+    expect(pendingCode).not.toContain("throw new TRPCError");
   });
 
   it("mantém erro temporário no guard e oferece nova tentativa sem redirecionar", () => {
@@ -143,16 +177,27 @@ describe("integração da tela pendente e do guard", () => {
     );
   });
 
+  it("mantém erros estáveis e não submete rotas administrativas à assinatura", () => {
+    expect(guard).toContain("accessStatusQuery.error && !accessStatusQuery.data");
+    expect(adminGuard).toContain("meQuery.error && !meQuery.data");
+    expect(guard).toContain("refetchOnReconnect: false");
+    expect(adminGuard).toContain("refetchOnReconnect: false");
+    expect(app).toContain("<SubscriptionGuard bypass={isAdminRoute}>");
+  });
+
   it("usa exclusivamente a RPC canônica para estudantes e preserva acesso por papel", () => {
     const start = router.indexOf("getAccessStatus: protectedProcedure");
     const end = router.indexOf("logout: publicProcedure", start);
     const procedure = router.slice(start, end);
 
-    expect(procedure).toContain('role === "admin" || role === "editor"');
-    expect(procedure).toContain('rpc("user_has_active_subscription"');
+    expect(procedure).toContain("getPlatformAccessDecision(ctx.user, supabaseAdmin");
+    expect(platformAccess).toContain('user.role === "admin" || user.role === "editor"');
+    expect(platformAccess).toContain('rpc("user_has_active_subscription"');
     expect(procedure).not.toContain('source: "fallback"');
     expect(procedure).not.toContain('.in("status", ["active", "trialing"])');
-    expect(procedure).toContain('code: "INTERNAL_SERVER_ERROR"');
+    expect(platformAccess).toContain('code: "INTERNAL_SERVER_ERROR"');
+    expect(procedure).toContain('"payment_pending"');
+    expect(platformAccess).toContain("hasPendingPayment");
   });
 
   it("mantém aplicação aprovada transacional antes de marcar acesso ativo", () => {

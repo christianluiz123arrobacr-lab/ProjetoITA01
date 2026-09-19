@@ -208,23 +208,23 @@ export default function AdminQuestionBatchImportPage() {
           </Link>
         </div>
 
-        {error ? <Card className="border-red-200 bg-red-50 p-5 text-red-700"><div className="flex gap-3"><AlertTriangle className="h-5 w-5" /><p className="font-medium">{error}</p></div></Card> : null}
+        {error ? <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-5 text-red-700 dark:text-red-300"><div className="flex gap-3"><AlertTriangle className="h-5 w-5" /><p className="font-medium">{error}</p></div></Card> : null}
 
-        <Card className="border-slate-200 bg-white p-6">
+        <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
           <div
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
-            className="rounded-3xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center"
+            className="rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-8 text-center"
           >
-            <FileJson className="mx-auto h-10 w-10 text-slate-500" />
-            <h2 className="mt-3 text-xl font-bold text-slate-900">Selecione ou arraste um JSON</h2>
-            <p className="mt-1 text-sm text-slate-500">Aceita o novo formato com <code>questoes</code> e o JSON antigo de questão única. Limite: {formatBytes(MAX_QUESTION_IMPORT_JSON_BYTES)}.</p>
+            <FileJson className="mx-auto h-10 w-10 text-slate-500 dark:text-slate-400" />
+            <h2 className="mt-3 text-xl font-bold text-slate-900 dark:text-slate-100">Selecione ou arraste um JSON</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Aceita o novo formato com <code>questoes</code> e o JSON antigo de questão única. Limite: {formatBytes(MAX_QUESTION_IMPORT_JSON_BYTES)}.</p>
             <input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={handleFileInput} />
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               <Button className="rounded-2xl" onClick={() => fileInputRef.current?.click()}><Upload className="mr-2 h-4 w-4" />Escolher arquivo JSON</Button>
               {fileInfo ? <Button variant="outline" className="rounded-2xl" onClick={clearBatch}><Trash2 className="mr-2 h-4 w-4" />Remover arquivo</Button> : null}
             </div>
-            {fileInfo ? <p className="mt-4 text-sm font-medium text-slate-700">{fileInfo.name} · {formatBytes(fileInfo.size)}</p> : null}
+            {fileInfo ? <p className="mt-4 text-sm font-medium text-slate-700 dark:text-slate-300">{fileInfo.name} · {formatBytes(fileInfo.size)}</p> : null}
           </div>
         </Card>
 
@@ -240,11 +240,11 @@ export default function AdminQuestionBatchImportPage() {
                 ["Conteúdos novos", newContents],
                 ["Assuntos novos", newSubjects],
               ].map(([label, value]) => (
-                <Card key={label} className="border-slate-200 bg-white p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-2xl font-black text-slate-900">{value}</p></Card>
+                <Card key={label} className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p><p className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">{value}</p></Card>
               ))}
             </div>
 
-            <Card className="border-slate-200 bg-white p-5">
+            <Card className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
               <div className="flex flex-wrap gap-3">
                 <Button variant="outline" className="rounded-2xl" onClick={() => setSelected(new Set(validIndexes))}>Selecionar todas as válidas</Button>
                 <Button variant="outline" className="rounded-2xl" onClick={() => setSelected(new Set())}>Desmarcar todas</Button>
@@ -258,7 +258,7 @@ export default function AdminQuestionBatchImportPage() {
             </Card>
 
             {finalReport ? (
-              <Card className="border-emerald-200 bg-emerald-50 p-5 text-emerald-800">
+              <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-5 text-emerald-800 dark:text-emerald-200">
                 <div className="flex items-start gap-3"><CheckCircle2 className="h-5 w-5" /><div><p className="font-bold">Relatório final</p><p className="text-sm">Criadas: {finalReport.criadas} · Duplicadas: {finalReport.duplicadas} · Falhas: {finalReport.falhas} · Resoluções salvas: {finalReport.resolucoes}</p></div></div>
               </Card>
             ) : null}
@@ -269,33 +269,33 @@ export default function AdminQuestionBatchImportPage() {
                 const result = resultMap.get(preview.index);
                 const isExpanded = expanded.has(preview.index);
                 return (
-                  <Card key={preview.index} className="border-slate-200 bg-white p-5">
+                  <Card key={preview.index} className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                      <input type="checkbox" className="mt-1 h-5 w-5 rounded border-slate-300" checked={selected.has(preview.index)} disabled={preview.status !== "valida" || importMutation.isPending} onChange={(event) => setSelected((prev) => { const next = new Set(prev); event.target.checked ? next.add(preview.index) : next.delete(preview.index); return next; })} />
+                      <input type="checkbox" className="mt-1 h-5 w-5 rounded border-slate-300 dark:border-slate-700" checked={selected.has(preview.index)} disabled={preview.status !== "valida" || importMutation.isPending} onChange={(event) => setSelected((prev) => { const next = new Set(prev); event.target.checked ? next.add(preview.index) : next.delete(preview.index); return next; })} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <StatusPill className={preview.status === "valida" ? "border-emerald-200 bg-emerald-100 text-emerald-700" : "border-red-200 bg-red-100 text-red-700"}>#{preview.index + 1} {preview.status}</StatusPill>
-                          {result ? <StatusPill className={result.status === "criada" ? "border-emerald-200 bg-emerald-100 text-emerald-700" : result.status === "duplicada" ? "border-blue-200 bg-blue-100 text-blue-700" : "border-red-200 bg-red-100 text-red-700"}>{result.status}</StatusPill> : null}
-                          <StatusPill className="border-slate-200 bg-slate-100 text-slate-700">{item.disciplina || "Sem disciplina"}</StatusPill>
-                          <StatusPill className="border-slate-200 bg-slate-100 text-slate-700">{item.dificuldade || "Sem dificuldade"}</StatusPill>
+                          <StatusPill className={preview.status === "valida" ? "border-emerald-200 dark:border-emerald-800 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : "border-red-200 dark:border-red-800 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"}>#{preview.index + 1} {preview.status}</StatusPill>
+                          {result ? <StatusPill className={result.status === "criada" ? "border-emerald-200 dark:border-emerald-800 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : result.status === "duplicada" ? "border-blue-200 dark:border-blue-800 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300" : "border-red-200 dark:border-red-800 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"}>{result.status}</StatusPill> : null}
+                          <StatusPill className="border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">{item.disciplina || "Sem disciplina"}</StatusPill>
+                          <StatusPill className="border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">{item.dificuldade || "Sem dificuldade"}</StatusPill>
                         </div>
-                        <p className="mt-3 text-sm text-slate-700 line-clamp-2">{item.enunciado || "Sem enunciado"}</p>
-                        <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                        <p className="mt-3 text-sm text-slate-700 dark:text-slate-300 line-clamp-2">{item.enunciado || "Sem enunciado"}</p>
+                        <div className="mt-3 grid gap-2 text-xs text-slate-600 dark:text-slate-300 md:grid-cols-2 xl:grid-cols-4">
                           <p><b>Conteúdos:</b> {item.conteudos.join(", ") || "—"}</p>
                           <p><b>Assuntos:</b> {item.assuntos.join(", ") || "—"}</p>
                           <p><b>Alternativas:</b> {preview.alternativas_preenchidas} · correta {item.alternativa_correta || "—"}</p>
                           <p><b>Resolução:</b> {preview.resolution_blocks_count} bloco(s)</p>
                         </div>
-                        {preview.errors.length ? <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><b>Erros:</b> {preview.errors.join(" ")}</div> : null}
-                        {preview.warnings.length ? <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><b>Avisos:</b> {preview.warnings.join(" ")}</div> : null}
-                        {result ? <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><b>Resultado:</b> {result.message}</div> : null}
+                        {preview.errors.length ? <div className="mt-3 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-3 text-sm text-red-700 dark:text-red-300"><b>Erros:</b> {preview.errors.join(" ")}</div> : null}
+                        {preview.warnings.length ? <div className="mt-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-800 dark:text-amber-200"><b>Avisos:</b> {preview.warnings.join(" ")}</div> : null}
+                        {result ? <div className="mt-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 text-sm text-slate-700 dark:text-slate-300"><b>Resultado:</b> {result.message}</div> : null}
                         {isExpanded ? (
                           <pre className="mt-4 max-h-96 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(item, null, 2)}</pre>
                         ) : null}
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
                         <Button variant="outline" className="rounded-2xl" onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(preview.index) ? next.delete(preview.index) : next.add(preview.index); return next; })}>{isExpanded ? "Recolher" : "Expandir"}</Button>
-                        <Button variant="outline" className="rounded-2xl text-red-700" onClick={() => { setRemoved((prev) => new Set(prev).add(preview.index)); setSelected((prev) => { const next = new Set(prev); next.delete(preview.index); return next; }); }}><XCircle className="mr-2 h-4 w-4" />Retirar</Button>
+                        <Button variant="outline" className="rounded-2xl text-red-700 dark:text-red-300" onClick={() => { setRemoved((prev) => new Set(prev).add(preview.index)); setSelected((prev) => { const next = new Set(prev); next.delete(preview.index); return next; }); }}><XCircle className="mr-2 h-4 w-4" />Retirar</Button>
                       </div>
                     </div>
                   </Card>

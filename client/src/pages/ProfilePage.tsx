@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getDifficultyBucket as getCanonicalDifficultyBucket, getDifficultyNumeric, getDifficultyRankingPoints } from "@shared/difficulty";
 import {
   ArrowLeft,
   Pencil,
@@ -62,6 +63,7 @@ type ProfileRow = {
   prova_alvo?: string | null;
   foco_atual?: string | null;
   meta_semanal_questoes?: number | null;
+  billing_whatsapp_opt_in?: boolean | null;
 };
 
 type EditableProfile = {
@@ -71,6 +73,7 @@ type EditableProfile = {
   prova_alvo: string;
   foco_atual: string;
   meta_semanal_questoes: string;
+  billing_whatsapp_opt_in: boolean;
 };
 
 type GroupedStat = {
@@ -147,6 +150,7 @@ const INITIAL_FORM: EditableProfile = {
   prova_alvo: "",
   foco_atual: "",
   meta_semanal_questoes: "",
+  billing_whatsapp_opt_in: false,
 };
 
 function formatDate(date?: string | null) {
@@ -350,7 +354,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -358,7 +362,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const difficultyScore =
@@ -372,7 +376,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -380,7 +384,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const prevDifficultyScore =
@@ -604,23 +608,11 @@ function formatDelta(delta?: number) {
 }
 
 function getDifficultyPoints(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return 2;
-  if (value === "medio") return 4;
-  if (value === "dificil") return 7;
-
-  return 0;
+  return getDifficultyRankingPoints(difficulty);
 }
 
 function getDifficultyBucket(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return "easy";
-  if (value === "medio") return "medium";
-  if (value === "dificil") return "hard";
-
-  return "unknown";
+  return getCanonicalDifficultyBucket(difficulty);
 }
 
 function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
@@ -750,6 +742,8 @@ export default function ProfilePage() {
   const { user, loading: authLoading, signOut } = useSupabaseAuth();
   const trpcUtils = trpc.useUtils();
   const updateMyProfileMutation = trpc.auth.updateMyProfile.useMutation();
+  const legalConfig = trpc.legal.publicConfig.useQuery();
+  const whatsappConsentMutation = trpc.legal.setWhatsAppConsent.useMutation();
   const [, setLocation] = useLocation();
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -794,6 +788,7 @@ export default function ProfilePage() {
           meta_semanal_questoes: profileData?.meta_semanal_questoes
             ? String(profileData.meta_semanal_questoes)
             : "",
+          billing_whatsapp_opt_in: Boolean(profileData?.billing_whatsapp_opt_in),
         });
       } catch (err) {
         console.error(err);
@@ -847,7 +842,11 @@ export default function ProfilePage() {
         metaSemanalQuestoes: metaSemanal,
       });
 
-      setProfile(data as ProfileRow);
+      if (form.billing_whatsapp_opt_in !== Boolean(profile?.billing_whatsapp_opt_in)) {
+        await whatsappConsentMutation.mutateAsync({ granted: form.billing_whatsapp_opt_in });
+      }
+
+      setProfile({ ...(data as ProfileRow), billing_whatsapp_opt_in: form.billing_whatsapp_opt_in });
       setEditing(false);
       setSuccessMessage("Perfil salvo com sucesso.");
     } catch (err) {
@@ -1128,15 +1127,15 @@ export default function ProfilePage() {
   const avatar = getAvatarConfig(form.avatar_key);
 
   function phaseToneClasses(tone: string) {
-    if (tone === "green") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    if (tone === "purple") return "border-purple-200 bg-purple-50 text-purple-700";
-    if (tone === "orange") return "border-orange-200 bg-orange-50 text-orange-700";
-    if (tone === "blue") return "border-blue-200 bg-blue-50 text-blue-700";
-    return "border-slate-200 bg-slate-50 text-slate-700";
+    if (tone === "green") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
+    if (tone === "purple") return "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-200";
+    if (tone === "orange") return "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-200";
+    if (tone === "blue") return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200";
+    return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200";
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="profile-page min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/">
@@ -1267,7 +1266,7 @@ export default function ProfilePage() {
                   <p className="mt-2 max-w-3xl">{profilePhase.description}</p>
                 </div>
 
-                <div className="rounded-2xl bg-white/70 px-4 py-3 border border-white/60">
+                <div className="rounded-2xl border border-white/60 bg-white/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
                   <p className="text-sm font-semibold">Assinatura do perfil</p>
                   <p className="mt-1">{profileSignature}</p>
                 </div>
@@ -1372,6 +1371,8 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
+                  {(legalConfig.data?.whatsappConsentAvailable || profile?.billing_whatsapp_opt_in) && <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><input type="checkbox" checked={form.billing_whatsapp_opt_in} onChange={event => updateField("billing_whatsapp_opt_in", event.target.checked)} disabled={!legalConfig.data?.whatsappConsentAvailable && !form.billing_whatsapp_opt_in} className="mt-1 h-4 w-4" /><span>Quero receber comunicações do Projeto Vetor pelo WhatsApp.{!legalConfig.data?.whatsappConsentAvailable && profile?.billing_whatsapp_opt_in ? <small className="mt-1 block text-slate-500 dark:text-slate-400">A integração está indisponível; você ainda pode retirar esta autorização.</small> : null}</span></label>}
+
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                       Bio curta
@@ -1399,22 +1400,22 @@ export default function ProfilePage() {
 
               <Card className="p-5">
                 <p className="text-sm text-slate-500 mb-1">Taxa de acerto</p>
-                <p className="text-3xl font-bold text-emerald-600">{accuracy.toFixed(0)}%</p>
+                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-300">{accuracy.toFixed(0)}%</p>
               </Card>
 
               <Card className="p-5">
                 <p className="text-sm text-slate-500 mb-1">Tempo médio</p>
-                <p className="text-3xl font-bold text-purple-600">{formatSeconds(Math.round(avgTimeSeconds))}</p>
+                <p className="text-3xl font-bold text-purple-600 dark:text-purple-300">{formatSeconds(Math.round(avgTimeSeconds))}</p>
               </Card>
 
               <Card className="p-5">
                 <p className="text-sm text-slate-500 mb-1">Sequência atual</p>
-                <p className="text-3xl font-bold text-orange-600">{streakInfo.currentStreak}</p>
+                <p className="text-3xl font-bold text-orange-600 dark:text-orange-300">{streakInfo.currentStreak}</p>
               </Card>
 
               <Card className="p-5">
                 <p className="text-sm text-slate-500 mb-1">Dias ativos 30d</p>
-                <p className="text-3xl font-bold text-blue-600">{streakInfo.activeDays30}</p>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-300">{streakInfo.activeDays30}</p>
               </Card>
 
               <Card className="p-5">
@@ -1654,7 +1655,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950">
                   <p className="text-sm font-semibold text-emerald-700 mb-1">Melhor disciplina</p>
                   <p className="font-bold text-slate-900">{bestSubject?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
@@ -1662,7 +1663,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
                   <p className="text-sm font-semibold text-red-700 mb-1">Disciplina mais fraca</p>
                   <p className="font-bold text-slate-900">{worstSubject?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
@@ -1670,7 +1671,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
                   <p className="text-sm font-semibold text-blue-700 mb-1">Conteúdo mais treinado</p>
                   <p className="font-bold text-slate-900">{mostTrainedConteudo?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
@@ -1678,39 +1679,39 @@ export default function ProfilePage() {
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
-                  <p className="text-sm font-semibold text-orange-700 mb-1">Conteúdo mais crítico</p>
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950">
+                  <p className="mb-1 text-sm font-semibold text-orange-700 dark:text-orange-300">Conteúdo mais crítico</p>
                   <p className="font-bold text-slate-900">{mostCriticalConteudo?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
                     {mostCriticalConteudo ? `${mostCriticalConteudo.wrong} erros` : "—"}
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
-                  <p className="text-sm font-semibold text-teal-700 mb-1">Assunto mais forte</p>
+                <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-950">
+                  <p className="mb-1 text-sm font-semibold text-teal-700 dark:text-teal-300">Assunto mais forte</p>
                   <p className="font-bold text-slate-900">{bestAssunto?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
                     {bestAssunto ? `${bestAssunto.accuracy.toFixed(0)}% de acerto` : "—"}
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                  <p className="text-sm font-semibold text-rose-700 mb-1">Assunto mais fraco</p>
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-950">
+                  <p className="mb-1 text-sm font-semibold text-rose-700 dark:text-rose-300">Assunto mais fraco</p>
                   <p className="font-bold text-slate-900">{worstAssunto?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
                     {worstAssunto ? `${worstAssunto.accuracy.toFixed(0)}% de acerto` : "—"}
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-                  <p className="text-sm font-semibold text-indigo-700 mb-1">Melhor banca</p>
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-950">
+                  <p className="mb-1 text-sm font-semibold text-indigo-700 dark:text-indigo-300">Melhor banca</p>
                   <p className="font-bold text-slate-900">{bestBanca?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
                     {bestBanca ? `${bestBanca.accuracy.toFixed(0)}% de acerto` : "—"}
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950">
                   <p className="text-sm font-semibold text-yellow-700 mb-1">Banca mais chata</p>
                   <p className="font-bold text-slate-900">{worstBanca?.label ?? "Sem dados ainda"}</p>
                   <p className="text-sm text-slate-600 mt-1">
@@ -1886,7 +1887,7 @@ export default function ProfilePage() {
                   {recommendations.map((rec, index) => (
                     <div
                       key={index}
-                      className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-slate-700"
+                      className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-slate-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-100"
                     >
                       {rec}
                     </div>

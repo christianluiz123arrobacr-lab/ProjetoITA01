@@ -12,7 +12,7 @@ export default function AdminTopbar({
   subtitle,
 }: AdminTopbarProps) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 p-6 md:p-8 text-white shadow-lg">
+    <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 p-6 md:p-8 text-white shadow-lg">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-2">

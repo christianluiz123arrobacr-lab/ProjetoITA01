@@ -1,3 +1,4 @@
+import { clearReferralHint, getReferralHint } from "@/lib/referralHint";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -16,16 +17,31 @@ import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
+function getRegistrationErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (
+    !message ||
+    /unexpected token|json|server error|fetch failed|failed to fetch|internal server error/i.test(message)
+  ) {
+    return "O servidor não conseguiu concluir seu cadastro. Tente novamente em instantes.";
+  }
+  return message;
+}
+
 export default function RegisterPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
+  const [referralCode] = useState(getReferralHint);
   const registerMutation = trpc.auth.registerStudent.useMutation();
+  const legalConfig = trpc.legal.publicConfig.useQuery();
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [billingWhatsappOptIn, setBillingWhatsappOptIn] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [erro, setErro] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -73,15 +89,26 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!legalAccepted) {
+      setErro("É necessário aceitar os Termos de Uso e a Política de Privacidade.");
+      return;
+    }
+
     try {
       setLoading(true);
 
-      await registerMutation.mutateAsync({
+      const registration = await registerMutation.mutateAsync({
+        referralCode,
         nome: nomeTrimmed,
         telefone: telefoneTrimmed,
         email: emailTrimmed,
         senha: senhaTrimmed,
+        legalAccepted: true,
+        billingWhatsappOptIn: legalConfig.data?.whatsappConsentAvailable ? billingWhatsappOptIn : false,
       });
+      if (registration.referralStatus !== "unavailable") clearReferralHint();
+
+      if (registration.referralWarning) setSuccess(registration.referralWarning);
 
       const { error } = await supabase.auth.signInWithPassword({
         email: emailTrimmed,
@@ -98,11 +125,7 @@ export default function RegisterPage() {
     } catch (error) {
       console.error("Erro ao criar conta:", error);
 
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível criar sua conta agora."
-      );
+      setErro(getRegistrationErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -251,6 +274,10 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={legalAccepted} onChange={event => setLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4" required /><span>Li e concordo com os <Link href="/termos-de-uso"><a target="_blank" className="font-bold text-cyan-200 underline">Termos de Uso</a></Link> e a <Link href="/politica-de-privacidade"><a target="_blank" className="font-bold text-cyan-200 underline">Política de Privacidade</a></Link>.</span></label>
+
+            {legalConfig.data?.whatsappConsentAvailable && <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={billingWhatsappOptIn} onChange={event => setBillingWhatsappOptIn(event.target.checked)} className="mt-1 h-4 w-4" />Quero receber comunicações do Projeto Vetor pelo WhatsApp.</label>}
+
             {erro && (
               <div className="flex gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -266,7 +293,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !legalAccepted}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? (

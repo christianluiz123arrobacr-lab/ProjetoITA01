@@ -37,7 +37,7 @@ export default function AdminGuard({
     staleTime: ADMIN_ACCESS_RECHECK_MS,
     gcTime: ADMIN_ACCESS_CACHE_MS,
     refetchOnMount: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     refetchInterval: ADMIN_ACCESS_RECHECK_MS,
     refetchIntervalInBackground: false,
@@ -66,18 +66,18 @@ export default function AdminGuard({
       return;
     }
 
-    if (meQuery.isLoading || (meQuery.isFetching && !meQuery.data)) {
-      setStatus("checking-role");
-      setErrorMessage("");
-      return;
-    }
-
-    if (meQuery.error) {
+    if (meQuery.error && !meQuery.data) {
       console.error("Erro ao verificar acesso administrativo no backend:", meQuery.error);
       setStatus("error");
       setErrorMessage(
         "Não foi possível validar suas permissões administrativas no momento."
       );
+      return;
+    }
+
+    if (meQuery.isLoading || (meQuery.isFetching && !meQuery.data)) {
+      setStatus("checking-role");
+      setErrorMessage("");
       return;
     }
 
@@ -113,19 +113,19 @@ export default function AdminGuard({
     status === "redirecting"
   ) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <Card className="p-8 w-full max-w-md text-center border-slate-200 shadow-sm">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6">
+        <Card className="p-8 w-full max-w-md text-center border-slate-200 dark:border-slate-700 shadow-sm">
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-              <Loader2 className="w-6 h-6 text-slate-600 animate-spin" />
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-slate-600 dark:text-slate-300 animate-spin" />
             </div>
           </div>
 
-          <h2 className="text-xl font-bold text-slate-900 mb-2">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">
             Verificando acesso
           </h2>
 
-          <p className="text-slate-600">
+          <p className="text-slate-600 dark:text-slate-300">
             {status === "checking-auth" && "Validando autenticação..."}
             {status === "checking-role" &&
               "Validando permissões administrativas..."}
@@ -138,28 +138,28 @@ export default function AdminGuard({
 
   if (status === "forbidden") {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <Card className="p-8 w-full max-w-md text-center border-slate-200 shadow-sm">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6">
+        <Card className="p-8 w-full max-w-md text-center border-slate-200 dark:border-slate-700 shadow-sm">
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-red-500" />
+            <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950 flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6 text-red-500 dark:text-red-300" />
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-slate-900 mb-3">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3">
             Acesso negado
           </h2>
 
-          <p className="text-slate-600 mb-2">
+          <p className="text-slate-600 dark:text-slate-300 mb-2">
             Você não tem permissão para acessar a área administrativa.
           </p>
 
           {role ? (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Seu perfil atual é: <span className="font-semibold">{role}</span>
             </p>
           ) : (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Nenhum papel administrativo foi encontrado para este usuário.
             </p>
           )}
@@ -175,19 +175,19 @@ export default function AdminGuard({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <Card className="p-8 w-full max-w-md text-center border-slate-200 shadow-sm">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6">
+      <Card className="p-8 w-full max-w-md text-center border-slate-200 dark:border-slate-700 shadow-sm">
         <div className="flex justify-center mb-4">
-          <div className="w-14 h-14 rounded-2xl bg-yellow-50 flex items-center justify-center">
-            <AlertTriangle className="w-6 h-6 text-yellow-600" />
+          <div className="w-14 h-14 rounded-2xl bg-yellow-50 dark:bg-yellow-950 flex items-center justify-center">
+            <AlertTriangle className="w-6 h-6 text-yellow-600 dark:text-yellow-300" />
           </div>
         </div>
 
-        <h2 className="text-2xl font-bold text-slate-900 mb-3">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3">
           Erro ao validar acesso
         </h2>
 
-        <p className="text-slate-600 mb-4">
+        <p className="text-slate-600 dark:text-slate-300 mb-4">
           {errorMessage ||
             "Ocorreu um problema ao verificar suas permissões administrativas."}
         </p>

@@ -20,11 +20,8 @@ export type QuestionSubtopicsByTopic = {
 
 export type QuestionSubject = "fisica" | "matematica" | "quimica" | string;
 
-export type QuestionDifficulty =
-  | "facil"
-  | "medio"
-  | "dificil"
-  | "muito_dificil";
+export type { QuestionDifficulty } from "../../../shared/difficulty";
+import type { QuestionDifficulty } from "../../../shared/difficulty";
 
 export type Question = {
   id: string;

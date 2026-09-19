@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isBlockingRecurringReconciliation, processBatchIndependently, runClaimedBillingWebhook, sanitizeBillingError } from "./billingOrchestration";
 import {
@@ -8,6 +9,7 @@ import {
   mapPaymentReconciliationError,
   PAYMENT_WITH_ORIGIN_SUBSCRIPTION_SELECT,
   processChargebackUpdate,
+  processMercadoPagoWebhook,
   reconcileMercadoPagoPaymentByAdmin,
   reconcileRecurringRecords,
   syncMyMercadoPagoPaymentStatus,
@@ -44,11 +46,83 @@ function cancellationDependencies(overrides: Record<string, unknown> = {}) {
 describe("produção de billing orchestration", () => {
   beforeEach(() => {
     process.env.APP_BASE_URL = "https://example.test";
+    process.env.MERCADO_PAGO_WEBHOOK_SECRET = "webhook-secret";
   });
+
+  function signedWebhookInput(resourceId = "9001", requestId = "request-1") {
+    const ts = "1700000000";
+    const manifest = `id:${resourceId};request-id:${requestId};ts:${ts};`;
+    const signature = createHmac("sha256", "webhook-secret").update(manifest).digest("hex");
+    return {
+      headers: { "x-request-id": requestId, "x-signature": `ts=${ts},v1=${signature}` },
+      query: { "data.id": resourceId },
+      body: { id: "event-1", type: "payment", data: { id: resourceId } },
+    } as any;
+  }
 
   it("mantém a reserva Pix pelo mesmo período de validade do QR Code", () => {
     expect(getCheckoutReservationMinutes("pix")).toBe(60 * 24);
     expect(getCheckoutReservationMinutes("card")).toBe(30);
+  });
+
+  it("webhook assinado processa a consulta canônica e marca o evento concluído", async () => {
+    const dispatch = vi.fn().mockResolvedValue({ paymentStatus: "approved", kind: "pix" });
+    const markProcessed = vi.fn().mockResolvedValue(undefined);
+    const result = await processMercadoPagoWebhook(signedWebhookInput(), {
+      claimEvent: vi.fn().mockResolvedValue({ row: { id: "claim-1" }, claimStatus: "claimed" }),
+      dispatch,
+      markProcessed,
+      markFailed: vi.fn(),
+    } as any);
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    expect(dispatch).toHaveBeenCalledWith("payment", "9001");
+    expect(markProcessed).toHaveBeenCalledWith({ claimId: "claim-1", resourceId: "9001" });
+  });
+
+  it("webhook duplicado já processado não reaplica o pagamento", async () => {
+    const dispatch = vi.fn();
+    const result = await processMercadoPagoWebhook(signedWebhookInput(), {
+      claimEvent: vi.fn().mockResolvedValue({ row: { id: "claim-1" }, claimStatus: "already_processed" }),
+      dispatch,
+      markProcessed: vi.fn(),
+      markFailed: vi.fn(),
+    } as any);
+
+    expect(result).toMatchObject({ ok: true, status: 200, duplicate: true });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("webhook com assinatura inválida é rejeitado antes do claim", async () => {
+    const claimEvent = vi.fn();
+    const input = signedWebhookInput();
+    input.headers["x-signature"] = "ts=1,v1=deadbeef";
+    const result = await processMercadoPagoWebhook(input, {
+      claimEvent,
+      dispatch: vi.fn(),
+      markProcessed: vi.fn(),
+      markFailed: vi.fn(),
+    } as any);
+
+    expect(result).toMatchObject({ ok: false, status: 401 });
+    expect(claimEvent).not.toHaveBeenCalled();
+  });
+
+  it("falha após claim registra auditoria e permite retry do webhook", async () => {
+    const markFailed = vi.fn().mockResolvedValue(undefined);
+    const result = await processMercadoPagoWebhook(signedWebhookInput(), {
+      claimEvent: vi.fn().mockResolvedValue({ row: { id: "claim-1" }, claimStatus: "claimed" }),
+      dispatch: vi.fn().mockRejectedValue(new Error("gateway timeout Authorization: Bearer secret")),
+      markProcessed: vi.fn(),
+      markFailed,
+    } as any);
+
+    expect(result).toMatchObject({ ok: false, status: 500 });
+    expect(markFailed).toHaveBeenCalledWith(expect.objectContaining({
+      claimId: "claim-1",
+      resourceId: "9001",
+      message: expect.not.stringContaining("Bearer secret"),
+    }));
   });
 
   it("lista vazia retorna no_action com contadores explícitos", async () => {
@@ -223,7 +297,19 @@ describe("produção de billing orchestration", () => {
     );
     expect(processGatewayPayment).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ success: true, paymentStatus: "approved", accessApplied: true, subscriptionId: local.subscription_id });
-    expect(writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ admin_user_id: "admin-1", entity_id: local.id }));
+    expect(writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({ actor_user_id: "admin-1", entity_id: local.id }));
+  });
+
+  it("não transforma pagamento aprovado em erro quando apenas a auditoria falha", async () => {
+    const local = { id: "11111111-1111-4111-8111-111111111111", subscription_id: "22222222-2222-4222-8222-222222222222", gateway: "mercadopago", gateway_payment_id: "9001", status: "pending" };
+    const result = await reconcileMercadoPagoPaymentByAdmin({ billingPaymentId: local.id, adminUserId: "admin-1" }, {
+      loadLocalPayment: vi.fn().mockResolvedValue(local),
+      getGatewayPayment: vi.fn().mockResolvedValue({ id: 9001, status: "approved" }),
+      processGatewayPayment: vi.fn().mockResolvedValue({ paymentStatus: "approved", kind: "pix" }),
+      reloadLocalPayment: vi.fn().mockResolvedValue({ ...local, status: "approved", access_applied_at: "2026-07-28T00:00:00Z" }),
+      writeAuditLog: vi.fn().mockRejectedValue(new Error("schema cache")),
+    } as any);
+    expect(result).toMatchObject({ success: true, paymentStatus: "approved", accessApplied: true });
   });
 
   it("reconciliação administrativa repetida preserva a idempotência do aplicador", async () => {

@@ -1,4 +1,12 @@
-import { ChangeEvent, KeyboardEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type {
+  ChangeEvent,
+  InputHTMLAttributes,
+  KeyboardEvent,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 import { Link, useLocation } from "wouter";
 import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { trpc } from "@/lib/trpc";
@@ -11,6 +19,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
+import { normalizeDifficulty } from "@/lib/difficulty";
 import {
   Loader2,
   AlertTriangle,
@@ -35,6 +44,11 @@ type ResolutionDraftBlock = {
   ordem: number;
 };
 
+function getQuestionCreationSuccessMessage(resolutionBlockCount: number) {
+  return resolutionBlockCount > 0
+    ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
+    : "Questão criada com sucesso. Indo para a resolução...";
+}
 type QuestionFormData = {
   codigo: string;
   disciplina: string;
@@ -116,7 +130,7 @@ const QUESTION_IMAGES_BUCKET = "questoes-imagens";
 const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-const initialForm: QuestionFormData = {
+export const initialForm: QuestionFormData = {
   codigo: "",
   disciplina: "",
   conteudo: "",
@@ -350,7 +364,7 @@ function normalizeResolutionBlockType(value: string, urlImagem: string): "texto"
   return "texto";
 }
 
-function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
+export function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
   const directBlocksValue = readJsonValue(record, [
     "resolucao_blocos",
     "resolução_blocos",
@@ -372,11 +386,12 @@ function readResolutionBlocks(record: JsonRecord): ResolutionDraftBlock[] {
     ? readJsonValue(resolutionValue, ["blocos", "blocks", "passos", "steps"])
     : resolutionValue;
 
-  if (!Array.isArray(blocksValue)) return [];
+  const normalizedBlocksValue = typeof blocksValue === "string" ? [blocksValue] : blocksValue;
+  if (!Array.isArray(normalizedBlocksValue)) return [];
 
   const parsedBlocks: ResolutionDraftBlock[] = [];
 
-  blocksValue.forEach((item, index) => {
+  normalizedBlocksValue.forEach((item, index) => {
     let block: ResolutionDraftBlock | null = null;
 
     if (typeof item === "string") {
@@ -430,7 +445,7 @@ function readAssuntosPorConteudo(record: JsonRecord, conteudos: string[]) {
   );
 }
 
-function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
+export function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData): QuestionFormData {
   const conteudos = normalizarLista([
     ...readJsonStringArray(record, ["conteudos", "contents"]),
     readJsonString(record, ["conteudo", "content"]),
@@ -454,7 +469,7 @@ function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData
     assuntosPorConteudo: assuntosPorConteudo.length ? assuntosPorConteudo : currentForm.assuntosPorConteudo,
     banca: readJsonString(record, ["banca", "examBoard"]) || currentForm.banca,
     ano: readJsonString(record, ["ano", "year"]) || currentForm.ano,
-    dificuldade: readJsonString(record, ["dificuldade", "difficulty"]) || currentForm.dificuldade,
+    dificuldade: normalizeDifficulty(readJsonString(record, ["dificuldade", "difficulty"])) || currentForm.dificuldade,
     instituicao:
       readJsonString(record, ["instituição", "instituicao", "institution"]) || currentForm.instituicao,
     publicada: readJsonBoolean(record, ["publicada", "published"], currentForm.publicada),
@@ -483,39 +498,39 @@ function mapQuestionJsonToForm(record: JsonRecord, currentForm: QuestionFormData
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-sm font-semibold text-slate-700 mb-2">
+    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
       {children}
     </label>
   );
 }
 
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+      className={`w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
         props.className || ""
       }`}
     />
   );
 }
 
-function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+      className={`w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
         props.className || ""
       }`}
     />
   );
 }
 
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+      className={`w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
         props.className || ""
       }`}
     />
@@ -669,10 +684,14 @@ function normalizeImportedGroupedSubtopics(
 }
 
 function normalizeImportedResolutionBlocks(rawValue: unknown) {
-  const blocks = Array.isArray(rawValue) ? rawValue : [];
+  const blocks = typeof rawValue === "string" ? [rawValue] : Array.isArray(rawValue) ? rawValue : [];
 
   return blocks
     .map((block, index) => {
+      if (typeof block === "string") {
+        const texto = block.trim();
+        return texto ? { tipo: "texto" as const, texto, url_imagem: "", ordem: index + 1 } : null;
+      }
       if (!block || typeof block !== "object") return null;
 
       const rawBlock = block as ImportedResolutionBlock;
@@ -703,7 +722,7 @@ function normalizeImportedResolutionBlocks(rawValue: unknown) {
     }));
 }
 
-function normalizeImportedQuestion(rawData: unknown) {
+export function normalizeImportedQuestion(rawData: unknown) {
   if (!rawData || typeof rawData !== "object") {
     throw new Error("O arquivo precisa ser um JSON de questão.");
   }
@@ -717,7 +736,7 @@ function normalizeImportedQuestion(rawData: unknown) {
     assuntos
   );
   const assuntosNormalizados = flattenAssuntosPorConteudo(assuntosPorConteudo);
-  const alternativas = raw.alternativas ?? raw.options;
+  const alternativas = raw.alternativas ?? raw.options ?? raw;
   const rawResolucao =
     raw.resolucao && typeof raw.resolucao === "object"
       ? (raw.resolucao as { blocos?: unknown; blocks?: unknown })
@@ -749,7 +768,7 @@ function normalizeImportedQuestion(rawData: unknown) {
       ),
     },
     resolutionBlocks: normalizeImportedResolutionBlocks(
-      raw.resolucao_blocos ?? raw.resolutionBlocks ?? rawResolucao?.blocos ?? rawResolucao?.blocks
+      raw.resolucao_blocos ?? raw.resolutionBlocks ?? rawResolucao?.blocos ?? rawResolucao?.blocks ?? raw.resolucao
     ),
   };
 }
@@ -903,7 +922,7 @@ function MultiTagInput({
     <div>
       <FieldLabel>{label}</FieldLabel>
 
-      <div className="rounded-2xl border border-slate-300 bg-white p-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900">
+      <div className="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900">
         {values.length > 0 ? (
           <div className="flex flex-wrap gap-2 mb-3">
             {values.map((value) => (
@@ -931,11 +950,11 @@ function MultiTagInput({
           onKeyDown={handleKeyDown}
           onBlur={() => addValues(draft)}
           placeholder={placeholder}
-          className="w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+          className="w-full border-0 bg-transparent text-sm text-slate-700 dark:text-slate-300 outline-none placeholder:text-slate-400"
         />
 
         {filteredSuggestions.length > 0 ? (
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+          <div className="mt-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2">
             <p className="px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
               Sugestões já cadastradas
             </p>
@@ -948,7 +967,7 @@ function MultiTagInput({
                   event.preventDefault();
                   addSingleValue(suggestion);
                 }}
-                className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-white"
+                className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800"
               >
                 {suggestion}
               </button>
@@ -957,7 +976,7 @@ function MultiTagInput({
         ) : null}
       </div>
 
-      {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
+      {helper ? <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{helper}</p> : null}
     </div>
   );
 }
@@ -986,12 +1005,12 @@ function AssuntosPorConteudoEditor({
   }
 
   return (
-    <div className="md:col-span-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+    <div className="md:col-span-4 rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
       <div className="mb-4">
-        <h3 className="text-base font-bold text-slate-900">
+        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
           Assuntos por conteúdo
         </h3>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Cada conteúdo selecionado tem sua própria caixa de assuntos. Assim Funções não rouba assunto de Álgebra, essa pequena vitória contra o caos.
         </p>
       </div>
@@ -1001,10 +1020,10 @@ function AssuntosPorConteudoEditor({
           {items.map((item) => (
             <div
               key={item.conteudo}
-              className="rounded-2xl border border-slate-200 bg-white p-4"
+              className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4"
             >
               <div className="mb-3">
-                <span className="inline-flex rounded-full bg-purple-50 border border-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
+                <span className="inline-flex rounded-full bg-purple-50 dark:bg-purple-950 border border-purple-100 dark:border-purple-800 px-3 py-1 text-xs font-bold text-purple-700 dark:text-purple-300">
                   {item.conteudo}
                 </span>
               </div>
@@ -1021,7 +1040,7 @@ function AssuntosPorConteudoEditor({
           ))}
         </div>
       ) : (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Adicione pelo menos um conteúdo para liberar as caixas de assuntos.
         </p>
       )}
@@ -1049,11 +1068,11 @@ function MarkdownPreview({
   const content = value.trim();
 
   if (!content) {
-    return <p className="text-sm text-slate-500">{emptyMessage}</p>;
+    return <p className="text-sm text-slate-500 dark:text-slate-400">{emptyMessage}</p>;
   }
 
   return (
-    <div className="prose prose-slate max-w-none text-slate-800 prose-p:my-2 prose-img:rounded-xl prose-img:border prose-img:border-slate-200">
+    <div className="prose dark:prose-invert prose-slate max-w-none text-slate-800 dark:text-slate-100 prose-p:my-2 prose-img:rounded-xl prose-img:border prose-img:border-slate-200">
       <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}>
         {normalizeMathSource(content)}
       </ReactMarkdown>
@@ -1100,29 +1119,29 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
   );
 
   return (
-    <Card className="p-6 bg-white border-slate-200">
+    <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
       <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Eye className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-bold text-slate-900">Prévia da questão</h2>
+            <Eye className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Prévia da questão</h2>
           </div>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Veja como o enunciado, a imagem, as fórmulas e as alternativas vão aparecer para o aluno.
           </p>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 md:p-6 space-y-5">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+      <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-5 md:p-6 space-y-5">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           {form.codigo.trim() ? (
-            <span className="rounded-full bg-white border border-slate-200 px-3 py-1 font-semibold">
+            <span className="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1 font-semibold">
               {form.codigo.trim()}
             </span>
           ) : null}
 
           {form.disciplina.trim() ? (
-            <span className="rounded-full bg-blue-50 border border-blue-100 px-3 py-1 font-semibold text-blue-700">
+            <span className="rounded-full bg-blue-50 dark:bg-blue-950 border border-blue-100 dark:border-blue-800 px-3 py-1 font-semibold text-blue-700 dark:text-blue-300">
               {form.disciplina.trim()}
             </span>
           ) : null}
@@ -1130,7 +1149,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
           {normalizarLista(form.conteudos).map((conteudo) => (
             <span
               key={conteudo}
-              className="rounded-full bg-purple-50 border border-purple-100 px-3 py-1 font-semibold text-purple-700"
+              className="rounded-full bg-purple-50 dark:bg-purple-950 border border-purple-100 dark:border-purple-800 px-3 py-1 font-semibold text-purple-700 dark:text-purple-300"
             >
               {conteudo}
             </span>
@@ -1139,21 +1158,21 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
           {normalizarLista(form.assuntos).map((assunto) => (
             <span
               key={assunto}
-              className="rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 font-semibold text-emerald-700"
+              className="rounded-full bg-emerald-50 dark:bg-emerald-950 border border-emerald-100 dark:border-emerald-800 px-3 py-1 font-semibold text-emerald-700 dark:text-emerald-300"
             >
               {assunto}
             </span>
           ))}
 
           {form.banca.trim() || form.ano.trim() ? (
-            <span className="rounded-full bg-amber-50 border border-amber-100 px-3 py-1 font-semibold text-amber-700">
+            <span className="rounded-full bg-amber-50 dark:bg-amber-950 border border-amber-100 dark:border-amber-800 px-3 py-1 font-semibold text-amber-700 dark:text-amber-300">
               {[form.banca.trim(), form.ano.trim()].filter(Boolean).join(" • ")}
             </span>
           ) : null}
         </div>
 
-        <div className="rounded-2xl bg-white border border-slate-200 p-5">
-          <p className="text-sm font-semibold text-slate-500 mb-3">Enunciado</p>
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">Enunciado</p>
           <MarkdownPreview
             value={form.enunciado}
             emptyMessage="Digite o enunciado para ver a prévia renderizada aqui."
@@ -1161,19 +1180,19 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
         </div>
 
         {form.url_imagem.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">Imagem</p>
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">Imagem</p>
             <img
               src={form.url_imagem.trim()}
               alt="Imagem da questão"
-              className="max-w-full rounded-xl border border-slate-200 bg-white"
+              className="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
             />
           </div>
         ) : null}
 
         {form.enunciado_pos_imagem.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">
               Continuação do enunciado
             </p>
             <MarkdownPreview value={form.enunciado_pos_imagem} />
@@ -1181,14 +1200,14 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
         ) : null}
 
         {form.formula.trim() ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-5">
-            <p className="text-sm font-semibold text-slate-500 mb-3">Fórmula</p>
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">Fórmula</p>
             <MarkdownPreview value={form.formula} />
           </div>
         ) : null}
 
-        <div className="rounded-2xl bg-white border border-slate-200 p-5">
-          <p className="text-sm font-semibold text-slate-500 mb-4">Alternativas</p>
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4">Alternativas</p>
 
           {hasAnyAlternative ? (
             <div className="space-y-3">
@@ -1204,8 +1223,8 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
                     key={alternative.value}
                     className={`rounded-2xl border p-4 ${
                       isCorrect
-                        ? "border-emerald-300 bg-emerald-50"
-                        : "border-slate-200 bg-slate-50"
+                        ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -1213,7 +1232,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
                         className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
                           isCorrect
                             ? "bg-emerald-600 text-white"
-                            : "bg-white text-slate-700 border border-slate-200"
+                            : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                         }`}
                       >
                         {alternative.letter}
@@ -1228,7 +1247,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
                           <img
                             src={alternative.image.trim()}
                             alt={`Imagem da alternativa ${alternative.letter}`}
-                            className="max-h-56 rounded-xl border border-slate-200 bg-white"
+                            className="max-h-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                           />
                         ) : null}
                       </div>
@@ -1238,7 +1257,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
               })}
             </div>
           ) : (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Preencha as alternativas para visualizar como elas aparecerão.
             </p>
           )}
@@ -1422,21 +1441,16 @@ export default function AdminQuestionCreatePage() {
   ) {
     if (blocks.length === 0) return;
 
-    const payload = blocks.map((block, index) => ({
-      questao_id: questaoId,
+    await saveResolutionBlocksMutation.mutateAsync({
+      questaoId,
+      blocks: blocks.map((block, index) => ({
       tipo: block.tipo,
       texto: block.tipo === "imagem" ? null : block.texto,
       url_imagem: block.tipo === "imagem" ? block.url_imagem || null : null,
       ordem: index + 1,
-    }));
-
-    const { error } = await supabase.from("resolucoes").insert(payload);
-
-    if (error) {
-      throw error;
-    }
+      })),
+    });
   }
-
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1624,7 +1638,7 @@ export default function AdminQuestionCreatePage() {
         assuntos_por_conteudo: assuntosPorConteudoSelecionados,
         banca: valorLimpo(form.banca),
         ano: anoNumero,
-        dificuldade: valorLimpo(form.dificuldade),
+        dificuldade: normalizeDifficulty(form.dificuldade) || "",
         instituição: valorLimpo(form.instituicao),
         publicada: form.publicada,
         enunciado: valorLimpo(form.enunciado),
@@ -1666,8 +1680,6 @@ export default function AdminQuestionCreatePage() {
         });
       }
 
-      setSuccessMessage(
-        resolutionDraftBlocks.length > 0
       try {
         await saveImportedResolutionBlocks(data.id, pendingResolutionBlocks);
       } catch (resolutionError) {
@@ -1678,51 +1690,8 @@ export default function AdminQuestionCreatePage() {
         return;
       }
 
-      if (resolutionDraftBlocks.length > 0) {
-        await saveResolutionBlocksMutation.mutateAsync({
-          questaoId: data.id,
-          blocks: resolutionDraftBlocks.map((block, index) => ({
-            tipo: block.tipo,
-            texto: block.tipo === "imagem" ? null : block.texto ?? null,
-            url_imagem: block.tipo === "imagem" ? block.url_imagem ?? null : null,
-            ordem: index + 1,
-          })),
-        });
-      }
-
       setSuccessMessage(
-        resolutionDraftBlocks.length > 0
-      await logAdminAction({
-        action: "question_created",
-        entityType: "questao",
-        entityId: data.id,
-        description: `Questão ${form.codigo || data.id} criada no ADM`,
-        level: "info",
-        metadata: {
-          codigo: form.codigo || null,
-          disciplina: form.disciplina || null,
-          conteudo: primeiroValorDaLista(form.conteudos) || null,
-          conteudos: normalizarLista(form.conteudos),
-          assunto: primeiroValorDaLista(form.assuntos) || null,
-          assuntos: normalizarLista(form.assuntos),
-          assuntosPorConteudo: normalizarAssuntosPorConteudo(form.assuntosPorConteudo),
-          banca: form.banca || null,
-          ano: anoNumero,
-          dificuldade: form.dificuldade || null,
-          instituicao: form.instituicao || null,
-          publicada: form.publicada,
-          urlImagem: form.url_imagem || null,
-          alternativaAImagem: form.alternativa_a_imagem || null,
-          alternativaBImagem: form.alternativa_b_imagem || null,
-          alternativaCImagem: form.alternativa_c_imagem || null,
-          alternativaDImagem: form.alternativa_d_imagem || null,
-          alternativaEImagem: form.alternativa_e_imagem || null,
-          resolucaoImportadaBlocos: pendingResolutionBlocks.length,
-        },
-      });
-
-      setSuccessMessage(
-        pendingResolutionBlocks.length > 0
+        pendingResolutionBlocks.length > 0 || resolutionDraftBlocks.length > 0
           ? "Questão e resolução criadas com sucesso. Indo para a resolução..."
           : "Questão criada com sucesso. Indo para a resolução..."
       );
@@ -1761,7 +1730,7 @@ export default function AdminQuestionCreatePage() {
               className="hidden"
               onChange={(e) => handleAlternativeImageUpload(imageField, e)}
             />
-            <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+            <span className="inline-flex items-center rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
               {uploadingAlternative === imageField ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1787,7 +1756,7 @@ export default function AdminQuestionCreatePage() {
           <img
             src={imageValue}
             alt={`Preview ${label}`}
-            className="mt-3 max-h-40 rounded-xl border border-slate-200 bg-white"
+            className="mt-3 max-h-40 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
         ) : null}
       </div>
@@ -1800,11 +1769,11 @@ export default function AdminQuestionCreatePage() {
         title="Nova questão"
         subtitle="Cadastre uma nova questão diretamente pelo painel administrativo."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <p className="text-sm text-slate-500 mb-1">Criação de questão</p>
-              <p className="text-sm text-slate-800">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Criação de questão</p>
+              <p className="text-sm text-slate-800 dark:text-slate-100">
                 Importe um JSON gerado pela IA ou preencha os campos manualmente.
               </p>
             </div>
@@ -1830,7 +1799,7 @@ export default function AdminQuestionCreatePage() {
                   <h2 className="text-base font-bold">Importação por JSON</h2>
 
                   {pendingResolutionBlocks.length > 0 ? (
-                    <span className="rounded-full bg-emerald-400/15 border border-emerald-300/30 px-3 py-1 text-[11px] font-bold text-emerald-100">
+                    <span className="rounded-full bg-emerald-400/15 border border-emerald-300/30 dark:border-emerald-800/30 px-3 py-1 text-[11px] font-bold text-emerald-100">
                       {pendingResolutionBlocks.length} bloco(s) de resolução
                     </span>
                   ) : (
@@ -1861,7 +1830,7 @@ export default function AdminQuestionCreatePage() {
                   className="hidden"
                   onChange={handleQuestionJsonImport}
                 />
-                <span className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 shadow-sm cursor-pointer hover:bg-blue-50">
+                <span className="inline-flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 px-5 py-3 text-sm font-bold text-slate-950 dark:text-slate-100 shadow-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950">
                   <Upload className="w-4 h-4 mr-2" />
                   Importar JSON
                 </span>
@@ -1871,39 +1840,39 @@ export default function AdminQuestionCreatePage() {
         </Card>
 
         {error ? (
-          <Card className="p-5 border-red-200 bg-red-50">
+          <Card className="p-5 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">
                   Erro ao criar questão
                 </h2>
-                <p className="text-red-600">{error}</p>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : null}
 
         {successMessage ? (
-          <Card className="p-5 border-emerald-200 bg-emerald-50">
+          <Card className="p-5 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <p className="text-emerald-700 font-medium">{successMessage}</p>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+              <p className="text-emerald-700 dark:text-emerald-300 font-medium">{successMessage}</p>
             </div>
           </Card>
         ) : null}
 
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <FileJson className="w-5 h-5 text-slate-700" />
-                <h2 className="text-xl font-bold text-slate-900">Importar questão por JSON</h2>
+                <FileJson className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Importar questão por JSON</h2>
               </div>
-              <p className="text-sm text-slate-500 leading-relaxed">
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                 Cole o JSON antigo da questão para preencher automaticamente o formulário. A resolução pode vir em
-                <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">resolucao_blocos</code>
-                ou em <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">resolucao.blocos</code>.
+                <code className="mx-1 rounded bg-slate-100 dark:bg-slate-900 px-1 py-0.5 text-xs">resolucao_blocos</code>
+                ou em <code className="mx-1 rounded bg-slate-100 dark:bg-slate-900 px-1 py-0.5 text-xs">resolucao.blocos</code>.
                 Depois revise a prévia e salve normalmente pelo backend.
               </p>
             </div>
@@ -1916,7 +1885,7 @@ export default function AdminQuestionCreatePage() {
                   className="hidden"
                   onChange={handleQuestionJsonFileUpload}
                 />
-                <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                <span className="inline-flex items-center rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                   <Upload className="w-4 h-4 mr-2" />
                   Importar arquivo .json
                 </span>
@@ -1964,14 +1933,14 @@ export default function AdminQuestionCreatePage() {
           </div>
 
           {resolutionDraftBlocks.length > 0 ? (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <div className="mt-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
               {resolutionDraftBlocks.length} bloco(s) de resolução importado(s). Ao clicar em criar questão, eles serão salvos automaticamente e aparecerão no editor de resolução.
             </div>
           ) : null}
         </Card>
 
-        <Card className="p-6 bg-white border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">
             Dados principais
           </h2>
 
@@ -2107,15 +2076,15 @@ export default function AdminQuestionCreatePage() {
                 onChange={(e) => updateField("publicada", e.target.checked)}
                 className="h-4 w-4"
               />
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Questão publicada
               </span>
             </label>
           </div>
         </Card>
 
-        <Card className="p-6 bg-white border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">
             Enunciado e imagem
           </h2>
 
@@ -2150,7 +2119,7 @@ export default function AdminQuestionCreatePage() {
                   className="hidden"
                   onChange={handleImageUpload}
                 />
-                <span className="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
+                <span className="inline-flex items-center rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                   {uploadingImage ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -2175,10 +2144,10 @@ export default function AdminQuestionCreatePage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
               <div className="flex items-center gap-2 mb-3">
-                <ImageIcon className="w-4 h-4 text-emerald-600" />
-                <p className="text-sm font-semibold text-slate-700">
+                <ImageIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                   Preview da imagem da questão
                 </p>
               </div>
@@ -2187,10 +2156,10 @@ export default function AdminQuestionCreatePage() {
                 <img
                   src={form.url_imagem}
                   alt="Preview da imagem da questão"
-                  className="max-w-full rounded-xl border border-slate-200 bg-white"
+                  className="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                 />
               ) : (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   Envie uma imagem ou cole uma URL para visualizar o preview.
                 </p>
               )}
@@ -2208,8 +2177,8 @@ export default function AdminQuestionCreatePage() {
           </div>
         </Card>
 
-        <Card className="p-6 bg-white border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6">
             Alternativas
           </h2>
 
