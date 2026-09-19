@@ -129,7 +129,7 @@ describe("integração da tela pendente e do guard", () => {
   it("sincroniza no clique e confirma o acesso canônico sem redirecionar por status local", () => {
     const syncPosition = pendingPage.indexOf("syncMyMercadoPagoPaymentStatus()");
     const canonicalPosition = pendingPage.indexOf(
-      "confirmCanonicalAccess(normalizedSubscription)"
+      "confirmCanonicalAccess(normalizedSubscription, hasPendingMercadoPagoPayment)"
     );
 
     expect(syncPosition).toBeGreaterThan(-1);
@@ -143,7 +143,29 @@ describe("integração da tela pendente e do guard", () => {
   it("consulta o Mercado Pago automaticamente enquanto a assinatura está pendente", () => {
     expect(pendingPage).toContain("loadLatestSubscription(false, true)");
     expect(pendingPage).toContain("syncGateway = showRefreshing");
-    expect(pendingPage).toContain("const refreshed = syncGateway");
+    expect(pendingPage).toContain("refreshed = await syncMyMercadoPagoPaymentStatus()");
+    expect(pendingPage).toContain("MAX_AUTOMATIC_SYNC_ATTEMPTS");
+    expect(pendingPage).toContain('latestPayment?.status === "pending"');
+    expect(pendingPage).not.toContain("localStorage");
+    expect(pendingPage).not.toContain("sessionStorage");
+    expect(pendingPage).toContain("PAYMENT_CONFIRMATION_MESSAGE");
+  });
+
+  it("distingue pagamento pendente de indisponibilidade real da RPC", () => {
+    const pendingBranch = platformAccess.indexOf("if (hasPendingPayment)");
+    const pendingBranchEnd = platformAccess.indexOf(
+      'logAccess({ correlationId, stage: "canonical_rpc", outcome: "error"',
+      pendingBranch,
+    );
+    const technicalFailure = platformAccess.indexOf("throw new TRPCError", pendingBranchEnd);
+    const pendingCode = platformAccess.slice(pendingBranch, pendingBranchEnd);
+
+    expect(pendingBranch).toBeGreaterThan(-1);
+    expect(pendingBranchEnd).toBeGreaterThan(pendingBranch);
+    expect(technicalFailure).toBeGreaterThan(pendingBranch);
+    expect(pendingCode).toContain('allowed: false');
+    expect(pendingCode).toContain("hasPendingPayment");
+    expect(pendingCode).not.toContain("throw new TRPCError");
   });
 
   it("mantém erro temporário no guard e oferece nova tentativa sem redirecionar", () => {
@@ -168,12 +190,14 @@ describe("integração da tela pendente e do guard", () => {
     const end = router.indexOf("logout: publicProcedure", start);
     const procedure = router.slice(start, end);
 
-    expect(procedure).toContain("getPlatformAccessDecision(ctx.user)");
+    expect(procedure).toContain("getPlatformAccessDecision(ctx.user, supabaseAdmin");
     expect(platformAccess).toContain('user.role === "admin" || user.role === "editor"');
     expect(platformAccess).toContain('rpc("user_has_active_subscription"');
     expect(procedure).not.toContain('source: "fallback"');
     expect(procedure).not.toContain('.in("status", ["active", "trialing"])');
     expect(platformAccess).toContain('code: "INTERNAL_SERVER_ERROR"');
+    expect(procedure).toContain('"payment_pending"');
+    expect(platformAccess).toContain("hasPendingPayment");
   });
 
   it("mantém aplicação aprovada transacional antes de marcar acesso ativo", () => {

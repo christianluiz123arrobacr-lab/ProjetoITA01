@@ -32,6 +32,11 @@ const MANUAL_PIX = {
   receiver: "Projeto Vetor",
 };
 
+const AUTOMATIC_SYNC_INTERVAL_MS = 20_000;
+const MAX_AUTOMATIC_SYNC_ATTEMPTS = 6;
+const PAYMENT_CONFIRMATION_MESSAGE =
+  "Estamos confirmando seu pagamento. Isso pode levar alguns instantes. Atualize o status.";
+
 type LatestSubscription = {
   subscription_id: string;
   status: string;
@@ -72,6 +77,8 @@ function getStatusLabel(status?: string | null) {
   switch (status) {
     case "manual_review":
       return "Aguardando confirmação";
+    case "pending":
+      return "Confirmando pagamento";
     case "active":
     case "trialing":
       return "Assinatura ativa";
@@ -127,6 +134,8 @@ export default function SubscriptionPendingPage() {
   const [manualPixEnabled, setManualPixEnabled] = useState(false);
   const [latestPayment, setLatestPayment] = useState<any | null>(null);
   const redirectStarted = useRef(false);
+  const automaticSyncAttempts = useRef(0);
+  const automaticSyncInFlight = useRef(false);
 
   const whatsappUrl = useMemo(() => {
     const planName = subscription?.plan_name || "plano da plataforma";
@@ -139,12 +148,27 @@ export default function SubscriptionPendingPage() {
   }, [subscription]);
 
   useEffect(() => {
-    if (!subscription || ["active", "expired", "failed", "refunded", "canceled"].includes(subscription.status)) return;
+    const isPendingMercadoPago = latestPayment?.gateway === "mercadopago"
+      && latestPayment?.status === "pending";
+    if (!isPendingMercadoPago) {
+      automaticSyncAttempts.current = 0;
+      return;
+    }
+
     const timer = window.setInterval(() => {
-      void loadLatestSubscription(false, true);
-    }, 30_000);
+      if (
+        automaticSyncInFlight.current
+        || automaticSyncAttempts.current >= MAX_AUTOMATIC_SYNC_ATTEMPTS
+      ) return;
+
+      automaticSyncAttempts.current += 1;
+      automaticSyncInFlight.current = true;
+      void loadLatestSubscription(false, true, true).finally(() => {
+        automaticSyncInFlight.current = false;
+      });
+    }, AUTOMATIC_SYNC_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [subscription?.subscription_id, subscription?.status]);
+  }, [latestPayment?.id, latestPayment?.gateway, latestPayment?.status]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -161,7 +185,10 @@ export default function SubscriptionPendingPage() {
     }
   }
 
-  async function confirmCanonicalAccess(latestSubscription: LatestSubscription | null) {
+  async function confirmCanonicalAccess(
+    latestSubscription: LatestSubscription | null,
+    hasPendingMercadoPagoPayment = false,
+  ) {
     if (!user?.id || redirectStarted.current) return false;
 
     setAccessCheckError("");
@@ -175,7 +202,9 @@ export default function SubscriptionPendingPage() {
       if (redirected) return true;
 
       setAccessProcessingMessage(
-        getPendingAccessMessage(latestSubscription?.status, "blocked")
+        hasPendingMercadoPagoPayment
+          ? PAYMENT_CONFIRMATION_MESSAGE
+          : getPendingAccessMessage(latestSubscription?.status, "blocked")
       );
       return false;
     } catch (error) {
@@ -187,27 +216,31 @@ export default function SubscriptionPendingPage() {
     }
   }
 
-  async function loadLatestSubscription(showRefreshing = false, syncGateway = showRefreshing) {
+  async function loadLatestSubscription(
+    showRefreshing = false,
+    syncGateway = showRefreshing,
+    background = false,
+  ) {
     try {
       if (showRefreshing) {
         setRefreshing(true);
-      } else {
+      } else if (!background) {
         setLoadingSubscription(true);
       }
 
       setErrorMessage("");
       setCopyMessage("");
 
-      const refreshed = syncGateway
-        ? await syncMyMercadoPagoPaymentStatus()
-        : null;
-
-      const failedSync = refreshed?.sync?.results?.find((result) => !result.ok);
-      if (failedSync) {
-        throw new Error(
-          failedSync.error ||
-            "O Mercado Pago confirmou a consulta, mas não foi possível aplicar o pagamento à assinatura."
-        );
+      let refreshed: Awaited<ReturnType<typeof syncMyMercadoPagoPaymentStatus>> | null = null;
+      let syncFailed = false;
+      if (syncGateway) {
+        try {
+          refreshed = await syncMyMercadoPagoPaymentStatus();
+          syncFailed = Boolean(refreshed?.sync?.results?.some((result) => !result.ok));
+        } catch (syncError) {
+          syncFailed = true;
+          console.error("Falha temporária ao sincronizar pagamento:", syncError);
+        }
       }
 
       const [data, capabilities, storedPayments] = await Promise.all([
@@ -219,12 +252,16 @@ export default function SubscriptionPendingPage() {
       ]);
       setManualPixEnabled(Boolean(capabilities.manualPixFallbackEnabled));
       const payments = Array.isArray(storedPayments) ? storedPayments : [];
-      setLatestPayment(payments[0] ?? null);
+      const newestPayment = payments[0] ?? null;
+      const hasPendingMercadoPagoPayment = newestPayment?.gateway === "mercadopago"
+        && newestPayment?.status === "pending";
+      setLatestPayment(newestPayment);
+      if (syncFailed) setErrorMessage(PAYMENT_CONFIRMATION_MESSAGE);
 
       if (!data) {
         setSubscription(null);
         setAccessProcessingMessage("");
-        await confirmCanonicalAccess(null);
+        await confirmCanonicalAccess(null, hasPendingMercadoPagoPayment);
         return;
       }
 
@@ -245,23 +282,21 @@ export default function SubscriptionPendingPage() {
         plan_price_cents: Number(data.plan_price_cents || 0),
       };
       setSubscription(normalizedSubscription);
-      await confirmCanonicalAccess(normalizedSubscription);
+      await confirmCanonicalAccess(normalizedSubscription, hasPendingMercadoPagoPayment);
     } catch (error) {
       console.error("Erro inesperado ao carregar assinatura:", error);
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Ocorreu um erro inesperado ao carregar sua assinatura."
-      );
+      setErrorMessage(syncGateway
+        ? PAYMENT_CONFIRMATION_MESSAGE
+        : "Ocorreu um erro inesperado ao carregar sua assinatura.");
     } finally {
-      setLoadingSubscription(false);
+      if (!background) setLoadingSubscription(false);
       setRefreshing(false);
     }
   }
 
   useEffect(() => {
     if (!authLoading && user?.id) {
-      void loadLatestSubscription();
+      void loadLatestSubscription(false, true);
     }
   }, [authLoading, user?.id]);
 

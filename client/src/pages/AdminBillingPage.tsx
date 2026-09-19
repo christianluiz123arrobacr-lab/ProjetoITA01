@@ -113,6 +113,12 @@ type AdminBillingPaymentRow = {
   currency: string;
   access_applied_at: string | null;
   gateway_reconciliation_error: string | null;
+  last_webhook_received_at?: string | null;
+  last_webhook_status?: string | null;
+  last_webhook_error?: string | null;
+  gateway_last_checked_at?: string | null;
+  gateway_last_status?: string | null;
+  gateway_sync_attempts?: number;
   created_at: string;
 };
 
@@ -1041,6 +1047,16 @@ export default function AdminBillingPage() {
                         <p className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">Pagamento local: {payment.id}</p>
                         <p className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">Mercado Pago: {payment.gateway_payment_id || "ID não registrado"}</p>
                         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Criado em {formatDate(payment.created_at)} · Acesso {payment.access_applied_at ? "aplicado" : "não aplicado"}</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          Último webhook: {formatDate(payment.last_webhook_received_at)}
+                          {payment.last_webhook_status ? ` · ${payment.last_webhook_status}` : ""}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          Última consulta oficial: {formatDate(payment.gateway_last_checked_at)}
+                          {payment.gateway_last_status ? ` · ${payment.gateway_last_status}` : ""}
+                          {` · ${payment.gateway_sync_attempts ?? 0} tentativa(s)`}
+                        </p>
+                        {payment.last_webhook_error ? <p className="mt-2 text-xs text-red-700 dark:text-red-300">Erro do webhook: {payment.last_webhook_error}</p> : null}
                         {payment.gateway_reconciliation_error ? <p className="mt-2 text-xs text-red-700 dark:text-red-300">Falha anterior: {payment.gateway_reconciliation_error}</p> : null}
                       </div>
                       {canReconcile ? (

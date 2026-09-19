@@ -552,7 +552,12 @@ export const appRouter = router({
 
 
     getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
-      const access = await getPlatformAccessDecision(ctx.user);
+      const requestId = Array.isArray(ctx.req.headers["x-request-id"])
+        ? ctx.req.headers["x-request-id"][0]
+        : ctx.req.headers["x-request-id"];
+      const access = await getPlatformAccessDecision(ctx.user, supabaseAdmin, {
+        correlationId: requestId || randomUUID(),
+      });
       if (access.source === "role") {
         return {
           accessState: "allowed",
@@ -597,12 +602,14 @@ export const appRouter = router({
         planName: latestSubscriptionDetails?.plan_name ?? null,
         blockReason: access.allowed
           ? null
-          : localSubscriptionLooksActive
+          : access.hasPendingPayment
+            ? "payment_pending"
+            : localSubscriptionLooksActive
             ? "access_processing"
             : latestSubscriptionDetails
               ? "expired_subscription"
               : "no_subscription",
-        source: "rpc",
+        source: access.hasPendingPayment ? "local_pending_payment" : "rpc",
       } as const;
     }),
 
@@ -1837,7 +1844,7 @@ export const appRouter = router({
       .query(async ({ input }) => {
         let query = supabaseAdmin
           .from("billing_payments")
-          .select("id, subscription_id, original_subscription_id, applied_to_subscription_id, user_id, plan_id, gateway, gateway_payment_id, payment_method, status, amount_cents, currency, approved_at, access_applied_at, current_period_start, current_period_end, access_duration_value, access_duration_unit, gateway_reconciliation_status, gateway_reconciliation_error, refunded_at, expires_at, payment_url, metadata, created_at, updated_at")
+          .select("id, subscription_id, original_subscription_id, applied_to_subscription_id, user_id, plan_id, gateway, gateway_payment_id, payment_method, status, amount_cents, currency, approved_at, access_applied_at, current_period_start, current_period_end, access_duration_value, access_duration_unit, gateway_reconciliation_status, gateway_reconciliation_error, last_webhook_received_at, gateway_last_checked_at, gateway_last_status, gateway_sync_attempts, refunded_at, expires_at, payment_url, metadata, created_at, updated_at")
           .order("created_at", { ascending: false })
           .limit(100);
 
@@ -1848,7 +1855,44 @@ export const appRouter = router({
 
         const { data, error } = await query;
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-        return data ?? [];
+        const payments = data ?? [];
+        const gatewayPaymentIds = payments.flatMap(payment =>
+          payment.gateway === "mercadopago" && payment.gateway_payment_id
+            ? [String(payment.gateway_payment_id)]
+            : []
+        );
+        if (!gatewayPaymentIds.length) return payments;
+
+        const { data: webhookEvents, error: webhookError } = await supabaseAdmin
+          .from("billing_webhook_events")
+          .select("resource_id, status, error_message, received_at, processed_at, created_at")
+          .eq("provider", "mercadopago")
+          .in("resource_id", gatewayPaymentIds)
+          .order("created_at", { ascending: false });
+        if (webhookError) throw new TRPCError({ code: "BAD_REQUEST", message: webhookError.message });
+
+        const latestWebhookByPayment = new Map<string, any>();
+        for (const event of webhookEvents ?? []) {
+          const resourceId = String(event.resource_id ?? "");
+          if (resourceId && !latestWebhookByPayment.has(resourceId)) {
+            latestWebhookByPayment.set(resourceId, event);
+          }
+        }
+
+        return payments.map(payment => {
+          const event = payment.gateway_payment_id
+            ? latestWebhookByPayment.get(String(payment.gateway_payment_id))
+            : null;
+          return {
+            ...payment,
+            last_webhook_received_at: payment.last_webhook_received_at
+              ?? event?.received_at
+              ?? event?.created_at
+              ?? null,
+            last_webhook_status: event?.status ?? null,
+            last_webhook_error: event?.error_message ?? null,
+          };
+        });
       }),
 
     reconcileMercadoPagoPayment: adminProcedure

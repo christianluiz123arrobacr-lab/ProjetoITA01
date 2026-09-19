@@ -6,6 +6,7 @@ const app = readFileSync(new URL("../client/src/App.tsx", import.meta.url), "utf
 const adminGuard = readFileSync(new URL("../client/src/components/admin/AdminGuard.tsx", import.meta.url), "utf8");
 const adminDashboard = readFileSync(new URL("../client/src/pages/AdminDashboardPage.tsx", import.meta.url), "utf8");
 const router = readFileSync(new URL("./routers.ts", import.meta.url), "utf8");
+const platformAccess = readFileSync(new URL("./_core/platformAccess.ts", import.meta.url), "utf8");
 
 describe("separação de acesso administrativo e assinatura", () => {
   it("classifica somente rotas administrativas reais", () => {
@@ -24,9 +25,8 @@ describe("separação de acesso administrativo e assinatura", () => {
   });
 
   it("não monta SubscriptionGuard em admin e mantém o guard para alunos", () => {
-    expect(app).toContain("return isAdminRoute ? pageContent : (");
-    expect(app).toContain("<SubscriptionGuard>{pageContent}</SubscriptionGuard>");
-    expect(app).toContain("{!isAdminRoute ? (");
+    expect(app).toContain("<SubscriptionGuard bypass={isAdminRoute}>{pageContent}</SubscriptionGuard>");
+    expect(app).toContain("const isAdminRoute = isAdminPath(location);");
   });
 
   it("protege admin por sessão e papel canônico, sem consultar assinatura", () => {
@@ -41,12 +41,13 @@ describe("separação de acesso administrativo e assinatura", () => {
   it("libera o papel administrativo antes de consultar perfil ou assinatura", () => {
     const start = router.indexOf("getAccessStatus: protectedProcedure");
     const procedure = router.slice(start, router.indexOf("logout: publicProcedure", start));
-    const override = procedure.indexOf('ctx.user.role === "admin"');
-    const profileQuery = procedure.indexOf('.from("profiles")');
+    const override = platformAccess.indexOf('user.role === "admin" || user.role === "editor"');
+    const profileQuery = platformAccess.indexOf('.from("profiles")');
 
     expect(override).toBeGreaterThan(-1);
     expect(profileQuery).toBeGreaterThan(override);
-    expect(procedure.slice(override, profileQuery)).toContain('accessState: "allowed"');
-    expect(procedure.slice(override, profileQuery)).toContain('subscriptionStatus: "admin_override"');
+    expect(platformAccess.slice(override, profileQuery)).toContain('allowed: true');
+    expect(platformAccess.slice(override, profileQuery)).toContain('source: "role"');
+    expect(procedure).toContain("getPlatformAccessDecision");
   });
 });
