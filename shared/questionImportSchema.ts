@@ -3,6 +3,10 @@ import { normalizeDifficulty, type QuestionDifficulty } from "./difficulty.js";
 
 export const MAX_QUESTION_IMPORT_ITEMS = 50;
 export const MAX_QUESTION_IMPORT_JSON_BYTES = 2 * 1024 * 1024;
+export const MAX_QUESTION_IMPORT_IMAGE_BYTES = 3 * 1024 * 1024;
+export const QUESTION_IMPORT_FORMAT_V2 = "questoes-v2" as const;
+export const QUESTION_IMAGE_LOCATIONS = ["enunciado", "alternativa", "resolucao", "contexto"] as const;
+export type QuestionImageLocation = (typeof QUESTION_IMAGE_LOCATIONS)[number];
 
 export const QUESTION_IMPORT_BLOCK_TYPES = ["texto", "latex", "imagem", "equacao_quimica", "molecula"] as const;
 export type QuestionImportBlockType = (typeof QUESTION_IMPORT_BLOCK_TYPES)[number];
@@ -21,7 +25,21 @@ export type NormalizedResolutionImportBlock = {
   ordem: number;
 };
 
+export type NormalizedQuestionImageSlot = {
+  slot_id: string;
+  obrigatoria: boolean;
+  local: QuestionImageLocation;
+  alternativa: "a" | "b" | "c" | "d" | "e" | null;
+  nome_arquivo_esperado: string | null;
+  descricao: string | null;
+  texto_alternativo: string;
+  legenda: string | null;
+};
+
+export type QuestionImageMetadata = Pick<NormalizedQuestionImageSlot, "slot_id" | "local" | "alternativa" | "texto_alternativo" | "legenda">;
+
 export type NormalizedQuestionImportItem = {
+  chave_importacao: string | null;
   id_importacao: string | null;
   codigo: string | null;
   disciplina: string;
@@ -49,6 +67,8 @@ export type NormalizedQuestionImportItem = {
   e_url_imagem: string | null;
   alternativa_correta: "a" | "b" | "c" | "d" | "e" | "";
   resolucao_blocos: NormalizedResolutionImportBlock[];
+  imagens: NormalizedQuestionImageSlot[];
+  image_metadata: QuestionImageMetadata[];
   import_hash: string;
   raw_index: number;
 };
@@ -86,7 +106,28 @@ export const normalizedResolutionImportBlockSchema = z.object({
   ordem: z.number().int().min(1).max(500),
 });
 
+const safeImportMetadataText = z.string().trim().max(500).refine(
+  (value) => !/<\/?(?:script|iframe|object|embed|svg)\b/i.test(value) && !/(?:javascript|data):/i.test(value),
+  "Texto contém conteúdo não permitido."
+);
+
+export const normalizedQuestionImageSlotSchema = z.object({
+  slot_id: z.string().trim().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/, "slot_id inválido."),
+  obrigatoria: z.boolean(),
+  local: z.enum(QUESTION_IMAGE_LOCATIONS),
+  alternativa: z.enum(["a", "b", "c", "d", "e"]).nullable(),
+  nome_arquivo_esperado: z.string().trim().min(1).max(180).nullable(),
+  descricao: safeImportMetadataText.nullable(),
+  texto_alternativo: safeImportMetadataText,
+  legenda: safeImportMetadataText.nullable(),
+}).superRefine((slot, context) => {
+  if (slot.local === "alternativa" && !slot.alternativa) context.addIssue({ code: "custom", path: ["alternativa"], message: "Informe a alternativa do slot." });
+  if (slot.local !== "alternativa" && slot.alternativa) context.addIssue({ code: "custom", path: ["alternativa"], message: "A alternativa só pode ser usada em slots de alternativa." });
+  if (slot.obrigatoria && !slot.texto_alternativo.trim()) context.addIssue({ code: "custom", path: ["texto_alternativo"], message: "Texto alternativo é obrigatório para imagens obrigatórias." });
+});
+
 export const normalizedQuestionImportItemSchema = z.object({
+  chave_importacao: z.string().trim().min(1).max(180).nullable(),
   id_importacao: z.string().trim().min(1).max(180).nullable(),
   codigo: z.string().trim().min(1).max(120).nullable(),
   disciplina: z.string().trim().min(1).max(120),
@@ -117,6 +158,14 @@ export const normalizedQuestionImportItemSchema = z.object({
   e_url_imagem: z.string().trim().max(2000).nullable(),
   alternativa_correta: z.enum(["a", "b", "c", "d", "e", ""]),
   resolucao_blocos: z.array(normalizedResolutionImportBlockSchema).max(500),
+  imagens: z.array(normalizedQuestionImageSlotSchema).max(30),
+  image_metadata: z.array(z.object({
+    slot_id: z.string().trim().min(1).max(100),
+    local: z.enum(QUESTION_IMAGE_LOCATIONS),
+    alternativa: z.enum(["a", "b", "c", "d", "e"]).nullable(),
+    texto_alternativo: safeImportMetadataText,
+    legenda: safeImportMetadataText.nullable(),
+  })).max(30),
   import_hash: z.string().trim().min(1).max(80),
   raw_index: z.number().int().min(0).max(MAX_QUESTION_IMPORT_ITEMS - 1),
 });
@@ -205,6 +254,49 @@ function first(values: string[]) {
 function nullable(value: string) {
   const clean = value.trim();
   return clean ? clean : null;
+}
+
+function containsUnsafeEmbeddedContent(value: string) {
+  return /(?:javascript|data):/i.test(value) || /<\/?(?:script|iframe|object|embed|svg)\b/i.test(value);
+}
+
+function readImageSlots(record: JsonRecord): { slots: NormalizedQuestionImageSlot[]; errors: string[] } {
+  const raw = read(record, ["imagens", "images"]);
+  if (raw === undefined) return { slots: [], errors: [] };
+  if (!Array.isArray(raw)) return { slots: [], errors: ["O campo imagens precisa ser uma lista."] };
+  const errors: string[] = [];
+  const slots: NormalizedQuestionImageSlot[] = [];
+  const seen = new Set<string>();
+  raw.forEach((value, index) => {
+    if (!isRecord(value)) { errors.push(`Imagem ${index + 1}: slot inválido.`); return; }
+    const local = normalizeSearch(readString(value, ["local", "location"])) as QuestionImageLocation;
+    const slotId = readString(value, ["slot_id", "slotId"]).trim();
+    const rawAlternative = readString(value, ["alternativa", "letra_alternativa", "alternative", "alternative_letter"]).trim().toLowerCase();
+    const rawIndexAlternative = readString(value, ["indice_alternativa", "alternative_index"]).trim();
+    const indexAlternative = rawIndexAlternative ? Number(rawIndexAlternative) : Number.NaN;
+    const alternativa = /^[a-e]$/.test(rawAlternative)
+      ? rawAlternative as NormalizedQuestionImageSlot["alternativa"]
+      : Number.isInteger(indexAlternative) && indexAlternative >= 0 && indexAlternative <= 4
+        ? (["a", "b", "c", "d", "e"] as const)[indexAlternative]
+        : null;
+    const slot: NormalizedQuestionImageSlot = {
+      slot_id: slotId,
+      obrigatoria: readBoolean(value, ["obrigatoria", "required"], false),
+      local,
+      alternativa,
+      nome_arquivo_esperado: nullable(readString(value, ["nome_arquivo_esperado", "expected_filename"])),
+      descricao: nullable(readString(value, ["descricao", "description"])),
+      texto_alternativo: readString(value, ["texto_alternativo", "alt", "alt_text"]).trim(),
+      legenda: nullable(readString(value, ["legenda", "caption"])),
+    };
+    const parsed = normalizedQuestionImageSlotSchema.safeParse(slot);
+    if (!parsed.success) { errors.push(`Imagem ${index + 1}: ${parsed.error.issues.map((issue) => issue.message).join(" ")}`); return; }
+    const normalizedId = normalizeSearch(slotId);
+    if (seen.has(normalizedId)) { errors.push(`slot_id duplicado: ${slotId}.`); return; }
+    seen.add(normalizedId);
+    slots.push(parsed.data);
+  });
+  return { slots, errors };
 }
 
 function normalizeCorrectAlternative(value: string): "a" | "b" | "c" | "d" | "e" | "" {
@@ -329,11 +421,12 @@ function buildImportHash(data: Pick<NormalizedQuestionImportItem, "disciplina" |
   return `qimp_${fnv1aHash(basis)}_${fnv1aHash(basis.split("").reverse().join(""))}`;
 }
 
-function normalizeQuestion(record: JsonRecord, rawIndex: number): { item: NormalizedQuestionImportItem; unsupportedBlockTypes: string[] } {
-  const conteudos = normalizeTextList([
+function normalizeQuestion(record: JsonRecord, rawIndex: number): { item: NormalizedQuestionImportItem; unsupportedBlockTypes: string[]; imageErrors: string[] } {
+  let conteudos = normalizeTextList([
     ...readStringArray(record, ["conteudos", "contents"]),
     readString(record, ["conteudo", "content"]),
   ]);
+  if (conteudos.length === 0) conteudos = normalizeTextList(read(record, ["assunto", "subtopic"]));
   const groups = readAssuntosPorConteudo(record, conteudos);
   const assuntos = normalizeTextList([
     ...flattenAssuntos(groups),
@@ -344,16 +437,17 @@ function normalizeQuestion(record: JsonRecord, rawIndex: number): { item: Normal
     ? groups.map((group) => ({ conteudo: group.conteudo, assuntos: normalizeTextList(group.assuntos.length ? group.assuntos : assuntos) }))
     : conteudos.map((conteudo) => ({ conteudo, assuntos }));
   const { blocks, unsupportedTypes } = readResolutionBlocks(record);
+  const { slots: imagens, errors: imageErrors } = readImageSlots(record);
   const anoRaw = readString(record, ["ano", "year"]);
   const ano = anoRaw.trim() && Number.isFinite(Number(anoRaw)) ? Number(anoRaw) : null;
 
   const base = {
+    chave_importacao: nullable(readString(record, ["chave_importacao", "import_key"])),
     id_importacao: nullable(readString(record, ["id_importacao", "import_id", "external_id"])),
     codigo: nullable(readString(record, ["codigo", "código", "code"])),
     disciplina: readString(record, ["disciplina", "subject"]).trim(),
     dificuldade:
-      normalizeDifficulty(readString(record, ["dificuldade", "difficulty"])) ??
-      ("" as QuestionDifficulty),
+      normalizeDifficulty(readString(record, ["dificuldade", "difficulty"])) ?? "medio",
     conteudos,
     assuntos,
     assuntos_por_conteudo: normalizedGroups,
@@ -388,12 +482,16 @@ function normalizeQuestion(record: JsonRecord, rawIndex: number): { item: Normal
     c_url_imagem: nullable(readAlternative(record, "C", true)),
     d_url_imagem: nullable(readAlternative(record, "D", true)),
     e_url_imagem: nullable(readAlternative(record, "E", true)),
-    alternativa_correta: normalizeCorrectAlternative(readString(record, ["alternativa_correta", "correta", "answer"])),
+    alternativa_correta: normalizeCorrectAlternative(readString(record, ["alternativa_correta", "correta", "resposta", "answer"])),
     resolucao_blocos: blocks,
+    imagens,
+    image_metadata: [],
     raw_index: rawIndex,
   } satisfies Omit<NormalizedQuestionImportItem, "import_hash">;
 
-  return { item: { ...base, import_hash: buildImportHash(base) }, unsupportedBlockTypes: unsupportedTypes };
+  const item = { ...base, import_hash: buildImportHash(base) };
+  item.id_importacao = item.chave_importacao || item.id_importacao;
+  return { item, unsupportedBlockTypes: unsupportedTypes, imageErrors };
 }
 
 function getRawQuestions(payload: unknown) {
@@ -402,8 +500,8 @@ function getRawQuestions(payload: unknown) {
   const batchQuestions = read(payload, ["questoes", "questions"]);
   if (Array.isArray(batchQuestions)) {
     return {
-      versao: nullable(readString(payload, ["versao", "version"])),
-      tipo: readString(payload, ["tipo", "type"]) || "importacao_lote_questoes",
+      versao: nullable(readString(payload, ["formato", "format", "versao", "version"])),
+      tipo: readString(payload, ["tipo", "type"]) || (readString(payload, ["formato", "format"]) === QUESTION_IMPORT_FORMAT_V2 ? QUESTION_IMPORT_FORMAT_V2 : "importacao_lote_questoes"),
       questions: batchQuestions,
     };
   }
@@ -432,8 +530,17 @@ export function parseQuestionImportPayload(payload: unknown): QuestionImportBatc
       const item = normalizeQuestion({}, index).item;
       return { index, item, status: "invalida" as const, errors: ["Item do lote não é um objeto JSON."], warnings: [], alternativas_preenchidas: 0, resolution_blocks_count: 0 };
     }
-    const { item, unsupportedBlockTypes } = normalizeQuestion(raw, index);
-    return validateQuestionImportItem(item, index, unsupportedBlockTypes);
+    const { item, unsupportedBlockTypes, imageErrors } = normalizeQuestion(raw, index);
+    const preview = validateQuestionImportItem(item, index, unsupportedBlockTypes);
+    preview.errors.push(...imageErrors);
+    if (rawBatch.versao === QUESTION_IMPORT_FORMAT_V2 || rawBatch.tipo === QUESTION_IMPORT_FORMAT_V2) {
+      if (!item.chave_importacao) preview.errors.push("chave_importacao é obrigatória no formato questoes-v2.");
+      if ([item.url_imagem, item.a_url_imagem, item.b_url_imagem, item.c_url_imagem, item.d_url_imagem, item.e_url_imagem].some(Boolean) || item.resolucao_blocos.some((block) => Boolean(block.url_imagem))) {
+        preview.errors.push("questoes-v2 não aceita URLs de imagem no JSON; declare slots e envie os arquivos pela tela.");
+      }
+    }
+    preview.status = preview.errors.length ? "invalida" : "valida";
+    return preview;
   });
 
   return {
@@ -466,6 +573,8 @@ export function validateQuestionImportItem(
   }
   if (item.resolucao_blocos.length === 0) errors.push("Inclua pelo menos um bloco de resolução.");
   if (unsupportedBlockTypes.length > 0) errors.push(`Tipo(s) de bloco não suportado(s): ${unsupportedBlockTypes.join(", ")}.`);
+  if ([item.url_imagem, item.a_url_imagem, item.b_url_imagem, item.c_url_imagem, item.d_url_imagem, item.e_url_imagem]
+    .some((value) => value && (containsUnsafeEmbeddedContent(value) || !/^https:\/\//i.test(value)))) errors.push("URLs de imagem precisam usar HTTPS e não podem conter data:, JavaScript ou conteúdo incorporado.");
 
   if (!item.codigo) warnings.push("Código vazio: o sistema usará o padrão atual de cadastro sem código.");
   if (!item.E.trim()) warnings.push("Alternativa E vazia.");
@@ -524,6 +633,7 @@ export function buildQuestionInsertPayload(question: NormalizedQuestionImportIte
     c_url_imagem: question.c_url_imagem,
     d_url_imagem: question.d_url_imagem,
     e_url_imagem: question.e_url_imagem,
+    image_metadata: question.image_metadata,
     alternativa_correta: question.alternativa_correta,
     import_source_id: getQuestionImportSourceId(question),
     import_batch_id: importBatchId,

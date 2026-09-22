@@ -50,6 +50,20 @@ import { setPublicQuestionPublication } from "./publicQuestions.js";
 import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
 import { lessonRouter } from "./lessons/lessonRouter.js";
 import { getPlatformAccessDecision } from "./_core/platformAccess.js";
+import {
+  cancelQuestionImportDraft,
+  cleanupExpiredQuestionImportDrafts,
+  completeQuestionImportDraft,
+  confirmQuestionImportSlotUpload,
+  createQuestionImportDraft,
+  getQuestionImportDraft,
+  listQuestionImportDrafts,
+  prepareQuestionImportFinalization,
+  prepareQuestionImportSlotUpload,
+  removeQuestionImportSlotUpload,
+  updateQuestionImportSlotMetadata,
+} from "./questions/questionImportBatchService.js";
+import { MAX_QUESTION_IMPORT_IMAGE_BYTES } from "../shared/questionImportSchema.js";
 
 const notebookPaperSchema = z.object({ size: z.enum(["a5", "a4", "a3", "infinite"]), lined: z.boolean() });
 const stableVetOrder = (seed: string, value: string) => Array.from(`${seed}:${value}`).reduce((hash, char) => ((hash * 31) ^ char.charCodeAt(0)) >>> 0, 2166136261);
@@ -141,7 +155,7 @@ function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeo
   return {
     questao_id: questaoId,
     tipo: block.tipo,
-    texto: block.tipo === "imagem" ? null : (block.texto?.trim() || null),
+    texto: block.texto?.trim() || null,
     url_imagem: block.tipo === "imagem" ? (block.url_imagem?.trim() || null) : null,
     ordem: block.ordem,
   };
@@ -190,6 +204,60 @@ async function getResolutionBlocksCount(questionId: string) {
   }
 
   return count ?? 0;
+}
+
+async function executePreparedQuestionImport(questions: z.infer<typeof questionImportPayloadSchema>["questions"], batchId: string, userId: string) {
+  const startedAt = Date.now();
+  const results: Array<{ index: number; importSourceId: string; status: ImportResultStatus; questionId: string | null; codigo: string | null; resolutionBlocksSaved: number; message: string }> = [];
+  for (const question of questions) {
+    const preview = validateQuestionImportItem(question);
+    const importSourceId = getQuestionImportSourceId(question);
+    if (preview.status === "invalida") {
+      results.push({ index: question.raw_index, importSourceId, status: "falhou", questionId: null, codigo: question.codigo, resolutionBlocksSaved: 0, message: preview.errors.join(" ") || "Questão inválida." });
+      continue;
+    }
+    try {
+      const duplicate = await supabaseAdmin.from("questoes").select("id,codigo").eq("import_source_id", importSourceId).maybeSingle();
+      if (duplicate.error) throw new Error("Não foi possível verificar duplicidade da questão.");
+      if (duplicate.data?.id) {
+        const existing = await getResolutionBlocksCount(duplicate.data.id);
+        const repaired = existing === 0 && question.resolucao_blocos.length ? await saveImportedResolutionBlocks(duplicate.data.id, question.resolucao_blocos) : 0;
+        results.push({ index: question.raw_index, importSourceId, status: "duplicada", questionId: duplicate.data.id, codigo: (duplicate.data as any).codigo ?? question.codigo, resolutionBlocksSaved: repaired, message: repaired ? "Questão já existia; blocos ausentes foram recuperados." : "Questão já importada anteriormente." });
+        continue;
+      }
+      const payload = buildQuestionInsertPayload(question, batchId, userId);
+      const { data, error } = await supabaseAdmin.from("questoes").insert([payload]).select("id,codigo").single();
+      if (error?.code === "23505") {
+        const concurrentDuplicate = await supabaseAdmin.from("questoes").select("id,codigo").eq("import_source_id", importSourceId).maybeSingle();
+        if (concurrentDuplicate.data?.id) {
+          const existing = await getResolutionBlocksCount(concurrentDuplicate.data.id);
+          const repaired = existing === 0 && question.resolucao_blocos.length ? await saveImportedResolutionBlocks(concurrentDuplicate.data.id, question.resolucao_blocos) : 0;
+          results.push({ index: question.raw_index, importSourceId, status: "duplicada", questionId: concurrentDuplicate.data.id, codigo: (concurrentDuplicate.data as any).codigo ?? question.codigo, resolutionBlocksSaved: repaired, message: "Questão já criada por outra tentativa do mesmo lote." });
+          continue;
+        }
+      }
+      if (error || !data?.id) throw new Error("Não foi possível criar a questão.");
+      let resolutionBlocksSaved = 0;
+      try {
+        resolutionBlocksSaved = await saveImportedResolutionBlocks(data.id, question.resolucao_blocos);
+      } catch (resolutionError) {
+        await supabaseAdmin.from("resolucoes_meta").delete().eq("questao_id", data.id);
+        await supabaseAdmin.from("resolucoes").delete().eq("questao_id", data.id);
+        await supabaseAdmin.from("questoes").delete().eq("id", data.id);
+        throw resolutionError;
+      }
+      results.push({ index: question.raw_index, importSourceId, status: "criada", questionId: data.id, codigo: (data as any).codigo ?? question.codigo, resolutionBlocksSaved, message: "Questão e resolução importadas com sucesso." });
+    } catch (error) {
+      results.push({ index: question.raw_index, importSourceId, status: "falhou", questionId: null, codigo: question.codigo, resolutionBlocksSaved: 0, message: error instanceof Error ? error.message : "Falha inesperada ao importar a questão." });
+    }
+  }
+  const createdCount = results.filter((result) => result.status === "criada").length;
+  const duplicatedCount = results.filter((result) => result.status === "duplicada").length;
+  const failedCount = results.filter((result) => result.status === "falhou").length;
+  const resolutionBlocksSaved = results.reduce((sum, result) => sum + result.resolutionBlocksSaved, 0);
+  const response = { batchId, createdCount, duplicatedCount, failedCount, resolutionBlocksSaved, durationMs: Date.now() - startedAt, results };
+  await supabaseAdmin.from("admin_logs").insert({ actor_user_id: userId, action: "question_batch_imported", entity_type: "question_import_batch", entity_id: batchId, description: `Importação em lote: ${createdCount} criada(s), ${duplicatedCount} duplicada(s), ${failedCount} falha(s)`, level: failedCount ? "warning" : "info", metadata: { ...response, results: undefined } });
+  return response;
 }
 
 type ResolutionSummaryRow = {
@@ -2273,6 +2341,56 @@ export const appRouter = router({
         });
 
         return { id: data.id } as const;
+      }),
+
+    createQuestionImportDraft: adminProcedure
+      .input(z.object({ rawJson: z.string().min(2).max(2 * 1024 * 1024), sourceName: z.string().trim().max(180).optional() }))
+      .mutation(({ ctx, input }) => createQuestionImportDraft(ctx.user.id, input.rawJson, input.sourceName)),
+
+    listQuestionImportDrafts: adminProcedure.query(({ ctx }) => listQuestionImportDrafts(ctx.user.id)),
+
+    getQuestionImportDraft: adminProcedure
+      .input(z.object({ batchId: z.string().uuid() }))
+      .query(({ ctx, input }) => getQuestionImportDraft(input.batchId, ctx.user.id)),
+
+    prepareQuestionImportImageUpload: adminProcedure
+      .input(z.object({
+        batchId: z.string().uuid(),
+        importKey: z.string().trim().min(1).max(180),
+        slotId: z.string().trim().min(1).max(100),
+        originalName: z.string().trim().min(1).max(180),
+        contentType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+        byteSize: z.number().int().min(1).max(MAX_QUESTION_IMPORT_IMAGE_BYTES),
+      }))
+      .mutation(({ ctx, input }) => prepareQuestionImportSlotUpload(input, ctx.user.id)),
+
+    confirmQuestionImportImageUpload: adminProcedure
+      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional() }))
+      .mutation(({ ctx, input }) => confirmQuestionImportSlotUpload(input, ctx.user.id)),
+
+    removeQuestionImportImageUpload: adminProcedure
+      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100) }))
+      .mutation(({ ctx, input }) => removeQuestionImportSlotUpload(input.batchId, input.importKey, input.slotId, ctx.user.id)),
+
+    updateQuestionImportImageMetadata: adminProcedure
+      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional() }))
+      .mutation(({ ctx, input }) => updateQuestionImportSlotMetadata(input, ctx.user.id)),
+
+    cancelQuestionImportDraft: adminProcedure
+      .input(z.object({ batchId: z.string().uuid() }))
+      .mutation(({ ctx, input }) => cancelQuestionImportDraft(input.batchId, ctx.user.id)),
+
+    cleanupExpiredQuestionImportDrafts: adminProcedure
+      .mutation(({ ctx }) => cleanupExpiredQuestionImportDrafts(ctx.user.id)),
+
+    finalizeQuestionImportDraft: adminProcedure
+      .input(z.object({ batchId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const prepared = await prepareQuestionImportFinalization(input.batchId, ctx.user.id);
+        if (prepared.batch.status === "completed" && prepared.batch.result) return prepared.batch.result;
+        const result = await executePreparedQuestionImport(questionImportPayloadSchema.shape.questions.parse(prepared.questions), input.batchId, ctx.user.id);
+        await completeQuestionImportDraft(input.batchId, ctx.user.id, result);
+        return result;
       }),
 
     importQuestionBatch: adminProcedure

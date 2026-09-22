@@ -118,6 +118,14 @@ function normalizeOptionId(value?: string | null) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function importedImageMetadata(value: unknown): { alt?: string; caption?: string } {
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed ? { alt: String((parsed as any).alt ?? "") || undefined, caption: String((parsed as any).caption ?? "") || undefined } : {};
+  } catch { return {}; }
+}
+
 function buildAnswerStatsFromRows(rows: AnswerStatsRow[]): AnswerStats {
   const counts: Record<string, number> = {};
 
@@ -695,7 +703,7 @@ export function InteractiveQuiz({
 
           {questionContent.map((group, index) => group.type === "image" ? (
             <div className="mt-5" key={`statement-image-${index}`}>
-              <img src={group.url} alt="Imagem da questão" className="max-w-full rounded-2xl border border-slate-200 bg-white" />
+              <figure><img src={group.url} alt={question.imageAlt || "Imagem da questão"} className="max-w-full rounded-2xl border border-slate-200 bg-white" />{question.imageCaption ? <figcaption className="mt-2 text-sm text-slate-600">{question.imageCaption}</figcaption> : null}</figure>
             </div>
           ) : (
             <div className={index ? "mt-5" : ""} key={`statement-content-${index}`}>
@@ -813,13 +821,13 @@ export function InteractiveQuiz({
                     ) : null}
 
                     {option.imageUrl ? (
-                      <img
+                      <figure><img
                         src={option.imageUrl}
-                        alt={`Alternativa ${option.label}`}
+                        alt={option.imageAlt || `Alternativa ${option.label}`}
                         className={`mt-3 max-h-48 max-w-full object-contain rounded-xl border border-slate-200 bg-white ${
                           usesQuestionBankFeedback ? "dark:border-slate-700 dark:bg-slate-900" : ""
                         }`}
-                      />
+                      />{option.imageCaption ? <figcaption className="mt-1 text-xs text-slate-600">{option.imageCaption}</figcaption> : null}</figure>
                     ) : null}
 
                     {answered ? (
@@ -944,7 +952,7 @@ export function InteractiveQuiz({
 
               {(resolutionByQuestion[currentQuestion]?.length || question.explanationBlocks?.length) ? (
                 <div className="space-y-4">
-                  {(resolutionByQuestion[currentQuestion]?.map(block => ({ type: block.tipo, content: block.texto, imageUrl: block.url_imagem, order: block.ordem ?? 0 })) ?? question.explanationBlocks ?? [])
+                  {(resolutionByQuestion[currentQuestion]?.map(block => ({ type: block.tipo, content: block.texto, imageUrl: block.url_imagem, order: block.ordem ?? 0, imageAlt: importedImageMetadata(block.texto).alt, imageCaption: importedImageMetadata(block.texto).caption })) ?? question.explanationBlocks ?? [])
                     .sort((a, b) => a.order - b.order)
                     .map((block, index) => {
                       if (block.type === "equacao_quimica" || block.type === "molecula") {
@@ -956,11 +964,11 @@ export function InteractiveQuiz({
                             key={`${block.type}-${block.order}-${index}`}
                             className="rounded-2xl overflow-hidden border border-slate-200 bg-white p-3"
                           >
-                            <img
+                            <figure><img
                               src={block.imageUrl}
-                              alt={`Imagem da resolução ${index + 1}`}
+                              alt={block.imageAlt || `Imagem da resolução ${index + 1}`}
                               className="max-w-full rounded-xl mx-auto"
-                            />
+                            />{block.imageCaption ? <figcaption className="mt-2 text-center text-sm text-slate-600">{block.imageCaption}</figcaption> : null}</figure>
                           </div>
                         );
                       }

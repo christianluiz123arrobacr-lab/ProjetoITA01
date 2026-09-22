@@ -3,6 +3,8 @@ export type QuestionOption = {
   label: string;
   text?: string;
   imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
 };
 
 export type ExplanationBlock = {
@@ -10,6 +12,8 @@ export type ExplanationBlock = {
   type: "texto" | "latex" | "imagem";
   content?: string;
   imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
   order: number;
 };
 
@@ -43,6 +47,8 @@ export type Question = {
   statementAfterImage?: string;
   formula?: string;
   imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
 
   options: QuestionOption[];
   correctOptionId: string;

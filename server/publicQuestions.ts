@@ -5,7 +5,7 @@ import { formatDifficultyLabel } from "../shared/difficulty.js";
 
 export const PUBLIC_SITE_ORIGIN = "https://www.projetovetor.com";
 export const PUBLIC_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-export const PUBLIC_QUESTION_SELECT = "id,codigo,disciplina,conteudo,conteudos,assunto,assuntos,banca,ano,dificuldade,enunciado,enunciado_pos_imagem,url_imagem,formula,A,B,C,D,E,a_url_imagem,b_url_imagem,c_url_imagem,d_url_imagem,e_url_imagem,instituição,public_slug,is_public,public_noindex,public_published_at,publicada,alternativa_correta";
+export const PUBLIC_QUESTION_SELECT = "id,codigo,disciplina,conteudo,conteudos,assunto,assuntos,banca,ano,dificuldade,enunciado,enunciado_pos_imagem,url_imagem,image_metadata,formula,A,B,C,D,E,a_url_imagem,b_url_imagem,c_url_imagem,d_url_imagem,e_url_imagem,instituição,public_slug,is_public,public_noindex,public_published_at,publicada,alternativa_correta";
 
 type PublicQuestionRow = Record<string, any>;
 type ResolutionRow = { tipo?: string | null; texto?: string | null; ordem?: number | null; url_imagem?: string | null };
@@ -77,7 +77,8 @@ export function safePublicImageUrl(value: unknown): string | null {
 function optionDto(row: PublicQuestionRow, key: "a" | "b" | "c" | "d" | "e") {
   const text = typeof row[key.toUpperCase()] === "string" ? row[key.toUpperCase()].trim() : "";
   const imageUrl = safePublicImageUrl(row[`${key}_url_imagem`]);
-  return text || imageUrl ? { key, text, imageUrl } : null;
+  const metadata = Array.isArray(row.image_metadata) ? row.image_metadata.find((item: any) => item?.local === "alternativa" && item?.alternativa === key) : null;
+  return text || imageUrl ? { key, text, imageUrl, imageAlt: metadata?.texto_alternativo || null, imageCaption: metadata?.legenda || null } : null;
 }
 
 export function toInitialPublicQuestion(row: PublicQuestionRow, related: PublicQuestionRow[] = []) {
@@ -86,6 +87,7 @@ export function toInitialPublicQuestion(row: PublicQuestionRow, related: PublicQ
   const institution = String(row.instituição || row.banca || "Projeto Vetor");
   const contents = list(row.conteudos, row.conteudo);
   const subjects = list(row.assuntos, row.assunto);
+  const statementMetadata = Array.isArray(row.image_metadata) ? row.image_metadata.find((item: any) => item?.local === "enunciado" || item?.local === "contexto") : null;
   return {
     slug: row.public_slug as string,
     title: `Questão de ${discipline} — ${institution}${row.ano ? ` ${row.ano}` : ""}`,
@@ -100,6 +102,8 @@ export function toInitialPublicQuestion(row: PublicQuestionRow, related: PublicQ
     statementAfterImage: String(row.enunciado_pos_imagem || ""),
     formula: String(row.formula || ""),
     imageUrl: safePublicImageUrl(row.url_imagem),
+    imageAlt: statementMetadata?.texto_alternativo || null,
+    imageCaption: statementMetadata?.legenda || null,
     options: (["a", "b", "c", "d", "e"] as const).map((key) => optionDto(row, key)).filter(Boolean),
     related: related.filter(isPubliclyEligible).slice(0, 3).map((item) => ({
       slug: item.public_slug as string,
@@ -164,9 +168,11 @@ export function buildPublicAnswer(correctOption: string, selectedOption: string,
   return {
     isCorrect: selectedOption === correctOption,
     correctOption,
-    resolution: resolutionRows.map((block) => ({
-      type: block.tipo || "texto", text: block.texto || "", imageUrl: safePublicImageUrl(block.url_imagem), order: block.ordem || 0,
-    })),
+    resolution: resolutionRows.map((block) => {
+      let metadata: { alt?: string; caption?: string } = {};
+      if (block.tipo === "imagem" && block.texto) { try { metadata = JSON.parse(block.texto); } catch { metadata = {}; } }
+      return { type: block.tipo || "texto", text: block.tipo === "imagem" ? "" : block.texto || "", imageUrl: safePublicImageUrl(block.url_imagem), ...(block.tipo === "imagem" ? { imageAlt: metadata.alt || null, imageCaption: metadata.caption || null } : {}), order: block.ordem || 0 };
+    }),
   };
 }
 
