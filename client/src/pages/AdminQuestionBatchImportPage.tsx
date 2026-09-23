@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { getDifficultyLabel } from "@shared/difficulty";
 import { MAX_QUESTION_IMPORT_IMAGE_BYTES, MAX_QUESTION_IMPORT_JSON_BYTES, type NormalizedQuestionImageSlot, type QuestionImportPreviewItem } from "@shared/questionImportSchema";
+import { getExistingQuestionTaxonomy, normalizeQuestionTaxonomyKey } from "@shared/questionImportTaxonomy";
 
 type SlotRow = {
   id: string; import_key: string; slot_id: string; required: boolean; location: NormalizedQuestionImageSlot["local"];
@@ -21,32 +22,6 @@ type Draft = {
   id: string; status: string; format: string; source_name: string | null; validation_summary: any; result?: any;
   payload: { questions: QuestionImportPreviewItem["item"][]; previews: QuestionImportPreviewItem[] }; slots: SlotRow[];
 };
-
-type SuggestionRow = {
-  conteudo?: string | null;
-  conteudos?: string[] | null;
-  assunto?: string | null;
-  assuntos?: string[] | null;
-  assuntos_por_conteudo?: Array<{ conteudo?: string; assuntos?: string[] }> | null;
-};
-
-function normalizeKey(value: string) {
-  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
-}
-
-function getExistingTaxonomy(rows: SuggestionRow[]) {
-  const contents = new Set<string>();
-  const subjects = new Set<string>();
-  for (const row of rows) {
-    [row.conteudo, ...(row.conteudos ?? [])].filter(Boolean).forEach((value) => contents.add(normalizeKey(String(value))));
-    [row.assunto, ...(row.assuntos ?? [])].filter(Boolean).forEach((value) => subjects.add(normalizeKey(String(value))));
-    for (const group of row.assuntos_por_conteudo ?? []) {
-      if (group.conteudo) contents.add(normalizeKey(group.conteudo));
-      (group.assuntos ?? []).forEach((value) => subjects.add(normalizeKey(value)));
-    }
-  }
-  return { contents, subjects };
-}
 
 function formatBytes(bytes: number | null) {
   if (!bytes) return "—";
@@ -110,9 +85,9 @@ export default function AdminQuestionBatchImportPage() {
   const readyCount = slots.filter((slot) => slot.status === "ready").length;
   const questionsWithImages = new Set(slots.map((slot) => slot.import_key)).size;
   const invalidCount = previews.filter((preview) => preview.status !== "valida").length;
-  const existingTaxonomy = useMemo(() => getExistingTaxonomy((suggestionsQuery.data ?? []) as unknown as SuggestionRow[]), [suggestionsQuery.data]);
-  const newContents = useMemo(() => new Set(previews.flatMap((preview) => preview.item.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeKey(value))).map(normalizeKey))).size, [previews, existingTaxonomy]);
-  const newSubjects = useMemo(() => new Set(previews.flatMap((preview) => preview.item.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeKey(value))).map(normalizeKey))).size, [previews, existingTaxonomy]);
+  const existingTaxonomy = useMemo(() => getExistingQuestionTaxonomy(suggestionsQuery.data), [suggestionsQuery.data]);
+  const newContents = useMemo(() => new Set(previews.flatMap((preview) => preview.item.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
+  const newSubjects = useMemo(() => new Set(previews.flatMap((preview) => preview.item.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
   const busy = createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending;
   const slotsByQuestion = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
@@ -222,8 +197,8 @@ export default function AdminQuestionBatchImportPage() {
           </div>
           <p className="mt-3 line-clamp-2 text-sm">{question.enunciado}</p>
           <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-            <div><h3 className="font-semibold">Conteúdos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.conteudos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">Conteúdo novo: {value}</span>)}</div>
-            <div><h3 className="font-semibold">Assuntos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.assuntos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">Assunto novo: {value}</span>)}</div>
+            <div><h3 className="font-semibold">Conteúdos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.conteudos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeQuestionTaxonomyKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">Conteúdo novo: {value}</span>)}</div>
+            <div><h3 className="font-semibold">Assuntos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.assuntos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeQuestionTaxonomyKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">Assunto novo: {value}</span>)}</div>
           </div>
           <div className="mt-4"><h3 className="text-sm font-semibold">Alternativas <span className="font-normal text-slate-500 dark:text-slate-400">({preview.alternativas_preenchidas} preenchidas · correta: {question.alternativa_correta?.toUpperCase() || "—"})</span></h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{(["A", "B", "C", "D", "E"] as const).map((letter) => <div key={letter} className={`rounded-xl border p-3 text-sm ${question.alternativa_correta === letter.toLowerCase() ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950"}`}><strong>{letter}.</strong> <span className="whitespace-pre-wrap break-words">{question[letter] || "—"}</span>{(question[`${letter.toLowerCase()}_url_imagem` as "a_url_imagem" | "b_url_imagem" | "c_url_imagem" | "d_url_imagem" | "e_url_imagem"] || questionSlots.some((slot) => slot.location === "alternativa" && slot.alternative_key === letter.toLowerCase())) && <span className="ml-2 text-xs text-blue-700 dark:text-blue-300">Imagem da alternativa</span>}</div>)}</div></div>
           {preview.errors?.length > 0 && <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">{preview.errors.join(" ")}</div>}
