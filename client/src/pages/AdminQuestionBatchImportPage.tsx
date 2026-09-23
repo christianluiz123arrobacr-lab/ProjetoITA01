@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
-import { MAX_QUESTION_IMPORT_IMAGE_BYTES, MAX_QUESTION_IMPORT_JSON_BYTES, type NormalizedQuestionImageSlot } from "@shared/questionImportSchema";
+import { getDifficultyLabel } from "@shared/difficulty";
+import { MAX_QUESTION_IMPORT_IMAGE_BYTES, MAX_QUESTION_IMPORT_JSON_BYTES, type NormalizedQuestionImageSlot, type QuestionImportPreviewItem } from "@shared/questionImportSchema";
 
 type SlotRow = {
   id: string; import_key: string; slot_id: string; required: boolean; location: NormalizedQuestionImageSlot["local"];
@@ -18,8 +19,34 @@ type SlotRow = {
 
 type Draft = {
   id: string; status: string; format: string; source_name: string | null; validation_summary: any; result?: any;
-  payload: { questions: any[]; previews: any[] }; slots: SlotRow[];
+  payload: { questions: QuestionImportPreviewItem["item"][]; previews: QuestionImportPreviewItem[] }; slots: SlotRow[];
 };
+
+type SuggestionRow = {
+  conteudo?: string | null;
+  conteudos?: string[] | null;
+  assunto?: string | null;
+  assuntos?: string[] | null;
+  assuntos_por_conteudo?: Array<{ conteudo?: string; assuntos?: string[] }> | null;
+};
+
+function normalizeKey(value: string) {
+  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+function getExistingTaxonomy(rows: SuggestionRow[]) {
+  const contents = new Set<string>();
+  const subjects = new Set<string>();
+  for (const row of rows) {
+    [row.conteudo, ...(row.conteudos ?? [])].filter(Boolean).forEach((value) => contents.add(normalizeKey(String(value))));
+    [row.assunto, ...(row.assuntos ?? [])].filter(Boolean).forEach((value) => subjects.add(normalizeKey(String(value))));
+    for (const group of row.assuntos_por_conteudo ?? []) {
+      if (group.conteudo) contents.add(normalizeKey(group.conteudo));
+      (group.assuntos ?? []).forEach((value) => subjects.add(normalizeKey(value)));
+    }
+  }
+  return { contents, subjects };
+}
 
 function formatBytes(bytes: number | null) {
   if (!bytes) return "—";
@@ -61,6 +88,7 @@ export default function AdminQuestionBatchImportPage() {
   const bulkImagesInput = useRef<HTMLInputElement | null>(null);
   const utils = trpc.useUtils();
   const draftsQuery = trpc.admin.listQuestionImportDrafts.useQuery();
+  const suggestionsQuery = trpc.admin.getQuestionSuggestions.useQuery();
   const createDraft = trpc.admin.createQuestionImportDraft.useMutation();
   const prepareUpload = trpc.admin.prepareQuestionImportImageUpload.useMutation();
   const confirmUpload = trpc.admin.confirmQuestionImportImageUpload.useMutation();
@@ -81,7 +109,10 @@ export default function AdminQuestionBatchImportPage() {
   const pendingRequired = slots.filter((slot) => slot.required && slot.status !== "ready").length;
   const readyCount = slots.filter((slot) => slot.status === "ready").length;
   const questionsWithImages = new Set(slots.map((slot) => slot.import_key)).size;
-  const invalidCount = previews.filter((preview: any) => preview.status !== "valida").length;
+  const invalidCount = previews.filter((preview) => preview.status !== "valida").length;
+  const existingTaxonomy = useMemo(() => getExistingTaxonomy((suggestionsQuery.data ?? []) as unknown as SuggestionRow[]), [suggestionsQuery.data]);
+  const newContents = useMemo(() => new Set(previews.flatMap((preview) => preview.item.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeKey(value))).map(normalizeKey))).size, [previews, existingTaxonomy]);
+  const newSubjects = useMemo(() => new Set(previews.flatMap((preview) => preview.item.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeKey(value))).map(normalizeKey))).size, [previews, existingTaxonomy]);
   const busy = createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending;
   const slotsByQuestion = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
@@ -170,7 +201,8 @@ export default function AdminQuestionBatchImportPage() {
       </Card>
       {(draftsQuery.data?.length ?? 0) > 0 && <Card className="border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900"><h2 className="font-bold">Lotes salvos</h2><div className="mt-3 space-y-2">{draftsQuery.data?.map((item: any) => <button key={item.id} className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={async () => applyDraft(await utils.client.admin.getQuestionImportDraft.query({ batchId: item.id }))}><span>{item.source_name || item.format} · {item.validation_summary?.total ?? 0} questão(ões)</span><span className="text-xs font-bold uppercase">{item.status}</span></button>)}</div></Card>}
     </> : <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">{[["Questões", previews.length], ["Válidas", previews.length - invalidCount], ["Inválidas", invalidCount], ["Com imagens", questionsWithImages], ["Imagens vinculadas", readyCount], ["Obrigatórias pendentes", pendingRequired]].map(([label, value]) => <Card key={String(label)} className="border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></Card>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Questões", previews.length], ["Válidas", previews.length - invalidCount], ["Inválidas", invalidCount], ["Com imagens", questionsWithImages], ["Imagens vinculadas", readyCount], ["Obrigatórias pendentes", pendingRequired], ["Conteúdos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newContents], ["Assuntos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newSubjects]].map(([label, value]) => <Card key={String(label)} className="border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></Card>)}</div>
+      {suggestionsQuery.isError && <p className="text-sm text-amber-700 dark:text-amber-300">Não foi possível comparar conteúdos e assuntos com as questões cadastradas. Atualize a página para tentar novamente.</p>}
       <Card className="flex flex-wrap items-center gap-3 border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
         <input ref={bulkImagesInput} multiple type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { void uploadMany(Array.from(event.target.files ?? [])); event.target.value = ""; }}/>
         <Button variant="outline" className="rounded-2xl" onClick={() => bulkImagesInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4"/>Associar vários arquivos</Button>
@@ -178,9 +210,22 @@ export default function AdminQuestionBatchImportPage() {
         <Button variant="outline" className="rounded-2xl" onClick={() => { setDraft(null); setRawJson(""); setNotice("Rascunho salvo para continuar depois."); }}><Save className="mr-2 h-4 w-4"/>Salvar e sair</Button>
         {draft.status === "draft" && <Button variant="outline" className="rounded-2xl text-red-700" onClick={async () => { await cancelDraft.mutateAsync({ batchId: draft.id }); setDraft(null); await draftsQuery.refetch(); }}><Trash2 className="mr-2 h-4 w-4"/>Cancelar lote</Button>}
       </Card>
-      <div className="space-y-4">{previews.map((preview: any) => {
+      <div className="space-y-4">{previews.map((preview) => {
         const question = preview.item; const key = question.chave_importacao || question.id_importacao || question.import_hash; const questionSlots = slotsByQuestion.get(key) ?? []; const state = statusLabel(preview, questionSlots);
-        return <Card key={key} className="border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold dark:bg-slate-800">{state}</span><code className="text-xs">{key}</code><span className="text-sm text-slate-500">{question.disciplina} · {question.assuntos?.[0] || "Sem assunto"} · {question.banca || "Sem banca"} · {question.ano || "Sem ano"}</span></div><p className="mt-3 line-clamp-2 text-sm">{question.enunciado}</p>
+        return <Card key={`${preview.index}-${key}`} className="border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold dark:bg-slate-800">{state}</span><code className="text-xs">{key}</code><span className="text-sm text-slate-500 dark:text-slate-400">{question.disciplina || "Sem disciplina"}</span></div>
+          <div className="mt-3 grid gap-2 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
+            <p><strong>Dificuldade:</strong> {getDifficultyLabel(question.dificuldade) || "—"}</p>
+            <p><strong>Ano:</strong> {question.ano ?? "—"}</p>
+            <p><strong>Prova:</strong> {question.instituição || question.banca || "—"}</p>
+            <p><strong>Banca:</strong> {question.banca || "—"}</p>
+          </div>
+          <p className="mt-3 line-clamp-2 text-sm">{question.enunciado}</p>
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+            <div><h3 className="font-semibold">Conteúdos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.conteudos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">Conteúdo novo: {value}</span>)}</div>
+            <div><h3 className="font-semibold">Assuntos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.assuntos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">Assunto novo: {value}</span>)}</div>
+          </div>
+          <div className="mt-4"><h3 className="text-sm font-semibold">Alternativas <span className="font-normal text-slate-500 dark:text-slate-400">({preview.alternativas_preenchidas} preenchidas · correta: {question.alternativa_correta?.toUpperCase() || "—"})</span></h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{(["A", "B", "C", "D", "E"] as const).map((letter) => <div key={letter} className={`rounded-xl border p-3 text-sm ${question.alternativa_correta === letter.toLowerCase() ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950"}`}><strong>{letter}.</strong> <span className="whitespace-pre-wrap break-words">{question[letter] || "—"}</span>{(question[`${letter.toLowerCase()}_url_imagem` as "a_url_imagem" | "b_url_imagem" | "c_url_imagem" | "d_url_imagem" | "e_url_imagem"] || questionSlots.some((slot) => slot.location === "alternativa" && slot.alternative_key === letter.toLowerCase())) && <span className="ml-2 text-xs text-blue-700 dark:text-blue-300">Imagem da alternativa</span>}</div>)}</div></div>
           {preview.errors?.length > 0 && <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">{preview.errors.join(" ")}</div>}
           {questionSlots.length > 0 && <div className="mt-4 grid gap-3 lg:grid-cols-2">{questionSlots.map((slot) => { const values = metadata[slot.id] ?? { alt: slot.alt_text ?? "", caption: slot.caption ?? "" }; return <div key={slot.id} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void uploadFile(slot, file); }} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
             <div className="flex items-start gap-3">{slot.public_url ? <img src={slot.public_url} alt={slot.alt_text} className="h-24 w-24 rounded-xl bg-white object-contain"/> : <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300"><FileImage className="h-7 w-7 text-slate-400"/></div>}<div className="min-w-0 flex-1"><p className="font-bold">{slotLabel(slot)} {slot.required && <span className="text-red-600">*</span>}</p><p className="text-xs text-slate-500">slot: {slot.slot_id}</p><p className="truncate text-xs text-slate-500">esperado: {slot.expected_filename || "associação manual"}</p><p className="mt-1 text-xs">{slot.original_name || "Nenhum arquivo"} · {formatBytes(slot.byte_size)} · {slot.mime_type || "—"}{slot.width ? ` · ${slot.width}×${slot.height}` : ""}</p><p className={`mt-1 text-xs font-bold ${slot.status === "ready" ? "text-emerald-600" : "text-amber-600"}`}>{slot.status === "ready" ? "Concluído" : "Pendente"}</p></div></div>

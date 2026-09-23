@@ -2255,15 +2255,22 @@ export const appRouter = router({
 
 
     getQuestionSuggestions: adminOrEditorProcedure.query(async () => {
-      const { data, error } = await supabaseAdmin
-        .from("questoes")
-        .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição");
+      const pageSize = 1000;
+      const suggestions = [] as Record<string, unknown>[];
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabaseAdmin
+          .from("questoes")
+          .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição")
+          .order("id")
+          .range(from, from + pageSize - 1);
 
-      if (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        if (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+        suggestions.push(...((data ?? []) as unknown as Record<string, unknown>[]));
+        if (!data || data.length < pageSize) break;
       }
-
-      return data ?? [];
+      return suggestions;
     }),
 
     getQuestionById: adminOrEditorProcedure
