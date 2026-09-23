@@ -70,6 +70,7 @@ export default function AdminQuestionBatchImportPage() {
   const removeUpload = trpc.admin.removeQuestionImportImageUpload.useMutation();
   const updateMetadata = trpc.admin.updateQuestionImportImageMetadata.useMutation();
   const cancelDraft = trpc.admin.cancelQuestionImportDraft.useMutation();
+  const removeInvalidQuestion = trpc.admin.removeInvalidQuestionFromImportDraft.useMutation();
   const finalizeDraft = trpc.admin.finalizeQuestionImportDraft.useMutation();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [rawJson, setRawJson] = useState("");
@@ -81,14 +82,16 @@ export default function AdminQuestionBatchImportPage() {
 
   const previews = draft?.payload?.previews ?? [];
   const slots = draft?.slots ?? [];
-  const pendingRequired = slots.filter((slot) => slot.required && slot.status !== "ready").length;
+  const validKeys = new Set(previews.filter((preview) => preview.status === "valida").map((preview) => preview.item.chave_importacao || preview.item.id_importacao || preview.item.import_hash));
+  const pendingRequired = slots.filter((slot) => validKeys.has(slot.import_key) && slot.required && slot.status !== "ready").length;
   const readyCount = slots.filter((slot) => slot.status === "ready").length;
   const questionsWithImages = new Set(slots.map((slot) => slot.import_key)).size;
   const invalidCount = previews.filter((preview) => preview.status !== "valida").length;
+  const validCount = previews.length - invalidCount;
   const existingTaxonomy = useMemo(() => getExistingQuestionTaxonomy(suggestionsQuery.data), [suggestionsQuery.data]);
   const newContents = useMemo(() => new Set(previews.flatMap((preview) => preview.item.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
   const newSubjects = useMemo(() => new Set(previews.flatMap((preview) => preview.item.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
-  const busy = createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending;
+  const busy = createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending || removeInvalidQuestion.isPending;
   const slotsByQuestion = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
     for (const slot of slots) map.set(slot.import_key, [...(map.get(slot.import_key) ?? []), slot]);
@@ -154,9 +157,20 @@ export default function AdminQuestionBatchImportPage() {
     if (!draft) return;
     setError("");
     try {
+      if (invalidCount > 0 && !window.confirm(`Este lote contém ${invalidCount} questão(ões) inválida(s). Importar somente as ${validCount} válida(s) e deixar as inválidas de fora?`)) return;
       const result = await finalizeDraft.mutateAsync({ batchId: draft.id }); await refreshDraft();
-      setNotice(`Importação concluída: ${result.createdCount} criada(s), ${result.duplicatedCount} já existente(s), ${result.failedCount} falha(s).`); await draftsQuery.refetch();
+      setNotice(`Importação concluída: ${result.createdCount} criada(s), ${result.duplicatedCount} já existente(s), ${result.skippedInvalidCount} inválida(s) ignorada(s), ${result.failedCount} falha(s).`); await draftsQuery.refetch();
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível concluir a importação."); }
+  }
+
+  async function removeInvalid(index: number) {
+    if (!draft || !window.confirm("Remover esta questão inválida do rascunho?")) return;
+    setError("");
+    try {
+      applyDraft(await removeInvalidQuestion.mutateAsync({ batchId: draft.id, questionIndex: index }));
+      setNotice("Questão inválida removida do rascunho.");
+      await draftsQuery.refetch();
+    } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível remover a questão."); }
   }
 
   return <AdminGuard><AdminLayout title="Importar lote JSON" subtitle="Valide o lote, vincule imagens e finalize de forma segura e idempotente.">
@@ -181,7 +195,7 @@ export default function AdminQuestionBatchImportPage() {
       <Card className="flex flex-wrap items-center gap-3 border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
         <input ref={bulkImagesInput} multiple type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { void uploadMany(Array.from(event.target.files ?? [])); event.target.value = ""; }}/>
         <Button variant="outline" className="rounded-2xl" onClick={() => bulkImagesInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4"/>Associar vários arquivos</Button>
-        <Button className="rounded-2xl" disabled={busy || pendingRequired > 0 || invalidCount > 0 || draft.status === "completed"} onClick={() => void finish()}><CheckCircle2 className="mr-2 h-4 w-4"/>{draft.status === "completed" ? "Lote concluído" : "Concluir importação"}</Button>
+        <Button className="rounded-2xl" disabled={busy || validCount === 0 || pendingRequired > 0 || draft.status === "completed"} onClick={() => void finish()}><CheckCircle2 className="mr-2 h-4 w-4"/>{draft.status === "completed" ? "Lote concluído" : invalidCount > 0 ? `Importar ${validCount} válida(s)` : "Concluir importação"}</Button>
         <Button variant="outline" className="rounded-2xl" onClick={() => { setDraft(null); setRawJson(""); setNotice("Rascunho salvo para continuar depois."); }}><Save className="mr-2 h-4 w-4"/>Salvar e sair</Button>
         {draft.status === "draft" && <Button variant="outline" className="rounded-2xl text-red-700" onClick={async () => { await cancelDraft.mutateAsync({ batchId: draft.id }); setDraft(null); await draftsQuery.refetch(); }}><Trash2 className="mr-2 h-4 w-4"/>Cancelar lote</Button>}
       </Card>
@@ -202,6 +216,7 @@ export default function AdminQuestionBatchImportPage() {
           </div>
           <div className="mt-4"><h3 className="text-sm font-semibold">Alternativas <span className="font-normal text-slate-500 dark:text-slate-400">({preview.alternativas_preenchidas} preenchidas · correta: {question.alternativa_correta?.toUpperCase() || "—"})</span></h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{(["A", "B", "C", "D", "E"] as const).map((letter) => <div key={letter} className={`rounded-xl border p-3 text-sm ${question.alternativa_correta === letter.toLowerCase() ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950"}`}><strong>{letter}.</strong> <span className="whitespace-pre-wrap break-words">{question[letter] || "—"}</span>{(question[`${letter.toLowerCase()}_url_imagem` as "a_url_imagem" | "b_url_imagem" | "c_url_imagem" | "d_url_imagem" | "e_url_imagem"] || questionSlots.some((slot) => slot.location === "alternativa" && slot.alternative_key === letter.toLowerCase())) && <span className="ml-2 text-xs text-blue-700 dark:text-blue-300">Imagem da alternativa</span>}</div>)}</div></div>
           {preview.errors?.length > 0 && <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">{preview.errors.join(" ")}</div>}
+          {preview.status === "invalida" && draft.status === "draft" && <Button variant="outline" size="sm" className="mt-3 text-red-700 dark:text-red-300" disabled={removeInvalidQuestion.isPending} onClick={() => void removeInvalid(preview.index)}><Trash2 className="mr-1 h-3 w-3"/>Remover questão inválida</Button>}
           {questionSlots.length > 0 && <div className="mt-4 grid gap-3 lg:grid-cols-2">{questionSlots.map((slot) => { const values = metadata[slot.id] ?? { alt: slot.alt_text ?? "", caption: slot.caption ?? "" }; return <div key={slot.id} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void uploadFile(slot, file); }} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
             <div className="flex items-start gap-3">{slot.public_url ? <img src={slot.public_url} alt={slot.alt_text} className="h-24 w-24 rounded-xl bg-white object-contain"/> : <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300"><FileImage className="h-7 w-7 text-slate-400"/></div>}<div className="min-w-0 flex-1"><p className="font-bold">{slotLabel(slot)} {slot.required && <span className="text-red-600">*</span>}</p><p className="text-xs text-slate-500">slot: {slot.slot_id}</p><p className="truncate text-xs text-slate-500">esperado: {slot.expected_filename || "associação manual"}</p><p className="mt-1 text-xs">{slot.original_name || "Nenhum arquivo"} · {formatBytes(slot.byte_size)} · {slot.mime_type || "—"}{slot.width ? ` · ${slot.width}×${slot.height}` : ""}</p><p className={`mt-1 text-xs font-bold ${slot.status === "ready" ? "text-emerald-600" : "text-amber-600"}`}>{slot.status === "ready" ? "Concluído" : "Pendente"}</p></div></div>
             <label className="mt-3 block text-xs font-bold">Texto alternativo<input value={values.alt} onChange={(event) => setMetadata((prev) => ({ ...prev, [slot.id]: { ...values, alt: event.target.value } }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900" maxLength={500}/></label>

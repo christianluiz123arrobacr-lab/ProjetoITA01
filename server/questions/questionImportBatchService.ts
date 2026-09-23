@@ -4,9 +4,12 @@ import { supabaseAdmin } from "../_core/supabaseAdmin.js";
 import {
   MAX_QUESTION_IMPORT_IMAGE_BYTES,
   parseQuestionImportJsonText,
+  summarizeQuestionImport,
   validateQuestionImportItem,
   type NormalizedQuestionImportItem,
+  type QuestionImportPreviewItem,
 } from "../../shared/questionImportSchema.js";
+import { selectValidQuestionImportItems } from "../../shared/questionImportSelection.js";
 import { applyReadyImageSlots, inspectQuestionImportImage, sanitizeImportFileName, type QuestionImportImageType, type ReadyImportImageSlot } from "./questionImportImages.js";
 
 const BATCH_SELECT = "id,created_by,status,format,source_name,payload,validation_summary,result,created_at,updated_at,completed_at,expires_at";
@@ -75,6 +78,44 @@ export async function listQuestionImportDrafts(userId: string) {
   return data ?? [];
 }
 
+export async function removeInvalidQuestionFromImportDraft(batchId: string, questionIndex: number, userId: string) {
+  const batch = await loadOwnedBatch(batchId, userId);
+  const questions = batch.payload?.questions as NormalizedQuestionImportItem[] | undefined;
+  const previews = batch.payload?.previews as QuestionImportPreviewItem[] | undefined;
+  if (!Array.isArray(questions) || !Array.isArray(previews) || questions.length !== previews.length) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "O rascunho de importação está inconsistente." });
+  }
+  const position = previews.findIndex((preview) => preview.index === questionIndex);
+  if (position < 0 || previews[position].status !== "invalida") {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Somente uma questão inválida deste rascunho pode ser removida." });
+  }
+  const question = questions[position];
+  const importKey = question.chave_importacao || question.id_importacao || question.import_hash;
+  if (questions.some((other, index) => index !== position && (other.chave_importacao || other.id_importacao || other.import_hash) === importKey)) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Há outra questão com a mesma chave neste lote; corrija o JSON antes de remover." });
+  }
+  const { data: slots, error: slotsError } = await supabaseAdmin.from("question_import_image_slots").select("bucket,storage_path").eq("batch_id", batchId).eq("import_key", importKey);
+  if (slotsError) throw dbError("Não foi possível consultar as imagens da questão.", slotsError);
+  for (const slot of slots ?? []) {
+    if (slot.bucket && slot.storage_path) {
+      const { error } = await supabaseAdmin.storage.from(slot.bucket).remove([slot.storage_path]);
+      if (error) throw dbError("Não foi possível remover a imagem temporária da questão.", error);
+    }
+  }
+  const { error: deleteError } = await supabaseAdmin.from("question_import_image_slots").delete().eq("batch_id", batchId).eq("import_key", importKey);
+  if (deleteError) throw dbError("Não foi possível remover os slots da questão.", deleteError);
+  const nextQuestions = questions.filter((_, index) => index !== position);
+  const nextPreviews = previews.filter((_, index) => index !== position);
+  const { error: updateError } = await supabaseAdmin.from("question_import_batches").update({
+    payload: { questions: nextQuestions, previews: nextPreviews },
+    validation_summary: summarizeQuestionImport(nextPreviews),
+    updated_at: new Date().toISOString(),
+  }).eq("id", batchId).eq("created_by", userId).eq("status", "draft");
+  if (updateError) throw dbError("Não foi possível atualizar o rascunho.", updateError);
+  await supabaseAdmin.from("admin_logs").insert({ actor_user_id: userId, action: "question_import_invalid_removed", entity_type: "question_import_batch", entity_id: batchId, description: "Questão inválida removida do rascunho.", level: "info", metadata: { questionIndex } });
+  return getQuestionImportDraft(batchId, userId);
+}
+
 export async function prepareQuestionImportSlotUpload(input: { batchId: string; slotId: string; importKey: string; originalName: string; contentType: QuestionImportImageType; byteSize: number }, userId: string) {
   await loadOwnedBatch(input.batchId, userId);
   if (input.byteSize < 1 || input.byteSize > MAX_QUESTION_IMPORT_IMAGE_BYTES) throw new TRPCError({ code: "BAD_REQUEST", message: "A imagem deve ter no máximo 3 MB." });
@@ -136,21 +177,48 @@ export async function updateQuestionImportSlotMetadata(input: { batchId: string;
 
 export async function prepareQuestionImportFinalization(batchId: string, userId: string) {
   const batch = await loadOwnedBatch(batchId, userId, false);
-  if (batch.status === "completed") return { batch, questions: [] as NormalizedQuestionImportItem[] };
+  if (batch.status === "completed") return { batch, questions: [] as NormalizedQuestionImportItem[], skippedInvalidCount: 0, skippedImportKeys: [] as string[] };
   if (batch.status !== "draft") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Este lote não pode ser finalizado agora." });
+  const previews = batch.payload?.previews as QuestionImportPreviewItem[] | undefined;
+  const allQuestions = batch.payload?.questions as NormalizedQuestionImportItem[] | undefined;
+  if (!Array.isArray(previews) || !Array.isArray(allQuestions)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "O rascunho de importação está inconsistente." });
+  if (previews.length !== allQuestions.length) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "O rascunho de importação está inconsistente." });
+  const { valid, skipped } = selectValidQuestionImportItems(previews, allQuestions);
+  if (!valid.length) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Não há questões válidas para importar." });
+  const validKeys = new Set(valid.map((question) => question.chave_importacao || question.id_importacao || question.import_hash));
   const { data: slots, error } = await supabaseAdmin.from("question_import_image_slots").select(SLOT_SELECT).eq("batch_id", batchId);
   if (error) throw dbError("Não foi possível validar os slots.", error);
-  const pending = (slots ?? []).filter((slot: any) => slot.required && slot.status !== "ready");
+  const pending = (slots ?? []).filter((slot: any) => validKeys.has(slot.import_key) && slot.required && slot.status !== "ready");
   if (pending.length) throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Faltam ${pending.length} imagem(ns) obrigatória(s): ${pending.map((slot: any) => `${slot.import_key}/${slot.slot_id}`).join(", ")}.` });
-  const ready = (slots ?? []).filter((slot: any) => slot.status === "ready").map((slot: any): ReadyImportImageSlot => ({
+  const ready = (slots ?? []).filter((slot: any) => validKeys.has(slot.import_key) && slot.status === "ready").map((slot: any): ReadyImportImageSlot => ({
     slot_id: slot.slot_id, obrigatoria: slot.required, local: slot.location, alternativa: slot.alternative_key,
     nome_arquivo_esperado: slot.expected_filename, descricao: slot.description, texto_alternativo: slot.alt_text, legenda: slot.caption,
     import_key: slot.import_key, public_url: slot.public_url,
   }));
-  const questions = ((batch.payload?.questions ?? []) as NormalizedQuestionImportItem[]).map((question) => applyReadyImageSlots(question, ready));
+  const questions = valid.map((question) => applyReadyImageSlots(question, ready));
   const invalid = questions.map((question) => validateQuestionImportItem(question)).filter((preview) => preview.status === "invalida");
   if (invalid.length) throw new TRPCError({ code: "PRECONDITION_FAILED", message: `O lote contém ${invalid.length} questão(ões) inválida(s).` });
-  return { batch, questions };
+  const skippedImportKeys = allQuestions.filter((question, index) => skipped.includes(previews[index].index))
+    .map((question) => question.chave_importacao || question.id_importacao || question.import_hash)
+    .filter((key) => !validKeys.has(key));
+  return { batch, questions, skippedInvalidCount: skipped.length, skippedImportKeys };
+}
+
+export async function cleanupSkippedQuestionImportImages(batchId: string, importKeys: string[], userId: string) {
+  if (!importKeys.length) return;
+  await loadOwnedBatch(batchId, userId);
+  const { data: slots, error } = await supabaseAdmin.from("question_import_image_slots")
+    .select("bucket,storage_path").eq("batch_id", batchId).in("import_key", importKeys);
+  if (error) throw dbError("Não foi possível consultar as imagens ignoradas.", error);
+  for (const slot of slots ?? []) {
+    if (slot.bucket && slot.storage_path) {
+      const { error: removeError } = await supabaseAdmin.storage.from(slot.bucket).remove([slot.storage_path]);
+      if (removeError) throw dbError("Não foi possível limpar a imagem ignorada.", removeError);
+    }
+  }
+  const { error: deleteError } = await supabaseAdmin.from("question_import_image_slots")
+    .delete().eq("batch_id", batchId).in("import_key", importKeys);
+  if (deleteError) throw dbError("Não foi possível limpar os slots ignorados.", deleteError);
 }
 
 export async function completeQuestionImportDraft(batchId: string, userId: string, result: unknown) {

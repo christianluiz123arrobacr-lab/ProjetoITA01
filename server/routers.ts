@@ -52,6 +52,7 @@ import { lessonRouter } from "./lessons/lessonRouter.js";
 import { getPlatformAccessDecision } from "./_core/platformAccess.js";
 import {
   cancelQuestionImportDraft,
+  cleanupSkippedQuestionImportImages,
   cleanupExpiredQuestionImportDrafts,
   completeQuestionImportDraft,
   confirmQuestionImportSlotUpload,
@@ -60,6 +61,7 @@ import {
   listQuestionImportDrafts,
   prepareQuestionImportFinalization,
   prepareQuestionImportSlotUpload,
+  removeInvalidQuestionFromImportDraft,
   removeQuestionImportSlotUpload,
   updateQuestionImportSlotMetadata,
 } from "./questions/questionImportBatchService.js";
@@ -2387,6 +2389,10 @@ export const appRouter = router({
       .input(z.object({ batchId: z.string().uuid() }))
       .mutation(({ ctx, input }) => cancelQuestionImportDraft(input.batchId, ctx.user.id)),
 
+    removeInvalidQuestionFromImportDraft: adminProcedure
+      .input(z.object({ batchId: z.string().uuid(), questionIndex: z.number().int().nonnegative() }))
+      .mutation(({ ctx, input }) => removeInvalidQuestionFromImportDraft(input.batchId, input.questionIndex, ctx.user.id)),
+
     cleanupExpiredQuestionImportDrafts: adminProcedure
       .mutation(({ ctx }) => cleanupExpiredQuestionImportDrafts(ctx.user.id)),
 
@@ -2395,7 +2401,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const prepared = await prepareQuestionImportFinalization(input.batchId, ctx.user.id);
         if (prepared.batch.status === "completed" && prepared.batch.result) return prepared.batch.result;
-        const result = await executePreparedQuestionImport(questionImportPayloadSchema.shape.questions.parse(prepared.questions), input.batchId, ctx.user.id);
+        await cleanupSkippedQuestionImportImages(input.batchId, prepared.skippedImportKeys, ctx.user.id);
+        const result = {
+          ...await executePreparedQuestionImport(questionImportPayloadSchema.shape.questions.parse(prepared.questions), input.batchId, ctx.user.id),
+          skippedInvalidCount: prepared.skippedInvalidCount,
+        };
         await completeQuestionImportDraft(input.batchId, ctx.user.id, result);
         return result;
       }),
