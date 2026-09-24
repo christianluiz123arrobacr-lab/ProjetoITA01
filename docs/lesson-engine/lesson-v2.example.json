@@ -1,0 +1,83 @@
+{
+  "metadata": {
+    "title": "Bases da Cinemática — estrutura v2",
+    "slug": "bases-da-cinematica-v2",
+    "description": "Exemplo do formato estruturado v2.",
+    "discipline": "Física",
+    "content": "Cinemática",
+    "subject": "Movimento Uniforme",
+    "level": "Intermediário",
+    "displayOrder": 20
+  },
+  "lesson": {
+    "schemaVersion": 2,
+    "blocks": [
+      {
+        "id": "conceitos-iniciais",
+        "type": "section",
+        "visible": true,
+        "title": "Conceitos iniciais",
+        "description": "Organize ideias relacionadas em uma seção com âncora estável.",
+        "anchor": "conceitos-iniciais",
+        "blocks": [
+          {
+            "id": "conceitos-grid",
+            "type": "grid",
+            "visible": true,
+            "preset": "one_third_two_thirds",
+            "columns": [
+              {
+                "id": "conceitos-coluna-a",
+                "blocks": [
+                  {
+                    "id": "referencial",
+                    "type": "highlight",
+                    "visible": true,
+                    "variant": "key_concept",
+                    "title": "Referencial",
+                    "content": "Movimento e repouso dependem do **referencial**."
+                  }
+                ]
+              },
+              {
+                "id": "conceitos-coluna-b",
+                "blocks": [
+                  {
+                    "id": "velocidade-media-card",
+                    "type": "formula_card",
+                    "visible": true,
+                    "title": "Velocidade média",
+                    "latex": "v_m = \\frac{\\Delta s}{\\Delta t}",
+                    "description": "Relaciona o deslocamento ao intervalo de tempo.",
+                    "terms": [
+                      { "symbol": "v_m", "meaning": "velocidade média", "unit": "m/s" },
+                      { "symbol": "\\Delta s", "meaning": "deslocamento", "unit": "m" },
+                      { "symbol": "\\Delta t", "meaning": "intervalo de tempo", "unit": "s" }
+                    ],
+                    "siUnit": "m/s",
+                    "observations": ["Use unidades compatíveis antes de calcular."],
+                    "validityConditions": ["O intervalo de tempo deve ser diferente de zero."],
+                    "variant": "primary"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "demonstracao-velocidade",
+        "type": "derivation",
+        "visible": true,
+        "title": "Da definição ao cálculo",
+        "introduction": "A razão compara duas variações medidas no mesmo intervalo.",
+        "initiallyOpen": false,
+        "steps": [
+          { "id": "passo-identificar", "title": "Identifique as variações", "text": "Determine $\\Delta s$ e $\\Delta t$." },
+          { "id": "passo-substituir", "title": "Substitua", "latex": "v_m = \\frac{120}{10} = 12\\,m/s" }
+        ],
+        "conclusion": "A velocidade média é $12\\,m/s$."
+      }
+    ]
+  }
+}

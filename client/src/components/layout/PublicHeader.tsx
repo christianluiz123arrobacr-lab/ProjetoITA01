@@ -20,17 +20,17 @@ export default function PublicHeader() {
   const closeMenu = () => setMenuOpen(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/90 text-white shadow-xl backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 text-white shadow-sm backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-6">
         <Link href={isAuthenticated ? "/plataforma" : "/"}>
           <a
             onClick={closeMenu}
             className="flex items-center gap-3 transition hover:opacity-90"
           >
-            <img src="/brand/projeto-vetor-logo.svg" alt="Projeto Vetor" className="h-10 w-10 object-contain drop-shadow-lg" />
+            <img src="/brand/projeto-vetor-logo.svg" alt="Projeto Vetor" className="h-10 w-10 object-contain" />
 
             <div className="leading-tight">
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-blue-300">
                 Projeto Vetor
               </p>
               <p className="text-xs font-semibold text-slate-400">
@@ -69,18 +69,18 @@ export default function PublicHeader() {
 
         <div className="hidden items-center gap-3 md:flex">
           {loading ? (
-            <div className="h-10 w-36 animate-pulse rounded-2xl bg-white/[0.08]" />
+            <div className="h-10 w-36 animate-pulse rounded-lg bg-white/[0.08]" />
           ) : isAuthenticated ? (
             <>
               <Link href="/plataforma">
-                <a className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-cyan-200">
+                <a className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-black text-white transition hover:bg-blue-500">
                   Ir para plataforma
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </Link>
 
               <Link href="/perfil">
-                <a className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-white transition hover:bg-white/[0.1]">
+                <a className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-white transition hover:bg-white/[0.1]">
                   <UserCircle2 className="h-5 w-5" />
                 </a>
               </Link>
@@ -88,14 +88,14 @@ export default function PublicHeader() {
           ) : (
             <>
               <Link href="/login">
-                <a className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-2.5 text-sm font-black text-white transition hover:bg-white/[0.1]">
+                <a className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-5 py-2.5 text-sm font-black text-white transition hover:bg-white/[0.1]">
                   <LogIn className="h-4 w-4" />
                   Entrar
                 </a>
               </Link>
 
               <Link href="/cadastro">
-                <a className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-cyan-200">
+                <a className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-black text-white transition hover:bg-blue-500">
                   Criar conta
                   <ArrowRight className="h-4 w-4" />
                 </a>
@@ -107,7 +107,7 @@ export default function PublicHeader() {
         <button
           type="button"
           onClick={() => setMenuOpen((current) => !current)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-white transition hover:bg-white/[0.1] md:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-white transition hover:bg-white/[0.1] md:hidden"
           aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
         >
           {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -140,13 +140,13 @@ export default function PublicHeader() {
             </Link>
 
             {loading ? (
-              <div className="h-12 animate-pulse rounded-2xl bg-white/[0.08]" />
+              <div className="h-12 animate-pulse rounded-lg bg-white/[0.08]" />
             ) : isAuthenticated ? (
               <>
                 <Link href="/plataforma">
                   <a
                     onClick={closeMenu}
-                    className="flex items-center gap-3 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+                    className="flex items-center gap-3 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-500"
                   >
                     <BookOpen className="h-4 w-4" />
                     Ir para plataforma
@@ -156,7 +156,7 @@ export default function PublicHeader() {
                 <Link href="/perfil">
                   <a
                     onClick={closeMenu}
-                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white transition hover:bg-white/[0.1]"
+                    className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white transition hover:bg-white/[0.1]"
                   >
                     <UserCircle2 className="h-4 w-4" />
                     Ver perfil
@@ -168,7 +168,7 @@ export default function PublicHeader() {
                 <Link href="/login">
                   <a
                     onClick={closeMenu}
-                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white transition hover:bg-white/[0.1]"
+                    className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white transition hover:bg-white/[0.1]"
                   >
                     <LogIn className="h-4 w-4" />
                     Entrar
@@ -178,7 +178,7 @@ export default function PublicHeader() {
                 <Link href="/cadastro">
                   <a
                     onClick={closeMenu}
-                    className="flex items-center gap-3 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+                    className="flex items-center gap-3 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-500"
                   >
                     <ArrowRight className="h-4 w-4" />
                     Criar conta

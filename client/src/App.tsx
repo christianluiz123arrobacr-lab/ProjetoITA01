@@ -1,3 +1,4 @@
+import ReferralPage from "./pages/ReferralPage";
 import { Suspense, useEffect, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { Redirect, Route, Switch, useLocation } from "wouter";
@@ -8,8 +9,12 @@ import NotFound from "@/pages/NotFound";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import SubscriptionGuard from "./components/SubscriptionGuard";
+import { isAdminPath, normalizeLegacyAdminPath } from "./lib/privateRouteAccess";
 import StudentSidebar from "./components/layout/StudentSidebar";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import LegalAcceptanceGuard from "./components/legal/LegalAcceptanceGuard";
+import LegalFooter from "./components/legal/LegalFooter";
+import LegalPage from "./pages/LegalPage";
 
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import {
@@ -80,13 +85,29 @@ const AdminProfilesPage = lazyWithRetry(
   "AdminProfilesPage",
   () => import("./pages/AdminProfilesPage")
 );
-const AdminSpatialGeometryPrototypePage = lazyWithRetry(
-  "AdminSpatialGeometryPrototypePage",
-  () => import("./pages/AdminSpatialGeometryPrototypePage")
+const AdminGestureLabPage = lazyWithRetry(
+  "AdminGestureLabPage",
+  () => import("./pages/AdminGestureLabPage")
+);
+const AdminSpatialGestureWorkspacePage = lazyWithRetry(
+  "AdminSpatialGestureWorkspacePage",
+  () => import("./pages/AdminSpatialGestureWorkspacePage")
 );
 const AdminMolecularGeometryPrototypePage = lazyWithRetry(
   "AdminMolecularGeometryPrototypePage",
   () => import("./pages/AdminMolecularGeometryPrototypePage")
+);
+const AdminLessonsPage = lazyWithRetry(
+  "AdminLessonsPage",
+  () => import("./pages/AdminLessonsPage")
+);
+const AdminLessonEditorPage = lazyWithRetry(
+  "AdminLessonEditorPage",
+  () => import("./pages/AdminLessonEditorPage")
+);
+const LessonPage = lazyWithRetry(
+  "LessonPage",
+  () => import("./pages/LessonPage")
 );
 
 import Home from "./pages/Home";
@@ -286,7 +307,7 @@ import FisicaModernaTopicAtomo from "./pages/FisicaModernaTopicAtomo";
 import FisicaModernaTopicParticulas from "./pages/FisicaModernaTopicParticulas";
 import FisicaModernaTopicAplicacoes from "./pages/FisicaModernaTopicAplicacoes";
 
-type RootAccessState = "checking" | "allowed" | "blocked" | "public";
+type RootAccessState = "checking" | "allowed" | "blocked" | "public" | "error";
 
 function RootGate() {
   const { isAuthenticated, loading: authLoading, user } = useSupabaseAuth();
@@ -327,8 +348,8 @@ function RootGate() {
       } catch (error) {
         console.warn("Erro inesperado na entrada do site:", error);
 
-        if (!cancelled && !cached) {
-          setAccessState("blocked");
+        if (!cancelled && cached?.status !== "allowed") {
+          setAccessState("error");
         }
       }
     }
@@ -362,29 +383,44 @@ function RootGate() {
     return <Redirect to="/assinatura-pendente" />;
   }
 
+  if (accessState === "error") {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-3xl border border-amber-300/30 bg-white/[0.06] p-8 text-center shadow-2xl">
+          <h1 className="text-xl font-black">Não foi possível verificar seu acesso</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-300">
+            O serviço está temporariamente indisponível. Nenhuma alteração foi feita na sua conta.
+          </p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-6 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950">
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return <Landing />;
+}
+
+function MySubscriptionRoute() {
+  const { isAuthenticated, loading } = useSupabaseAuth();
+  if (loading) return <p role="status" className="p-8">Carregando...</p>;
+  if (!isAuthenticated) return <Redirect to="/login" />;
+  return <MinhaAssinaturaPage />;
 }
 
 function PrivateRouter() {
   const [location] = useLocation();
-  const legacyAdminPrefix = "/plataforma/admin";
-  const isLegacyAdminRoute =
-    location === legacyAdminPrefix ||
-    location.startsWith(`${legacyAdminPrefix}/`);
-  const isAdminRoute = location.startsWith("/admin") || isLegacyAdminRoute;
+  const normalizedLegacyAdminPath = normalizeLegacyAdminPath(location);
+  const isAdminRoute = isAdminPath(location);
   const [studentMenuOpen, setStudentMenuOpen] = useState(false);
 
-  if (isLegacyAdminRoute) {
-    const normalizedAdminPath = location.replace(
-      /^\/plataforma\/admin/,
-      "/admin"
-    );
-
-    return <Redirect to={normalizedAdminPath || "/admin"} />;
+  if (normalizedLegacyAdminPath) {
+    return <Redirect to={normalizedLegacyAdminPath} />;
   }
 
-  return (
-    <SubscriptionGuard>
+  const pageContent = (
+    <>
       {!isAdminRoute ? (
         <StudentSidebar
           expanded={studentMenuOpen}
@@ -395,10 +431,10 @@ function PrivateRouter() {
       <div
         className={
           isAdminRoute
-            ? ""
+            ? "admin-theme min-h-screen dark:bg-slate-950 dark:text-slate-100"
             : studentMenuOpen
-              ? "min-h-screen transition-[padding] duration-200 md:pl-72"
-              : "min-h-screen transition-[padding] duration-200 md:pl-[76px]"
+              ? "theme-page min-h-screen bg-slate-50 text-slate-900 transition-[padding] duration-200 dark:bg-slate-950 dark:text-slate-100 md:pl-72"
+              : "theme-page min-h-screen bg-slate-50 text-slate-900 transition-[padding] duration-200 dark:bg-slate-950 dark:text-slate-100 md:pl-[76px]"
         }
       >
         <Suspense
@@ -414,6 +450,8 @@ function PrivateRouter() {
             <Route path="/admin/usuarios" component={AdminUsersPage} />
             <Route path="/admin/profiles" component={AdminProfilesPage} />
             <Route path="/admin/assinaturas" component={AdminBillingPage} />
+            <Route path="/admin/aulas/:id" component={AdminLessonEditorPage} />
+            <Route path="/admin/aulas" component={AdminLessonsPage} />
 
             <Route path="/admin/questoes" component={AdminQuestionsPage} />
             <Route
@@ -446,8 +484,12 @@ function PrivateRouter() {
             <Route path="/admin/vet" component={AdminVetPage} />
             <Route path="/admin/logs" component={AdminLogsPage} />
             <Route
+              path="/admin/laboratorio-gestos"
+              component={AdminGestureLabPage}
+            />
+            <Route
               path="/admin/matematica/geometria-espacial"
-              component={AdminSpatialGeometryPrototypePage}
+              component={AdminSpatialGestureWorkspacePage}
             />
             <Route
               path="/admin/quimica/geometria-molecular"
@@ -456,6 +498,7 @@ function PrivateRouter() {
 
             {/* Entrada geral da plataforma */}
             <Route path="/plataforma" component={LandingPage} />
+            <Route path="/aulas/:slug" component={LessonPage} />
 
             {/* Seletor de Física */}
             <Route path="/fisica" component={FisicaSelector} />
@@ -797,8 +840,10 @@ function PrivateRouter() {
           </Switch>
         </Suspense>
       </div>
-    </SubscriptionGuard>
+    </>
   );
+
+  return <SubscriptionGuard bypass={isAdminRoute}>{pageContent}</SubscriptionGuard>;
 }
 
 function Router() {
@@ -810,9 +855,15 @@ function Router() {
       {/* Rotas públicas */}
       <Route path="/landing" component={Landing} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/minha-assinatura" component={MySubscriptionRoute} />
+      <Route path="/indique-e-ganhe" component={ReferralPage} />
       <Route path="/cadastro" component={RegisterPage} />
       <Route path="/planos" component={PricingPage} />
       <Route path="/assinatura-pendente" component={SubscriptionPendingPage} />
+      <Route path="/termos-de-uso">{() => <LegalPage kind="terms" />}</Route>
+      <Route path="/politica-de-privacidade">{() => <LegalPage kind="privacy" />}</Route>
+      <Route path="/assinaturas-cancelamento-e-reembolso">{() => <LegalPage kind="billing" />}</Route>
+      <Route path="/regras-indique-e-ganhe">{() => <LegalPage kind="referrals" />}</Route>
 
       {/* Todo o resto exige login + assinatura, com exceção de admin liberado pelo guard */}
       <Route>
@@ -825,10 +876,13 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <LegalAcceptanceGuard>
+            <Router />
+            <LegalFooter />
+          </LegalAcceptanceGuard>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

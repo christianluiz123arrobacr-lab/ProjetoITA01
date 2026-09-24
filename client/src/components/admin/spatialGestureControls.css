@@ -1,0 +1,318 @@
+.spatial-gesture-console {
+  position: relative;
+  z-index: 45;
+  display: grid;
+  gap: 14px;
+  border: 1px solid #334155;
+  border-radius: 22px;
+  padding: 18px;
+  color: #e2e8f0;
+  background:
+    radial-gradient(
+      circle at 12% 0%,
+      rgba(34, 211, 238, 0.14),
+      transparent 30%
+    ),
+    linear-gradient(135deg, #07111f, #101d32 56%, #111b31);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.24);
+}
+[data-spatial-fullscreen="true"] > .spatial-gesture-console {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: min(680px, calc(100vw - 470px));
+  max-height: 132px;
+  overflow: auto;
+}
+[data-spatial-fullscreen="true"] > .spatial-gesture-console + div {
+  top: 156px;
+}
+.spatial-gesture-console__intro span {
+  display: inline-flex;
+  border: 1px solid rgba(103, 232, 249, 0.38);
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #a5f3fc;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.spatial-gesture-console__intro strong {
+  display: block;
+  margin-top: 8px;
+  color: #f8fafc;
+  font-size: 17px;
+}
+.spatial-gesture-console__intro p,
+.spatial-gesture-console__feedback {
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.spatial-gesture-console__buttons,
+.spatial-gesture-console__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.spatial-gesture-console__buttons button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 1px solid #42526b;
+  border-radius: 12px;
+  padding: 8px 11px;
+  color: #e2e8f0;
+  background: #17243a;
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+.spatial-gesture-console__buttons button:hover:not(:disabled),
+.spatial-gesture-console__buttons button[aria-pressed="true"] {
+  border-color: #67e8f9;
+  background: #164e63;
+}
+.spatial-gesture-console__buttons button:focus-visible,
+.spatial-tool-radial button:focus-visible {
+  outline: 3px solid #67e8f9;
+  outline-offset: 3px;
+}
+.spatial-gesture-console__buttons button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.spatial-gesture-console__status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #25344b;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.72);
+  font-size: 11px;
+}
+.spatial-gesture-console__status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #64748b;
+}
+.spatial-gesture-console__status i[data-ok="true"] {
+  background: #34d399;
+  box-shadow: 0 0 10px #34d399;
+}
+.spatial-gesture-console__feedback {
+  min-height: 20px;
+  color: #a7f3d0;
+}
+.spatial-webcam {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10020;
+  width: 190px;
+  overflow: hidden;
+  border: 1px solid #475569;
+  border-radius: 16px;
+  color: #a5f3fc;
+  background: #07111f;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+}
+.spatial-webcam > div {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  display: none;
+}
+.spatial-webcam[data-active="true"] > div {
+  display: block;
+}
+.spatial-webcam video,
+.spatial-webcam canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.spatial-webcam video {
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.spatial-webcam canvas {
+  pointer-events: none;
+}
+.spatial-webcam canvas[hidden] {
+  display: none;
+}
+.spatial-webcam p {
+  padding: 7px 9px;
+  font-size: 10px;
+}
+.spatial-air-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10050;
+  width: 24px;
+  height: 24px;
+  margin: -12px;
+  pointer-events: none;
+  border: 2px solid #67e8f9;
+  border-radius: 999px;
+  box-shadow: 0 0 18px #22d3ee;
+}
+.spatial-air-cursor[data-hover="true"] {
+  border-color: #facc15;
+  background: rgba(250, 204, 21, 0.28);
+  transform-origin: center;
+}
+.spatial-air-cursor[data-mode="captured"],
+.spatial-air-cursor[data-mode="rotating"],
+.spatial-air-cursor[data-mode="scaling"] {
+  background: #34d399;
+  border-color: #d1fae5;
+}
+.spatial-air-cursor[hidden] {
+  display: none;
+}
+[data-spatial-object-target][data-gesture-hover="true"] {
+  filter: drop-shadow(0 0 12px #67e8f9);
+}
+.spatial-tool-radial {
+  --radius: min(28vw, 250px);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 10010;
+  width: min(620px, calc(100vw - 32px));
+  height: min(620px, calc(100vh - 32px));
+  max-height: 620px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(103, 232, 249, 0.34);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(8, 17, 31, 0.98) 0 26%,
+    rgba(8, 17, 31, 0.94) 27% 64%,
+    rgba(8, 17, 31, 0.35) 65% 100%
+  );
+  box-shadow:
+    0 0 0 100vmax rgba(2, 6, 23, 0.7),
+    0 0 70px rgba(34, 211, 238, 0.22);
+}
+.spatial-tool-radial > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #67e8f9;
+  font-size: 38px;
+}
+.spatial-tool-radial button:not(.spatial-tool-radial__close) {
+  --angle: calc(var(--tool-index) * 51.428deg - 90deg);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 118px;
+  min-height: 58px;
+  transform: translate(-50%, -50%) rotate(var(--angle))
+    translateX(var(--radius)) rotate(calc(-1 * var(--angle)));
+  border: 1px solid #475569;
+  border-radius: 15px;
+  color: #e2e8f0;
+  background: #182840;
+  font-size: 12px;
+  font-weight: 800;
+}
+.spatial-tool-radial button:hover,
+.spatial-tool-radial button[data-highlight="true"] {
+  border-color: #67e8f9;
+  color: #ecfeff;
+  background: #155e75;
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.42);
+}
+.spatial-tool-radial__close {
+  position: absolute;
+  left: 50%;
+  bottom: 24%;
+  transform: translateX(-50%);
+  border: 1px solid #475569;
+  border-radius: 999px;
+  padding: 7px 13px;
+  color: #cbd5e1;
+  background: #172033;
+  font-size: 11px;
+}
+.spatial-depth-guide,
+.spatial-rotation-guide {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 10015;
+  transform: translateX(-50%);
+  border: 1px solid #475569;
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: #e2e8f0;
+  background: rgba(7, 17, 31, 0.92);
+  font-size: 11px;
+  font-weight: 800;
+}
+.spatial-depth-guide b {
+  display: inline-block;
+  margin: 0 18px;
+  color: #67e8f9;
+}
+.spatial-depth-guide b[data-direction="perto"] {
+  transform: translateX(10px);
+}
+.spatial-depth-guide b[data-direction="longe"] {
+  transform: translateX(-10px);
+}
+.spatial-rotation-guide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c4b5fd;
+}
+
+@media (max-width: 760px) {
+  [data-spatial-fullscreen="true"] > .spatial-gesture-console {
+    right: 10px;
+    left: 10px;
+    width: auto;
+  }
+  .spatial-webcam {
+    right: 10px;
+    bottom: 10px;
+    width: 135px;
+  }
+  .spatial-tool-radial {
+    --radius: min(31vw, 125px);
+    width: min(360px, calc(100vw - 20px));
+    height: min(520px, calc(100vh - 20px));
+    border-radius: 32px;
+  }
+  .spatial-tool-radial button:not(.spatial-tool-radial__close) {
+    width: 88px;
+    min-height: 48px;
+    padding: 5px;
+    font-size: 10px;
+  }
+  .spatial-tool-radial__close {
+    bottom: 29%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spatial-gesture-console__buttons button,
+  .spatial-depth-guide b {
+    transition: none;
+  }
+}

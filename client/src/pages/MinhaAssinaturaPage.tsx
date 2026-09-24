@@ -1,3 +1,4 @@
+import PaymentHistory from "@/components/billing/PaymentHistory";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -15,7 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { cancelMySubscription, getBillingCapabilities, getMyLatestSubscriptionRequest, getMyPayments, syncMyMercadoPagoPaymentStatus } from "@/services/billing.service";
+import { cancelMySubscription, createPrepaidCheckout, getBillingCapabilities, getMyLatestSubscriptionRequest, syncMyMercadoPagoPaymentStatus } from "@/services/billing.service";
 import { manualPaymentConfig } from "@/config/payment";
 import {
   formatPriceFromCents,
@@ -125,8 +126,9 @@ export default function MinhaAssinaturaPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [manualPixEnabled, setManualPixEnabled] = useState(false);
-  const [payments, setPayments] = useState<any[]>([]);
   const [canceling, setCanceling] = useState(false);
+  const [prepaidMonths, setPrepaidMonths] = useState<1 | 2 | 3>(1);
+  const [prepaidLoading, setPrepaidLoading] = useState(false);
 
   const shouldShowManualPayment =
     manualPixEnabled && (subscription?.status === "manual_review" || subscription?.status === "pending");
@@ -146,13 +148,11 @@ export default function MinhaAssinaturaPage() {
         await syncMyMercadoPagoPaymentStatus();
       }
 
-      const [data, capabilities, userPayments] = await Promise.all([
+      const [data, capabilities] = await Promise.all([
         getMyLatestSubscriptionRequest(),
         getBillingCapabilities(),
-        getMyPayments().catch(() => []),
       ]);
       setManualPixEnabled(Boolean(capabilities.manualPixFallbackEnabled));
-      setPayments(Array.isArray(userPayments) ? userPayments : []);
 
       if (!data) {
         setSubscription(null);
@@ -198,6 +198,17 @@ export default function MinhaAssinaturaPage() {
     } finally {
       setCanceling(false);
     }
+  }
+
+  async function handlePrepaidPackage(paymentMethod: "card" | "pix") {
+    if (!subscription) return;
+    try {
+      setPrepaidLoading(true);
+      const checkout = await createPrepaidCheckout(subscription.plan_slug, prepaidMonths, paymentMethod);
+      if (!checkout.checkoutUrl) throw new Error("Checkout indisponível.");
+      window.location.assign(checkout.checkoutUrl);
+    } catch (error) { setErrorMessage(error instanceof Error ? error.message : "Não foi possível criar o pacote."); }
+    finally { setPrepaidLoading(false); }
   }
 
   async function handleCopyPixKey() {
@@ -262,7 +273,7 @@ export default function MinhaAssinaturaPage() {
   if (!subscription) {
     return (
       <main className="min-h-screen bg-slate-950 text-white">
-        <section className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-16">
+        <section className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-4 py-16">
           <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center shadow-2xl">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-cyan-400/10 text-cyan-200">
               <Sparkles className="h-8 w-8" />
@@ -294,6 +305,7 @@ export default function MinhaAssinaturaPage() {
               </Link>
             </div>
           </div>
+          <PaymentHistory />
         </section>
       </main>
     );
@@ -443,26 +455,19 @@ export default function MinhaAssinaturaPage() {
                   </>
                 )}
               </Button>
+
+              {subscription.plan_slug === "referral-promotional-access" ? <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4"><p className="text-sm text-cyan-100">Seu benefício não gera cobrança. Escolha um plano para contratar mais tempo de acesso.</p><Link href="/planos"><Button className="mt-3">Ver planos</Button></Link></div> : <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+                <p className="text-sm font-black text-cyan-100">Adicionar meses ao acesso</p>
+                <p className="mt-1 text-xs text-slate-300">Pagamento único. Se houver renovação automática, ela será cancelada somente após a aprovação do pacote.</p>
+                <div className="mt-3 grid grid-cols-3 gap-2">{([1, 2, 3] as const).map(months => <button key={months} type="button" onClick={() => setPrepaidMonths(months)} className={`rounded-xl px-2 py-2 text-xs font-bold ${prepaidMonths === months ? "bg-cyan-300 text-slate-950" : "bg-white/10 text-white"}`}>{months} {months === 1 ? "mês" : "meses"}</button>)}</div>
+                <p className="mt-3 text-sm text-white">{formatPriceFromCents(subscription.plan_price_cents * prepaidMonths)} · vencimento previsto após {prepaidMonths} {prepaidMonths === 1 ? "mês" : "meses"} de calendário.</p>
+                <div className="mt-3 grid grid-cols-2 gap-2"><Button onClick={() => handlePrepaidPackage("card")} disabled={prepaidLoading} className="rounded-xl bg-white text-slate-950 hover:bg-slate-100">{prepaidLoading ? "Abrindo..." : "Pagar com cartão"}</Button><Button variant="outline" onClick={() => handlePrepaidPackage("pix")} disabled={prepaidLoading} className="rounded-xl border-cyan-300/30 text-cyan-100">Pix</Button></div>
+              </div>}
             </div>
           </Card>
         </div>
 
-        {payments.length > 0 && (
-          <Card className="mx-auto mt-6 max-w-4xl border-white/10 bg-white/[0.04] p-6 text-white">
-            <h2 className="text-xl font-black">Histórico de pagamentos</h2>
-            <div className="mt-4 space-y-3">
-              {payments.slice(0, 8).map((payment) => (
-                <div key={payment.id} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-bold text-white">{formatPriceFromCents(Number(payment.amount_cents || 0))}</p>
-                    <p className="text-xs text-slate-400">{formatGatewayLabel(payment.gateway)} • {payment.payment_method}</p>
-                  </div>
-                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-slate-200">{payment.status}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
+        <PaymentHistory />
 
         {shouldShowManualPayment && (
           <Card className="mx-auto mt-6 max-w-4xl border-emerald-400/30 bg-emerald-500/10 p-6 text-emerald-50">
