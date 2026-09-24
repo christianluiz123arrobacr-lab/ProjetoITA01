@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { summarizeAttempts } from "@shared/statistics";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,7 @@ type RankingEntry = {
   avatarKey: string;
   score: number;
   correctCount: number;
+  correctAttempts: number;
   totalAttempts: number;
   accuracy: number;
   avgTimeSeconds: number;
@@ -521,8 +523,7 @@ function buildRankingRows(
 
     const correctCount = uniqueCorrectByQuestion.size;
     const totalAttempts = userAttempts.length;
-    const accuracy =
-      totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
+    const { accuracy, correctAttempts } = summarizeAttempts(userAttempts);
 
     const timedAttempts = userAttempts.filter(
       (attempt) => typeof attempt.time_spent_seconds === "number"
@@ -549,6 +550,7 @@ function buildRankingRows(
       avatarKey: profile.avatar_key || "avatar_1",
       score,
       correctCount,
+      correctAttempts,
       totalAttempts,
       accuracy,
       avgTimeSeconds,
@@ -1307,8 +1309,8 @@ export default function RankingPage() {
 
                                 <p className="text-sm text-slate-500">
                                   {entry.correctCount} acertos únicos •{" "}
-                                  {entry.totalAttempts} tentativas •{" "}
-                                  {entry.accuracy.toFixed(0)}% de taxa
+                                  {entry.correctAttempts}/{entry.totalAttempts} tentativas corretas •{" "}
+                                  {entry.accuracy.toFixed(0)}% de taxa por tentativa
                                 </p>
 
                                 {entry.badges.length > 0 ? (

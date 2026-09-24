@@ -46,6 +46,7 @@ import { getCanonicalVetAnalysis, safeQuestionDto, VET_ENGINE_VERSION } from "./
 import { normalizeVetText } from "../shared/vet/vetEngine.js";
 import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetContent, postgrestAliasFilter, prioritizeVetCandidates } from "./vet/vetQuestionSelection.js";
 import { fetchAllQuestionPages } from "./questions/questionPagination.js";
+import { getQuestionsWithoutResolution, summarizeAttempts } from "../shared/statistics.js";
 import { setPublicQuestionPublication } from "./publicQuestions.js";
 import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
 import { lessonRouter } from "./lessons/lessonRouter.js";
@@ -628,6 +629,15 @@ export const appRouter = router({
       const access = await getPlatformAccessDecision(ctx.user, supabaseAdmin, {
         correlationId: requestId || randomUUID(),
       });
+      if (access.allowed) {
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - 15 * 60_000).toISOString();
+        const { error: seenError } = await supabaseAdmin.from("profiles")
+          .update({ last_seen_at: now.toISOString() })
+          .eq("id", ctx.user.id)
+          .or(`last_seen_at.is.null,last_seen_at.lt.${cutoff}`);
+        if (seenError) console.warn("Não foi possível registrar o último acesso autenticado.");
+      }
       if (access.source === "role") {
         return {
           accessState: "allowed",
@@ -1187,8 +1197,8 @@ export const appRouter = router({
         latestQuestionsResult,
         latestResolutionsResult,
         latestUsersResult,
-        allQuestionsResult,
-        allResolutionQuestionIdsResult,
+        allQuestions,
+        allResolutionBlocks,
       ] = await Promise.all([
         supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }),
         supabaseAdmin.from("admin_users").select("id", { count: "exact", head: true }),
@@ -1217,11 +1227,18 @@ export const appRouter = router({
           .select("id,nome,email,role,ativo,created_at")
           .order("created_at", { ascending: false })
           .limit(5),
-        supabaseAdmin
-          .from("questoes")
-          .select("id,codigo,enunciado,banca,ano,created_at")
-          .order("created_at", { ascending: false }),
-        supabaseAdmin.from("resolucoes").select("questao_id"),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("questoes")
+            .select("id,codigo,enunciado,banca,ano,created_at").order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível contar as questões sem resolução." });
+          return data ?? [];
+        }),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("resolucoes")
+            .select("id,questao_id,tipo,texto,url_imagem").order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível contar as resoluções." });
+          return data ?? [];
+        }),
       ]);
 
       const possibleError =
@@ -1233,9 +1250,7 @@ export const appRouter = router({
         resolutionImagesResult.error ||
         latestQuestionsResult.error ||
         latestResolutionsResult.error ||
-        latestUsersResult.error ||
-        allQuestionsResult.error ||
-        allResolutionQuestionIdsResult.error;
+        latestUsersResult.error;
 
       if (possibleError) {
         throw new TRPCError({
@@ -1244,23 +1259,7 @@ export const appRouter = router({
         });
       }
 
-      const resolutionQuestionIds = new Set(
-        ((allResolutionQuestionIdsResult.data as Array<{ questao_id: string | null }> | null) ?? [])
-          .map((item) => item.questao_id)
-          .filter(Boolean)
-      );
-      const allQuestions =
-        (allQuestionsResult.data as Array<{
-          id: string;
-          codigo?: string | null;
-          enunciado?: string | null;
-          banca?: string | null;
-          ano?: number | null;
-          created_at?: string | null;
-        }> | null) ?? [];
-      const questionsWithoutResolution = allQuestions.filter(
-        (question) => !resolutionQuestionIds.has(question.id)
-      );
+      const questionsWithoutResolution = getQuestionsWithoutResolution(allQuestions, allResolutionBlocks);
 
       return {
         stats: {
@@ -1652,13 +1651,27 @@ export const appRouter = router({
     }),
 
     listStudentsWithBilling: adminProcedure.query(async () => {
-      const { data: profiles, error: profilesError } = await supabaseAdmin
-        .from("profiles")
-        .select("id, nome, email, telefone, role, ativo, created_at, last_seen_at")
-        .order("created_at", { ascending: false });
-
-      if (profilesError) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: profilesError.message });
+      const [profiles, attempts] = await Promise.all([
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("profiles")
+            .select("id, nome, email, telefone, role, ativo, created_at, last_seen_at")
+            .order("created_at", { ascending: false }).order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível listar os alunos." });
+          return data ?? [];
+        }),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("user_question_attempts")
+            .select("id,user_id,question_id,is_correct,answered_at").order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível calcular as estatísticas dos alunos." });
+          return data ?? [];
+        }),
+      ]);
+      const attemptsByUser = new Map<string, typeof attempts>();
+      for (const attempt of attempts) {
+        const userId = String(attempt.user_id);
+        const list = attemptsByUser.get(userId) ?? [];
+        list.push(attempt);
+        attemptsByUser.set(userId, list);
       }
 
       const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
@@ -1697,10 +1710,12 @@ export const appRouter = router({
       const { effectiveByUser } = resolveEffectiveBillingAccess(subscriptions ?? [], payments);
       const subscriptionById = new Map((subscriptions ?? []).map((subscription: any) => [String(subscription.id), subscription]));
 
-      return (profiles ?? []).map((profile: any) => {
+      return profiles.map((profile: any) => {
         const effective = effectiveByUser.get(String(profile.id));
         const subscription = effective?.subscriptionId ? subscriptionById.get(effective.subscriptionId) : null;
         const plan = pickBillingPlan(subscription);
+        const userAttempts = attemptsByUser.get(String(profile.id)) ?? [];
+        const attemptStats = summarizeAttempts(userAttempts);
 
         return {
           id: String(profile.id),
@@ -1731,10 +1746,11 @@ export const appRouter = router({
           updated_at: subscription?.updated_at ?? null,
           has_valid_access: Boolean(effective?.hasValidAccess),
           effective_subscription_id: effective?.subscriptionId ?? null,
-          attempts_count: 0,
-          correct_count: 0,
-          wrong_count: 0,
-          last_answered_at: null,
+          attempts_count: attemptStats.totalAttempts,
+          correct_count: attemptStats.correctAttempts,
+          wrong_count: attemptStats.totalAttempts - attemptStats.correctAttempts,
+          last_answered_at: userAttempts.reduce<string | null>((latest, attempt) =>
+            !latest || attempt.answered_at > latest ? attempt.answered_at : latest, null),
         };
       });
     }),
@@ -3085,22 +3101,24 @@ export const appRouter = router({
 
   publicStats: router({
     getRankingData: publicProcedure.query(async () => {
-      const [attemptsResult, profilesResult] = await Promise.all([
-        supabaseAdmin
-          .from("user_question_attempts")
-          .select("user_id,question_id,is_correct,time_spent_seconds,answered_at,subject,difficulty")
-          .order("answered_at", { ascending: false }),
-        supabaseAdmin
-          .from("profiles")
-          .select("id,nome,avatar_key,ativo")
-          .eq("ativo", true),
+      const [attemptRows, profiles] = await Promise.all([
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("user_question_attempts")
+            .select("user_id,question_id,is_correct,time_spent_seconds,answered_at,subject,difficulty")
+            .order("answered_at", { ascending: false }).order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar o ranking." });
+          return data ?? [];
+        }),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("profiles")
+            .select("id,nome,avatar_key,ativo").eq("ativo", true).order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar os perfis do ranking." });
+          return data ?? [];
+        }),
       ]);
 
-      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
-      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
-
       const groups = new Map<string, any>();
-      for (const attempt of attemptsResult.data ?? []) {
+      for (const attempt of attemptRows) {
         const day = String(attempt.answered_at ?? "").slice(0, 10);
         const key = [attempt.user_id, attempt.question_id, day, attempt.subject ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
         const current = groups.get(key) ?? { user_id: attempt.user_id, question_id: attempt.question_id, answered_at: `${day}T12:00:00.000Z`, subject: attempt.subject, difficulty: attempt.difficulty, is_correct: attempt.is_correct, count: 0, total_time: 0, timed: 0 };
@@ -3109,47 +3127,51 @@ export const appRouter = router({
         groups.set(key, current);
       }
       const attempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: group.user_id, question_id: group.question_id, answered_at: group.answered_at, subject: group.subject, difficulty: group.difficulty, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null })));
-      return { attempts, profiles: profilesResult.data ?? [] };
+      return { attempts, profiles };
     }),
 
     getPublicProfile: publicProcedure
       .input(z.object({ userId: z.string().uuid() }))
       .query(async ({ input }) => {
-        const [profileResult, attemptsResult, profilesResult] = await Promise.all([
+        const [profileResult, attemptRows] = await Promise.all([
           supabaseAdmin
             .from("profiles")
             .select("id,nome,ativo,created_at,last_seen_at,avatar_key,bio,prova_alvo,foco_atual,meta_semanal_questoes")
             .eq("id", input.userId)
             .maybeSingle(),
-          supabaseAdmin
-            .from("user_question_attempts")
-            .select("user_id,is_correct,time_spent_seconds,answered_at,subject,conteudo,assunto,banca,ano,difficulty")
-            .eq("user_id", input.userId)
-            .order("answered_at", { ascending: false }),
-          supabaseAdmin
-            .from("profiles")
-            .select("id,nome,avatar_key,ativo")
-            .eq("ativo", true),
+          fetchAllQuestionPages(async (from, to) => {
+            const { data, error } = await supabaseAdmin.from("user_question_attempts")
+              .select("user_id,question_id,is_correct,time_spent_seconds,answered_at,subject,conteudo,assunto,banca,ano,difficulty")
+              .eq("user_id", input.userId).order("answered_at", { ascending: false }).order("id").range(from, to);
+            if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar as tentativas do perfil." });
+            return data ?? [];
+          }),
         ]);
 
         if (profileResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profileResult.error.message });
-        if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
-        if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
 
         if (!profileResult.data || profileResult.data.ativo === false) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Perfil não disponível." });
         }
 
       const groups = new Map<string, any>();
-      for (const attempt of attemptsResult.data ?? []) {
+      for (const attempt of attemptRows) {
         const month = String(attempt.answered_at ?? "").slice(0, 7);
-        const key = [month, attempt.subject ?? "", attempt.conteudo ?? "", attempt.assunto ?? "", attempt.banca ?? "", attempt.ano ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
+        const key = [month, attempt.question_id ?? "", attempt.subject ?? "", attempt.conteudo ?? "", attempt.assunto ?? "", attempt.banca ?? "", attempt.ano ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
         const current = groups.get(key) ?? { ...attempt, answered_at: `${month}-15T12:00:00.000Z`, count: 0, total_time: 0, timed: 0 };
         current.count += 1;
         if (typeof attempt.time_spent_seconds === "number") { current.total_time += attempt.time_spent_seconds; current.timed += 1; }
         groups.set(key, current);
       }
-      const publicAttempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: input.userId, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null, answered_at: group.answered_at, subject: group.subject, conteudo: group.conteudo, assunto: group.assunto, banca: group.banca, ano: group.ano, difficulty: group.difficulty })));
+      // Preserve distinct-question counts without publishing real question IDs.
+      const publicQuestionAliases = new Map<string, string>();
+      const publicAttempts = Array.from(groups.values()).flatMap(group => {
+        const questionId = String(group.question_id ?? "");
+        if (questionId && !publicQuestionAliases.has(questionId)) {
+          publicQuestionAliases.set(questionId, `question-${publicQuestionAliases.size + 1}`);
+        }
+        return Array.from({ length: group.count }, () => ({ user_id: input.userId, question_id: publicQuestionAliases.get(questionId) ?? null, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null, answered_at: group.answered_at, subject: group.subject, conteudo: group.conteudo, assunto: group.assunto, banca: group.banca, ano: group.ano, difficulty: group.difficulty }));
+      });
       return {
         profile: profileResult.data,
         attempts: publicAttempts,
@@ -3584,24 +3606,29 @@ export const appRouter = router({
       }),
 
     getProfileStats: protectedProcedure.query(async ({ ctx }) => {
-      const [profileResult, attemptsResult, profilesResult] = await Promise.all([
+      const [profileResult, attempts, profiles] = await Promise.all([
         supabaseAdmin.from("profiles").select("*").eq("id", ctx.user.id).maybeSingle(),
-        supabaseAdmin
-          .from("user_question_attempts")
-          .select("*")
-          .eq("user_id", ctx.user.id)
-          .order("answered_at", { ascending: false }),
-        supabaseAdmin.from("profiles").select("id, nome, avatar_key"),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("user_question_attempts")
+            .select("*").eq("user_id", ctx.user.id)
+            .order("answered_at", { ascending: false }).order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar as tentativas do aluno." });
+          return data ?? [];
+        }),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("profiles")
+            .select("id, nome, avatar_key").order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar os perfis do ranking." });
+          return data ?? [];
+        }),
       ]);
 
       if (profileResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profileResult.error.message });
-      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
-      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
 
       return {
         profile: profileResult.data ?? null,
-        attempts: attemptsResult.data ?? [],
-        profiles: profilesResult.data ?? [],
+        attempts,
+        profiles,
       };
     }),
   }),

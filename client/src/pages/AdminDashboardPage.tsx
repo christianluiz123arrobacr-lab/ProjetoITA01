@@ -246,7 +246,7 @@ export default function AdminDashboardPage() {
                 value={String(stats.totalQuestionsWithoutResolution)}
                 icon={BookOpenCheck}
                 tone="red"
-                helper="Questões sem nenhum bloco em resolucoes"
+                helper="Questões sem bloco de resolução legível"
               />
               <StatCard
                 title="Não publicadas"

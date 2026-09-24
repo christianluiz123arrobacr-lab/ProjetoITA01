@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { summarizeAttempts } from "@shared/statistics";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -678,7 +679,7 @@ function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
 
     const correctCount = uniqueCorrectByQuestion.size;
     const totalAttempts = userAttempts.length;
-    const accuracy = totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
+    const accuracy = summarizeAttempts(userAttempts).accuracy;
 
     const timedAttempts = userAttempts.filter(
       (attempt) => typeof attempt.time_spent_seconds === "number"
@@ -1394,12 +1395,12 @@ export default function ProfilePage() {
 
             <div className="grid md:grid-cols-2 xl:grid-cols-6 gap-4">
               <Card className="p-5">
-                <p className="text-sm text-slate-500 mb-1">Questões resolvidas</p>
+                <p className="text-sm text-slate-500 mb-1">Tentativas registradas</p>
                 <p className="text-3xl font-bold text-slate-900">{totalAnswered}</p>
               </Card>
 
               <Card className="p-5">
-                <p className="text-sm text-slate-500 mb-1">Taxa de acerto</p>
+                <p className="text-sm text-slate-500 mb-1">Taxa de acerto por tentativa</p>
                 <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-300">{accuracy.toFixed(0)}%</p>
               </Card>
 
