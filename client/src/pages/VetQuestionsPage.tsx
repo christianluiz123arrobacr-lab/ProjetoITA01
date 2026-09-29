@@ -26,6 +26,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { mapQuestao } from "@/services/questions.service";
 import type { Question } from "@/types/question";
+import { getVetSelectionDifficultyScore } from "@shared/difficulty";
 import {
   buildVetEngineResult,
   formatVetPercent,
@@ -125,27 +126,7 @@ function getBlockMeta(block: VetTrainingBlock) {
 }
 
 function getDifficultyScore(question: Question, block: VetTrainingBlock) {
-  const difficulty = normalizeText(question.difficulty);
-
-  if (block === "ataque") {
-    if (difficulty === "medio") return 10;
-    if (difficulty === "dificil") return 8;
-    if (difficulty === "facil") return 4;
-    return 5;
-  }
-
-  if (block === "consolidacao") {
-    if (difficulty === "medio") return 10;
-    if (difficulty === "facil") return 7;
-    if (difficulty === "dificil") return 4;
-    return 5;
-  }
-
-  if (difficulty === "facil") return 10;
-  if (difficulty === "medio") return 7;
-  if (difficulty === "dificil") return 3;
-
-  return 5;
+  return getVetSelectionDifficultyScore(question.difficulty, block);
 }
 
 function getQuestionRecencyScore(question: Question) {

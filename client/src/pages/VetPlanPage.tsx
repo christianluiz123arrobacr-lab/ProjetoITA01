@@ -26,6 +26,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { mapQuestao } from "@/services/questions.service";
 import type { Question } from "@/types/question";
+import { getVetPlanDifficultyBonus } from "@shared/difficulty";
 import {
   buildVetEngineResult,
   formatVetPercent,
@@ -452,12 +453,7 @@ export default function VetPlanPage() {
 
       const recencyBonus = question.year ? Math.min(10, Math.max(0, question.year - 2015)) : 0;
 
-      const difficultyBonus =
-        normalizeText(question.difficulty) === "dificil"
-          ? 8
-          : normalizeText(question.difficulty) === "medio"
-            ? 5
-            : 2;
+      const difficultyBonus = getVetPlanDifficultyBonus(question.difficulty);
 
       result.push({
         question,

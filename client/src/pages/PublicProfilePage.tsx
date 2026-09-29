@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { summarizeAttempts } from "@shared/statistics";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getDifficultyBucket as getCanonicalDifficultyBucket, getDifficultyNumeric, getDifficultyRankingPoints } from "@shared/difficulty";
 import {
   ArrowLeft,
   Target,
@@ -308,7 +310,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -316,7 +318,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const difficultyScore =
@@ -330,7 +332,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      const weight = difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      const weight = getDifficultyNumeric(difficulty);
       return a.is_correct ? weight : 0;
     });
 
@@ -338,7 +340,7 @@ function buildRadarMetrics(currentAttempts: AttemptRow[], previousAttempts: Atte
     .filter((a) => a.difficulty)
     .map((a) => {
       const difficulty = (a.difficulty || "").toLowerCase().trim();
-      return difficulty === "dificil" ? 3 : difficulty === "medio" ? 2 : 1;
+      return getDifficultyNumeric(difficulty);
     });
 
   const prevDifficultyScore =
@@ -562,23 +564,11 @@ function formatDelta(delta?: number) {
 }
 
 function getDifficultyPoints(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return 2;
-  if (value === "medio") return 4;
-  if (value === "dificil") return 7;
-
-  return 0;
+  return getDifficultyRankingPoints(difficulty);
 }
 
 function getDifficultyBucket(difficulty?: string | null) {
-  const value = (difficulty || "").trim().toLowerCase();
-
-  if (value === "facil") return "easy";
-  if (value === "medio") return "medium";
-  if (value === "dificil") return "hard";
-
-  return "unknown";
+  return getCanonicalDifficultyBucket(difficulty);
 }
 
 function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
@@ -645,7 +635,7 @@ function buildRanking(profiles: ProfileRow[], attempts: AttemptRow[]) {
 
     const correctCount = uniqueCorrectByQuestion.size;
     const totalAttempts = userAttempts.length;
-    const accuracy = totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
+    const accuracy = summarizeAttempts(userAttempts).accuracy;
 
     const timedAttempts = userAttempts.filter(
       (attempt) => typeof attempt.time_spent_seconds === "number"
@@ -1094,12 +1084,12 @@ export default function PublicProfilePage() {
 
             <div className="grid md:grid-cols-2 xl:grid-cols-6 gap-4">
               <Card className="p-5">
-                <p className="text-sm text-slate-500 mb-1">Questões resolvidas</p>
+                <p className="text-sm text-slate-500 mb-1">Tentativas registradas</p>
                 <p className="text-3xl font-bold text-slate-900">{totalAnswered}</p>
               </Card>
 
               <Card className="p-5">
-                <p className="text-sm text-slate-500 mb-1">Taxa de acerto</p>
+                <p className="text-sm text-slate-500 mb-1">Taxa de acerto por tentativa</p>
                 <p className="text-3xl font-bold text-emerald-600">{accuracy.toFixed(0)}%</p>
               </Card>
 

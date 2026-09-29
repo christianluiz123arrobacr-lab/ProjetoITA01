@@ -32,6 +32,7 @@ type QuestaoRow = {
   enunciado?: string | null;
   enunciado_pos_imagem?: string | null;
   url_imagem?: string | null;
+  image_metadata?: Array<{ slot_id?: string; local?: string; alternativa?: string | null; texto_alternativo?: string; legenda?: string | null }> | null;
   formula?: string | null;
 
   a?: string | null;
@@ -51,6 +52,8 @@ type QuestaoRow = {
     label?: string | null;
     text?: string | null;
     imageUrl?: string | null;
+    imageAlt?: string | null;
+    imageCaption?: string | null;
   }> | null;
 
   a_url_imagem?: string | null;
@@ -192,6 +195,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
         label: String(option.label ?? id).trim().toUpperCase(),
         text,
         imageUrl,
+        imageAlt: normalizarTexto(option.imageAlt),
+        imageCaption: normalizarTexto(option.imageCaption),
       }];
     });
 
@@ -203,6 +208,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
   const altC = row.c ?? row.C ?? "";
   const altD = row.d ?? row.D ?? "";
   const altE = row.e ?? row.E ?? "";
+  const imageMeta = Array.isArray(row.image_metadata) ? row.image_metadata : [];
+  const optionMeta = (letter: string) => imageMeta.find((item) => item.local === "alternativa" && item.alternativa === letter);
 
   return [
     altA || row.a_url_imagem
@@ -211,6 +218,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "A",
           text: altA || undefined,
           imageUrl: row.a_url_imagem ?? undefined,
+          imageAlt: optionMeta("a")?.texto_alternativo,
+          imageCaption: optionMeta("a")?.legenda ?? undefined,
         }
       : null,
 
@@ -220,6 +229,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "B",
           text: altB || undefined,
           imageUrl: row.b_url_imagem ?? undefined,
+          imageAlt: optionMeta("b")?.texto_alternativo,
+          imageCaption: optionMeta("b")?.legenda ?? undefined,
         }
       : null,
 
@@ -229,6 +240,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "C",
           text: altC || undefined,
           imageUrl: row.c_url_imagem ?? undefined,
+          imageAlt: optionMeta("c")?.texto_alternativo,
+          imageCaption: optionMeta("c")?.legenda ?? undefined,
         }
       : null,
 
@@ -238,6 +251,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "D",
           text: altD || undefined,
           imageUrl: row.d_url_imagem ?? undefined,
+          imageAlt: optionMeta("d")?.texto_alternativo,
+          imageCaption: optionMeta("d")?.legenda ?? undefined,
         }
       : null,
 
@@ -247,6 +262,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "E",
           text: altE || undefined,
           imageUrl: row.e_url_imagem ?? undefined,
+          imageAlt: optionMeta("e")?.texto_alternativo,
+          imageCaption: optionMeta("e")?.legenda ?? undefined,
         }
       : null,
   ].filter(Boolean) as Question["options"];
@@ -260,10 +277,14 @@ export function mapQuestao(row: QuestaoRow): Question {
         const tipo = (r.tipo || "").toLowerCase().trim();
 
         if (tipo === "imagem") {
+          let metadata: { alt?: string; caption?: string } = {};
+          try { metadata = r.texto ? JSON.parse(r.texto) : {}; } catch { metadata = {}; }
           return {
             type: "imagem" as const,
             imageUrl: r.url_imagem ?? undefined,
             order: r.ordem ?? 0,
+            imageAlt: metadata.alt,
+            imageCaption: metadata.caption,
           };
         }
 
@@ -305,6 +326,8 @@ export function mapQuestao(row: QuestaoRow): Question {
   const subtopicsByTopic = normalizarAssuntosPorConteudo(
     row.assuntos_por_conteudo
   );
+  const imageMetadata = Array.isArray(row.image_metadata) ? row.image_metadata : [];
+  const statementImage = imageMetadata.find((item) => item.local === "enunciado" || item.local === "contexto");
 
   return {
     id: row.id,
@@ -326,6 +349,8 @@ export function mapQuestao(row: QuestaoRow): Question {
     statementAfterImage: row.enunciado_pos_imagem ?? undefined,
     formula: row.formula ?? undefined,
     imageUrl: row.url_imagem ?? undefined,
+    imageAlt: statementImage?.texto_alternativo,
+    imageCaption: statementImage?.legenda ?? undefined,
 
     options: normalizarAlternativas(row),
     correctOptionId: normalizarTexto(row.alternativa_correta)?.toLowerCase() ?? "",

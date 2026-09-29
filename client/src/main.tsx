@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
+import "katex/dist/katex.min.css";
 
 const queryClient = new QueryClient();
 
