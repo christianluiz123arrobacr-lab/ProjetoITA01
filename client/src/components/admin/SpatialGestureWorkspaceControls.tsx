@@ -20,11 +20,10 @@ import {
 } from "lucide-react";
 import { HAND_CONNECTIONS, mapCursor, type Point } from "@/lib/gestures/gestureEngine";
 import { createHandTracker, type HandTracker } from "@/lib/gestures/handTracker";
+import { advanceCursor, canCapture, captureHand, displayHandSide, emptyHandSession, relativeScale, releaseHand, rotationFromAnchor, type HandSide } from "@/lib/gestures/spatialHandSession";
 import {
   analyzeSpatialHand,
   depthWithDeadZone,
-  normalizeAngleDelta,
-  safeScaleFactor,
   unprojectScreenDelta,
   type SpatialHand,
   type Vec3,
@@ -65,18 +64,23 @@ type Props = {
   sceneRef: RefObject<HTMLDivElement | null>;
   selectedObjectId: string | null;
   selectedLabel: string;
+  selectedElementKind: "solid" | "vertex" | "edge" | "face" | "surface" | null;
+  sceneRevision: unknown;
   rotationX: number;
   rotationY: number;
   canUndo: boolean;
   canRedo: boolean;
   snapEnabled: boolean;
-  onSelectObject(id: string): void;
+  getObjectLabel(id: string): string;
+  onHoverScene(x: number, y: number): string | null;
+  onSelectScene(x: number, y: number): string | null;
   onMove(id: string, delta: Vec3): void;
   onRotate(id: string, delta: Vec3): void;
   onScale(id: string, factor: number): void;
   onMenuAction(action: GestureMenuAction): { selectedObjectId?: string | null; message?: string } | void;
   onResetScene(): void;
   onInteractionChange(state: SpatialInteractionState): void;
+  onGestureTransformChange(active: boolean): void;
 };
 
 const STORAGE_KEY = "projeto-vetor:admin-spatial-gesture-preferences:v2";
@@ -133,7 +137,7 @@ const SECTION_ACTIONS: Record<Exclude<MenuSection, "root">, Array<{ id: GestureM
     { id: "toggle:fullscreen", label: "Tela cheia" },
   ],
   measure: [
-    { id: "tool:measure", label: "Medir centros" },
+    { id: "tool:measure", label: "Medir elementos" },
     { id: "tool:formulas", label: "Fórmulas" },
     { id: "tool:metrics", label: "Áreas e volumes" },
     { id: "tool:cuts", label: "Cortes" },
@@ -186,12 +190,16 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
   const [preferences, setPreferences] = useState(loadPreferences);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [transformMode, setTransformMode] = useState<"move" | "rotate" | "scale">("move");
+  const [diagnostics, setDiagnostics] = useState({ cameraFps: 0, inferenceFps: 0, renderFps: 0, sceneUpdates: 0, processingMs: 0, resultAgeMs: 0 });
+  const [handStatus, setHandStatus] = useState<Record<HandSide, string>>({ Left: "Livre", Right: "Livre" });
+  const [handConfidence, setHandConfidence] = useState<Record<HandSide, number | null>>({ Left: null, Right: null });
   const [handsDetected, setHandsDetected] = useState(0);
   const [gestureLabel, setGestureLabel] = useState("Nenhum");
   const [feedback, setFeedback] = useState("Câmera desligada. Mouse e teclado estão disponíveis.");
   const [calibrating, setCalibrating] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
-  const [depthDirection, setDepthDirection] = useState("centro");
   const [menuSection, setMenuSection] = useState<MenuSection>("root");
   const [menuPosition, setMenuPosition] = useState({ x: 0.5, y: 0.48 });
   const [hoveredMenuAction, setHoveredMenuAction] = useState<string | null>(null);
@@ -205,6 +213,7 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
+  const rightCursorRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const trackerRef = useRef<HandTracker | null>(null);
@@ -216,18 +225,18 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
   const gesturesEnabledRef = useRef(gesturesEnabled);
   const calibratingRef = useRef(calibrating);
   const latestRef = useRef(props);
-  const smoothedCursorRef = useRef<{ x: number; y: number } | null>(null);
-  const previousHandRef = useRef<SpatialHand | null>(null);
-  const previousRollRef = useRef<number | null>(null);
-  const previousScaleRef = useRef<number | null>(null);
+  const cursorSamplesRef = useRef<Record<HandSide, { target: { x: number; y: number }; current: { x: number; y: number }; at: number } | null>>({ Left: null, Right: null });
+  const handSessionsRef = useRef({ Left: emptyHandSession("Left"), Right: emptyHandSession("Right") });
+  const handGatesRef = useRef({ Left: new StablePoseGate(), Right: new StablePoseGate() });
+  const transformModeRef = useRef(transformMode);
+  const diagnosticClockRef = useRef({ cameraFrames: 0, inferenceFrames: 0, renderFrames: 0, sceneUpdates: 0, lastCameraTime: -1, lastResultTime: 0, lastReportTime: 0, processingMs: 0 });
+  const diagnosticsOpenRef = useRef(diagnosticsOpen);
   const depthReferenceRef = useRef<number | null>(null);
   const menuDragOffsetRef = useRef({ x: 0, y: 0 });
   const lostSinceRef = useRef<number | null>(null);
   const releasedFramesRef = useRef(0);
   const openGateRef = useRef(new StablePoseGate());
   const actionGateRef = useRef(new StablePoseGate());
-  const rotateGateRef = useRef(new StablePoseGate());
-  const scaleGateRef = useRef(new StablePoseGate());
   const fistGateRef = useRef(new StablePoseGate());
   const calibrationGateRef = useRef(new StablePoseGate());
 
@@ -236,6 +245,10 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
   preferencesRef.current = preferences;
   gesturesEnabledRef.current = gesturesEnabled;
   calibratingRef.current = calibrating;
+  transformModeRef.current = transformMode;
+  diagnosticsOpenRef.current = diagnosticsOpen;
+
+  useEffect(() => { diagnosticClockRef.current.sceneUpdates += 1; }, [props.sceneRevision]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
@@ -263,16 +276,15 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
   }
 
   function clearGestureReferences() {
-    previousHandRef.current = null;
-    previousRollRef.current = null;
-    previousScaleRef.current = null;
-    smoothedCursorRef.current = null;
     releasedFramesRef.current = 0;
     openGateRef.current.reset();
     actionGateRef.current.reset();
-    rotateGateRef.current.reset();
-    scaleGateRef.current.reset();
     fistGateRef.current.reset();
+    handSessionsRef.current = { Left: emptyHandSession("Left"), Right: emptyHandSession("Right") };
+    handGatesRef.current.Left.reset();
+    handGatesRef.current.Right.reset();
+    cursorSamplesRef.current = { Left: null, Right: null };
+    latestRef.current.onGestureTransformChange(false);
   }
 
   function stopCamera(message = "Câmera desligada. Mouse e teclado continuam disponíveis.") {
@@ -284,12 +296,16 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
     trackerRef.current?.close();
     trackerRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    if (cursorRef.current) cursorRef.current.hidden = true;
+    if (rightCursorRef.current) rightCursorRef.current.hidden = true;
     const canvas = overlayRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     dispatch({ type: "TRACKING_LOST" });
     dispatch({ type: "GESTURES_RELEASED" });
     clearGestureReferences();
     setHandsDetected(0);
+    setHandStatus({ Left: "Livre", Right: "Livre" });
+    setHandConfidence({ Left: null, Right: null });
     setGestureLabel("Nenhum");
     setCamera("off");
     setFeedback(message);
@@ -328,8 +344,8 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
   function drawHands(points: Point[][], width: number, height: number) {
     const canvas = overlayRef.current;
     if (!canvas) return;
-    canvas.width = width;
-    canvas.height = height;
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.clearRect(0, 0, width, height);
@@ -408,6 +424,11 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
       closeMenu(gestureDriven ? "Menu fechado. Solte a pinça para voltar à cena." : "Menu fechado.", gestureDriven);
       return;
     }
+    if (action === "transform:move" || action === "transform:rotate" || action === "transform:scale") {
+      setTransformMode(action.slice(10) as "move" | "rotate" | "scale");
+      handSessionsRef.current = { Left: emptyHandSession("Left"), Right: emptyHandSession("Right") };
+      latestRef.current.onGestureTransformChange(false);
+    }
     const result = latestRef.current.onMenuAction(action as GestureMenuAction);
     const selectedObjectId = result?.selectedObjectId;
     setMenuSection("root");
@@ -426,24 +447,108 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
     }
   }
 
-  function processTrackedHands(hands: SpatialHand[], now: number) {
+  function processIndependentHands(tracked: Array<{ side: HandSide; hand: SpatialHand }>, now: number) {
+    const sessions = handSessionsRef.current;
+    const seen = new Set(tracked.map(item => item.side));
+    for (const side of ["Left", "Right"] as const) {
+      if (!seen.has(side) && now - sessions[side].lastSeen > 360) sessions[side] = releaseHand(sessions[side]);
+    }
+    const scaleHeld = sessions.Left.mode === "scale" && sessions.Right.mode === "scale";
+    const scaleHands = tracked.filter(item => item.hand.gesture === "indexPinch" || (scaleHeld && item.hand.pinchRatios.index < 0.37));
+    if (transformModeRef.current === "scale" && scaleHands.length === 2 && latestRef.current.selectedObjectId) {
+      const id = latestRef.current.selectedObjectId;
+      const distance = handDistance(scaleHands[0].hand, scaleHands[1].hand);
+      const session = sessions.Left;
+      if (session.mode !== "scale" || session.objectId !== id) {
+        sessions.Left = { ...captureHand(session, id, scaleHands[0].hand, now, "scale"), scaleReference: distance, scaleApplied: 1 };
+        sessions.Right = { ...captureHand(sessions.Right, id, scaleHands[1].hand, now, "scale"), scaleReference: distance, scaleApplied: 1 };
+      } else if (session.scaleReference && distance > 0.02) {
+        const { factor, applied } = relativeScale(distance, session.scaleReference, session.scaleApplied);
+        if (Number.isFinite(factor) && Math.abs(factor - 1) > 0.004) {
+          latestRef.current.onScale(id, factor);
+          sessions.Left.scaleApplied = applied;
+        }
+      }
+      setHandStatus(current => current.Left === `Escalando ${latestRef.current.selectedLabel}` && current.Right === `Escalando ${latestRef.current.selectedLabel}` ? current : { Left: `Escalando ${latestRef.current.selectedLabel}`, Right: `Escalando ${latestRef.current.selectedLabel}` });
+      latestRef.current.onGestureTransformChange(true);
+      return;
+    }
+    if (sessions.Left.mode === "scale" || sessions.Right.mode === "scale") {
+      sessions.Left = releaseHand(sessions.Left);
+      sessions.Right = releaseHand(sessions.Right);
+    }
+    for (const { side, hand } of tracked) {
+      let session = sessions[side];
+      if (hand.gesture === "fist") {
+        sessions[side] = releaseHand(session);
+        handGatesRef.current[side].reset();
+        continue;
+      }
+      const cursor = mapCursor(hand.cursor, window.innerWidth, window.innerHeight);
+      cursorSamplesRef.current[side] = { target: cursor, current: cursorSamplesRef.current[side]?.current ?? cursor, at: now };
+      const rotationGesture = preferencesRef.current.rotationPinch === "pinky" ? "pinkyPinch" : "middlePinch";
+      const desiredMode = transformModeRef.current;
+      const heldIndex = session.objectId !== null && hand.pinchRatios.index < 0.37;
+      const heldRotation = session.objectId !== null && (preferencesRef.current.rotationPinch === "pinky" ? hand.pinchRatios.pinky : hand.pinchRatios.middle) < 0.37;
+      const activePinch = desiredMode === "rotate" ? hand.gesture === "indexPinch" || hand.gesture === rotationGesture || heldIndex || heldRotation : hand.gesture === "indexPinch" || heldIndex;
+      if (session.objectId) {
+        if (!activePinch || desiredMode !== session.mode) {
+          sessions[side] = releaseHand(session);
+          handGatesRef.current[side].reset();
+          continue;
+        }
+        if (session.previous && Math.hypot(hand.anchor.x - session.previous.anchor.x, hand.anchor.y - session.previous.anchor.y) > 0.24) {
+          sessions[side] = releaseHand(session);
+          setFeedback("Rastreamento saltou; somente esta mão foi liberada por segurança.");
+          continue;
+        }
+        if (session.previous && session.mode === "move") {
+          const dx = (session.previous.cursor.x - hand.cursor.x) * window.innerWidth;
+          const dy = (hand.cursor.y - session.previous.cursor.y) * window.innerHeight;
+          const rect = latestRef.current.sceneRef.current?.getBoundingClientRect();
+          const scale = Math.max(100, Math.min(rect?.width ?? 700, rect?.height ?? 550) / 4.2);
+          const depthReference = depthReferenceRef.current ?? session.origin?.depth ?? 0.2;
+          const depthSensitivity = 4.6 * preferencesRef.current.sensitivity * Math.max(0.7, Math.min(1.4, 0.2 / Math.max(0.08, depthReference)));
+          const depth = depthWithDeadZone(hand.depth, session.previous.depth, preferencesRef.current.deadZone, depthSensitivity);
+          if (Math.hypot(dx, dy) > 0.5 || Math.abs(depth) > 0.005) latestRef.current.onMove(session.objectId, unprojectScreenDelta(dx, dy, depth, latestRef.current.rotationX, latestRef.current.rotationY, scale));
+        } else if (session.previous && session.mode === "rotate") {
+          const rotation = rotationFromAnchor(hand, session.previous, preferencesRef.current.sensitivity);
+          if (Math.hypot(rotation.x, rotation.y) > 0.08) latestRef.current.onRotate(session.objectId, rotation);
+        }
+        sessions[side] = { ...session, previous: hand, lastSeen: now };
+        continue;
+      }
+      if (!activePinch || desiredMode === "scale") {
+        handGatesRef.current[side].reset();
+        sessions[side].lastSeen = now;
+        continue;
+      }
+      const objectId = latestRef.current.onHoverScene(cursor.x, cursor.y);
+      const allowed = objectId && canCapture(sessions, side, objectId);
+      const confirmed = handGatesRef.current[side].update({ key: allowed ? `${side}:${objectId}` : null, x: hand.indexPinch.x, y: hand.indexPinch.y, now, durationMs: 220, stability: 0.06 });
+      if (confirmed && objectId && allowed) {
+        sessions[side] = captureHand(session, objectId, hand, now, desiredMode);
+        latestRef.current.onSelectScene(cursor.x, cursor.y);
+        setFeedback(`${side === "Left" ? "Esquerda" : "Direita"} capturou ${latestRef.current.getObjectLabel(objectId)}.`);
+      } else sessions[side].lastSeen = now;
+    }
+    const active = sessions.Left.objectId !== null || sessions.Right.objectId !== null;
+    latestRef.current.onGestureTransformChange(active);
+    const nextStatus = { Left: sessions.Left.objectId ? `${sessions.Left.mode}: ${latestRef.current.getObjectLabel(sessions.Left.objectId)}` : "Livre", Right: sessions.Right.objectId ? `${sessions.Right.mode}: ${latestRef.current.getObjectLabel(sessions.Right.objectId)}` : "Livre" };
+    setHandStatus(current => current.Left === nextStatus.Left && current.Right === nextStatus.Right ? current : nextStatus);
+  }
+
+  function processTrackedHands(tracked: Array<{ side: HandSide; hand: SpatialHand }>, now: number) {
+    const hands = tracked.map(item => item.hand);
     const primary = hands[0];
     const settings = preferencesRef.current;
     const rawCursor = mapCursor(primary.cursor, window.innerWidth, window.innerHeight);
-    const previousCursor = smoothedCursorRef.current ?? rawCursor;
-    const adaptive = Math.min(0.72, settings.smoothing + Math.hypot(rawCursor.x - previousCursor.x, rawCursor.y - previousCursor.y) / 900);
-    const cursor = {
-      x: previousCursor.x + (rawCursor.x - previousCursor.x) * adaptive,
-      y: previousCursor.y + (rawCursor.y - previousCursor.y) * adaptive,
-    };
-    smoothedCursorRef.current = cursor;
-    if (cursorRef.current) {
-      cursorRef.current.hidden = false;
-      cursorRef.current.style.transform = `translate3d(${cursor.x}px, ${cursor.y}px, 0)`;
-    }
+    const cursor = rawCursor;
+    const primarySide = tracked[0].side;
+    cursorSamplesRef.current[primarySide] = { target: rawCursor, current: cursorSamplesRef.current[primarySide]?.current ?? rawCursor, at: now };
     const target = pointerTarget(cursor.x, cursor.y);
     const menuAction = target?.dataset.gestureMenuAction ?? null;
-    const objectId = target?.dataset.spatialObjectId ?? null;
+    const objectId = isMenuState(interactionRef.current.state) ? null : latestRef.current.onHoverScene(cursor.x, cursor.y);
     setHoveredMenuAction(menuAction ?? (target?.hasAttribute("data-gesture-menu-drag") ? "menu:drag" : null));
     setHoveredObjectId(objectId);
     setGestureLabel(gestureText(primary.gesture, settings.rotationPinch));
@@ -458,11 +563,12 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
       stability: 0.07,
     });
     if (fistFired) {
-      const wasMenuOpen = isMenuState(interactionRef.current.state);
-      setMenuSection("root");
-      dispatch({ type: "CANCEL" });
-      setFeedback(wasMenuOpen ? "Menu fechado pelo punho." : "Interação cancelada pelo punho.");
-      clearGestureReferences();
+      if (isMenuState(interactionRef.current.state)) {
+        setMenuSection("root");
+        dispatch({ type: "CANCEL" });
+      }
+      handSessionsRef.current[primarySide] = releaseHand(handSessionsRef.current[primarySide]);
+      setFeedback(`${primarySide === "Left" ? "Esquerda" : "Direita"} liberada pelo punho.`);
       return;
     }
 
@@ -521,134 +627,14 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
       return;
     }
 
-    if (activeState === "object_scaling") {
-      if (hands.length < 2 || hands[0].gesture !== "indexPinch" || hands[1].gesture !== "indexPinch") {
-        dispatch({ type: "END_TRANSFORM" });
-        previousScaleRef.current = null;
-        setFeedback("Escala finalizada.");
-        return;
-      }
-      const distance = handDistance(hands[0], hands[1]);
-      if (previousScaleRef.current !== null && interactionRef.current.activeObjectId) {
-        latestRef.current.onScale(interactionRef.current.activeObjectId, safeScaleFactor(distance, previousScaleRef.current));
-      }
-      previousScaleRef.current = distance;
-      return;
-    }
-
-    const rotationGesture = settings.rotationPinch === "pinky" ? "pinkyPinch" : "middlePinch";
-    if (activeState === "object_rotating") {
-      if (primary.gesture !== rotationGesture) {
-        dispatch({ type: "END_TRANSFORM" });
-        previousRollRef.current = null;
-        previousHandRef.current = null;
-        setFeedback("Rotação finalizada.");
-        return;
-      }
-      const previous = previousHandRef.current;
-      const previousRoll = previousRollRef.current;
-      const activeId = interactionRef.current.activeObjectId;
-      if (previous && previousRoll !== null && activeId) {
-        const rollDelta = normalizeAngleDelta(primary.roll, previousRoll);
-        const dx = primary.anchor.x - previous.anchor.x;
-        const dy = primary.anchor.y - previous.anchor.y;
-        const dead = settings.deadZone * 0.8;
-        latestRef.current.onRotate(activeId, {
-          x: Math.abs(dy) > dead ? -dy * 150 * settings.sensitivity : 0,
-          y: Math.abs(dx) > dead ? dx * 150 * settings.sensitivity : 0,
-          z: Math.abs(rollDelta) > 0.018 ? (rollDelta * 180) / Math.PI : 0,
-        });
-      }
-      previousHandRef.current = primary;
-      previousRollRef.current = primary.roll;
-      setFeedback("Rotação ativa");
-      return;
-    }
-
-    if (activeState === "object_dragging") {
-      if (primary.gesture !== "indexPinch") {
-        dispatch({ type: "END_TRANSFORM" });
-        previousHandRef.current = null;
-        depthReferenceRef.current = primary.depth;
-        setDepthDirection("centro");
-        setFeedback("Objeto fixado na posição final.");
-        return;
-      }
-      const previous = previousHandRef.current;
-      const activeId = interactionRef.current.activeObjectId;
-      if (previous && activeId) {
-        const dx = (previous.cursor.x - primary.cursor.x) * window.innerWidth;
-        const dy = (primary.cursor.y - previous.cursor.y) * window.innerHeight;
-        const reference = depthReferenceRef.current ?? primary.depth;
-        const depth = depthWithDeadZone(primary.depth, reference, settings.deadZone, 4.6 * settings.sensitivity);
-        if (Math.abs(depth) > 0.9) {
-          depthReferenceRef.current = primary.depth;
-        } else {
-          const sceneRect = latestRef.current.sceneRef.current?.getBoundingClientRect();
-          const sceneScale = Math.max(100, Math.min(sceneRect?.width ?? 700, sceneRect?.height ?? 550) / 4.2);
-          latestRef.current.onMove(
-            activeId,
-            unprojectScreenDelta(dx, dy, depth, latestRef.current.rotationX, latestRef.current.rotationY, sceneScale)
-          );
-          setDepthDirection(depth > 0.035 ? "perto" : depth < -0.035 ? "longe" : "centro");
-        }
-      }
-      previousHandRef.current = primary;
-      return;
-    }
-
-    if (hands.length >= 2 && hands[0].gesture === "indexPinch" && hands[1].gesture === "indexPinch" && interactionRef.current.selectedObjectId) {
-      const distance = handDistance(hands[0], hands[1]);
-      const confirmed = scaleGateRef.current.update({ key: "two-hand-scale", x: distance, y: 0, now, durationMs: 280, stability: 0.055 });
-      if (confirmed) {
-        previousScaleRef.current = distance;
-        dispatch({ type: "START_OBJECT_SCALE" });
-        setFeedback("Escala ativa");
-      }
-      return;
-    }
-    scaleGateRef.current.update({ key: null, x: 0, y: 0, now, durationMs: 0, stability: 0 });
-
-    if (primary.gesture === rotationGesture && interactionRef.current.selectedObjectId) {
-      const confirmed = rotateGateRef.current.update({ key: rotationGesture, x: primary.anchor.x, y: primary.anchor.y, now, durationMs: 330, stability: 0.045 });
-      if (confirmed) {
-        previousHandRef.current = primary;
-        previousRollRef.current = primary.roll;
-        dispatch({ type: "START_OBJECT_ROTATION" });
-        setFeedback("Rotação ativa");
-      }
-      return;
-    }
-    rotateGateRef.current.update({ key: null, x: 0, y: 0, now, durationMs: 0, stability: 0 });
-
-    if (primary.gesture === "indexPinch" && objectId) {
-      const confirmed = actionGateRef.current.update({ key: `object:${objectId}`, x: primary.indexPinch.x, y: primary.indexPinch.y, now, durationMs: 300, stability: 0.045 });
-      if (confirmed) {
-        latestRef.current.onSelectObject(objectId);
-        depthReferenceRef.current = primary.depth;
-        previousHandRef.current = primary;
-        dispatch({ type: "START_OBJECT_DRAG", objectId });
-        setFeedback("Objeto capturado. Mova a mão ou aproxime/afaste para profundidade.");
-      }
-      return;
-    }
-    actionGateRef.current.update({ key: null, x: 0, y: 0, now, durationMs: 0, stability: 0 });
-
-    const canOpen = primary.gesture === "open" && !isTransformState(interactionRef.current.state);
-    const opened = openGateRef.current.update({
-      key: canOpen ? "open-menu" : null,
-      x: primary.anchor.x,
-      y: primary.anchor.y,
-      now,
-      durationMs: settings.menuDwellMs,
-      stability: 0.05,
-    });
+    const canOpen = primary.gesture === "open" && !Object.values(handSessionsRef.current).some(session => session.objectId);
+    const opened = openGateRef.current.update({ key: canOpen ? "open-menu" : null, x: primary.anchor.x, y: primary.anchor.y, now, durationMs: settings.menuDwellMs, stability: 0.05 });
     if (opened) {
       setMenuSection("root");
       dispatch({ type: "OPEN_MENU" });
       setFeedback("Menu aberto. A cena está bloqueada até você fechar e soltar os gestos.");
+      return;
     }
-
     if (calibratingRef.current && primary.gesture === "open") {
       const complete = calibrationGateRef.current.update({ key: "calibrate", x: primary.anchor.x, y: primary.anchor.y, now, durationMs: 700, stability: 0.045 });
       if (complete) {
@@ -658,6 +644,7 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
         setFeedback("Calibração concluída na posição atual da mão.");
       }
     }
+    processIndependentHands(tracked, now);
   }
 
   async function startCamera() {
@@ -691,17 +678,52 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
       trackerRef.current = tracker;
       setCamera("active");
       setFeedback("Câmera ativa. Mostre a mão inteira dentro do quadro.");
+      diagnosticClockRef.current.lastReportTime = performance.now();
       const loop = (now: number) => {
         if (generation !== generationRef.current || !trackerRef.current || !videoRef.current) return;
         frameRef.current = requestAnimationFrame(loop);
+        const clock = diagnosticClockRef.current;
+        clock.renderFrames += 1;
+        if (videoRef.current.currentTime !== clock.lastCameraTime && videoRef.current.readyState >= 2) {
+          clock.cameraFrames += 1;
+          clock.lastCameraTime = videoRef.current.currentTime;
+        }
+        for (const side of ["Left", "Right"] as const) {
+          const sample = cursorSamplesRef.current[side];
+          const element = side === "Left" ? cursorRef.current : rightCursorRef.current;
+          if (!element) continue;
+          if (!gesturesEnabledRef.current || !sample || now - sample.at > 360) { element.hidden = true; continue; }
+          element.hidden = false;
+          sample.current = advanceCursor(sample.current, sample.target, preferencesRef.current.smoothing);
+          element.style.transform = `translate3d(${sample.current.x}px, ${sample.current.y}px, 0)`;
+        }
+        if (now - clock.lastReportTime >= 650) {
+          const elapsed = (now - clock.lastReportTime) / 1000;
+          if (diagnosticsOpenRef.current) setDiagnostics({ cameraFps: clock.cameraFrames / elapsed, inferenceFps: clock.inferenceFrames / elapsed, renderFps: clock.renderFrames / elapsed, sceneUpdates: clock.sceneUpdates / elapsed, processingMs: clock.processingMs, resultAgeMs: clock.lastResultTime ? now - clock.lastResultTime : 0 });
+          clock.cameraFrames = clock.inferenceFrames = clock.renderFrames = clock.sceneUpdates = 0;
+          clock.lastReportTime = now;
+        }
         if (now - lastInferenceRef.current < 66 || videoRef.current.readyState < 2) return;
         lastInferenceRef.current = now;
+        const processingStart = performance.now();
         const result = trackerRef.current.detectForVideo(videoRef.current, now);
-        const trustedPoints = result.landmarks.filter((_, index) => (result.handedness[index]?.[0]?.score ?? 0) >= 0.72);
-        const hands = trustedPoints
-          .map(points => analyzeSpatialHand(points, preferencesRef.current.sensitivity))
-          .filter((hand): hand is SpatialHand => Boolean(hand));
+        clock.inferenceFrames += 1;
+        clock.lastResultTime = now;
+        const candidates = result.landmarks.flatMap((points, index) => {
+          const category = result.handedness[index]?.[0];
+          if (!category || category.score < 0.72 || (category.categoryName !== "Left" && category.categoryName !== "Right")) return [];
+          const hand = analyzeSpatialHand(points, preferencesRef.current.sensitivity);
+          // The model's handedness assumes a mirrored input; pixels fed to it are raw,
+          // while the webcam preview and cursor are mirrored for a selfie view.
+          const side = displayHandSide(category.categoryName as HandSide);
+          return hand ? [{ side, hand, points, score: category.score }] : [];
+        });
+        const trusted = (["Left", "Right"] as const).flatMap(side => candidates.filter(item => item.side === side).sort((a, b) => b.score - a.score).slice(0, 1));
+        if (diagnosticsOpenRef.current) setHandConfidence({ Left: trusted.find(item => item.side === "Left")?.score ?? null, Right: trusted.find(item => item.side === "Right")?.score ?? null });
+        const trustedPoints = trusted.map(item => item.points);
+        const hands = trusted.map(({ side, hand }) => ({ side, hand }));
         drawHands(trustedPoints, videoRef.current.videoWidth || 640, videoRef.current.videoHeight || 480);
+        clock.processingMs = performance.now() - processingStart;
         setHandsDetected(hands.length);
         if (!gesturesEnabledRef.current) {
           setGestureLabel("Modo desligado");
@@ -710,6 +732,7 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
         }
         if (!hands.length) {
           if (cursorRef.current) cursorRef.current.hidden = true;
+          if (rightCursorRef.current) rightCursorRef.current.hidden = true;
           setGestureLabel("Mão não encontrada");
           lostSinceRef.current ??= now;
           if (now - lostSinceRef.current > 360 && interactionRef.current.state !== "cancelled") {
@@ -745,7 +768,7 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
             {camera === "active" ? <CameraOff size={16} /> : <Camera size={16} />}
             {camera === "active" ? "Desativar" : "Ativar câmera"}
           </button>
-          <button type="button" aria-pressed={gesturesEnabled} onClick={() => setGesturesEnabled(value => !value)}>
+          <button type="button" aria-pressed={gesturesEnabled} onClick={() => { if (gesturesEnabled) clearGestureReferences(); setGesturesEnabled(value => !value); }}>
             <Hand size={16} /> Gestos {gesturesEnabled ? "ativos" : "desligados"}
           </button>
           <button type="button" aria-pressed={menuOpen} onClick={openMenuWithControls}>
@@ -761,6 +784,7 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
           <button type="button" aria-pressed={settingsOpen} onClick={() => setSettingsOpen(value => !value)}>
             <Settings2 size={16} /> Configurar gestos
           </button>
+          <button type="button" aria-pressed={diagnosticsOpen} onClick={() => setDiagnosticsOpen(value => !value)}>Diagnóstico</button>
           <button type="button" aria-pressed={helpOpen} onClick={() => setHelpOpen(value => !value)}>
             <HelpCircle size={16} /> Ajuda
           </button>
@@ -771,10 +795,21 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
           <span>{handsDetected ? `${handsDetected} mão${handsDetected > 1 ? "s" : ""}` : "Sem mão"}</span>
           <span data-mode={interaction.state}>{statusLabel}</span>
           <span>{props.selectedLabel}</span>
+          <span>Ferramenta: {transformMode === "move" ? "Mover" : transformMode === "rotate" ? "Girar" : "Escalar"}</span>
+          <span>Esquerda: {handStatus.Left}</span><span>Direita: {handStatus.Right}</span>
           <span>Encaixe {props.snapEnabled ? "ativo" : "desligado"}</span>
           <strong>{feedback}</strong>
         </div>
       </header>
+
+      {diagnosticsOpen ? <aside className="gesture-diagnostics" aria-label="Diagnóstico local dos gestos">
+        <div><h2>Diagnóstico · neste dispositivo</h2><button type="button" onClick={() => setDiagnosticsOpen(false)} aria-label="Fechar diagnóstico"><X size={16} /></button></div>
+        <p>Câmera: {camera === "active" ? diagnostics.cameraFps.toFixed(1) : "—"} FPS · Rastreamento: {camera === "active" ? diagnostics.inferenceFps.toFixed(1) : "—"} Hz · Ciclo visual: {camera === "active" ? diagnostics.renderFps.toFixed(1) : "—"} FPS · Cena SVG: {camera === "active" ? diagnostics.sceneUpdates.toFixed(1) : "—"} atualizações/s</p>
+        <p>Processamento: {camera === "active" ? diagnostics.processingMs.toFixed(1) : "—"} ms · Idade do resultado: {camera === "active" ? diagnostics.resultAgeMs.toFixed(0) : "—"} ms</p>
+        <p>Gesto: {gestureLabel} · ferramenta {transformMode} · confiança da mão E/D: {handConfidence.Left?.toFixed(2) ?? "—"}/{handConfidence.Right?.toFixed(2) ?? "—"}</p>
+        <p>Esquerda: {handStatus.Left} · Direita: {handStatus.Right}</p>
+        <small>Webcam e landmarks permanecem no navegador. A inferência é limitada a até ~15 Hz; os cursores são desenhados no ciclo visual, e a cena SVG só atualiza quando há mudança.</small>
+      </aside> : null}
 
       {settingsOpen ? (
         <aside className="gesture-settings-panel" aria-label="Configurar gestos">
@@ -797,8 +832,8 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
           <label>Tempo para abrir menu <output>{preferences.menuDwellMs} ms</output>
             <input type="range" min="550" max="1500" step="50" value={preferences.menuDwellMs} onChange={event => setPreferences(value => ({ ...value, menuDwellMs: Number(event.target.value) }))} />
           </label>
-          <button type="button" className="gesture-panel-reset" onClick={() => setPreferences(DEFAULT_PREFERENCES)}>Restaurar padrão</button>
-          <p>Selecionar/mover: polegar + indicador. Rotacionar: {preferences.rotationPinch === "pinky" ? "polegar + mindinho" : "polegar + médio"}. Escalar: pinça com duas mãos.</p>
+          <button type="button" className="gesture-panel-reset" onClick={() => { setPreferences(DEFAULT_PREFERENCES); depthReferenceRef.current = null; setCalibrated(false); }}>Restaurar padrão</button>
+          <p>Mover e girar: escolha a ferramenta e use pinça com indicador. {preferences.rotationPinch === "pinky" ? "Polegar + mindinho" : "Polegar + médio"} também gira no modo Girar. Escalar: escolha Escalar e faça pinça com as duas mãos no mesmo objeto.</p>
         </aside>
       ) : null}
 
@@ -808,7 +843,7 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
           <p><b>Palma aberta:</b> abre as ferramentas quando nada está sendo transformado.</p>
           <p><b>Indicador + polegar:</b> escolhe menus ou captura o objeto apontado.</p>
           <p><b>{preferences.rotationPinch === "pinky" ? "Mindinho" : "Dedo médio"} + polegar:</b> rotaciona o selecionado.</p>
-          <p><b>Duas pinças:</b> altera a escala.</p>
+          <p><b>Duas pinças:</b> movem dois objetos independentes no modo Mover; só alteram escala no modo Escalar.</p>
           <p><b>Punho fechado:</b> cancela e solta com segurança.</p>
         </aside>
       ) : null}
@@ -836,7 +871,13 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
                     <span>{item.label}</span><small>{item.id === "create" ? "7 sólidos" : item.id === "scene" ? "Histórico e objetos" : "Abrir ferramentas"}</small>
                   </button>
                 ))
-              : SECTION_ACTIONS[menuSection].map(item => (
+              : SECTION_ACTIONS[menuSection].filter(item => {
+                  if (menuSection !== "measure") return true;
+                  if (item.id === "tool:formulas") return props.selectedElementKind === "solid";
+                  if (item.id === "tool:metrics") return props.selectedElementKind === "solid" || props.selectedElementKind === "edge" || props.selectedElementKind === "face";
+                  if (item.id === "tool:cuts") return props.selectedElementKind === "solid" || props.selectedElementKind === "face";
+                  return true;
+                }).map(item => (
                   <button key={item.id} type="button" data-gesture-menu-action={item.id} data-highlight={hoveredMenuAction === item.id} onClick={() => performMenuAction(item.id, false)} disabled={(item.id === "scene:undo" && !props.canUndo) || (item.id === "scene:redo" && !props.canRedo)}>
                     <span>{item.label}</span><small>Apontar + pinça</small>
                   </button>
@@ -850,10 +891,9 @@ export default function SpatialGestureWorkspaceControls(props: Props) {
       ) : null}
 
       <div ref={cursorRef} className="gesture-air-cursor" data-mode={interaction.state} data-hover={Boolean(hoveredMenuAction || hoveredObjectId)} hidden />
+      <div ref={rightCursorRef} className="gesture-air-cursor gesture-air-cursor--right" hidden />
 
-      {interaction.state === "object_dragging" ? <div className="gesture-mode-indicator">Movendo · profundidade <b data-direction={depthDirection}>{depthDirection}</b></div> : null}
-      {interaction.state === "object_rotating" ? <div className="gesture-mode-indicator gesture-mode-indicator--rotation">Rotação ativa · {preferences.rotationPinch === "pinky" ? "polegar + mindinho" : "polegar + médio"}</div> : null}
-      {interaction.state === "object_scaling" ? <div className="gesture-mode-indicator">Escala ativa · duas mãos</div> : null}
+      {handStatus.Left !== "Livre" || handStatus.Right !== "Livre" ? <div className="gesture-mode-indicator">{handStatus.Left !== "Livre" ? `Esquerda: ${handStatus.Left}` : ""} {handStatus.Right !== "Livre" ? `· Direita: ${handStatus.Right}` : ""}</div> : null}
       {calibrating ? <div className="gesture-mode-indicator">Calibrando · mantenha a palma aberta e estável</div> : null}
 
       <aside className="gesture-webcam" data-active={camera === "active"} data-visible={cameraVisible}>

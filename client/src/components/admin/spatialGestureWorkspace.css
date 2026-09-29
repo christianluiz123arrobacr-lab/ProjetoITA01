@@ -266,6 +266,12 @@
 .gesture-air-cursor[data-mode="object_rotating"],
 .gesture-air-cursor[data-mode="object_scaling"] { border-color: #a7f3d0; background: #059669; }
 .gesture-air-cursor[hidden] { display: none; }
+.gesture-air-cursor--right { border-color: #c4b5fd; box-shadow: 0 0 19px #a78bfa; }
+.gesture-diagnostics { position: fixed; right: 16px; bottom: 180px; z-index: 10130; width: min(420px, calc(100vw - 32px)); padding: 14px; border: 1px solid #334155; border-radius: 14px; color: #e2e8f0; background: #0f172a; box-shadow: 0 16px 40px #020617aa; font-size: 12px; }
+.gesture-diagnostics > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gesture-diagnostics h2 { margin: 0; font-size: 14px; }
+.gesture-diagnostics p { margin: 9px 0; }
+.gesture-diagnostics small { color: #a5b4c8; }
 .gesture-mode-indicator {
   position: fixed;
   left: 50%;

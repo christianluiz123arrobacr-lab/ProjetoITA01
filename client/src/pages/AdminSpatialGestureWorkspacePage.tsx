@@ -30,6 +30,7 @@ import SpatialGestureWorkspaceControls, {
   type GestureMenuAction,
 } from "@/components/admin/SpatialGestureWorkspaceControls";
 import { unprojectScreenDelta, type Vec3 } from "@/lib/gestures/spatialGestureEngine";
+import { faceArea, faceNormal, pickGeometry, pointDistance, type Pick, type Ray } from "@/lib/gestures/spatialPicking";
 import type { SpatialInteractionState } from "@/lib/gestures/spatialInteractionMachine";
 import "./adminSpatialGestureWorkspace.css";
 
@@ -67,7 +68,7 @@ type Vec2 = { x: number; y: number; z: number };
 type Mesh = { vertices: Vec3[]; faces: number[][] };
 type Panel = "objects" | "properties" | "geometry" | "measure";
 type CutMode = "none" | "axial" | "base" | "central" | "diagonal";
-type Measurement = { from: string; to: string; distance: number };
+type Measurement = { from: string; to: string };
 
 const VIEWBOX = { width: 900, height: 620, cx: 450, cy: 310 };
 const COLORS = ["#22d3ee", "#a78bfa", "#fb7185", "#fbbf24", "#34d399", "#60a5fa", "#f472b6"];
@@ -219,14 +220,18 @@ function metricsFor(object: SceneObject) {
   const { width, height, depth, radius, sides } = object.dimensions;
   const scale3 = object.scale ** 3;
   const scale2 = object.scale ** 2;
-  if (object.kind === "cube") return { volume: width ** 3 * scale3, area: 6 * width ** 2 * scale2, formula: "V = a³ · A = 6a²" };
-  if (object.kind === "box") return { volume: width * height * depth * scale3, area: 2 * (width * height + width * depth + height * depth) * scale2, formula: "V = abc · A = 2(ab + ac + bc)" };
-  if (object.kind === "sphere") return { volume: (4 / 3) * Math.PI * radius ** 3 * scale3, area: 4 * Math.PI * radius ** 2 * scale2, formula: "V = 4πr³/3 · A = 4πr²" };
-  if (object.kind === "cylinder") return { volume: Math.PI * radius ** 2 * height * scale3, area: 2 * Math.PI * radius * (radius + height) * scale2, formula: "V = πr²h · A = 2πr(r+h)" };
-  if (object.kind === "cone") return { volume: (Math.PI * radius ** 2 * height * scale3) / 3, area: Math.PI * radius * (radius + Math.hypot(radius, height)) * scale2, formula: "V = πr²h/3 · A = πr(r+g)" };
-  const baseArea = (sides * radius ** 2 * Math.sin((2 * Math.PI) / sides)) / 2;
-  if (object.kind === "pyramid") return { volume: (baseArea * height * scale3) / 3, area: baseArea * scale2, formula: "V = Ab·h/3" };
-  return { volume: baseArea * height * scale3, area: baseArea * scale2, formula: "V = Ab·h" };
+  const fmt = (value: number) => value.toFixed(2);
+  const w = width * object.scale, h = height * object.scale, d = depth * object.scale, r = radius * object.scale;
+  if (object.kind === "cube" || object.kind === "box") return { volume: width * height * depth * scale3, area: 2 * (width * height + width * depth + height * depth) * scale2, formula: width === height && height === depth && object.kind === "cube" ? "V = a³ · A = 6a²" : "V = abc · A = 2(ab + ac + bc)", substitution: `a=${fmt(w)}, b=${fmt(h)}, c=${fmt(d)} u. V=${fmt(w)}×${fmt(h)}×${fmt(d)}; A=2(${fmt(w)}×${fmt(h)} + ${fmt(w)}×${fmt(d)} + ${fmt(h)}×${fmt(d)}).` };
+  if (object.kind === "sphere") return { volume: (4 / 3) * Math.PI * radius ** 3 * scale3, area: 4 * Math.PI * radius ** 2 * scale2, formula: "V = 4πr³/3 · A = 4πr²", substitution: `r=${fmt(r)} u. V=4π(${fmt(r)})³/3; A=4π(${fmt(r)})².` };
+  if (object.kind === "cylinder") return { volume: Math.PI * radius ** 2 * height * scale3, area: 2 * Math.PI * radius * (radius + height) * scale2, formula: "V = πr²h · A = 2πr(r+h)", substitution: `r=${fmt(r)}, h=${fmt(h)} u. V=π(${fmt(r)})²(${fmt(h)}); A=2π(${fmt(r)})(${fmt(r)}+${fmt(h)}).` };
+  if (object.kind === "cone") return { volume: (Math.PI * radius ** 2 * height * scale3) / 3, area: Math.PI * radius * (radius + Math.hypot(radius, height)) * scale2, formula: "V = πr²h/3 · A = πr(r+g)", substitution: `r=${fmt(r)}, h=${fmt(h)}, g=${fmt(Math.hypot(r, h))} u. V=π(${fmt(r)})²(${fmt(h)})/3; A=π(${fmt(r)})(${fmt(r)}+${fmt(Math.hypot(r, h))}).` };
+  const n = Math.max(3, Math.round(sides));
+  const baseArea = (n * radius ** 2 * Math.sin((2 * Math.PI) / n)) / 2;
+  const edge = 2 * radius * Math.sin(Math.PI / n);
+  const perimeter = n * edge;
+  if (object.kind === "pyramid") return { volume: (baseArea * height * scale3) / 3, area: (baseArea + perimeter * Math.hypot(height, radius * Math.cos(Math.PI / n)) / 2) * scale2, formula: "V = Ab·h/3 · A = Ab + P·g/2", substitution: `Ab=${fmt(baseArea * scale2)} u², P=${fmt(perimeter * object.scale)} u, h=${fmt(h)} u, g=${fmt(Math.hypot(height, radius * Math.cos(Math.PI / n)) * object.scale)} u. V=Ab×h/3; A=Ab+P×g/2.` };
+  return { volume: baseArea * height * scale3, area: (2 * baseArea + perimeter * height) * scale2, formula: "V = Ab·h · A = 2Ab + P·h", substitution: `Ab=${fmt(baseArea * scale2)} u², P=${fmt(perimeter * object.scale)} u, h=${fmt(h)} u. V=Ab×h; A=2Ab+P×h.` };
 }
 
 function distance(a: Vec3, b: Vec3) {
@@ -239,6 +244,7 @@ export function AdminSpatialGestureWorkspace() {
   const objectsRef = useRef<SceneObject[]>([]);
   const continuousAnchorRef = useRef<SceneObject[] | null>(null);
   const pointerRef = useRef<{ mode: "object" | "view"; x: number; y: number; id?: string } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const previousInteractionRef = useRef<SpatialInteractionState>("idle");
   const [objects, setObjects] = useState<SceneObject[]>(initialObjects);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -259,6 +265,12 @@ export function AdminSpatialGestureWorkspace() {
   const [measureMode, setMeasureMode] = useState(false);
   const [measurementStartId, setMeasurementStartId] = useState<string | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
+  const [elementPick, setElementPick] = useState<Pick | null>(null);
+  const [hoverPick, setHoverPick] = useState<Pick | null>(null);
+  const [pointMeasureMode, setPointMeasureMode] = useState(false);
+  const [pointStart, setPointStart] = useState<Pick | null>(null);
+  const [pointMeasure, setPointMeasure] = useState<{ from: Pick; to: Pick } | null>(null);
+  const [surfaceMode, setSurfaceMode] = useState(false);
   const [notice, setNotice] = useState("Cena pronta. Use mouse, teclado ou ative a câmera.");
 
   objectsRef.current = objects;
@@ -325,6 +337,8 @@ export function AdminSpatialGestureWorkspace() {
   }
 
   function selectObject(id: string) {
+    const object = objectsRef.current.find(item => item.id === id);
+    if (object) setElementPick({ objectId: id, kind: "solid", indices: [], world: object.position, screen: project(object.position, view), label: object.name });
     if (measureMode) {
       if (!measurementStartId) {
         setMeasurementStartId(id);
@@ -332,7 +346,7 @@ export function AdminSpatialGestureWorkspace() {
       } else if (measurementStartId !== id) {
         const from = objectsRef.current.find(object => object.id === measurementStartId);
         const to = objectsRef.current.find(object => object.id === id);
-        if (from && to) setMeasurement({ from: from.id, to: to.id, distance: distance(from.position, to.position) });
+        if (from && to) setMeasurement({ from: from.id, to: to.id });
         setMeasureMode(false);
         setMeasurementStartId(null);
         setPanel("measure");
@@ -479,7 +493,7 @@ export function AdminSpatialGestureWorkspace() {
     else if (action === "view:iso") setView({ x: 20, y: -28, zoom: 1 });
     else if (action === "view:front") setView({ x: 0, y: 0, zoom: 1 });
     else if (action === "view:top") setView({ x: 90, y: 0, zoom: 1 });
-    else if (action === "tool:measure") { setMeasureMode(true); setMeasurementStartId(null); setPanel("measure"); }
+    else if (action === "tool:measure") { setPointMeasureMode(true); setPointStart(null); setPanel("measure"); }
     else if (action === "tool:cuts") { setPanel("geometry"); setCutMode(current => current === "none" ? "axial" : current); }
     else if (action === "tool:formulas" || action === "tool:metrics") setPanel("measure");
     else if (action === "tool:properties" || action === "tool:dimensions") setPanel("properties");
@@ -498,11 +512,15 @@ export function AdminSpatialGestureWorkspace() {
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    const picked = pickAt(event.clientX, event.clientY);
+    if (picked) chooseElement(picked);
+    if (pointMeasureMode) return;
     const target = (event.target as HTMLElement).closest<SVGGElement>("[data-spatial-object-id]");
-    if (target) {
-      const id = target.dataset.spatialObjectId;
+    if (target || picked) {
+      const id = picked?.objectId ?? target?.dataset.spatialObjectId;
       if (!id) return;
-      selectObject(id);
+      if (!picked || measureMode) selectObject(id);
+      else setSelectedId(id);
       beginContinuousEdit();
       pointerRef.current = { mode: "object", x: event.clientX, y: event.clientY, id };
     } else {
@@ -512,6 +530,8 @@ export function AdminSpatialGestureWorkspace() {
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const picked = pickAt(event.clientX, event.clientY);
+    setHoverPick(current => sameHover(current, picked) ? current : picked);
     const pointer = pointerRef.current;
     if (!pointer) return;
     const dx = event.clientX - pointer.x;
@@ -554,8 +574,68 @@ export function AdminSpatialGestureWorkspace() {
     const faces = mesh.faces
       .map((face, faceIndex) => ({ face, faceIndex, depth: face.reduce((sum, index) => sum + projected[index].z, 0) / face.length }))
       .sort((a, b) => a.depth - b.depth);
-    return { object, projected, faces, center: project(object.position, view) };
+    return { object, mesh, world, projected, faces, center: project(object.position, view) };
   }), [objects, view]);
+
+  function pickAt(clientX: number, clientY: number): Pick | null {
+    const svg = svgRef.current;
+    const matrix = svg?.getScreenCTM();
+    if (!svg || !matrix) return null;
+    const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse());
+    if (point.x < 0 || point.x > VIEWBOX.width || point.y < 0 || point.y > VIEWBOX.height) return null;
+    const cameraPoint = { x: (point.x - VIEWBOX.cx) / (68 * view.zoom), y: (VIEWBOX.cy - point.y) / (68 * view.zoom), z: -28 };
+    const inverse = (value: Vec3) => rotatePoint(rotatePoint(value, { x: 0, y: -view.y, z: 0 }), { x: -view.x, y: 0, z: 0 });
+    const ray: Ray = { origin: inverse({ x: 0, y: 0, z: 28 }), direction: inverse(cameraPoint) };
+    return pickGeometry(renderedObjects.map(({ object, world, projected, mesh }) => ({ objectId: object.id, world, projected, faces: mesh.faces, vertexIndices: object.kind === "sphere" || object.kind === "cylinder" ? [] : object.kind === "cone" ? [Math.floor(mesh.vertices.length / 2)] : undefined, allowEdges: !["sphere", "cylinder", "cone"].includes(object.kind) })), point.x, point.y, ray);
+  }
+
+  function sameHover(current: Pick | null, next: Pick | null) {
+    return current?.objectId === next?.objectId && current?.kind === next?.kind && current?.indices.join() === next?.indices.join() && (!current || !next || Math.hypot(current.screen.x - next.screen.x, current.screen.y - next.screen.y) < 3);
+  }
+
+  function chooseElement(pick: Pick) {
+    const object = objectsRef.current.find(item => item.id === pick.objectId);
+    const untransform = (world: Vec3): Vec3 | undefined => {
+      if (!object) return undefined;
+      const translated = { x: world.x - object.position.x, y: world.y - object.position.y, z: world.z - object.position.z };
+      const z = rotatePoint(translated, { x: 0, y: 0, z: -object.rotation.z });
+      const y = rotatePoint(z, { x: 0, y: -object.rotation.y, z: 0 });
+      const x = rotatePoint(y, { x: -object.rotation.x, y: 0, z: 0 });
+      return { x: x.x / object.scale, y: x.y / object.scale, z: x.z / object.scale };
+    };
+    const chosen = pick.kind === "face" ? { ...pick, kind: surfaceMode ? "surface" as const : "face" as const, local: untransform(pick.world), label: surfaceMode ? "Ponto livre na face" : pick.label } : pick;
+    setElementPick(chosen);
+    setSelectedId(chosen.objectId);
+    if (pointMeasureMode && (chosen.kind === "vertex" || chosen.kind === "surface")) {
+      if (!pointStart) {
+        setPointStart(chosen);
+        setNotice(`Primeiro ponto: ${chosen.label}. Escolha o segundo.`);
+      } else {
+        setPointMeasure({ from: pointStart, to: chosen });
+        setPointMeasureMode(false);
+        setPointStart(null);
+        setPanel("measure");
+      }
+    }
+  }
+
+  function currentPickWorld(pick: Pick): Vec3 | null {
+    const rendered = renderedObjects.find(item => item.object.id === pick.objectId);
+    if (!rendered) return null;
+    if (pick.kind === "vertex") return rendered.world[pick.indices[0]] ?? null;
+    if (pick.kind === "edge") {
+      const [a, b] = pick.indices.map(index => rendered.world[index]);
+      return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 } : null;
+    }
+    if ((pick.kind === "surface" || pick.kind === "face") && pick.local) return transformPoint(pick.local, rendered.object);
+    return pick.world;
+  }
+
+  const pointFrom = pointMeasure && currentPickWorld(pointMeasure.from);
+  const pointTo = pointMeasure && currentPickWorld(pointMeasure.to);
+  const pointDistanceValue = pointFrom && pointTo ? pointDistance(pointFrom, pointTo) : null;
+  const activePick = hoverPick ?? elementPick;
+  const activePickScreen = activePick ? project(currentPickWorld(activePick) ?? activePick.world, view) : null;
 
   const selectedMetrics = selected ? metricsFor(selected) : null;
   const measuredLine = measurement
@@ -565,6 +645,7 @@ export function AdminSpatialGestureWorkspace() {
         return from && to ? { from: project(from.position, view), to: project(to.position, view) } : null;
       })()
     : null;
+  const centerDistanceValue = measurement ? (() => { const from = objects.find(item => item.id === measurement.from); const to = objects.find(item => item.id === measurement.to); return from && to ? distance(from.position, to.position) : null; })() : null;
 
   return (
     <div ref={rootRef} className={`admin-spatial-workspace ${fullscreen ? "admin-spatial-workspace--fullscreen" : ""}`}>
@@ -572,18 +653,23 @@ export function AdminSpatialGestureWorkspace() {
         sceneRef={sceneRef}
         selectedObjectId={selectedId}
         selectedLabel={selected?.name ?? "Nenhum objeto"}
+        selectedElementKind={elementPick?.kind ?? null}
+        sceneRevision={renderedObjects}
         rotationX={view.x}
         rotationY={view.y}
         canUndo={past.length > 0}
         canRedo={future.length > 0}
         snapEnabled={snapEnabled}
-        onSelectObject={selectObject}
+        getObjectLabel={id => objectsRef.current.find(item => item.id === id)?.name ?? id}
+        onHoverScene={(x, y) => { const pick = pickAt(x, y); setHoverPick(current => sameHover(current, pick) ? current : pick); return pick?.objectId ?? null; }}
+        onSelectScene={(x, y) => { const pick = pickAt(x, y); if (pick) chooseElement(pick); return pick?.objectId ?? null; }}
         onMove={moveObject}
         onRotate={rotateObject}
         onScale={scaleObject}
         onMenuAction={handleMenuAction}
         onResetScene={resetScene}
         onInteractionChange={handleInteractionChange}
+        onGestureTransformChange={active => { if (active) beginContinuousEdit(); else endContinuousEdit(); }}
       />
 
       <section className="admin-spatial-stage-shell">
@@ -603,13 +689,14 @@ export function AdminSpatialGestureWorkspace() {
             className="admin-spatial-canvas"
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
+            onPointerLeave={() => setHoverPick(null)}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
             role="application"
             aria-label="Cena de geometria espacial. Arraste um objeto para mover ou arraste o fundo para girar a câmera."
           >
             <div className="admin-spatial-canvas__hint"><MousePointer2 /> Arraste o fundo para orbitar · objeto para mover</div>
-            <svg viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} preserveAspectRatio="xMidYMid meet">
+            <svg ref={svgRef} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} preserveAspectRatio="xMidYMid meet">
               <defs>
                 <radialGradient id="workspaceGlow"><stop offset="0" stopColor="#164e63" stopOpacity=".55" /><stop offset="1" stopColor="#020617" stopOpacity="0" /></radialGradient>
                 <pattern id="workspaceGrid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M 34 0 L 0 0 0 34" fill="none" stroke="#1e3a52" strokeWidth="1" /></pattern>
@@ -627,7 +714,6 @@ export function AdminSpatialGestureWorkspace() {
                   tabIndex={0}
                   role="button"
                   aria-label={`Selecionar ${object.name}`}
-                  onClick={event => { event.stopPropagation(); selectObject(object.id); }}
                   onKeyDown={event => { if (event.key === "Enter" || event.key === " ") selectObject(object.id); }}
                 >
                   {faces.map(({ face, faceIndex }) => (
@@ -644,7 +730,9 @@ export function AdminSpatialGestureWorkspace() {
                   {showCenter ? <g><circle cx={center.x} cy={center.y} r={object.id === selectedId ? 6 : 3} fill={object.id === selectedId ? "#f8fafc" : object.color} /><text x={center.x + 9} y={center.y - 8} fill="#cbd5e1" fontSize="11">{object.name}</text></g> : null}
                 </g>
               ))}
-              {measuredLine ? <g><line x1={measuredLine.from.x} y1={measuredLine.from.y} x2={measuredLine.to.x} y2={measuredLine.to.y} stroke="#facc15" strokeWidth="3" strokeDasharray="8 6" /><text x={(measuredLine.from.x + measuredLine.to.x) / 2} y={(measuredLine.from.y + measuredLine.to.y) / 2 - 10} fill="#fde047" textAnchor="middle" fontSize="13">{measurement?.distance.toFixed(2)} u</text></g> : null}
+              {activePick && activePickScreen ? <g pointerEvents="none"><circle cx={activePickScreen.x} cy={activePickScreen.y} r={activePick.kind === "vertex" ? 11 : 8} fill="none" stroke="#fde047" strokeWidth="2.5" /><text x={activePickScreen.x + 14} y={activePickScreen.y - 11} fill="#fde047" fontSize="13">{activePick.label}</text></g> : null}
+              {pointFrom && pointTo && pointDistanceValue !== null ? <g pointerEvents="none"><line x1={project(pointFrom, view).x} y1={project(pointFrom, view).y} x2={project(pointTo, view).x} y2={project(pointTo, view).y} stroke="#fde047" strokeWidth="2.5" strokeDasharray="6 4" /><circle cx={project(pointFrom, view).x} cy={project(pointFrom, view).y} r="5" fill="#fde047" /><circle cx={project(pointTo, view).x} cy={project(pointTo, view).y} r="5" fill="#fde047" /><text x={(project(pointFrom, view).x + project(pointTo, view).x) / 2} y={(project(pointFrom, view).y + project(pointTo, view).y) / 2 - 10} fill="#fde047" textAnchor="middle" fontSize="13">{pointDistanceValue.toFixed(3)} u</text></g> : null}
+              {measuredLine ? <g><line x1={measuredLine.from.x} y1={measuredLine.from.y} x2={measuredLine.to.x} y2={measuredLine.to.y} stroke="#facc15" strokeWidth="3" strokeDasharray="8 6" /><text x={(measuredLine.from.x + measuredLine.to.x) / 2} y={(measuredLine.from.y + measuredLine.to.y) / 2 - 10} fill="#fde047" textAnchor="middle" fontSize="13">{centerDistanceValue?.toFixed(2)} u</text></g> : null}
               {cutMode !== "none" && selected ? <g className="admin-spatial-cut"><ellipse cx={project(selected.position, view).x} cy={project(selected.position, view).y} rx="105" ry={cutMode === "base" ? 28 : 82} transform={cutMode === "diagonal" ? `rotate(-32 ${project(selected.position, view).x} ${project(selected.position, view).y})` : undefined} /><text x={project(selected.position, view).x} y={project(selected.position, view).y - 96} textAnchor="middle">Corte {cutMode}</text></g> : null}
             </svg>
             {!objects.length ? <div className="admin-spatial-empty"><Shapes /><h2>Cena vazia</h2><p>Adicione um sólido pela barra, pelo painel ou abrindo a palma.</p><button type="button" onClick={() => createSolid("cube")}>Criar cubo</button></div> : null}
@@ -693,10 +781,20 @@ export function AdminSpatialGestureWorkspace() {
               {panel === "measure" ? (
                 <div className="admin-spatial-panel-content">
                   <div className="admin-spatial-panel-title"><div><small>Cálculo e medição</small><h2>Análise</h2></div><Ruler /></div>
-                  {selected && selectedMetrics ? <div className="admin-spatial-metrics"><p>{selectedMetrics.formula}</p><div><span>Volume<b>{selectedMetrics.volume.toFixed(2)} u³</b></span><span>Área<b>{selectedMetrics.area.toFixed(2)} u²</b></span></div></div> : <p className="admin-spatial-muted">Selecione um sólido para ver fórmulas, área e volume.</p>}
+                  {selected && selectedMetrics ? <div className="admin-spatial-metrics"><p>{selectedMetrics.formula}</p><p>{selectedMetrics.substitution}</p><div><span>Volume<b>{selectedMetrics.volume.toFixed(2)} u³</b></span><span>Área<b>{selectedMetrics.area.toFixed(2)} u²</b></span></div></div> : <p className="admin-spatial-muted">Selecione um sólido para ver fórmulas, área e volume.</p>}
                   <button className="wide" type="button" aria-pressed={measureMode} onClick={() => { setMeasureMode(value => !value); setMeasurementStartId(null); }}>{measureMode ? "Cancelar medição" : "Medir entre centros"}</button>
+                  <button className="wide" type="button" aria-pressed={pointMeasureMode} onClick={() => { setPointMeasureMode(value => !value); setPointStart(null); }}>{pointMeasureMode ? "Cancelar medição de pontos" : "Medir dois pontos"}</button>
+                  <button className="wide" type="button" aria-pressed={surfaceMode} onClick={() => setSurfaceMode(value => !value)}>Seleção: {surfaceMode ? "ponto livre na face" : "face inteira"}</button>
+                  {pointMeasureMode ? <p className="admin-spatial-callout">{pointStart ? `Primeiro ponto: ${pointStart.label}. Escolha o segundo.` : "Escolha um vértice ou ponto livre na superfície."}</p> : null}
+                  {elementPick ? <div className="admin-spatial-measurement"><span>{elementPick.label}</span>
+                    {elementPick.kind === "vertex" && currentPickWorld(elementPick) ? <p>Coordenadas: ({Object.values(currentPickWorld(elementPick)!).map(value => value.toFixed(2)).join(", ")}) u</p> : null}
+                    {elementPick.kind === "edge" ? (() => { const item = renderedObjects.find(entry => entry.object.id === elementPick.objectId); const [a, b] = elementPick.indices.map(index => item?.world[index]); return a && b ? <p>Comprimento = √(Δx² + Δy² + Δz²) = {pointDistance(a, b).toFixed(3)} u. Distância entre os dois vértices desta aresta. Ponto médio = ({((a.x + b.x) / 2).toFixed(2)}, {((a.y + b.y) / 2).toFixed(2)}, {((a.z + b.z) / 2).toFixed(2)}) u.</p> : null; })() : null}
+                    {elementPick.kind === "face" ? (() => { const item = renderedObjects.find(entry => entry.object.id === elementPick.objectId); const face = item?.mesh.faces[elementPick.indices[0]]; const normal = item && face ? faceNormal(item.world, face) : null; return item && face ? <p>Área da face = soma das áreas triangulares = {faceArea(item.world, face).toFixed(3)} u²{["sphere", "cylinder", "cone"].includes(item.object.kind) ? " (aproximação da malha poligonal)" : ""}. {normal ? `Normal unitária: (${normal.x.toFixed(2)}, ${normal.y.toFixed(2)}, ${normal.z.toFixed(2)}).` : ""}</p> : null; })() : null}
+                    {elementPick.kind === "surface" && currentPickWorld(elementPick) ? <p>Ponto livre: ({Object.values(currentPickWorld(elementPick)!).map(value => value.toFixed(2)).join(", ")}) u. Interseção do cursor com a superfície.</p> : null}
+                  </div> : null}
+                  {pointDistanceValue !== null && pointFrom && pointTo ? <div className="admin-spatial-measurement"><span>Distância entre pontos selecionados</span><b>{pointDistanceValue.toFixed(3)} u</b><p>d = √[({pointTo.x.toFixed(2)} − {pointFrom.x.toFixed(2)})² + ({pointTo.y.toFixed(2)} − {pointFrom.y.toFixed(2)})² + ({pointTo.z.toFixed(2)} − {pointFrom.z.toFixed(2)})²]. Medida calculada nas coordenadas atuais da cena.</p><button type="button" onClick={() => setPointMeasure(null)}>Limpar</button></div> : null}
                   {measureMode ? <p className="admin-spatial-callout">{measurementStartId ? "Escolha o segundo objeto." : "Escolha o primeiro objeto na cena ou lista."}</p> : null}
-                  {measurement ? <div className="admin-spatial-measurement"><span>Distância atual</span><b>{measurement.distance.toFixed(3)} unidades</b><button type="button" onClick={() => setMeasurement(null)}>Limpar medida</button></div> : null}
+                  {measurement && centerDistanceValue !== null ? <div className="admin-spatial-measurement"><span>Distância atual entre centros</span><b>{centerDistanceValue.toFixed(3)} unidades</b><button type="button" onClick={() => setMeasurement(null)}>Limpar medida</button></div> : null}
                 </div>
               ) : null}
             </aside>
