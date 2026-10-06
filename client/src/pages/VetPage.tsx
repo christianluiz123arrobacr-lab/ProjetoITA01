@@ -20,6 +20,13 @@ import { Card } from "@/components/ui/card";
 
 const secondaryModules = [
   {
+    title: "Análise das provas",
+    description: "Consulte a incidência dos conteúdos e assuntos nas provas cadastradas, por instituição, disciplina e ano.",
+    href: "/vet/analise-provas",
+    icon: BarChart3,
+    enabled: true,
+  },
+  {
     title: "Objetivo",
     description:
       "Configure sua prova-alvo, tempo até a prova, horas por dia e disciplina foco.",

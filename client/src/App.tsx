@@ -176,6 +176,7 @@ import MinhaAssinaturaPage from "./pages/MinhaAssinaturaPage";
 import RankingPage from "./pages/RankingPage";
 
 const VetPage = lazyWithRetry("VetPage", () => import("./pages/VetPage"));
+const VetExamAnalysisPage = lazyWithRetry("VetExamAnalysisPage", () => import("./pages/VetExamAnalysisPage"));
 const VetDiagnosisPage = lazyWithRetry(
   "VetDiagnosisPage",
   () => import("./pages/VetDiagnosisPage")
@@ -537,6 +538,7 @@ function PrivateRouter() {
             <Route path="/ranking" component={RankingPage} />
 
             <Route path="/vet" component={VetPage} />
+            <Route path="/vet/analise-provas" component={VetExamAnalysisPage} />
             <Route path="/vet/diagnostico" component={VetDiagnosisPage} />
             <Route path="/vet/objetivo" component={VetObjectivePage} />
             <Route path="/vet/plano" component={VetPlanPage} />

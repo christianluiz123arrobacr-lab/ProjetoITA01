@@ -8,7 +8,7 @@ import { chemistryResolutionBlockSchema, safeChemistryLatexSchema, safeResolutio
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies.js";
 import { systemRouter } from "./_core/systemRouter.js";
-import { adminOrEditorProcedure, adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
+import { adminOrEditorProcedure, adminProcedure, platformAccessProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
 import { invokeLLM } from "./_core/llm.js";
 import { assertRateLimit, assertRequestRateLimit } from "./_core/rateLimit.js";
 import { supabaseAdmin } from "./_core/supabaseAdmin.js";
@@ -43,6 +43,8 @@ import { createGoogleDriveConnectUrl, createNotebook, disconnectGoogleDrive, get
 import { createQuestionReport } from "./questionReports.js";
 import { assertUserCanCheckoutPlan, hasLegacyFounderEligibility, hasValidPlanInvite, isSamePlanFamily, LEGACY_FOUNDER_SLUG, publicPlanAvailability } from "./billing/legacyFounderPricing.js";
 import { getCanonicalVetAnalysis, safeQuestionDto, VET_ENGINE_VERSION } from "./vet/vetService.js";
+import { getExamAnalysis } from "./vet/examAnalysisService.js";
+import { examAnalysisFiltersSchema } from "../shared/vet/examAnalysis.js";
 import { normalizeVetText } from "../shared/vet/vetEngine.js";
 import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetContent, postgrestAliasFilter, prioritizeVetCandidates } from "./vet/vetQuestionSelection.js";
 import { fetchAllQuestionPages } from "./questions/questionPagination.js";
@@ -3181,6 +3183,7 @@ export const appRouter = router({
   }),
 
   vet: router({
+    getExamAnalysis: platformAccessProcedure.input(examAnalysisFiltersSchema).query(({ input }) => getExamAnalysis(input)),
     getAnalysis: protectedProcedure.query(async ({ ctx }) => getCanonicalVetAnalysis(ctx.user.id)),
 
     getObjective: protectedProcedure.query(async ({ ctx }) => {
