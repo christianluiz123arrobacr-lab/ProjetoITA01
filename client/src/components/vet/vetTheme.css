@@ -1,0 +1,229 @@
+/* Compatibility for the existing VET semantic palette only. No !important,
+   no new theme state, no effect outside .vet-theme. Bright hero/action colors stay intact. */
+.dark .vet-theme.theme-page {
+  color: #f1f5f9;
+  background-color: #0b1526;
+}
+.dark .vet-theme.theme-page header {
+  background-color: rgb(15 23 42 / 96%);
+  border-color: #334155;
+}
+.dark
+  .vet-theme.theme-page
+  :is(
+    .bg-white,
+    .bg-white\/80,
+    .bg-white\/85,
+    .bg-white\/90,
+    .bg-slate-50,
+    .bg-slate-100,
+    .bg-slate-200
+  ) {
+  background-color: #172033;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-slate-900, .text-slate-800, .text-slate-700) {
+  color: #f1f5f9;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+  color: #b8c8dc;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-slate-100, .border-slate-200, .border-slate-300) {
+  border-color: #334155;
+}
+.dark
+  .vet-theme.theme-page
+  :is(
+    .from-white,
+    .from-slate-50,
+    .from-emerald-50,
+    .from-blue-50,
+    .from-amber-50,
+    .from-red-50
+  ) {
+  --tw-gradient-from: #172033;
+  --tw-gradient-via: #172033;
+  --tw-gradient-to: #14283a;
+}
+.dark .vet-theme.theme-page :is(input, select, textarea) {
+  color-scheme: dark;
+}
+.dark
+  .vet-theme.theme-page
+  :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]):not(
+    [type="range"]
+  ) {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  border-color: #475569;
+}
+.dark .vet-theme.theme-page :is(input, textarea)::placeholder {
+  color: #94a3b8;
+}
+.dark .vet-theme.theme-page option {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+.dark .vet-theme.theme-page :disabled {
+  opacity: 0.55;
+}
+.dark
+  .vet-theme.theme-page
+  :is([class~="hover:bg-slate-50"], [class~="hover:bg-slate-100"]):hover {
+  background-color: #25344d;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.bg-emerald-50, .bg-emerald-100, .bg-emerald-200) {
+  background-color: #12392f;
+}
+.dark
+  .vet-theme.theme-page
+  :is(
+    .text-emerald-600,
+    .text-emerald-700,
+    .text-emerald-800,
+    .text-emerald-900
+  ) {
+  color: #a7f3d0;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-emerald-100, .border-emerald-200, .border-emerald-300) {
+  border-color: #12392f;
+}
+.dark .vet-theme.theme-page :is(.bg-teal-50, .bg-teal-100, .bg-teal-200) {
+  background-color: #153b3d;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-teal-600, .text-teal-700, .text-teal-800, .text-teal-900) {
+  color: #99f6e4;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-teal-100, .border-teal-200, .border-teal-300) {
+  border-color: #153b3d;
+}
+.dark .vet-theme.theme-page :is(.bg-cyan-50, .bg-cyan-100, .bg-cyan-200) {
+  background-color: #143747;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-cyan-600, .text-cyan-700, .text-cyan-800, .text-cyan-900) {
+  color: #a5f3fc;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-cyan-100, .border-cyan-200, .border-cyan-300) {
+  border-color: #143747;
+}
+.dark .vet-theme.theme-page :is(.bg-blue-50, .bg-blue-100, .bg-blue-200) {
+  background-color: #162e50;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900) {
+  color: #bfdbfe;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-blue-100, .border-blue-200, .border-blue-300) {
+  border-color: #162e50;
+}
+.dark .vet-theme.theme-page :is(.bg-purple-50, .bg-purple-100, .bg-purple-200) {
+  background-color: #302448;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-purple-600, .text-purple-700, .text-purple-800, .text-purple-900) {
+  color: #e9d5ff;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-purple-100, .border-purple-200, .border-purple-300) {
+  border-color: #302448;
+}
+.dark .vet-theme.theme-page :is(.bg-violet-50, .bg-violet-100, .bg-violet-200) {
+  background-color: #302448;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-violet-600, .text-violet-700, .text-violet-800, .text-violet-900) {
+  color: #ddd6fe;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-violet-100, .border-violet-200, .border-violet-300) {
+  border-color: #302448;
+}
+.dark .vet-theme.theme-page :is(.bg-indigo-50, .bg-indigo-100, .bg-indigo-200) {
+  background-color: #272e51;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-indigo-600, .text-indigo-700, .text-indigo-800, .text-indigo-900) {
+  color: #c7d2fe;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-indigo-100, .border-indigo-200, .border-indigo-300) {
+  border-color: #272e51;
+}
+.dark .vet-theme.theme-page :is(.bg-red-50, .bg-red-100, .bg-red-200) {
+  background-color: #42232e;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-red-600, .text-red-700, .text-red-800, .text-red-900) {
+  color: #fecaca;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-red-100, .border-red-200, .border-red-300) {
+  border-color: #42232e;
+}
+.dark .vet-theme.theme-page :is(.bg-amber-50, .bg-amber-100, .bg-amber-200) {
+  background-color: #3c3324;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900) {
+  color: #fde68a;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-amber-100, .border-amber-200, .border-amber-300) {
+  border-color: #3c3324;
+}
+.dark .vet-theme.theme-page :is(.bg-yellow-50, .bg-yellow-100, .bg-yellow-200) {
+  background-color: #3c3324;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-yellow-600, .text-yellow-700, .text-yellow-800, .text-yellow-900) {
+  color: #fef08a;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-yellow-100, .border-yellow-200, .border-yellow-300) {
+  border-color: #3c3324;
+}
+.dark .vet-theme.theme-page :is(.bg-orange-50, .bg-orange-100, .bg-orange-200) {
+  background-color: #3c2b24;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.text-orange-600, .text-orange-700, .text-orange-800, .text-orange-900) {
+  color: #fed7aa;
+}
+.dark
+  .vet-theme.theme-page
+  :is(.border-orange-100, .border-orange-200, .border-orange-300) {
+  border-color: #3c2b24;
+}

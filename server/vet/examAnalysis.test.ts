@@ -166,6 +166,9 @@ describe("Análise das provas: questões distintas e taxonomia canônica", () =>
       "institution",
       "subject",
       "topics",
+      "subtopics",
+      "exam",
+      "years",
     ]);
     expect(url.searchParams.get("topics")).toBe("Mecânica");
   });

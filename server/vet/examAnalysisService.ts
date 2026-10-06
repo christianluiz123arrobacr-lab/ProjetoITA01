@@ -7,7 +7,27 @@ import {
   type ExamAnalysisRow,
 } from "../../shared/vet/examAnalysis.js";
 
-export async function getExamAnalysis(filters: ExamAnalysisFilters) {
+// Only public metadata, shared after platform authorization. Bounded, process-local
+// lifetime: not a persistent cache and never contains user performance or identities.
+let cache: { rows: ExamAnalysisRow[]; expires: number } | undefined;
+let pending: Promise<ExamAnalysisRow[]> | undefined;
+export function clearExamAnalysisCache() {
+  cache = undefined;
+  pending = undefined;
+}
+async function readRows() {
+  if (cache && cache.expires > Date.now()) return cache.rows;
+  if (pending) return pending;
+  pending = loadRows();
+  try {
+    const rows = await pending;
+    cache = { rows, expires: Date.now() + 60_000 };
+    return rows;
+  } finally {
+    pending = undefined;
+  }
+}
+async function loadRows() {
   const rows = await fetchAllQuestionPages<ExamAnalysisRow>(
     async (from, to) => {
       const { data, error } = await supabaseAdmin
@@ -27,5 +47,8 @@ export async function getExamAnalysis(filters: ExamAnalysisFilters) {
       return (data ?? []) as unknown as ExamAnalysisRow[];
     }
   );
-  return buildExamAnalysis(rows, filters);
+  return rows;
+}
+export async function getExamAnalysis(filters: ExamAnalysisFilters) {
+  return buildExamAnalysis(await readRows(), filters);
 }

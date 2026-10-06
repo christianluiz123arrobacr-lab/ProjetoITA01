@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
-import { getExamAnalysis } from "./examAnalysisService";
+import { getExamAnalysis, clearExamAnalysisCache } from "./examAnalysisService";
 import { platformAccessProcedure, router } from "../_core/trpc";
 import { examAnalysisFiltersSchema } from "../../shared/vet/examAnalysis";
 import { readFileSync } from "node:fs";
@@ -26,11 +26,27 @@ const api = router({
 const context = (user: unknown) => ({ user, req: {}, res: {} }) as any;
 
 beforeEach(() => {
+  clearExamAnalysisCache();
   vi.clearAllMocks();
   mocks.access.mockResolvedValue(undefined);
 });
 
 describe("API de análise: cobertura e acesso", () => {
+  it("reaproveita metadados públicos por 60 segundos, mantendo autorização antes do cache", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    mocks.range.mockResolvedValue({ data: [], error: null });
+    await getExamAnalysis({});
+    await getExamAnalysis({ subject: "Física" });
+    expect(mocks.range).toHaveBeenCalledTimes(1);
+    mocks.access.mockRejectedValueOnce(new TRPCError({ code: "FORBIDDEN" }));
+    await expect(
+      api.createCaller(context({ id: "student" })).getExamAnalysis({})
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    clock.mockReturnValue(61001);
+    await getExamAnalysis({});
+    expect(mocks.range).toHaveBeenCalledTimes(2);
+    clock.mockRestore();
+  });
   it("pagina além do limite padrão e não retorna IDs nem conteúdo privado", async () => {
     mocks.range.mockImplementation(async (from: number, to: number) => ({
       data: Array.from(

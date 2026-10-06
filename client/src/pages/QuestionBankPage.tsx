@@ -11,6 +11,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
 import { getDifficultyLabel, getDifficultyOrder, normalizeDifficulty } from "@shared/difficulty";
+import { parseQuestionBankUrlFilters } from "@shared/questionBankUrlFilters";
 import {
   ArrowLeft,
   Zap,
@@ -42,34 +43,7 @@ function normalizeText(value?: string | null) {
 }
 
 function parseVetFiltersFromUrl() {
-  if (typeof window === "undefined") {
-    return {
-      subjects: [] as string[],
-      institution: "",
-      topics: [] as string[],
-      block: "",
-    };
-  }
-
-  const params = new URLSearchParams(window.location.search);
-
-  const subject = params.get("subject") || "";
-  const institution = params.get("institution") || "";
-  const block = params.get("block") || "";
-  const topicsParam = params.get("topics") || "";
-
-  const topics = topicsParam
-    .split(",")
-    .map((item) => decodeURIComponent(item))
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return {
-    subjects: subject ? [subject] : [],
-    institution,
-    topics,
-    block,
-  };
+  return parseQuestionBankUrlFilters(typeof window === "undefined" ? "" : window.location.search);
 }
 
 function toggleValue(list: string[], value: string) {
@@ -410,7 +384,13 @@ export default function QuestionBankPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
   const initialVetFilters = useMemo(() => parseVetFiltersFromUrl(), []);
 
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [sourceQuestions, setQuestions] = useState<Question[]>([]);
+  const [linkedExam, setLinkedExam] = useState(initialVetFilters.exam);
+  const [linkedInterval, setLinkedInterval] = useState(initialVetFilters.interval);
+  const questions = useMemo(() => sourceQuestions.filter(q =>
+    (!linkedExam || normalizeText(q.exam) === normalizeText(linkedExam)) &&
+    (!linkedInterval || (q.year != null && Number(q.year) >= linkedInterval.from && Number(q.year) <= linkedInterval.to))
+  ), [sourceQuestions, linkedExam, linkedInterval]);
   const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -418,14 +398,14 @@ export default function QuestionBankPage() {
   const [selectedInstitutions, setSelectedInstitutions] = useState<string[]>(
     initialVetFilters.institution ? [initialVetFilters.institution] : []
   );
-  const [selectedYears, setSelectedYears] = useState<string[]>([]);
+  const [selectedYears, setSelectedYears] = useState<string[]>(initialVetFilters.years);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(
     initialVetFilters.subjects
   );
   const [selectedTopics, setSelectedTopics] = useState<string[]>(
     initialVetFilters.topics
   );
-  const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
+  const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>(initialVetFilters.subtopics);
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([]);
   const [selectedPracticeStatus, setSelectedPracticeStatus] =
     useState<PracticeStatusFilter>("all");
@@ -973,6 +953,8 @@ export default function QuestionBankPage() {
   function clearAllFilters() {
     setSearchTerm("");
     setSelectedInstitutions([]);
+    setLinkedExam("");
+    setLinkedInterval(undefined);
     setSelectedYears([]);
     setSelectedSubjects([]);
     setSelectedTopics([]);
@@ -1096,6 +1078,10 @@ export default function QuestionBankPage() {
       </header>
 
       <main className="container py-8 space-y-7">
+        {(linkedExam || linkedInterval) && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+          <span>Recorte da análise: {linkedExam || "Todas as bancas"}{linkedInterval ? ` · ${linkedInterval.from}–${linkedInterval.to}` : ""}</span>
+          <Button variant="outline" onClick={() => { setLinkedExam(""); setLinkedInterval(undefined); }}>Remover recorte</Button>
+        </div>}
         {hasVetFilter ? (
           <section>
             <Card className="p-4 md:p-5 border-emerald-200 bg-emerald-50/70 shadow-sm">

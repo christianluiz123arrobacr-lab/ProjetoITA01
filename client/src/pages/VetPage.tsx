@@ -97,7 +97,7 @@ const strategyPreview = [
 
 export default function VetPage() {
   return (
-    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50">
+    <div className="vet-theme theme-page min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/">
@@ -480,18 +480,18 @@ export default function VetPage() {
               Outros módulos
             </h2>
             <p className="text-sm text-slate-500">
-              Configuração e simulado continuam separados.
+              Explore as provas, configure seu objetivo e pratique com simulados.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-5">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {secondaryModules.map((module) => {
               const Icon = module.icon;
 
               return (
                 <Card
                   key={module.title}
-                  className={`p-6 rounded-2xl shadow-sm border ${
+                  className={`flex flex-col gap-0 p-5 rounded-2xl shadow-sm border ${
                     module.enabled
                       ? "border-slate-200 bg-white"
                       : "border-slate-200 bg-slate-50"
@@ -517,14 +517,14 @@ export default function VetPage() {
                     {module.title}
                   </h3>
 
-                  <p className="text-sm text-slate-600 leading-relaxed mb-6">
+                  <p className="text-sm text-slate-600 leading-relaxed mb-5 flex-1">
                     {module.description}
                   </p>
 
                   {module.enabled ? (
                     <Link href={module.href}>
                       <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                        Abrir módulo
+                        {module.href === "/vet/analise-provas" ? "Analisar provas" : "Abrir módulo"}
                       </Button>
                     </Link>
                   ) : (
