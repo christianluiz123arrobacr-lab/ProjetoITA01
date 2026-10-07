@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { VectorPdf, generateQuestionPdf, measurePdfMath } from "../client/src/lib/questionPdfGenerator";
 import { PdfUnicodeFont } from "../client/src/lib/questionPdfUnicodeFont";
+import { QuestionPdfError } from "../client/src/lib/questionPdfErrors";
 import type { Question } from "../client/src/types/question";
 
 const fontBytes = readFileSync(new URL("../client/public/fonts/pdf/DejaVuSans.ttf", import.meta.url));
@@ -77,7 +78,7 @@ describe("Unicode no PDF real de questões", () => {
     vi.stubGlobal("window", { setTimeout: vi.fn() });
     const question: Question = {
       id: "unicode", subject: "matematica", topic: "Álgebra", institution: "ITA", year: 2026,
-      statement: `${text}\n$${formula}$`,
+      statement: `${text}\n$${formula}$\n$$A^n=\\underbrace{A\\cdot A\\cdots A}_{n\\text{ vezes}}$$\n$$\\overbrace{a+b+c}^{\\text{soma}}$$`,
       options: [{ id: "a", label: "A", text }, { id: "b", label: "B", text: `$${formula}$` }],
       correctOptionId: "a", difficulty: "medio",
     };
@@ -101,6 +102,33 @@ describe("Unicode no PDF real de questões", () => {
     mockAssets();
     const pdf = new VectorPdf(""); pdf.addPage(); pdf.text("\u{10FFFF}", 44, 100);
     await expect(pdf.blob("Sem glifo")).rejects.toThrow("U+10FFFF");
+  });
+
+  it.each([
+    [String.raw`A^n=\underbrace{A\cdot A\cdot A\cdots A}_{n\text{ vezes}}`, "⏟"],
+    [String.raw`\overbrace{a+b+c}^{\text{soma}}`, "⏞"],
+  ])("exporta chave extensível e anotação sem depender de glifo: %s", async (formula, brace) => {
+    mockAssets();
+    const glyph = vi.spyOn(PdfUnicodeFont.prototype, "glyph");
+    const pdf = new VectorPdf(""); pdf.addPage();
+    const box = measurePdfMath(formula, 12);
+    box.draw(pdf, 44, 100, "#172033");
+    const blob = await pdf.blob("Chaves matemáticas");
+    expect(box.height).toBeGreaterThan(measurePdfMath("A+a+b", 12).height);
+    expect(await blob.text()).toContain(" c S Q");
+    expect((await extract(blob)).join("")).toContain(brace);
+    expect((await extract(blob)).join("").replace(/\u00a0/g, " ")).toContain(formula.includes("vezes") ? "n vezes" : "soma");
+    expect(glyph.mock.calls.some(([char]) => char === brace)).toBe(false);
+  });
+
+  it("mostra mensagem acionável para um símbolo realmente não suportado", () => {
+    const font = new PdfUnicodeFont(fontBytes);
+    try { font.glyph("\u{10FFFF}"); throw new Error("Deveria falhar"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(QuestionPdfError);
+      expect((error as QuestionPdfError).userMessage).toContain("ainda não é suportado na exportação PDF");
+      expect((error as QuestionPdfError).userMessage).not.toContain("glifo");
+    }
   });
 
   it("resolve glifos Unicode além do BMP e recusa glifo zero", () => {

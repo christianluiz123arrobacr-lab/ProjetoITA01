@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
 import { exportQuestionsForPdf, getQuestions } from "@/services/questions.service";
+import { QuestionPdfError } from "@/lib/questionPdfErrors";
 import { buildPdfFilterSummary } from "@/lib/questionPdfLayout";
 import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { trpc } from "@/lib/trpc";
@@ -1010,7 +1011,7 @@ export default function QuestionBankPage() {
         "navegador não conseguiu preparar",
         "Nenhuma questão",
       ].some(fragment => message.includes(fragment));
-      setPdfMessage(safeMessage
+      setPdfMessage(error instanceof QuestionPdfError ? error.userMessage : safeMessage
         ? message
         : "Não foi possível gerar o PDF neste navegador. Atualize a página e tente novamente.");
     } finally {

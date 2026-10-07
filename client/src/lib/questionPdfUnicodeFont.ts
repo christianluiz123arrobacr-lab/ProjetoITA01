@@ -1,3 +1,5 @@
+import { QuestionPdfError } from "./questionPdfErrors";
+
 /** Supplemental embedded font; Helvetica remains the font for existing prose.
  * No glyph-zero fallback: unsupported content must produce an actionable error.
  */
@@ -63,7 +65,10 @@ export class PdfUnicodeFont {
         break;
       }
     }
-    if (!id) throw new Error(`O PDF não possui glifo para “${char}” (U+${code.toString(16).toUpperCase()}). O conteúdo não foi substituído; adicione uma fonte com cobertura para este caractere.`);
+    if (!id) throw new QuestionPdfError(
+      `O PDF não possui glifo para “${char}” (U+${code.toString(16).toUpperCase()}). O conteúdo não foi substituído; adicione uma fonte com cobertura para este caractere.`,
+      `A lista contém o símbolo “${char}”, que ainda não é suportado na exportação PDF. Nenhuma questão foi alterada.`,
+    );
     return { id, width: v.getUint16(this.metrics + Math.min(id, this.metricCount - 1) * 4) * 1000 / this.units };
   }
 }
@@ -71,7 +76,10 @@ export class PdfUnicodeFont {
 let fontPromise: Promise<PdfUnicodeFont> | undefined;
 export function loadPdfUnicodeFont() {
   return fontPromise ??= fetch("/fonts/pdf/DejaVuSans.ttf").then(async response => {
-    if (!response.ok) throw new Error("Não foi possível carregar a fonte Unicode do PDF.");
+    if (!response.ok) throw new QuestionPdfError("Não foi possível carregar a fonte Unicode do PDF. Verifique sua conexão e tente novamente.");
     return new PdfUnicodeFont(new Uint8Array(await response.arrayBuffer()));
-  }).catch(error => { fontPromise = undefined; throw error; });
+  }).catch(error => {
+    fontPromise = undefined;
+    throw error instanceof QuestionPdfError ? error : new QuestionPdfError("Não foi possível carregar a fonte Unicode do PDF. Verifique sua conexão e tente novamente.");
+  });
 }

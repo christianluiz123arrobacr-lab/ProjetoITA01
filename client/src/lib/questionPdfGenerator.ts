@@ -1,4 +1,5 @@
 import { loadPdfUnicodeFont } from "./questionPdfUnicodeFont";
+import { QuestionPdfError } from "./questionPdfErrors";
 import type { Question } from "@/types/question";
 import { normalizeMathSource, renderMathToMathMl } from "./mathRendering";
 import { buildPdfFileName, chunkAnswers, fitPdfImage, getQuestionPdfTags, QUESTION_PDF_LAYOUT } from "./questionPdfLayout";
@@ -297,9 +298,46 @@ function parseMathMl(value: string): MathTree {
   return root;
 }
 
+// KaTeX represents stretchy braces as U+23DF/U+23DE in MathML. The embedded
+// prose font lacks those glyphs; draw the actual brace to the expression width.
+function horizontalBraceBox(width: number, size: number, under: boolean): MathBox {
+  const height = size * 0.45;
+  const half = width / 2;
+  const bend = Math.min(size * 0.55, width / 4);
+  return { width, height, baseline: height, draw: (pdf, x, top, color) => {
+    const y = PAGE_HEIGHT - top - (under ? 0 : height);
+    pdf.command(`q 1 0 0 ${under ? -1 : 1} ${x.toFixed(2)} ${y.toFixed(2)} cm ${rgb(color)} RG 0.65 w
+0 0 m 0 ${height * 0.4} ${bend * 0.4} ${height * 0.5} ${bend} ${height * 0.5} c
+${half - bend} ${height * 0.5} l ${half - bend * 0.3} ${height * 0.5} ${half} ${height * 0.65} ${half} ${height} c
+${half} ${height * 0.65} ${half + bend * 0.3} ${height * 0.5} ${half + bend} ${height * 0.5} c
+${width - bend} ${height * 0.5} l ${width - bend * 0.4} ${height * 0.5} ${width} ${height * 0.4} ${width} 0 c S Q`);
+  } };
+}
+
+function hasHorizontalBrace(node: MathTree) {
+  return node.children.length === 2 && node.children[1].tag === "mo"
+    && ((node.tag === "munder" && node.children[1].text.trim() === "⏟")
+      || (node.tag === "mover" && node.children[1].text.trim() === "⏞"));
+}
+
 function mathBox(node: MathTree, size: number): MathBox {
+  if (["munder", "mover"].includes(node.tag) && node.children.length === 2
+    && (hasHorizontalBrace(node) || hasHorizontalBrace(node.children[0]))) {
+    const under = node.tag === "munder";
+    const base = mathBox(node.children[0], size);
+    const decoration = node.children[1];
+    const brace = decoration.tag === "mo" && decoration.text.trim() === (under ? "⏟" : "⏞");
+    const annotation = brace ? horizontalBraceBox(base.width, size, under) : mathBox(decoration, size * 0.7);
+    const width = Math.max(base.width, annotation.width);
+    const gap = brace ? 1 : 2;
+    const offset = annotation.height + gap;
+    return { width, height: base.height + offset, baseline: base.baseline + (under ? 0 : offset), draw: (pdf, x, top, color) => {
+      base.draw(pdf, x + (width - base.width) / 2, top + (under ? 0 : offset), color);
+      annotation.draw(pdf, x + (width - annotation.width) / 2, top + (under ? base.height + gap : 0), color);
+    } };
+  }
   const childSize = node.tag === "mfrac" ? size * 0.82 : ["msup", "msub", "msubsup"].includes(node.tag) ? size * 0.7 : size;
-  const children = node.children.map((child, index) => mathBox(child, index === 0 && ["msup", "msub", "msubsup"].includes(node.tag) ? size : childSize)); const leaf = node.text.trim();
+  const children = node.children.map((child, index) => mathBox(child, index === 0 && ["msup", "msub", "msubsup"].includes(node.tag) ? size : childSize)); const leaf = node.tag === "mtext" ? node.text : node.text.trim();
   if (leaf && !children.length) {
     const width = Math.max(size * 0.28, textWidth(leaf, size));
     return { width, height: size * 1.18, baseline: size * 0.88, draw: (pdf, x, top, color) => pdf.mixedText(leaf, x, top + size * 0.88, size, color) };
@@ -372,7 +410,7 @@ const subscriptMap: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂
 function mappedScript(value: string, map: Record<string, string>, fallback: "^" | "_") { const converted = Array.from(value).map(char => map[char]).join(""); return converted.length === value.length ? converted : `${fallback}(${value})`; }
 function mathTreeToText(node: MathTree): string {
   if (node.tag === "annotation" || node.tag === "annotation-xml") return "";
-  const children = node.children.map(mathTreeToText); const own = node.text.trim();
+  const children = node.children.map(mathTreeToText); const own = node.tag === "mtext" ? node.text : node.text.trim();
   if (node.tag === "mspace") return " ";
   if (node.tag === "mfrac") return `(${children[0] ?? ""})/(${children[1] ?? ""})`;
   if (node.tag === "msqrt") return `√(${children.join("")})`;
@@ -418,7 +456,7 @@ async function loadPdfImage(url?: string): Promise<PdfImage | null> {
 export async function generateQuestionPdf(input: { questions: Question[]; filterSummary: string; logoUrl?: string }) {
   if (!input.questions.length) throw new Error("Nenhuma questão encontrada para exportar.");
   const logoResponse = await fetch(input.logoUrl ?? "/brand/projeto-vetor-logo.svg");
-  if (!logoResponse.ok) throw new Error("Não foi possível carregar o logo do Projeto Vetor para o PDF.");
+  if (!logoResponse.ok) throw new QuestionPdfError("Não foi possível carregar o logo do Projeto Vetor para o PDF. Verifique sua conexão e tente novamente.");
   const pdf = new VectorPdf(buildPdfLogoForm(await logoResponse.text())); let y = CONTENT_TOP; let pageNumber = 0;
   const startPage = () => { pdf.addPage(); pageNumber += 1; pdf.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, IVORY); pdf.watermark(); pdf.logo(MARGIN, 19, 34); pdf.text("PROJETO VETOR", MARGIN + 43, 31, 13, true, NAVY); pdf.text("LISTA PERSONALIZADA", MARGIN + 43, 48, 8.5, true, CYAN); pdf.line(MARGIN, 61, PAGE_WIDTH - MARGIN, 61, "#b9d8df", 0.8); y = CONTENT_TOP; };
   const footer = () => { pdf.text("projetovetor • lista personalizada", MARGIN, 812, 7.5, false, NAVY); pdf.text(`Página ${pageNumber}`, PAGE_WIDTH - 78, 812, 7.5, false, NAVY); };
