@@ -27,7 +27,7 @@ Veja [`public/question-import/questoes-v2.example.json`](../../public/question-i
 
 ## Segurança e limites
 
-- Endpoints são exclusivos de administradores e validam proprietário, lote, questão e slot no backend.
+- Administradores e editores podem importar em lote e enviar imagens. Os endpoints validam proprietário, lote, questão e slot no backend; cada usuário acessa somente seus próprios rascunhos.
 - Upload usa URL assinada; nenhuma `service_role` vai para o navegador.
 - São aceitos PNG, JPEG e WebP de até 3 MB e até 12.000 × 12.000 pixels.
 - O backend baixa e inspeciona assinatura binária e dimensões antes de aceitar o arquivo.
@@ -37,3 +37,5 @@ Veja [`public/question-import/questoes-v2.example.json`](../../public/question-i
 ## Banco de dados
 
 Antes de usar o novo fluxo, aplique manualmente a migration `202609210001_question_import_batches_with_images.sql`. O rollback correspondente está versionado. O código não executa migration remota automaticamente.
+
+Se a importação em lote já funciona para administradores, liberar o mesmo fluxo para editores exige somente a atualização do código. Não há SQL adicional para executar, nem é necessário reaplicar a migration existente.

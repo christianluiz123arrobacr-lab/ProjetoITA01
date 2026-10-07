@@ -2328,17 +2328,17 @@ export const appRouter = router({
         return { id: data.id } as const;
       }),
 
-    createQuestionImportDraft: adminProcedure
+    createQuestionImportDraft: adminOrEditorProcedure
       .input(z.object({ rawJson: z.string().min(2).max(2 * 1024 * 1024), sourceName: z.string().trim().max(180).optional() }))
       .mutation(({ ctx, input }) => createQuestionImportDraft(ctx.user.id, input.rawJson, input.sourceName)),
 
-    listQuestionImportDrafts: adminProcedure.query(({ ctx }) => listQuestionImportDrafts(ctx.user.id)),
+    listQuestionImportDrafts: adminOrEditorProcedure.query(({ ctx }) => listQuestionImportDrafts(ctx.user.id)),
 
-    getQuestionImportDraft: adminProcedure
+    getQuestionImportDraft: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid() }))
       .query(({ ctx, input }) => getQuestionImportDraft(input.batchId, ctx.user.id)),
 
-    prepareQuestionImportImageUpload: adminProcedure
+    prepareQuestionImportImageUpload: adminOrEditorProcedure
       .input(z.object({
         batchId: z.string().uuid(),
         importKey: z.string().trim().min(1).max(180),
@@ -2349,30 +2349,30 @@ export const appRouter = router({
       }))
       .mutation(({ ctx, input }) => prepareQuestionImportSlotUpload(input, ctx.user.id)),
 
-    confirmQuestionImportImageUpload: adminProcedure
+    confirmQuestionImportImageUpload: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional() }))
       .mutation(({ ctx, input }) => confirmQuestionImportSlotUpload(input, ctx.user.id)),
 
-    removeQuestionImportImageUpload: adminProcedure
+    removeQuestionImportImageUpload: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100) }))
       .mutation(({ ctx, input }) => removeQuestionImportSlotUpload(input.batchId, input.importKey, input.slotId, ctx.user.id)),
 
-    updateQuestionImportImageMetadata: adminProcedure
+    updateQuestionImportImageMetadata: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional() }))
       .mutation(({ ctx, input }) => updateQuestionImportSlotMetadata(input, ctx.user.id)),
 
-    cancelQuestionImportDraft: adminProcedure
+    cancelQuestionImportDraft: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid() }))
       .mutation(({ ctx, input }) => cancelQuestionImportDraft(input.batchId, ctx.user.id)),
 
-    removeInvalidQuestionFromImportDraft: adminProcedure
+    removeInvalidQuestionFromImportDraft: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid(), questionIndex: z.number().int().nonnegative() }))
       .mutation(({ ctx, input }) => removeInvalidQuestionFromImportDraft(input.batchId, input.questionIndex, ctx.user.id)),
 
-    cleanupExpiredQuestionImportDrafts: adminProcedure
+    cleanupExpiredQuestionImportDrafts: adminOrEditorProcedure
       .mutation(({ ctx }) => cleanupExpiredQuestionImportDrafts(ctx.user.id)),
 
-    finalizeQuestionImportDraft: adminProcedure
+    finalizeQuestionImportDraft: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const prepared = await prepareQuestionImportFinalization(input.batchId, ctx.user.id);
@@ -2386,7 +2386,7 @@ export const appRouter = router({
         return result;
       }),
 
-    importQuestionBatch: adminProcedure
+    importQuestionBatch: adminOrEditorProcedure
       .input(questionImportPayloadSchema)
       .mutation(async ({ ctx, input }) => {
         const startedAt = Date.now();

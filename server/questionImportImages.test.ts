@@ -38,7 +38,7 @@ describe("importação v2 com imagens", () => {
   it("14 rejeita slot_id duplicado", () => expect(parse([base("q", [slot("x"), slot("x")])]).summary.invalidas).toBe(1));
   it("15 rejeita conteúdo com tipo real diferente", () => expect(() => inspectQuestionImportImage(png(), "image/jpeg")).toThrow(/conteúdo real/));
   it("16 rejeita arquivo acima do limite", () => expect(() => inspectQuestionImportImage(new Uint8Array(MAX_QUESTION_IMPORT_IMAGE_BYTES + 1), "image/png")).toThrow(/3 MB/));
-  it("17 endpoints de upload são adminProcedure", () => expect(readFileSync("server/routers.ts", "utf8")).toMatch(/prepareQuestionImportImageUpload: adminProcedure/));
+  it("17 endpoints de upload permitem admin e editor", () => expect(readFileSync("server/routers.ts", "utf8")).toMatch(/prepareQuestionImportImageUpload: adminOrEditorProcedure/));
   it("18 valida lote, chave e slot no backend", () => expect(readFileSync("server/questions/questionImportBatchService.ts", "utf8")).toContain('.eq("batch_id", input.batchId).eq("import_key", input.importKey).eq("slot_id", input.slotId)'));
   it("19 usa chave estável para retry sem duplicação", () => { const first = parse([base("fixa")]).questoes[0].item; const second = parse([base("fixa")]).questoes[0].item; expect(first.id_importacao).toBe(second.id_importacao); });
   it("20 cancelamento remove uploads temporários", () => expect(readFileSync("server/questions/questionImportBatchService.ts", "utf8")).toMatch(/cancelQuestionImportDraft[\s\S]+storage\.from\(bucket\)\.remove/));
@@ -46,7 +46,7 @@ describe("importação v2 com imagens", () => {
     const source = readFileSync("server/questions/questionImportBatchService.ts", "utf8");
     expect(source).toMatch(/cleanupExpiredQuestionImportDrafts[\s\S]+\.eq\("created_by", userId\)[\s\S]+\.eq\("status", "draft"\)[\s\S]+\.lt\("expires_at"/);
   });
-  it("21 rascunho persiste e pode ser recarregado", () => { const source = readFileSync("server/routers.ts", "utf8"); expect(source).toContain("createQuestionImportDraft: adminProcedure"); expect(source).toContain("getQuestionImportDraft: adminProcedure"); });
+  it("21 rascunho persiste e pode ser recarregado", () => { const source = readFileSync("server/routers.ts", "utf8"); expect(source).toContain("createQuestionImportDraft: adminOrEditorProcedure"); expect(source).toContain("getQuestionImportDraft: adminOrEditorProcedure"); });
   it("23 mantém metadados para a renderização canônica", () => { const question = parse([base("q", [slot("s")])]).questoes[0].item; const result = applyReadyImageSlots(question, [{ ...question.imagens[0], import_key: "q", public_url: "https://storage.test/a.png" }]); expect(result.image_metadata[0]).toEqual(expect.objectContaining({ texto_alternativo: "Descrição s" })); });
   it("24 preserva texto alternativo e legenda separados", () => { const image = parse([base("q", [slot("s", "enunciado", true, { legenda: "Legenda" })])]).questoes[0].item.imagens[0]; expect(image.texto_alternativo).toBe("Descrição s"); expect(image.legenda).toBe("Legenda"); });
   it("rejeita URL externa e data/base64 no formato v2", () => { const external = parse([{ ...base("q"), url_imagem: "https://externo.test/a.png" }]); const embedded = parse([{ ...base("q2"), url_imagem: "data:image/png;base64,AAA" }]); expect(external.summary.invalidas).toBe(1); expect(embedded.summary.invalidas).toBe(1); });
