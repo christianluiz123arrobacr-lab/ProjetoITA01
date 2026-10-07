@@ -1,4 +1,5 @@
 import { loadPdfUnicodeFont } from "./questionPdfUnicodeFont";
+import { logPdfStage } from "./questionPdfDiagnostics";
 import { QuestionPdfError } from "./questionPdfErrors";
 import type { Question } from "@/types/question";
 import { normalizeMathSource, renderMathToMathMl } from "./mathRendering";
@@ -217,8 +218,12 @@ export class VectorPdf {
     this.page.images.add(index);
     this.command(`q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${x.toFixed(2)} ${(PAGE_HEIGHT - top - height).toFixed(2)} cm /Im${index} Do Q`);
   }
-  async blob(subject: string) {
-    const unicodeFont = this.unicodeChars.size ? await loadPdfUnicodeFont() : null;
+  async blob(subject: string, onFontLoaded?: (durationMs: number, error?: unknown) => void) {
+    const fontStarted = performance.now();
+    let unicodeFont: Awaited<ReturnType<typeof loadPdfUnicodeFont>> | null;
+    try { unicodeFont = this.unicodeChars.size ? await loadPdfUnicodeFont() : null; }
+    catch (error) { onFontLoaded?.(performance.now() - fontStarted, error); throw error; }
+    onFontLoaded?.(performance.now() - fontStarted);
     const unicodeGlyphs = Array.from(this.unicodeChars, ([char, cid]) => ({ char, cid, ...unicodeFont!.glyph(char) }));
     const objects: Uint8Array[] = [];
     const put = (id: number, value: string | Uint8Array) => { objects[id - 1] = typeof value === "string" ? enc.encode(value) : value; };
@@ -453,11 +458,36 @@ async function loadPdfImage(url?: string): Promise<PdfImage | null> {
   } catch { return null; }
 }
 
-export async function generateQuestionPdf(input: { questions: Question[]; filterSummary: string; logoUrl?: string }) {
+type QuestionPdfInput = { questions: Question[]; filterSummary: string; logoUrl?: string; correlationId?: string };
+export async function generateQuestionPdf(input: QuestionPdfInput) {
+  const correlationId = input.correlationId ?? crypto.randomUUID();
+  const started = performance.now();
+  try { return await generateQuestionPdfDocument({ ...input, correlationId }); }
+  catch (error) {
+    logPdfStage("generation", correlationId, performance.now() - started, error);
+    throw error;
+  }
+}
+
+async function generateQuestionPdfDocument(input: QuestionPdfInput) {
+  const correlationId = input.correlationId ?? crypto.randomUUID();
+  const started = performance.now();
+  let resourceDurationMs = 0;
+  const resource = async <T,>(load: () => Promise<T>): Promise<T> => {
+    const resourceStarted = performance.now();
+    try { return await load(); }
+    catch (error) {
+      logPdfStage("resources", correlationId, performance.now() - resourceStarted, error);
+      throw error;
+    } finally { resourceDurationMs += performance.now() - resourceStarted; }
+  };
   if (!input.questions.length) throw new Error("Nenhuma questão encontrada para exportar.");
-  const logoResponse = await fetch(input.logoUrl ?? "/brand/projeto-vetor-logo.svg");
-  if (!logoResponse.ok) throw new QuestionPdfError("Não foi possível carregar o logo do Projeto Vetor para o PDF. Verifique sua conexão e tente novamente.");
-  const pdf = new VectorPdf(buildPdfLogoForm(await logoResponse.text())); let y = CONTENT_TOP; let pageNumber = 0;
+  const logoSvg = await resource(async () => {
+    const response = await fetch(input.logoUrl ?? "/brand/projeto-vetor-logo.svg");
+    if (!response.ok) throw new QuestionPdfError("Não foi possível carregar o logo do Projeto Vetor para o PDF. Verifique sua conexão e tente novamente.");
+    return response.text();
+  });
+  const pdf = new VectorPdf(buildPdfLogoForm(logoSvg)); let y = CONTENT_TOP; let pageNumber = 0;
   const startPage = () => { pdf.addPage(); pageNumber += 1; pdf.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, IVORY); pdf.watermark(); pdf.logo(MARGIN, 19, 34); pdf.text("PROJETO VETOR", MARGIN + 43, 31, 13, true, NAVY); pdf.text("LISTA PERSONALIZADA", MARGIN + 43, 48, 8.5, true, CYAN); pdf.line(MARGIN, 61, PAGE_WIDTH - MARGIN, 61, "#b9d8df", 0.8); y = CONTENT_TOP; };
   const footer = () => { pdf.text("projetovetor • lista personalizada", MARGIN, 812, 7.5, false, NAVY); pdf.text(`Página ${pageNumber}`, PAGE_WIDTH - 78, 812, 7.5, false, NAVY); };
   const ensure = (height: number) => { if (y + height > CONTENT_BOTTOM) { footer(); startPage(); } };
@@ -510,7 +540,8 @@ export async function generateQuestionPdf(input: { questions: Question[]; filter
   };
 
   const drawQuestionImage = async (url: string | undefined, maxWidth: number, maxHeight: number, x: number) => {
-    const image = await loadPdfImage(url); if (!image) { ensure(18); pdf.text("Imagem indisponível", x, y + 11, 8.5, false, "#64748b"); y += 18; return; }
+    const image = await resource(() => loadPdfImage(url));
+    if (!image) { ensure(18); pdf.text("Imagem indisponível", x, y + 11, 8.5, false, "#64748b"); y += 18; return; }
     const fitted = fitPdfImage(image.width, image.height, maxWidth, maxHeight); ensure(fitted.height + 8); pdf.addImage(image, x, y, fitted.width, fitted.height); y += fitted.height + 8;
   };
 
@@ -543,6 +574,26 @@ export async function generateQuestionPdf(input: { questions: Question[]; filter
     startPage(); pdf.text("GABARITO", MARGIN, y + 15, 16, true, NAVY); y += 34; const columnWidth = (PAGE_WIDTH - MARGIN * 2) / 5;
     columns.forEach((column, columnIndex) => column.forEach((item, row) => { const top = y + row * 21; if (row % 2) pdf.rect(MARGIN + columnIndex * columnWidth, top - 11, columnWidth - 5, 18, "#f0f8f8"); pdf.text(`${item.number}. ${item.answer}`, MARGIN + columnIndex * columnWidth + 6, top + 2, 10, true, NAVY); })); footer();
   }
-  const blob = await pdf.blob(input.filterSummary); const fileName = buildPdfFileName(); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = fileName; link.hidden = true; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  return { fileName, pages: pdf.pages.length, questions: input.questions.length };
+  const blob = await pdf.blob(input.filterSummary, (durationMs, error) => {
+    resourceDurationMs += durationMs;
+    if (error) logPdfStage("resources", correlationId, durationMs, error);
+  });
+  const generationDurationMs = performance.now() - started - resourceDurationMs;
+  logPdfStage("resources", correlationId, resourceDurationMs);
+  logPdfStage("generation", correlationId, generationDurationMs);
+  const downloadStarted = performance.now();
+  const fileName = buildPdfFileName();
+  let url: string | undefined;
+  try {
+    url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = fileName; link.hidden = true;
+    document.body.appendChild(link); link.click(); link.remove();
+    logPdfStage("download", correlationId, performance.now() - downloadStarted);
+  } catch (error) {
+    logPdfStage("download", correlationId, performance.now() - downloadStarted, error);
+    throw new QuestionPdfError("Download do PDF não iniciado", "O PDF foi montado, mas não foi possível iniciar o download. Tente novamente.");
+  } finally {
+    if (url) window.setTimeout(() => URL.revokeObjectURL(url!), 1_000);
+  }
+  return { fileName, pages: pdf.pages.length, questions: input.questions.length, resourceDurationMs, generationDurationMs };
 }

@@ -1,6 +1,8 @@
 import { trpcClient } from "@/lib/trpcClient";
 import type { Question, QuestionSubtopicsByTopic } from "@/types/question";
 import type { QuestionPdfFilters } from "@shared/questionPdf";
+import { logPdfStage } from "@/lib/questionPdfDiagnostics";
+import { QuestionPdfError } from "@/lib/questionPdfErrors";
 
 type QuestionDifficulty = Question["difficulty"];
 type QuestionSubject = Question["subject"];
@@ -369,8 +371,25 @@ export function mapQuestao(row: QuestaoRow): Question {
 }
 
 export async function exportQuestionsForPdf(filters: QuestionPdfFilters) {
-  const result = await trpcClient.questions.exportPdfData.mutate(filters);
-  return { ...result, questions: (result.rows as QuestaoRow[]).map(mapQuestao) };
+  const correlationId = filters.correlationId ?? crypto.randomUUID();
+  const started = performance.now();
+  let result;
+  try {
+    result = await trpcClient.questions.exportPdfData.mutate({ ...filters, correlationId });
+    logPdfStage("server_search", correlationId, performance.now() - started);
+  } catch (error) {
+    logPdfStage("server_search", correlationId, performance.now() - started, error);
+    throw error;
+  }
+  const mappingStarted = performance.now();
+  try {
+    const questions = (result.rows as QuestaoRow[]).map(mapQuestao);
+    logPdfStage("mapping", correlationId, performance.now() - mappingStarted);
+    return { ...result, questions };
+  } catch (error) {
+    logPdfStage("mapping", correlationId, performance.now() - mappingStarted, error);
+    throw new QuestionPdfError("Mapeamento PDF inválido", "As questões foram recebidas, mas não foi possível prepará-las para o PDF. Tente novamente.");
+  }
 }
 
 export async function getQuestions(

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
 import { exportQuestionsForPdf, getQuestions } from "@/services/questions.service";
-import { QuestionPdfError } from "@/lib/questionPdfErrors";
+import { questionPdfFailureMessage } from "@/lib/questionPdfDiagnostics";
 import { buildPdfFilterSummary } from "@/lib/questionPdfLayout";
 import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { trpc } from "@/lib/trpc";
@@ -985,6 +985,7 @@ export default function QuestionBankPage() {
     };
     setPdfGenerating(true);
     setPdfMessage("");
+    let pdfStage: "server_search" | "generation" = "server_search";
     try {
       const result = await exportQuestionsForPdf(filters);
       if (!result.questions.length) {
@@ -992,28 +993,14 @@ export default function QuestionBankPage() {
         return;
       }
       const summary = buildPdfFilterSummary(filters);
+      pdfStage = "generation";
       const { generateQuestionPdf } = await import("@/lib/questionPdfGenerator");
-      const generated = await generateQuestionPdf({ questions: result.questions, filterSummary: summary });
+      const generated = await generateQuestionPdf({ questions: result.questions, filterSummary: summary, correlationId: result.correlationId });
       setPdfMessage(result.truncated
         ? `PDF concluído com ${generated.questions} questões (limite seguro de ${result.limit} por arquivo).`
         : `PDF concluído com ${generated.questions} questões.`);
     } catch (error) {
-      console.error("Falha ao gerar lista de questões em PDF", { name: error instanceof Error ? error.name : "UnknownError" });
-      const message = error instanceof Error ? error.message : "";
-      const safeMessage = [
-        "assinatura",
-        "acesso",
-        "sessão",
-        "limite de requisições",
-        "Muitas tentativas",
-        "buscar as questões",
-        "aplicar o filtro",
-        "navegador não conseguiu preparar",
-        "Nenhuma questão",
-      ].some(fragment => message.includes(fragment));
-      setPdfMessage(error instanceof QuestionPdfError ? error.userMessage : safeMessage
-        ? message
-        : "Não foi possível gerar o PDF neste navegador. Atualize a página e tente novamente.");
+      setPdfMessage(questionPdfFailureMessage(error, pdfStage));
     } finally {
       setPdfGenerating(false);
     }

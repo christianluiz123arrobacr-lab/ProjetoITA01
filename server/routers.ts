@@ -34,10 +34,9 @@ import {
   type ImportResultStatus,
 } from "../shared/questionImportSchema.js";
 import {
-  QUESTION_PDF_EXPORT_LIMIT,
   questionPdfFiltersSchema,
-  questionRowMatchesPdfFilters,
 } from "../shared/questionPdf.js";
+import { selectQuestionPdfData } from "./questionPdfExport.js";
 import { NOTEBOOK_DEVELOPMENT_MESSAGE, NOTEBOOK_FEATURE_AVAILABLE } from "../shared/featureAvailability.js";
 import { createGoogleDriveConnectUrl, createNotebook, disconnectGoogleDrive, getNotebook, googleDriveStatus, listNotebooks, renameNotebook, trashNotebook, updateNotebook, uploadNotebookPdf } from "./googleDrive/googleDriveService.js";
 import { createQuestionReport } from "./questionReports.js";
@@ -1004,48 +1003,7 @@ export const appRouter = router({
         });
         await assertQuestionPdfAccess(ctx.user.id, ctx.user.role);
 
-        const matched: Record<string, unknown>[] = [];
-        const batchSize = 200;
-        const scanLimit = 4_000;
-        for (let offset = 0; offset < scanLimit && (input.practiceStatus !== "all" || matched.length <= QUESTION_PDF_EXPORT_LIMIT); offset += batchSize) {
-          const { data, error } = await supabaseAdmin.from("questoes").select(`
-            *,
-            resolucoes (id, tipo, texto, ordem, url_imagem)
-          `).eq("publicada", true).order("created_at", { ascending: false }).range(offset, offset + batchSize - 1);
-          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível buscar as questões para exportação." });
-          const rows = (data ?? []) as Record<string, unknown>[];
-          matched.push(...rows.filter(row => questionRowMatchesPdfFilters(row, input)));
-          if (rows.length < batchSize) break;
-        }
-
-        let filtered = matched;
-        if (input.practiceStatus !== "all" && matched.length) {
-          const ids = matched.map(row => String(row.id));
-          const attempts: Array<{ question_id: string; is_correct: boolean | null; answered_at: string }> = [];
-          for (let offset = 0; offset < ids.length; offset += batchSize) {
-            const { data, error } = await supabaseAdmin.from("user_question_attempts")
-              .select("question_id, is_correct, answered_at")
-              .eq("user_id", ctx.user.id).in("question_id", ids.slice(offset, offset + batchSize))
-              .order("answered_at", { ascending: false });
-            if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível aplicar o filtro de prática." });
-            attempts.push(...(data ?? []));
-          }
-          const latest = new Map<string, boolean>();
-          for (const attempt of attempts) if (!latest.has(attempt.question_id)) latest.set(attempt.question_id, Boolean(attempt.is_correct));
-          filtered = matched.filter(row => {
-            const value = latest.get(String(row.id));
-            if (input.practiceStatus === "unanswered") return value === undefined;
-            if (input.practiceStatus === "answered") return value !== undefined;
-            if (input.practiceStatus === "correct") return value === true;
-            return value === false;
-          });
-        }
-        return {
-          rows: filtered.slice(0, QUESTION_PDF_EXPORT_LIMIT),
-          totalMatched: filtered.length,
-          limit: QUESTION_PDF_EXPORT_LIMIT,
-          truncated: filtered.length > QUESTION_PDF_EXPORT_LIMIT,
-        };
+        return selectQuestionPdfData(supabaseAdmin, ctx.user.id, input);
       }),
 
     list: publicProcedure
