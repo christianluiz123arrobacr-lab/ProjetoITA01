@@ -294,7 +294,7 @@ function MercadoPagoPixModal({
 
 export default function PricingPage() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
+  const { isAuthenticated, loading: authLoading, error: authError, recovering } = useSupabaseAuth();
 
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -349,6 +349,7 @@ export default function PricingPage() {
     setSuccess("");
 
     if (authLoading) return;
+    if (authError || recovering) { setErro("Não foi possível confirmar sua sessão agora. Tente novamente em instantes."); return; }
 
     if (!plan.canCheckout && !prepaid) {
       setErro(plan.checkoutBlockReason === "legacy_founder_required"

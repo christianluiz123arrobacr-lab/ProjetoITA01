@@ -6,7 +6,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
-import { createContext } from "./context";
+import { createTrpcContext as createContext } from "./context";
 import { supabaseAdmin } from "./supabaseAdmin";
 import { serveStatic, setupVite } from "./vite";
 import { registerGoogleDriveRoutes } from "../googleDrive/googleDriveRoutes.js";

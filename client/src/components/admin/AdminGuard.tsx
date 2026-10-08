@@ -1,10 +1,11 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
+import { ADMIN_RECOVERY_GRACE_MS, adminAccessRecheck, evaluateAdminAccess, suspendAdminRequests, type AdminConfirmation } from "@/lib/adminRevalidation";
 
 type AdminRole = "admin" | "editor";
 
@@ -29,7 +30,7 @@ export default function AdminGuard({
   children,
   allowedRoles = DEFAULT_ALLOWED_ROLES,
 }: AdminGuardProps) {
-  const { user, loading, error: authError, retry: retrySession } = useSupabaseAuth();
+  const { user, loading, error: authError, recovering: sessionRecovering, retry: retrySession } = useSupabaseAuth();
   const [, setLocation] = useLocation();
   const meQuery = trpc.auth.me.useQuery(undefined, {
     enabled: !loading && !authError && Boolean(user?.id),
@@ -39,18 +40,55 @@ export default function AdminGuard({
     refetchOnMount: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
-    refetchInterval: query => query.state.status === "error" ? false : ADMIN_ACCESS_RECHECK_MS,
+    refetchInterval: adminAccessRecheck,
     refetchIntervalInBackground: false,
   });
 
   const [status, setStatus] = useState<AdminGuardStatus>("checking-auth");
   const [role, setRole] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const confirmation = useRef<AdminConfirmation | null>(null);
+  const requestOwner = useRef(Symbol("admin-guard"));
+  const [now, setNow] = useState(Date.now);
+  const [retrying, setRetrying] = useState(false);
+  const recoveryBusy = useRef(false);
+  const latestRecovery = useRef<() => Promise<void>>(async () => {});
 
   const allowedRolesKey = useMemo(
     () => [...allowedRoles].sort().join("|"),
     [allowedRoles]
   );
+  const code = meQuery.error?.data?.code;
+  const definitive = code === "FORBIDDEN" || (code === "UNAUTHORIZED" && meQuery.error?.data?.authStatus === "invalid");
+  const waitingForFreshConfirmation = confirmation.current?.failedAt != null && meQuery.dataUpdatedAt <= confirmation.current.failedAt;
+  const decision = evaluateAdminAccess(confirmation.current, {
+    userId: user?.id, responseUserId: meQuery.data?.id, role: meQuery.data?.role,
+    loading: loading || meQuery.isLoading || (meQuery.isFetching && !meQuery.data),
+    failed: !!authError || !!meQuery.error || waitingForFreshConfirmation, definitive, roles: allowedRoles, now: Math.max(now, Date.now()),
+  });
+  useLayoutEffect(() => {
+    confirmation.current = decision.confirmation;
+    suspendAdminRequests(requestOwner.current, user?.id && decision.status !== "allowed" ? user.id : null);
+    return () => suspendAdminRequests(requestOwner.current, null);
+  }, [user?.id, decision.status, decision.confirmation?.failedAt, decision.confirmation?.role]);
+  const recover = async () => {
+    if (recoveryBusy.current || meQuery.isFetching || sessionRecovering) return;
+    recoveryBusy.current = true;
+    setRetrying(true);
+    try { if (authError) await retrySession(); await meQuery.refetch(); }
+    finally { recoveryBusy.current = false; setRetrying(false); }
+  };
+  latestRecovery.current = recover;
+  useEffect(() => {
+    const failedAt = decision.confirmation?.failedAt;
+    if (failedAt == null) return;
+    const deadline = setTimeout(() => setNow(Date.now()), Math.max(0, failedAt + ADMIN_RECOVERY_GRACE_MS - Date.now()));
+    // At most two delayed automatic rechecks per incident, not per error render.
+    const attempts = [2000, 6000].map(delay => setTimeout(() => {
+      if (Date.now() < failedAt + ADMIN_RECOVERY_GRACE_MS) void latestRecovery.current();
+    }, Math.max(0, failedAt + delay - Date.now())));
+    return () => { clearTimeout(deadline); attempts.forEach(clearTimeout); };
+  }, [user?.id, decision.confirmation?.failedAt]);
 
   useEffect(() => {
     if (loading) {
@@ -82,7 +120,7 @@ export default function AdminGuard({
       return;
     }
 
-    const userRole = meQuery.data?.role ?? null;
+    const userRole = meQuery.data?.id === user.id ? meQuery.data.role : null;
     setRole(userRole);
 
     const allowedSet = new Set(allowedRoles);
@@ -105,8 +143,17 @@ export default function AdminGuard({
     meQuery.isLoading,
   ]);
 
-  if (status === "allowed" && !loading && !authError && user && !meQuery.error) {
-    return <>{children}</>;
+  if (decision.status === "allowed" || decision.status === "recovering") {
+    const paused = decision.status === "recovering";
+    return <div>
+      <div aria-live="polite">
+        {paused && <div role="status" className="border border-amber-300 bg-amber-50 text-amber-950 dark:bg-amber-950 dark:text-amber-100 p-3 flex flex-wrap gap-3 items-center">
+          <span>A confirmação de acesso está temporariamente indisponível. Seu trabalho foi mantido; as operações estão pausadas.</span>
+          <Button variant="outline" disabled={retrying || meQuery.isFetching || sessionRecovering} onClick={() => void recover()}>Tentar novamente</Button>
+        </div>}
+      </div>
+      <div inert={paused} aria-busy={paused}>{children}</div>
+    </div>;
   }
 
   if (
@@ -190,14 +237,14 @@ export default function AdminGuard({
         </h2>
 
         <p className="text-slate-600 dark:text-slate-300 mb-4">
-          {errorMessage ||
+          {decision.confirmation?.failedAt != null && decision.status === "error"
+            ? "A confirmação não foi restabelecida no prazo. As operações continuam bloqueadas. Rascunhos já salvos não foram alterados."
+            : errorMessage ||
             "Ocorreu um problema ao verificar suas permissões administrativas."}
         </p>
 
         <div className="flex justify-center gap-3 flex-wrap">
-          <Button variant="outline" disabled={loading || meQuery.isFetching} onClick={() => {
-            if (authError) void retrySession(); else void meQuery.refetch();
-          }}>
+          <Button variant="outline" disabled={loading || retrying || sessionRecovering || meQuery.isFetching} onClick={() => void recover()}>
             Tentar novamente
           </Button>
 

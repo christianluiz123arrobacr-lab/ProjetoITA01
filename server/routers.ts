@@ -52,7 +52,7 @@ import { setPublicQuestionPublication } from "./publicQuestions.js";
 import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
 import { lessonRouter } from "./lessons/lessonRouter.js";
 import { accessQuery, getPlatformAccessDecision } from "./_core/platformAccess.js";
-import { assertAuthenticationAvailable } from "./_core/context.js";
+import { assertAuthenticationAvailable, ensureAuthentication } from "./_core/context.js";
 import {
   cancelQuestionImportDraft,
   cleanupSkippedQuestionImportImages,
@@ -470,7 +470,8 @@ export const appRouter = router({
   lessons: lessonRouter,
 
   auth: router({
-    me: publicProcedure.query(({ ctx }) => {
+    me: publicProcedure.query(async ({ ctx }) => {
+      await ensureAuthentication(ctx);
       assertAuthenticationAvailable(ctx);
       if (ctx.authentication?.status === "invalid") throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida. Entre novamente." });
       return ctx.user;
@@ -637,6 +638,7 @@ export const appRouter = router({
     getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
       const access = await getPlatformAccessDecision(ctx.user, supabaseAdmin, {
         correlationId: ctx.authentication?.correlationId || randomUUID(),
+        validatedProfile: ctx.validatedProfile,
       });
       if (access.allowed) {
         const now = new Date();
@@ -776,6 +778,9 @@ export const appRouter = router({
     }),
 
     listPublicPlans: publicProcedure.query(async ({ ctx }) => {
+      // This public response is optionally personalized; preserve its real
+      // server-validated identity despite lazy authentication for public calls.
+      await ensureAuthentication(ctx);
       const { data, error } = await supabaseAdmin
         .from("billing_plans")
         .select("id, slug, name, description, price_cents, currency, billing_cycle, is_active, is_public, requires_legacy_founder_eligibility, display_order, max_active_subscriptions")

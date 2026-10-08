@@ -10,7 +10,7 @@ import {
 } from "../../../shared/referralProgram";
 
 export default function ReferralPage() {
-  const { isAuthenticated, loading, user } = useSupabaseAuth();
+  const { isAuthenticated, loading, user, error: authError, retry, recovering } = useSupabaseAuth();
   const query = trpc.referrals.mine.useQuery(undefined, {
     enabled: isAuthenticated,
     retry: false,
@@ -22,6 +22,7 @@ export default function ReferralPage() {
         Carregando...
       </p>
     );
+  if (authError) return <div role="alert" className="p-8"><p>Não foi possível confirmar sua sessão agora.</p><Button disabled={recovering} onClick={() => void retry()}>Tentar novamente</Button></div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
   const data = query.data as any;
   const c = data?.campaign;

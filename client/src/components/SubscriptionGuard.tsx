@@ -16,7 +16,7 @@ const ACCESS_RECHECK_MS = 5 * 60 * 1000;
 const ACCESS_CACHE_MS = 30 * 60 * 1000;
 
 export default function SubscriptionGuard({ children, bypass = false }: SubscriptionGuardProps) {
-  const { isAuthenticated, loading: authLoading, error: authError, retry: retrySession } = useSupabaseAuth();
+  const { isAuthenticated, loading: authLoading, error: authError, recovering, retry: retrySession } = useSupabaseAuth();
 
   const [accessState, setAccessState] = useState<AccessState>("checking");
 
@@ -116,7 +116,7 @@ export default function SubscriptionGuard({ children, bypass = false }: Subscrip
           </p>
           <button
             type="button"
-            disabled={accessStatusQuery.isFetching || authLoading}
+            disabled={accessStatusQuery.isFetching || authLoading || recovering}
             onClick={() => {
               setAccessState("checking");
               if (authError) void retrySession();

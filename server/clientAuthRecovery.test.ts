@@ -60,7 +60,7 @@ describe("bounded client session and transport (no real provider)", () => {
     const { auth, controller } = setup();
     auth.getSession.mockReturnValue(new Promise(() => {}));
     const assertion = expect(controller.getSession()).rejects.toThrow("Não foi possível carregar");
-    await vi.advanceTimersByTimeAsync(8001);
+    await vi.advanceTimersByTimeAsync(27001);
     await assertion;
     expect(controller.getSnapshot().loading).toBe(false);
     await vi.advanceTimersByTimeAsync(60000);
@@ -79,7 +79,7 @@ describe("bounded client session and transport (no real provider)", () => {
     const { auth, controller } = setup();
     auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
     expect(await controller.getSession()).toBeNull();
-    expect(controller.getSnapshot()).toEqual({ session: null, loading: false, error: null });
+    expect(controller.getSnapshot()).toEqual({ session: null, loading: false, error: null, recovering: false });
   });
   it("503 or an unclassified 401 does not end a valid local session", async () => {
     const { auth, controller } = setup();

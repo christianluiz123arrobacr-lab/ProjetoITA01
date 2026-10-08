@@ -2,7 +2,7 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "../../shared/const.js";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context.js";
-import { assertAuthenticationAvailable } from "./context.js";
+import { assertAuthenticationAvailable, ensureAuthentication } from "./context.js";
 import { assertPlatformAccess } from "./platformAccess.js";
 
 const t = initTRPC.context<TrpcContext>().create({
@@ -20,6 +20,7 @@ export const publicProcedure = t.procedure;
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
+  await ensureAuthentication(ctx);
   assertAuthenticationAvailable(ctx);
 
   if (!ctx.user) {
@@ -47,6 +48,7 @@ export const platformAccessProcedure = protectedProcedure.use(
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
+    await ensureAuthentication(ctx);
     assertAuthenticationAvailable(ctx);
 
     if (!ctx.user || ctx.user.role !== 'admin') {
@@ -65,6 +67,7 @@ export const adminProcedure = t.procedure.use(
 export const adminOrEditorProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
+    await ensureAuthentication(ctx);
     assertAuthenticationAvailable(ctx);
 
     if (!ctx.user || !["admin", "editor"].includes(ctx.user.role)) {

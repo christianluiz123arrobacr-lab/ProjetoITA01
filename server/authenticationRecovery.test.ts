@@ -5,7 +5,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
 const mocks = vi.hoisted(() => ({ getUser: vi.fn(), from: vi.fn() }));
 vi.mock("./_core/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: { getUser: mocks.getUser }, from: mocks.from } }));
-import { createContext, assertAuthenticationAvailable } from "./_core/context.js";
+import { createContext, createTrpcContext, ensureAuthentication, assertAuthenticationAvailable } from "./_core/context.js";
 import { router, protectedProcedure, publicProcedure, adminProcedure, adminOrEditorProcedure } from "./_core/trpc.js";
 import { getPlatformAccessDecision, accessQuery } from "./_core/platformAccess.js";
 
@@ -13,7 +13,7 @@ const routes = router({
   access: protectedProcedure.query(({ ctx }) => ctx.user.role),
   admin: adminProcedure.query(() => true),
   editor: adminOrEditorProcedure.query(() => true),
-  me: publicProcedure.query(({ ctx }) => { assertAuthenticationAvailable(ctx); return ctx.user; }),
+  me: publicProcedure.query(async ({ ctx }) => { await ensureAuthentication(ctx); assertAuthenticationAvailable(ctx); return ctx.user; }),
   publicConfig: publicProcedure.query(() => true),
 });
 const options = (token?: string) => ({ req: { headers: token ? { authorization: `Bearer ${token}` } : {} } as IncomingMessage, res: {} as ServerResponse });
@@ -26,6 +26,7 @@ describe("authentication recovery (mocked Supabase)", () => {
   beforeEach(() => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "info").mockImplementation(() => {});
     mocks.getUser.mockReset(); mocks.from.mockReset();
     mocks.getUser.mockResolvedValue({ data: { user: { id: "test-user", email: "private@example.test" } }, error: null });
     mocks.from.mockReturnValue(query({ data: null, error: null }));
@@ -50,6 +51,7 @@ describe("authentication recovery (mocked Supabase)", () => {
     const ctx = await createContext(options("secret-token"));
     expect(ctx.authentication?.status).toBe("invalid");
     await expect(routes.createCaller(ctx).access()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(routes.createCaller(ctx).admin()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toMatch(/secret-token|private@example/);
   });
   it.each([
@@ -96,6 +98,50 @@ describe("authentication recovery (mocked Supabase)", () => {
     expect(ctx.user).toBeNull();
     await expect(routes.createCaller(ctx).admin()).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
   });
+  it("public-only requests avoid token and role checks, while concurrent protected calls share one check", async () => {
+    mocks.from.mockImplementation(table => query({ data: table === "admin_users" ? { role: "admin" } : null, error: null }));
+    const ctx = createTrpcContext(options("token"));
+    const caller = routes.createCaller(ctx);
+    expect(await caller.publicConfig()).toBe(true);
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(await Promise.all([caller.access(), caller.admin(), caller.editor(), caller.me()])).toMatchObject(["admin", true, true, { role: "admin" }]);
+    expect(mocks.getUser).toHaveBeenCalledTimes(1);
+    expect(mocks.from).toHaveBeenCalledTimes(2);
+    await routes.createCaller(createTrpcContext(options("token"))).access();
+    expect(mocks.getUser).toHaveBeenCalledTimes(2); // No cross-request role cache.
+  });
+  it("measured simulated public latency avoids the former eager validation delay", async () => {
+    vi.useFakeTimers();
+    mocks.getUser.mockImplementation(() => new Promise(r => setTimeout(() => r({ data: { user: { id: "test-user" } }, error: null }), 1000)));
+    mocks.from.mockImplementation(() => {
+      const q = { select: () => q, eq: () => q, maybeSingle: () => new Promise(r => setTimeout(() => r({ data: null, error: null }), 2000)) };
+      return q;
+    });
+    const before = Date.now();
+    const oldPath = createContext(options("token")).then(ctx => routes.createCaller(ctx).publicConfig());
+    await vi.advanceTimersByTimeAsync(3000); expect(await oldPath).toBe(true);
+    expect(Date.now() - before).toBe(3000);
+    const after = Date.now();
+    expect(await routes.createCaller(createTrpcContext(options("token"))).publicConfig()).toBe(true);
+    expect(Date.now() - after).toBe(0);
+  });
+  it("a new request sees revocation immediately", async () => {
+    mocks.from.mockImplementation(table => query({ data: table === "admin_users" ? { role: "admin" } : null, error: null }));
+    expect(await routes.createCaller(createTrpcContext(options("token"))).admin()).toBe(true);
+    mocks.from.mockReturnValue(query({ data: null, error: null }));
+    await expect(routes.createCaller(createTrpcContext(options("token"))).admin()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+  it("reuses a verified same-request profile for student access, never another user's", async () => {
+    const from = vi.fn().mockReturnValue(query({ data: null, error: null }));
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    const client = { from, rpc } as never;
+    await expect(getPlatformAccessDecision({ id: "student", role: "student" }, client, { validatedProfile: { userId: "student", data: { role: "student", ativo: true } } })).resolves.toMatchObject({ allowed: true });
+    expect(from).toHaveBeenCalledTimes(1); // pending payments only, no second profile read.
+    from.mockClear();
+    await getPlatformAccessDecision({ id: "student", role: "student" }, client, { validatedProfile: { userId: "other", data: { role: "admin" } } });
+    expect(from).toHaveBeenCalledTimes(2);
+  });
   it("handles thrown network failures without generating 401", async () => {
     mocks.getUser.mockRejectedValue(new Error("fetch failed secret"));
     const ctx = await createContext(options("token"));
@@ -112,6 +158,15 @@ describe("authentication recovery (mocked Supabase)", () => {
     const assertion = expect(pending).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
     await vi.advanceTimersByTimeAsync(3001);
     await assertion;
+  });
+  it("really cancels an access query when the provider supports AbortSignal", async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    const operation = Object.assign(new Promise(() => {}), { abortSignal: vi.fn((next: AbortSignal) => { signal = next; return operation; }) });
+    const observed = accessQuery(operation, "test", "profile").catch(() => null);
+    await vi.advanceTimersByTimeAsync(3001); await observed;
+    expect(signal?.aborted).toBe(true);
+    expect(operation.abortSignal).toHaveBeenCalledTimes(1);
   });
   it("keeps guards fail-closed and removes hard redirects/reloads on errors", () => {
     const main = readFileSync(new URL("../client/src/main.tsx", import.meta.url), "utf8");

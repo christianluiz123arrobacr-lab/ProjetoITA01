@@ -19,10 +19,34 @@ export type TrpcContext = {
   req: IncomingMessage;
   res: ServerResponse;
   user: AuthUser | null;
+  authenticate?: () => Promise<void>;
+  validatedProfile?: { userId: string; data: { role?: string; ativo?: boolean } | null };
   authentication?: { status: "missing" | "invalid" | "unavailable" | "verified"; correlationId: string };
 };
 
+export async function ensureAuthentication(ctx: TrpcContext) {
+  await ctx.authenticate?.();
+}
+
+/** Request-scoped lazy authentication: public-only requests do not query roles.
+ * No credentials/roles are cached across requests. Concurrent batch procedures
+ * share exactly one real token validation and role lookup in this request.
+ */
+export function createTrpcContext(opts: CreateContextOptions): TrpcContext {
+  const ctx: TrpcContext = { ...opts, user: null };
+  let pending: Promise<void> | undefined;
+  ctx.authenticate = () => pending ??= createContext(opts).then(result => {
+    ctx.user = result.user;
+    ctx.authentication = result.authentication;
+    ctx.validatedProfile = result.validatedProfile;
+  });
+  return ctx;
+}
+
 export function assertAuthenticationAvailable(ctx: TrpcContext) {
+  if (ctx.authentication?.status === "invalid") {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida. Entre novamente." });
+  }
   if (ctx.authentication?.status === "unavailable") {
     throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível confirmar sua autenticação. Tente novamente em instantes." });
   }
@@ -32,6 +56,7 @@ export async function createContext(
   opts: CreateContextOptions
 ): Promise<TrpcContext> {
   let user: AuthUser | null = null;
+  let validatedProfile: TrpcContext["validatedProfile"];
   const started = Date.now();
   const correlationId = randomUUID();
   let status: NonNullable<TrpcContext["authentication"]>["status"] = "missing";
@@ -48,7 +73,9 @@ export async function createContext(
 
     if (token) {
       stage = "supabase_auth";
+      const tokenStarted = Date.now();
       const { data, error } = await bounded(supabaseAdmin.auth.getUser(token), 6000);
+      console.info({ event: "authentication_check", correlation_id: correlationId, stage, outcome: error ? "error" : "success", code: error ? safeErrorCode(error) : undefined, duration_ms: Date.now() - tokenStarted });
       if (error) {
         status = isInvalidCredential(error) ? "invalid" : "unavailable";
         code = safeErrorCode(error);
@@ -60,22 +87,21 @@ export async function createContext(
       if (!error && data.user) {
         const email = data.user.email ?? null;
         stage = "roles";
+        const rolesStarted = Date.now();
+        const cancellation = new AbortController();
+        const adminQuery = supabaseAdmin.from("admin_users").select("role").eq("user_id", data.user.id);
+        const profileQuery = supabaseAdmin.from("profiles").select("role, ativo").eq("id", data.user.id);
 
         const [{ data: adminUser, error: adminUserError }, { data: profile, error: profileError }] =
           await bounded(Promise.all([
-            supabaseAdmin
-              .from("admin_users")
-              .select("role")
-              .eq("user_id", data.user.id)
-              .maybeSingle(),
-            supabaseAdmin
-              .from("profiles")
-              .select("role")
-              .eq("id", data.user.id)
-              .maybeSingle(),
-          ]), 4000);
+            (adminQuery.abortSignal?.(cancellation.signal) ?? adminQuery).maybeSingle(),
+            (profileQuery.abortSignal?.(cancellation.signal) ?? profileQuery).maybeSingle(),
+          ]), 4000).finally(() => cancellation.abort());
+
+        console.info({ event: "authentication_check", correlation_id: correlationId, stage, outcome: adminUserError || profileError ? "error" : "success", duration_ms: Date.now() - rolesStarted });
 
         if (adminUserError || profileError) throw adminUserError || profileError;
+        validatedProfile = { userId: data.user.id, data: profile };
 
         const resolvedRole =
           adminUser?.role === "admin" || adminUser?.role === "editor"
@@ -106,6 +132,7 @@ export async function createContext(
     req: opts.req,
     res: opts.res,
     user,
+    validatedProfile,
     authentication: { status, correlationId },
   };
 }
