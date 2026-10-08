@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
+import { useFilterPage } from "@/hooks/useFilterPage";
 import { getDifficultyLabel, getDifficultyOrder } from "@shared/difficulty";
 import {
   Search,
@@ -144,7 +145,6 @@ function statusResolucao(summary?: ResolutionSummary) {
 }
 
 export default function AdminQuestionsPage() {
-  const listQuestionsQuery = trpc.admin.listQuestions.useQuery();
   const setQuestionPublishedMutation = trpc.admin.setQuestionPublished.useMutation();
   const deleteQuestionMutation = trpc.admin.deleteQuestion.useMutation();
   const setPublicQuestionPublicationMutation = trpc.admin.setPublicQuestionPublication.useMutation();
@@ -163,20 +163,23 @@ export default function AdminQuestionsPage() {
     useState<PublishFilter>("todas");
   const [instituicaoFiltro, setInstituicaoFiltro] = useState("");
   const [anoFiltro, setAnoFiltro] = useState("");
+  const filters = { search, subjects: disciplinaFiltro ? [disciplinaFiltro] : [], difficulties: dificuldadeFiltro ? [dificuldadeFiltro] : [], institutions: instituicaoFiltro ? [instituicaoFiltro] : [], years: anoFiltro ? [Number(anoFiltro)] : [], publication: publicacaoFiltro === "publicadas" ? "published" as const : publicacaoFiltro === "nao_publicadas" ? "unpublished" as const : "all" as const };
+  const { page, setPage } = useFilterPage(filters);
+  const listQuestionsQuery = trpc.admin.browseQuestions.useQuery({ filters, page, pageSize: 25 }, { staleTime: 30000, retry: false });
 
   useEffect(() => {
     setLoading(listQuestionsQuery.isLoading || listQuestionsQuery.isFetching);
 
     if (listQuestionsQuery.error) {
-      console.error("Erro ao carregar questões ADM:", listQuestionsQuery.error);
-      setError("Não foi possível carregar as questões.");
+      console.warn({ event: "admin_question_list", outcome: "unavailable" });
+      setError(listQuestionsQuery.error.message || "Não foi possível carregar as questões.");
       return;
     }
 
     if (listQuestionsQuery.data) {
       setError("");
-      setQuestions((listQuestionsQuery.data.questions as AdminQuestionRow[]) || []);
-      setResolutions((listQuestionsQuery.data.resolutions as ResolutionRow[]) || []);
+      setQuestions((listQuestionsQuery.data.rows as AdminQuestionRow[]) || []);
+      setResolutions([]);
       setResolutionSummaries(
         ((listQuestionsQuery.data as any).resolutionSummaries as ResolutionSummaryRow[]) || []
       );
@@ -216,91 +219,11 @@ export default function AdminQuestionsPage() {
     return map;
   }, [resolutionSummaries, resolutions]);
 
-  const disciplinasDisponiveis = useMemo(() => {
-    return Array.from(new Set(questions.map((q) => normalizarDisciplina(q)).filter(Boolean)))
-      .filter((valor) => valor !== "—")
-      .sort((a, b) => a.localeCompare(b));
-  }, [questions]);
-
-  const dificuldadesDisponiveis = useMemo(() => {
-    return Array.from(
-      new Set(questions.map((q) => (q.dificuldade || "").trim()).filter(Boolean))
-    ).sort((a, b) => getDifficultyOrder(a) - getDifficultyOrder(b));
-  }, [questions]);
-
-  const instituicoesDisponiveis = useMemo(() => {
-    return Array.from(
-      new Set(questions.map((q) => (q.instituição || "").trim()).filter(Boolean))
-    ).sort((a, b) => a.localeCompare(b));
-  }, [questions]);
-
-  const anosDisponiveis = useMemo(() => {
-    return Array.from(new Set(questions.map((q) => q.ano).filter(Boolean) as number[]))
-      .sort((a, b) => b - a)
-      .map(String);
-  }, [questions]);
-
-  const filteredQuestions = useMemo(() => {
-    const termo = search.trim().toLowerCase();
-
-    return questions.filter((q) => {
-      const disciplina = normalizarDisciplina(q).toLowerCase();
-      const codigo = (q.codigo || "").toLowerCase();
-      const conteudo = listarConteudos(q).join(" ").toLowerCase();
-      const assunto = listarAssuntos(q).join(" ").toLowerCase();
-      const banca = (q.banca || "").toLowerCase();
-      const instituicao = (q.instituição || "").toLowerCase();
-      const enunciado = (q.enunciado || "").toLowerCase();
-      const ano = String(q.ano || "");
-      const dificuldade = (q.dificuldade || "").toLowerCase();
-
-      const passouBusca =
-        !termo ||
-        codigo.includes(termo) ||
-        disciplina.includes(termo) ||
-        conteudo.includes(termo) ||
-        assunto.includes(termo) ||
-        banca.includes(termo) ||
-        instituicao.includes(termo) ||
-        enunciado.includes(termo) ||
-        ano.includes(termo);
-
-      const passouDisciplina =
-        !disciplinaFiltro ||
-        normalizarDisciplina(q).toLowerCase() === disciplinaFiltro.toLowerCase();
-
-      const passouDificuldade =
-        !dificuldadeFiltro || dificuldade === dificuldadeFiltro.toLowerCase();
-
-      const passouInstituicao =
-        !instituicaoFiltro ||
-        (q.instituição || "").toLowerCase() === instituicaoFiltro.toLowerCase();
-
-      const passouAno = !anoFiltro || String(q.ano || "") === anoFiltro;
-
-      const passouPublicacao =
-        publicacaoFiltro === "todas" ||
-        (publicacaoFiltro === "publicadas" && q.publicada === true) ||
-        (publicacaoFiltro === "nao_publicadas" && q.publicada !== true);
-
-      return (
-        passouBusca &&
-        passouDisciplina &&
-        passouDificuldade &&
-        passouInstituicao &&
-        passouAno &&
-        passouPublicacao
-      );
-    });
-  }, [
-    questions,
-    search,
-    disciplinaFiltro,
-    dificuldadeFiltro,
-    instituicaoFiltro,
-    anoFiltro,
-    publicacaoFiltro,
-  ]);
+  const disciplinasDisponiveis = listQuestionsQuery.data?.facets.subjects ?? [];
+  const dificuldadesDisponiveis = [...(listQuestionsQuery.data?.facets.difficulties ?? [])].sort((a,b) => getDifficultyOrder(a)-getDifficultyOrder(b));
+  const instituicoesDisponiveis = listQuestionsQuery.data?.facets.institutions ?? [];
+  const anosDisponiveis = listQuestionsQuery.data?.facets.years ?? [];
+  const filteredQuestions = questions;
 
   function limparFiltros() {
     setSearch("");
@@ -392,7 +315,7 @@ export default function AdminQuestionsPage() {
                 Banco de questões administrativo
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Total carregado: {filteredQuestions.length} de {questions.length}{" "}
+                Página {page + 1}: {filteredQuestions.length} de {listQuestionsQuery.data?.total ?? "—"}{" "}
                 questões
               </p>
             </div>
@@ -426,6 +349,11 @@ export default function AdminQuestionsPage() {
           </div>
         </Card>
 
+        <div className="flex flex-wrap gap-3 items-center">
+          <Button variant="outline" disabled={page===0 || loading} onClick={() => setPage(page-1)}>Anterior</Button>
+          <Button variant="outline" disabled={loading || !listQuestionsQuery.data || (page+1)*25>=listQuestionsQuery.data.total} onClick={() => setPage(page+1)}>Próxima</Button>
+          {error && <Button variant="outline" onClick={() => void listQuestionsQuery.refetch()}>Tentar novamente</Button>}
+        </div>
         <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-4">
             <div>

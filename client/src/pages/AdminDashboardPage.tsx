@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { trpc } from "@/lib/trpc";
@@ -168,7 +169,7 @@ export default function AdminDashboardPage() {
   const [latestQuestionsWithoutResolution, setLatestQuestionsWithoutResolution] =
     useState<QuestionWithoutResolution[]>([]);
 
-  const trpcUtils = trpc.useUtils();
+  const dashboardQuery = trpc.admin.getDashboardStats.useQuery(undefined, { staleTime: 30000, retry: false });
 
   useEffect(() => {
     async function loadDashboard() {
@@ -176,7 +177,8 @@ export default function AdminDashboardPage() {
         setLoading(true);
         setError("");
 
-        const dashboard = await trpcUtils.admin.getDashboardStats.fetch();
+        if (!dashboardQuery.data) return;
+        const dashboard = dashboardQuery.data;
 
         setStats(dashboard.stats);
         setLatestQuestions(dashboard.latestQuestions as LatestQuestion[]);
@@ -187,14 +189,16 @@ export default function AdminDashboardPage() {
         );
       } catch (err) {
         console.error("Erro inesperado no dashboard ADM:", err);
-        setError("Ocorreu um erro inesperado ao carregar o dashboard.");
+        setError("Não foi possível atualizar o dashboard. Tente novamente.");
       } finally {
         setLoading(false);
       }
     }
 
-    loadDashboard();
-  }, [trpcUtils]);
+    if (dashboardQuery.error) { setError(dashboardQuery.error.message); setLoading(false); }
+    else if (dashboardQuery.isLoading) setLoading(true);
+    else void loadDashboard();
+  }, [dashboardQuery.data, dashboardQuery.error, dashboardQuery.isLoading]);
 
   return (
     <AdminGuard>
@@ -207,18 +211,20 @@ export default function AdminDashboardPage() {
             <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
             <p className="text-slate-600 dark:text-slate-300">Carregando dados reais do dashboard...</p>
           </Card>
-        ) : error ? (
+        ) : error && !dashboardQuery.data ? (
           <Card className="p-8 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
                 <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">Erro no dashboard</h2>
                 <p className="text-red-600 dark:text-red-300">{error}</p>
+                <Button variant="outline" onClick={() => void dashboardQuery.refetch()}>Tentar novamente</Button>
               </div>
             </div>
           </Card>
         ) : (
           <>
+            {error && <div role="alert" className="p-3 text-amber-700 dark:text-amber-300">Falha de atualização: {error} <Button variant="outline" onClick={() => void dashboardQuery.refetch()}>Tentar novamente</Button></div>}
             <div className="grid md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7 gap-4">
               <StatCard
                 title="Usuários cadastrados"

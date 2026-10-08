@@ -4,7 +4,8 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
-import { exportQuestionsForPdf, getQuestions } from "@/services/questions.service";
+import { exportQuestionsForPdf, getQuestionSelection, mapQuestao } from "@/services/questions.service";
+import { useFilterPage } from "@/hooks/useFilterPage";
 import { questionPdfFailureMessage } from "@/lib/questionPdfDiagnostics";
 import { buildPdfFilterSummary } from "@/lib/questionPdfLayout";
 import type { QuestionPdfFilters } from "@shared/questionPdf";
@@ -385,14 +386,8 @@ export default function QuestionBankPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
   const initialVetFilters = useMemo(() => parseVetFiltersFromUrl(), []);
 
-  const [sourceQuestions, setQuestions] = useState<Question[]>([]);
   const [linkedExam, setLinkedExam] = useState(initialVetFilters.exam);
   const [linkedInterval, setLinkedInterval] = useState(initialVetFilters.interval);
-  const questions = useMemo(() => sourceQuestions.filter(q =>
-    (!linkedExam || normalizeText(q.exam) === normalizeText(linkedExam)) &&
-    (!linkedInterval || (q.year != null && Number(q.year) >= linkedInterval.from && Number(q.year) <= linkedInterval.to))
-  ), [sourceQuestions, linkedExam, linkedInterval]);
-  const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -420,12 +415,19 @@ export default function QuestionBankPage() {
   const [notebookName, setNotebookName] = useState("Lista de exercícios");
   const [notebookPaper, setNotebookPaper] = useState<"a5" | "a4" | "a3" | "infinite">("a4");
   const createNotebook = trpc.notebooks.create.useMutation();
+  const [notebookLoading, setNotebookLoading] = useState(false);
+  const [notebookError, setNotebookError] = useState('');
 
   async function handleCreateLinkedNotebook() {
     const name = notebookName.trim();
-    if (!name || filteredQuestions.length === 0) return;
-    const result = await createNotebook.mutateAsync({ name, paper: { size: notebookPaper, lined: false }, questionIds: filteredQuestions.slice(0, 100).map(question => question.id) });
-    window.location.assign(`/caderno/${result.id}`);
+    if (!name || totalFiltered === 0 || notebookLoading) return;
+    setNotebookLoading(true); setNotebookError('');
+    try {
+      const selected = await getQuestionSelection(filters, 100);
+      const result = await createNotebook.mutateAsync({ name, paper: { size: notebookPaper, lined: false }, questionIds: selected.map(question => question.id) });
+      window.location.assign(`/caderno/${result.id}`);
+    } catch (error) { setNotebookError(error instanceof Error ? error.message : 'Não foi possível criar o caderno.'); }
+    finally { setNotebookLoading(false); }
   }
 
   const [vetTopics, setVetTopics] = useState<string[]>(initialVetFilters.topics);
@@ -436,302 +438,53 @@ export default function QuestionBankPage() {
   const effectiveTopics =
     selectedTopics.length > 0 ? selectedTopics : vetTopics;
 
-  const availableInstitutions = useMemo(() => {
-    return Array.from(
-      new Set(
-        questions
-          .map((q) => q.institution?.trim())
-          .filter(
-            (institution): institution is string =>
-              !!institution && institution !== ""
-          )
-      )
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [questions]);
-
-  const questionsForYears = useMemo(() => {
-    return questions.filter((q) =>
-      matchesMulti(q.institution, selectedInstitutions)
-    );
-  }, [questions, selectedInstitutions]);
-
-  const availableYears = useMemo(() => {
-    return Array.from(
-      new Set(questionsForYears.map((q) => String(q.year)).filter(Boolean))
-    ).sort((a, b) => Number(b) - Number(a));
-  }, [questionsForYears]);
-
-  const questionsForSubjects = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-
-      return matchesInstitution && matchesYear;
-    });
-  }, [questions, selectedInstitutions, selectedYears]);
-
-  const availableSubjects = useMemo(() => {
-    return sortSubjects(
-      Array.from(
-        new Set(questionsForSubjects.map((q) => q.subject).filter(Boolean))
-      )
-    );
-  }, [questionsForSubjects]);
-
-  const questionsForTopics = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-      const matchesSubject = matchesMulti(q.subject, selectedSubjects);
-
-      return matchesInstitution && matchesYear && matchesSubject;
-    });
-  }, [questions, selectedInstitutions, selectedYears, selectedSubjects]);
-
-  const availableTopics = useMemo(() => {
-    return Array.from(
-      new Set(
-        questionsForTopics
-          .flatMap((q) => getQuestionTopics(q))
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [questionsForTopics]);
-
-  const questionsForSubtopics = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-      const matchesSubject = matchesMulti(q.subject, selectedSubjects);
-      const matchesTopic = matchesMultiList(
-        getQuestionTopics(q),
-        effectiveTopics
-      );
-
-      return matchesInstitution && matchesYear && matchesSubject && matchesTopic;
-    });
-  }, [
-    questions,
-    selectedInstitutions,
-    selectedYears,
-    selectedSubjects,
-    effectiveTopics,
-  ]);
-
-  const availableSubtopics = useMemo(() => {
-    return Array.from(
-      new Set(
-        questionsForSubtopics
-          .flatMap((q) => getQuestionSubtopicsForTopics(q, effectiveTopics))
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [questionsForSubtopics, effectiveTopics]);
-
-  const questionsForDifficulties = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-      const matchesSubject = matchesMulti(q.subject, selectedSubjects);
-      const matchesTopic = matchesMultiList(
-        getQuestionTopics(q),
-        effectiveTopics
-      );
-      const matchesSubtopic = matchesMultiList(
-        getQuestionSubtopicsForTopics(q, effectiveTopics),
-        selectedSubtopics
-      );
-
-      return (
-        matchesInstitution &&
-        matchesYear &&
-        matchesSubject &&
-        matchesTopic &&
-        matchesSubtopic
-      );
-    });
-  }, [
-    questions,
-    selectedInstitutions,
-    selectedYears,
-    selectedSubjects,
-    effectiveTopics,
-    selectedSubtopics,
-  ]);
-
-  const availableDifficulties = useMemo(() => {
-    return sortDifficulties(
-      Array.from(
-        new Set(
-          questionsForDifficulties
-            .map((q) => normalizeDifficulty(q.difficulty) ?? "")
-            .filter(Boolean)
-        )
-      )
-    );
-  }, [questionsForDifficulties]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedYears((prev) => keepOnlyAvailableSelected(prev, availableYears));
-  }, [availableYears, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedSubjects((prev) =>
-      keepOnlyAvailableSelected(prev, availableSubjects)
-    );
-  }, [availableSubjects, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedTopics((prev) =>
-      keepOnlyAvailableSelected(prev, availableTopics)
-    );
-  }, [availableTopics, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedSubtopics((prev) =>
-      keepOnlyAvailableSelected(prev, availableSubtopics)
-    );
-  }, [availableSubtopics, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedDifficulties((prev) =>
-      keepOnlyAvailableSelected(prev, availableDifficulties)
-    );
-  }, [availableDifficulties, questions.length]);
-
-  const totalSubjects = useMemo(
-    () => new Set(questions.map((q) => q.subject).filter(Boolean)).size,
-    [questions]
-  );
-
-  const totalDifficulties = useMemo(
-    () => new Set(questions.map((q) => q.difficulty).filter(Boolean)).size,
-    [questions]
-  );
-
-  const practiceStats = useMemo(() => {
-    const total = questions.length;
-    const answered = questions.filter((q) => userQuestionStatus[q.id]?.attempted)
-      .length;
-    const correct = questions.filter(
-      (q) => userQuestionStatus[q.id]?.latestIsCorrect === true
-    ).length;
-    const wrong = questions.filter(
-      (q) => userQuestionStatus[q.id]?.latestIsCorrect === false
-    ).length;
-
-    return {
-      total,
-      answered,
-      unanswered: Math.max(0, total - answered),
-      correct,
-      wrong,
-    };
-  }, [questions, userQuestionStatus]);
-
-  const subjectStats = useMemo(() => {
-    const labels: Record<string, string> = {
-      fisica: "Física",
-      matematica: "Matemática",
-      quimica: "Química",
-    };
-
-    const counts = questions.reduce<Record<string, number>>((acc, q) => {
-      if (!q.subject) return acc;
-      acc[q.subject] = (acc[q.subject] || 0) + 1;
-      return acc;
-    }, {});
-
-    return Object.entries(counts)
-      .map(([key, count]) => ({
-        key,
-        label: labels[key] ?? key,
-        count,
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [questions]);
-
-  const difficultyStats = useMemo(() => {
-    const labels: Record<string, string> = {
-      facil: "Fácil",
-      medio: "Médio",
-      dificil: "Difícil",
-      muito_dificil: "Muito difícil",
-    };
-    const counts = questions.reduce<Record<string, number>>((acc, q) => {
-      const difficulty = normalizeDifficulty(q.difficulty);
-      if (!difficulty) return acc;
-      acc[difficulty] = (acc[difficulty] || 0) + 1;
-      return acc;
-    }, {});
-
-    const order: Record<string, number> = {
-      facil: 1,
-      medio: 2,
-      dificil: 3,
-      muito_dificil: 4,
-    };
-    return Object.entries(counts)
-      .map(([key, count]) => ({
-        key,
-        label: formatDifficultyLabel(key),
-        count,
-      }))
-      .sort((a, b) => getDifficultyOrder(a.key) - getDifficultyOrder(b.key));
-  }, [questions]);
-
-  const filteredDifficultyStats = useMemo(() => {
-    const counts = filteredQuestions.reduce<Record<string, number>>((acc, q) => {
-      const difficulty = normalizeDifficulty(q.difficulty);
-      if (!difficulty) return acc;
-      acc[difficulty] = (acc[difficulty] || 0) + 1;
-      return acc;
-    }, {});
-
-    return [
-      {
-        key: "facil",
-        label: "Fácil",
-        count: counts.facil || 0,
-        colorClass: "bg-emerald-500",
-      },
-      {
-        key: "medio",
-        label: "Médio",
-        count: counts.medio || 0,
-        colorClass: "bg-amber-500",
-      },
-      {
-        key: "dificil",
-        label: "Difícil",
-        count: counts.dificil || 0,
-        colorClass: "bg-rose-500",
-      },
-      {
-        key: "muito_dificil",
-        label: "Muito difícil",
-        count: counts.muito_dificil || 0,
-        colorClass: "bg-indigo-700",
-      },
-    ];
-  }, [filteredQuestions]);
+  const filters = useMemo(() => ({
+    search: searchTerm, institutions: selectedInstitutions, years: selectedYears.map(Number), subjects: selectedSubjects,
+    topics: effectiveTopics, subtopics: selectedSubtopics, difficulties: selectedDifficulties, practiceStatus: selectedPracticeStatus,
+    exams: linkedExam ? [linkedExam] : [], yearFrom: linkedInterval?.from, yearTo: linkedInterval?.to,
+  }), [searchTerm, selectedInstitutions, selectedYears, selectedSubjects, effectiveTopics, selectedSubtopics, selectedDifficulties, selectedPracticeStatus, linkedExam, linkedInterval]);
+  const { page, setPage } = useFilterPage(filters);
+  const pageQuery = trpc.questions.browse.useQuery({ filters, page, pageSize: 20 }, { enabled: !authLoading, staleTime: 30000, retry: false, trpc: { abortOnUnmount: true } });
+  const ids = pageQuery.data?.rows.map(row => row.id) ?? [];
+  const detailsQuery = trpc.questions.details.useQuery({ ids }, { enabled: ids.length>0, staleTime: 30000, retry: false, trpc: { abortOnUnmount: true } });
+  const pageQuestions = useMemo(() => (detailsQuery.data ?? []).map(row => mapQuestao(row as Parameters<typeof mapQuestao>[0])), [detailsQuery.data]);
+  const availableInstitutions = pageQuery.data?.facets.institutions ?? [];
+  const availableYears = pageQuery.data?.facets.years ?? [];
+  const availableSubjects = sortSubjects(pageQuery.data?.facets.subjects ?? []);
+  const availableTopics = pageQuery.data?.facets.topics ?? [];
+  const availableSubtopics = pageQuery.data?.facets.subtopics ?? [];
+  const availableDifficulties = sortDifficulties(pageQuery.data?.facets.difficulties ?? []);
+  const totalQuestions = pageQuery.data?.stats.total ?? 0;
+  const totalFiltered = pageQuery.data?.total ?? 0;
+  const totalSubjects = Object.keys(pageQuery.data?.stats.subjects ?? {}).length;
+  const totalDifficulties = pageQuery.data?.stats.totalDifficulties ?? 0;
+  const practiceStats = pageQuery.data?.stats ?? { answered:0, unanswered:0, correct:0, wrong:0 };
+  const subjectStats = Object.entries(pageQuery.data?.stats.subjects ?? {}).map(([key,count]) => ({key,count,label:formatSubjectLabel(key)})).sort((a,b)=>b.count-a.count);
+  const difficultyStats = Object.entries(pageQuery.data?.stats.difficulties ?? {}).map(([key,count]) => ({key,count,label:formatDifficultyLabel(key)})).sort((a,b)=>getDifficultyOrder(a.key)-getDifficultyOrder(b.key));
+  const filteredDifficultyStats = [
+    { key: "facil", label: "Fácil", colorClass: "bg-emerald-500" },
+    { key: "medio", label: "Médio", colorClass: "bg-amber-500" },
+    { key: "dificil", label: "Difícil", colorClass: "bg-rose-500" },
+    { key: "muito_dificil", label: "Muito difícil", colorClass: "bg-indigo-700" },
+  ].map(item=>({...item,count:pageQuery.data?.stats.filteredDifficulties[item.key] ?? 0}));
+  const [completeQuiz, setCompleteQuiz] = useState<{ key: string; questions: Question[] } | null>(null);
+  const [selectionLoading, setSelectionLoading] = useState(false);
+  const [selectionError, setSelectionError] = useState('');
+  const selectionController = useRef<AbortController | null>(null);
+  const selectionKey = JSON.stringify({ filters, user: user?.id });
+  const filteredQuestions = completeQuiz?.key === selectionKey ? completeQuiz.questions : pageQuestions;
+  useEffect(() => { selectionController.current?.abort(); setSelectionLoading(false); setSelectionError(''); }, [selectionKey]);
+  useEffect(() => () => selectionController.current?.abort(), []);
+  async function startCompleteQuiz() {
+    if (selectionLoading) return;
+    const controller = new AbortController(); selectionController.current = controller;
+    setSelectionLoading(true); setSelectionError('');
+    try {
+      const loaded = await getQuestionSelection(filters, Infinity, controller.signal);
+      if (!controller.signal.aborted) setCompleteQuiz({ key: selectionKey, questions: loaded });
+    } catch (error) { if (!controller.signal.aborted) setSelectionError(error instanceof Error ? error.message : 'Não foi possível carregar o quiz.'); }
+    finally { if (!controller.signal.aborted) setSelectionLoading(false); }
+  }
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{
@@ -836,121 +589,6 @@ export default function QuestionBankPage() {
 
   const trpcUtils = trpc.useUtils();
 
-  useEffect(() => {
-    async function loadQuestions() {
-      const data = await getQuestions();
-      setQuestions(data);
-      setFilteredQuestions(data);
-    }
-
-    loadQuestions();
-  }, []);
-
-  useEffect(() => {
-    async function loadUserAttempts() {
-      if (authLoading) return;
-
-      if (!user?.id) {
-        setUserQuestionStatus({});
-        setAttemptsLoading(false);
-        return;
-      }
-
-      setAttemptsLoading(true);
-
-      try {
-        const data = await trpcUtils.quiz.getMyAttempts.fetch({ summary: true });
-
-        const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
-
-        ((data as unknown as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
-        if (!attempt.question_id) return;
-
-        const current = nextStatus[attempt.question_id];
-
-        if (!current) {
-          nextStatus[attempt.question_id] = {
-            attempted: true,
-            latestIsCorrect: attempt.is_correct ?? false,
-            attempts: 1,
-            lastAnsweredAt: attempt.answered_at ?? null,
-          };
-          return;
-        }
-
-        current.attempts += 1;
-      });
-
-        setUserQuestionStatus(nextStatus);
-      } catch (error) {
-        console.error("Erro ao carregar tentativas do usuário:", error);
-        setUserQuestionStatus({});
-      } finally {
-        setAttemptsLoading(false);
-      }
-    }
-
-    loadUserAttempts();
-  }, [authLoading, trpcUtils, user?.id]);
-
-  useEffect(() => {
-    let filtered = questions;
-
-    filtered = filtered.filter((q) => questionMatchesSearch(q, searchTerm));
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(q.institution, selectedInstitutions)
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(String(q.year), selectedYears)
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(q.subject, selectedSubjects)
-    );
-
-    if (effectiveTopics.length > 0) {
-      filtered = filtered.filter((q) =>
-        matchesMultiList(getQuestionTopics(q), effectiveTopics)
-      );
-    }
-
-    filtered = filtered.filter((q) =>
-      matchesMultiList(
-        getQuestionSubtopicsForTopics(q, effectiveTopics),
-        selectedSubtopics
-      )
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(normalizeDifficulty(q.difficulty) ?? q.difficulty, selectedDifficulties)
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesPracticeStatus(
-        q.id,
-        selectedPracticeStatus,
-        userQuestionStatus,
-        !!user?.id
-      )
-    );
-
-    setFilteredQuestions(filtered);
-  }, [
-    questions,
-    searchTerm,
-    selectedInstitutions,
-    selectedYears,
-    selectedSubjects,
-    effectiveTopics,
-    selectedSubtopics,
-    selectedDifficulties,
-    selectedPracticeStatus,
-    userQuestionStatus,
-    user?.id,
-  ]);
-
   function clearAllFilters() {
     setSearchTerm("");
     setSelectedInstitutions([]);
@@ -972,7 +610,7 @@ export default function QuestionBankPage() {
   }
 
   async function handleExportPdf() {
-    if (pdfGenerating || filteredQuestions.length === 0) return;
+    if (pdfGenerating || totalFiltered === 0) return;
     const filters: QuestionPdfFilters = {
       search: searchTerm.trim(),
       institutions: selectedInstitutions,
@@ -1007,6 +645,7 @@ export default function QuestionBankPage() {
   }
 
   function handleQuestionAnswered(questionId: string, isCorrect: boolean) {
+    void trpcUtils.questions.browse.invalidate();
     setUserQuestionStatus((prev) => ({
       ...prev,
       [questionId]: {
@@ -1017,6 +656,8 @@ export default function QuestionBankPage() {
       },
     }));
   }
+
+  if (!pageQuery.data) return <main className="theme-page min-h-screen p-8"><h1>Banco de Questões</h1>{pageQuery.isLoading || authLoading ? <p role="status">Carregando questões...</p> : <div role="alert"><p>{pageQuery.error?.message || 'Não foi possível carregar os dados.'}</p><Button onClick={()=>void pageQuery.refetch()}>Tentar novamente</Button></div>}</main>;
 
   return (
     <div className="theme-page min-h-screen bg-slate-50">
@@ -1054,7 +695,7 @@ export default function QuestionBankPage() {
 
             <div>
               <p className="text-xl font-bold text-slate-900 leading-none">
-                {filteredQuestions.length}
+                {totalFiltered}
               </p>
 
               <p className="text-xs font-semibold text-blue-700">
@@ -1066,6 +707,8 @@ export default function QuestionBankPage() {
       </header>
 
       <main className="container py-8 space-y-7">
+        {(pageQuery.error || detailsQuery.error) && <Card role="alert" className="p-4 text-amber-700 dark:text-amber-300">Não foi possível atualizar o banco. {pageQuery.error?.message || detailsQuery.error?.message} <Button variant="outline" onClick={() => { void pageQuery.refetch(); if(ids.length) void detailsQuery.refetch(); }}>Tentar novamente</Button></Card>}
+        {pageQuery.isLoading && <p role="status">Carregando questões...</p>}
         {(linkedExam || linkedInterval) && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
           <span>Recorte da análise: {linkedExam || "Todas as bancas"}{linkedInterval ? ` · ${linkedInterval.from}–${linkedInterval.to}` : ""}</span>
           <Button variant="outline" onClick={() => { setLinkedExam(""); setLinkedInterval(undefined); }}>Remover recorte</Button>
@@ -1125,7 +768,7 @@ export default function QuestionBankPage() {
 
                   <div>
                     <p className="text-2xl font-bold text-slate-900 leading-tight">
-                      {questions.length}
+                      {totalQuestions}
                     </p>
 
                     <p className="text-sm font-semibold text-slate-800">
@@ -1190,8 +833,8 @@ export default function QuestionBankPage() {
                   {subjectStats.length > 0 ? (
                     subjectStats.map((item) => {
                       const percentage =
-                        questions.length > 0
-                          ? Math.round((item.count / questions.length) * 100)
+                        totalQuestions > 0
+                          ? Math.round((item.count / totalQuestions) * 100)
                           : 0;
 
                       return (
@@ -1232,8 +875,8 @@ export default function QuestionBankPage() {
                   {difficultyStats.length > 0 ? (
                     difficultyStats.map((item) => {
                       const percentage =
-                        questions.length > 0
-                          ? Math.round((item.count / questions.length) * 100)
+                        totalQuestions > 0
+                          ? Math.round((item.count / totalQuestions) * 100)
                           : 0;
 
                       const colorClass =
@@ -1298,14 +941,14 @@ export default function QuestionBankPage() {
                     <Button
                       variant="outline"
                       onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
-                      disabled={filteredQuestions.length === 0 || authLoading || !user}
+                      disabled={totalFiltered === 0 || authLoading || !user}
                       className="h-9 shrink-0 rounded-xl px-4 text-sm sm:flex-1 xl:flex-none"
                     >
                       <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
                     </Button>
                     <Button
                       onClick={handleExportPdf}
-                      disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
+                      disabled={pdfGenerating || totalFiltered === 0 || authLoading || !user}
                       className="h-9 shrink-0 rounded-lg bg-blue-600 px-4 text-sm hover:bg-blue-700 sm:flex-1 xl:flex-none"
                     >
                       {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
@@ -1581,7 +1224,7 @@ export default function QuestionBankPage() {
               </p>
 
               <p className="text-3xl font-bold text-slate-900">
-                {filteredQuestions.length}
+                {totalFiltered}
               </p>
             </div>
 
@@ -1632,9 +1275,9 @@ export default function QuestionBankPage() {
               <div className="space-y-4">
                 {filteredDifficultyStats.map((item) => {
                   const percentage =
-                    filteredQuestions.length > 0
+                    totalFiltered > 0
                       ? Math.round(
-                          (item.count / filteredQuestions.length) * 100
+                          (item.count / totalFiltered) * 100
                         )
                       : 0;
 
@@ -1671,7 +1314,17 @@ export default function QuestionBankPage() {
         </section>
 
         <section>
-          {filteredQuestions.length > 0 ? (
+          <div className="flex flex-wrap gap-3 items-center mb-4">
+            <Button variant="outline" disabled={page===0 || pageQuery.isFetching} onClick={()=>{setCompleteQuiz(null);setPage(page-1);}}>Página anterior</Button>
+            <span>Página {page+1} · {totalFiltered} questões no conjunto filtrado</span>
+            <Button variant="outline" disabled={(page+1)*20>=totalFiltered || pageQuery.isFetching} onClick={()=>{setCompleteQuiz(null);setPage(page+1);}}>Próxima página</Button>
+            <Button disabled={!totalFiltered || selectionLoading} onClick={()=>void startCompleteQuiz()}>Praticar conjunto completo ({totalFiltered})</Button>
+            {selectionLoading && <Button variant="outline" onClick={()=>{selectionController.current?.abort();setSelectionLoading(false);}}>Cancelar carregamento</Button>}
+          </div>
+          {selectionError && <p role="alert">{selectionError}</p>}
+          {filteredQuestions.length > 0 && !pageQuery.error ? (
+            <div>
+            <p className="text-sm mb-3">{completeQuiz?.key===selectionKey ? 'Quiz do conjunto completo' : 'Prática das questões desta página (20 por página)'}</p>
             <InteractiveQuiz
               key={[
                 searchTerm,
@@ -1683,12 +1336,14 @@ export default function QuestionBankPage() {
                 selectedDifficulties.join("|"),
                 selectedPracticeStatus,
                 vetTopics.join("|"),
+                String(page), completeQuiz?.key===selectionKey ? 'complete' : 'page',
               ].join("::")}
               questions={filteredQuestions}
               onQuestionAnswered={handleQuestionAnswered}
               optionFeedbackTheme="question-bank"
             />
-          ) : (
+            </div>
+          ) : pageQuery.isLoading || detailsQuery.isLoading ? <p role="status">Carregando...</p> : !pageQuery.error && !detailsQuery.error ? (
             <Card className="p-12 text-center bg-white border-slate-200">
               <p className="text-lg font-semibold text-slate-800 mb-3">
                 Nenhuma questão encontrada com os filtros selecionados.
@@ -1700,7 +1355,7 @@ export default function QuestionBankPage() {
 
               <Button onClick={clearAllFilters}>Limpar Filtros</Button>
             </Card>
-          )}
+          ) : null}
         </section>
       </main>
 
@@ -1708,11 +1363,11 @@ export default function QuestionBankPage() {
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="linked-notebook-title">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h2 id="linked-notebook-title" className="text-xl font-bold text-slate-900">Resolver no Caderno</h2>
-            <p className="mt-1 text-sm text-slate-500">Crie um arquivo ligado às {Math.min(filteredQuestions.length, 100)} questões desta lista.</p>
+            <p className="mt-1 text-sm text-slate-500">Crie um arquivo ligado às {Math.min(totalFiltered, 100)} questões desta lista.</p>
             <label className="mt-5 block text-sm font-semibold">Nome<input autoFocus maxLength={80} value={notebookName} onChange={event => setNotebookName(event.target.value)} className="mt-1 w-full rounded-xl border px-3 py-2" /></label>
             <label className="mt-4 block text-sm font-semibold">Papel<select value={notebookPaper} onChange={event => setNotebookPaper(event.target.value as typeof notebookPaper)} className="mt-1 w-full rounded-xl border px-3 py-2"><option value="a5">A5</option><option value="a4">A4</option><option value="a3">A3</option><option value="infinite">Folha infinita</option></select></label>
-            {createNotebook.error ? <p className="mt-3 text-sm text-red-600">Não foi possível criar o caderno. Confirme a conexão com o Google Drive.</p> : null}
-            <div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setNotebookDialogOpen(false)}>Cancelar</Button><Button onClick={() => void handleCreateLinkedNotebook()} disabled={!notebookName.trim() || createNotebook.isPending}>{createNotebook.isPending ? "Criando..." : "Criar caderno"}</Button></div>
+            {notebookError && <p role="alert" className="mt-3 text-sm text-red-600">{notebookError}</p>}
+            <div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setNotebookDialogOpen(false)}>Cancelar</Button><Button onClick={() => void handleCreateLinkedNotebook()} disabled={!notebookName.trim() || notebookLoading || createNotebook.isPending}>{notebookLoading || createNotebook.isPending ? "Criando..." : "Criar caderno"}</Button></div>
           </div>
         </div>
       ) : null}

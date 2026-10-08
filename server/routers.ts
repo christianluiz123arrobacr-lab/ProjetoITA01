@@ -37,6 +37,8 @@ import {
   questionPdfFiltersSchema,
 } from "../shared/questionPdf.js";
 import { selectQuestionPdfData } from "./questionPdfExport.js";
+import { questionBrowseSchema } from "../shared/questionBrowse.js";
+import { browseQuestions, performanceRpc, type DashboardResult, type StudentStatisticsRow } from "./performanceStageTwo.js";
 import { NOTEBOOK_DEVELOPMENT_MESSAGE, NOTEBOOK_FEATURE_AVAILABLE } from "../shared/featureAvailability.js";
 import { createGoogleDriveConnectUrl, createNotebook, disconnectGoogleDrive, getNotebook, googleDriveStatus, listNotebooks, renameNotebook, trashNotebook, updateNotebook, uploadNotebookPdf } from "./googleDrive/googleDriveService.js";
 import { createQuestionReport } from "./questionReports.js";
@@ -1005,6 +1007,16 @@ export const appRouter = router({
   }),
 
   questions: router({
+    browse: publicProcedure.input(questionBrowseSchema).query(async ({ ctx, input }) => {
+      await ensureAuthentication(ctx);
+      assertAuthenticationAvailable(ctx);
+      return browseQuestions(supabaseAdmin, input, false, ctx.user?.id ?? null);
+    }),
+    details: publicProcedure.input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) })).query(async ({ input }) => {
+      const rows = await performanceRpc<Record<string, any>[]>(supabaseAdmin, "vet_question_details", { p_ids: input.ids });
+      return rows.map(row => ({ ...safeQuestionDto(row), diciplina: row.diciplina,
+        ...(Array.isArray(row.options) && row.options.length ? { options: row.options.filter((o: any) => /^[a-e]$/i.test(String(o.id))).map((o: any) => ({ id: o.id, label: o.label, text: o.text, imageUrl: o.imageUrl, imageAlt: o.imageAlt, imageCaption: o.imageCaption })) } : {}) }));
+    }),
     exportPdfData: protectedProcedure
       .input(questionPdfFiltersSchema)
       .mutation(async ({ ctx, input }) => {
@@ -1161,97 +1173,7 @@ export const appRouter = router({
   }),
 
   admin: router({
-    getDashboardStats: adminOrEditorProcedure.query(async () => {
-      const [
-        usersCountResult,
-        adminsCountResult,
-        questionsCountResult,
-        unpublishedQuestionsCountResult,
-        resolutionsCountResult,
-        resolutionImagesResult,
-        latestQuestionsResult,
-        latestResolutionsResult,
-        latestUsersResult,
-        allQuestions,
-        allResolutionBlocks,
-      ] = await Promise.all([
-        supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }),
-        supabaseAdmin.from("admin_users").select("id", { count: "exact", head: true }),
-        supabaseAdmin.from("questoes").select("id", { count: "exact", head: true }),
-        supabaseAdmin
-          .from("questoes")
-          .select("id", { count: "exact", head: true })
-          .eq("publicada", false),
-        supabaseAdmin.from("resolucoes").select("id", { count: "exact", head: true }),
-        supabaseAdmin
-          .from("resolucoes")
-          .select("id", { count: "exact", head: true })
-          .not("url_imagem", "is", null),
-        supabaseAdmin
-          .from("questoes")
-          .select("id,codigo,enunciado,banca,ano,created_at,publicada")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        supabaseAdmin
-          .from("resolucoes")
-          .select("id,questao_id,tipo,ordem,codigo_resolucao,created_at")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        supabaseAdmin
-          .from("profiles")
-          .select("id,nome,email,role,ativo,created_at")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        fetchAllQuestionPages(async (from, to) => {
-          const { data, error } = await supabaseAdmin.from("questoes")
-            .select("id,codigo,enunciado,banca,ano,created_at").order("id").range(from, to);
-          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível contar as questões sem resolução." });
-          return data ?? [];
-        }),
-        fetchAllQuestionPages(async (from, to) => {
-          const { data, error } = await supabaseAdmin.from("resolucoes")
-            .select("id,questao_id,tipo,texto,url_imagem").order("id").range(from, to);
-          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível contar as resoluções." });
-          return data ?? [];
-        }),
-      ]);
-
-      const possibleError =
-        usersCountResult.error ||
-        adminsCountResult.error ||
-        questionsCountResult.error ||
-        unpublishedQuestionsCountResult.error ||
-        resolutionsCountResult.error ||
-        resolutionImagesResult.error ||
-        latestQuestionsResult.error ||
-        latestResolutionsResult.error ||
-        latestUsersResult.error;
-
-      if (possibleError) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: possibleError.message ?? "Não foi possível carregar o dashboard administrativo.",
-        });
-      }
-
-      const questionsWithoutResolution = getQuestionsWithoutResolution(allQuestions, allResolutionBlocks);
-
-      return {
-        stats: {
-          totalUsers: usersCountResult.count ?? 0,
-          totalAdmins: adminsCountResult.count ?? 0,
-          totalQuestions: questionsCountResult.count ?? 0,
-          totalQuestionsWithoutResolution: questionsWithoutResolution.length,
-          totalUnpublishedQuestions: unpublishedQuestionsCountResult.count ?? 0,
-          totalResolutions: resolutionsCountResult.count ?? 0,
-          totalResolutionImages: resolutionImagesResult.count ?? 0,
-        },
-        latestQuestions: latestQuestionsResult.data ?? [],
-        latestResolutions: latestResolutionsResult.data ?? [],
-        latestUsers: latestUsersResult.data ?? [],
-        latestQuestionsWithoutResolution: questionsWithoutResolution.slice(0, 5),
-      } as const;
-    }),
+    getDashboardStats: adminOrEditorProcedure.query(() => performanceRpc<DashboardResult>(supabaseAdmin, "vet_admin_dashboard")),
     listAdminLogs: adminProcedure.query(async () => {
       const { data, error } = await supabaseAdmin
         .from("admin_logs")
@@ -1626,28 +1548,7 @@ export const appRouter = router({
     }),
 
     listStudentsWithBilling: adminProcedure.query(async () => {
-      const [profiles, attempts] = await Promise.all([
-        fetchAllQuestionPages(async (from, to) => {
-          const { data, error } = await supabaseAdmin.from("profiles")
-            .select("id, nome, email, telefone, role, ativo, created_at, last_seen_at")
-            .order("created_at", { ascending: false }).order("id").range(from, to);
-          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível listar os alunos." });
-          return data ?? [];
-        }),
-        fetchAllQuestionPages(async (from, to) => {
-          const { data, error } = await supabaseAdmin.from("user_question_attempts")
-            .select("id,user_id,question_id,is_correct,answered_at").order("id").range(from, to);
-          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível calcular as estatísticas dos alunos." });
-          return data ?? [];
-        }),
-      ]);
-      const attemptsByUser = new Map<string, typeof attempts>();
-      for (const attempt of attempts) {
-        const userId = String(attempt.user_id);
-        const list = attemptsByUser.get(userId) ?? [];
-        list.push(attempt);
-        attemptsByUser.set(userId, list);
-      }
+      const profiles = await performanceRpc<StudentStatisticsRow[]>(supabaseAdmin, "vet_admin_student_statistics");
 
       const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
         .from("billing_subscriptions")
@@ -1689,8 +1590,6 @@ export const appRouter = router({
         const effective = effectiveByUser.get(String(profile.id));
         const subscription = effective?.subscriptionId ? subscriptionById.get(effective.subscriptionId) : null;
         const plan = pickBillingPlan(subscription);
-        const userAttempts = attemptsByUser.get(String(profile.id)) ?? [];
-        const attemptStats = summarizeAttempts(userAttempts);
 
         return {
           id: String(profile.id),
@@ -1721,11 +1620,13 @@ export const appRouter = router({
           updated_at: subscription?.updated_at ?? null,
           has_valid_access: Boolean(effective?.hasValidAccess),
           effective_subscription_id: effective?.subscriptionId ?? null,
-          attempts_count: attemptStats.totalAttempts,
-          correct_count: attemptStats.correctAttempts,
-          wrong_count: attemptStats.totalAttempts - attemptStats.correctAttempts,
-          last_answered_at: userAttempts.reduce<string | null>((latest, attempt) =>
-            !latest || attempt.answered_at > latest ? attempt.answered_at : latest, null),
+          attempts_count: profile.attempts_count,
+          correct_count: profile.correct_count,
+          wrong_count: profile.attempts_count - profile.correct_count,
+          distinct_answered: profile.distinct_answered,
+          distinct_correct: profile.distinct_correct,
+          accuracy: profile.accuracy,
+          last_answered_at: profile.last_answered_at,
         };
       });
     }),
@@ -2247,24 +2148,9 @@ export const appRouter = router({
       }),
 
 
-    getQuestionSuggestions: adminOrEditorProcedure.query(async () => {
-      const pageSize = 1000;
-      const suggestions = [] as Record<string, unknown>[];
-      for (let from = 0; ; from += pageSize) {
-        const { data, error } = await supabaseAdmin
-          .from("questoes")
-          .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição")
-          .order("id")
-          .range(from, from + pageSize - 1);
+    getQuestionSuggestions: adminOrEditorProcedure.query(() => performanceRpc<Record<string, unknown>[]>(supabaseAdmin, "vet_question_suggestions")),
 
-        if (error) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-        }
-        suggestions.push(...((data ?? []) as unknown as Record<string, unknown>[]));
-        if (!data || data.length < pageSize) break;
-      }
-      return suggestions;
-    }),
+    browseQuestions: adminOrEditorProcedure.input(questionBrowseSchema).query(({ input }) => browseQuestions(supabaseAdmin, input, true, null)),
 
     getQuestionById: adminOrEditorProcedure
       .input(z.object({ id: z.string().uuid() }))

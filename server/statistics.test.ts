@@ -35,8 +35,8 @@ describe("estatísticas canônicas", () => {
     const source = readFileSync("server/routers.ts", "utf8");
     const students = source.split("listStudentsWithBilling: adminProcedure")[1]?.split("getBillingConsistencyReport:")[0] ?? "";
     const access = source.split("getAccessStatus: protectedProcedure")[1]?.split("getAccessStatus:")[0] ?? "";
-    expect(students).toContain("summarizeAttempts(userAttempts)");
-    expect(students).toContain("attempts_count: attemptStats.totalAttempts");
+    expect(students).toContain("vet_admin_student_statistics");
+    expect(students).toContain("attempts_count: profile.attempts_count");
     expect(students).not.toContain("attempts_count: 0");
     expect(access).toContain('.eq("id", ctx.user.id)');
     expect(access).toContain("last_seen_at.lt.");

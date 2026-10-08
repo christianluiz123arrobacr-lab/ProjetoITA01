@@ -737,6 +737,7 @@ export default function AdminQuestionEditPage() {
   const questionId = match ? params.id : null;
 
   const [form, setForm] = useState<QuestionFormData>(initialForm);
+  const suggestionsQuery = trpc.admin.getQuestionSuggestions.useQuery(undefined, { staleTime: 60000, retry: false });
   const [suggestions, setSuggestions] =
     useState<SuggestionsState>(EMPTY_SUGGESTIONS);
   const [loading, setLoading] = useState(true);
@@ -750,7 +751,8 @@ export default function AdminQuestionEditPage() {
 
   useEffect(() => {
     async function loadSuggestions() {
-      const data = await trpcUtils.admin.getQuestionSuggestions.fetch();
+      const data = suggestionsQuery.data;
+      if (!data) return;
 
       const conteudosSet = new Set<string>();
       const assuntosSet = new Set<string>();
@@ -778,7 +780,7 @@ export default function AdminQuestionEditPage() {
     }
 
     loadSuggestions();
-  }, [trpcUtils]);
+  }, [suggestionsQuery.data]);
 
   useEffect(() => {
     async function loadQuestion() {
@@ -1184,6 +1186,7 @@ export default function AdminQuestionEditPage() {
         title="Editar questão"
         subtitle="Edite os dados estruturais da questão diretamente no banco."
       >
+        {suggestionsQuery.error && <div role="alert" className="p-3 text-amber-700 dark:text-amber-300">Sugestões indisponíveis; seus campos foram preservados. <Button variant="outline" onClick={() => void suggestionsQuery.refetch()}>Tentar novamente</Button></div>}
         <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>

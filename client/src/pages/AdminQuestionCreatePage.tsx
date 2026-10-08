@@ -1279,6 +1279,7 @@ export default function AdminQuestionCreatePage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAlternative, setUploadingAlternative] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionsState>(EMPTY_SUGGESTIONS);
+  const suggestionsQuery = trpc.admin.getQuestionSuggestions.useQuery(undefined, { staleTime: 60000, retry: false });
   const [jsonInput, setJsonInput] = useState("");
   const [resolutionDraftBlocks, setResolutionDraftBlocks] = useState<ResolutionDraftBlock[]>([]);
   const [error, setError] = useState("");
@@ -1289,7 +1290,9 @@ export default function AdminQuestionCreatePage() {
 
   useEffect(() => {
     async function loadSuggestions() {
-      const data = await trpcUtils.admin.getQuestionSuggestions.fetch();
+      // A failed suggestions query must not reset any form values.
+      const data = suggestionsQuery.data;
+      if (!data) return;
 
       const conteudosSet = new Set<string>();
       const assuntosSet = new Set<string>();
@@ -1317,7 +1320,7 @@ export default function AdminQuestionCreatePage() {
     }
 
     loadSuggestions();
-  }, [trpcUtils]);
+  }, [suggestionsQuery.data]);
 
   function updateField<K extends keyof QuestionFormData>(
     field: K,
@@ -1769,6 +1772,7 @@ export default function AdminQuestionCreatePage() {
         title="Nova questão"
         subtitle="Cadastre uma nova questão diretamente pelo painel administrativo."
       >
+        {suggestionsQuery.error && <div role="alert" className="p-3 text-amber-700 dark:text-amber-300">Sugestões indisponíveis; seus campos foram preservados. <Button variant="outline" onClick={() => void suggestionsQuery.refetch()}>Tentar novamente</Button></div>}
         <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>

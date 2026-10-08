@@ -3,6 +3,29 @@ import type { Question, QuestionSubtopicsByTopic } from "@/types/question";
 import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { logPdfStage } from "@/lib/questionPdfDiagnostics";
 import { QuestionPdfError } from "@/lib/questionPdfErrors";
+import type { BrowseFilters } from "@shared/questionBrowse";
+
+/** Explicit larger selection for quiz/notebook; never implicitly uses page 1. */
+export async function getQuestionSelection(filters: Partial<BrowseFilters>, limit = Infinity, signal?: AbortSignal): Promise<Question[]> {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  let total: number | undefined;
+  for (let page = 0; ; page++) {
+    const result = await trpcClient.questions.browse.query({ filters, page, pageSize: 100 }, { signal });
+    if (total !== undefined && total !== result.total) throw new Error("A lista mudou durante a seleção. Atualize e tente novamente.");
+    total = result.total;
+    for (const row of result.rows) if (!seen.has(row.id) && ids.length < limit) { seen.add(row.id); ids.push(row.id); }
+    if (ids.length >= Math.min(limit, result.total)) break;
+    if (!result.rows.length) throw new Error("A lista mudou durante a seleção. Atualize e tente novamente.");
+  }
+  const questions: Question[] = [];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const data = await trpcClient.questions.details.query({ ids: ids.slice(offset, offset + 100) }, { signal });
+    questions.push(...data.map(row => mapQuestao(row as QuestaoRow)));
+  }
+  if (questions.length !== ids.length) throw new Error("Uma questão deixou de estar disponível. Atualize e tente novamente.");
+  return questions;
+}
 
 type QuestionDifficulty = Question["difficulty"];
 type QuestionSubject = Question["subject"];
@@ -424,8 +447,8 @@ export async function getQuestions(
 
     return questions;
   } catch (error) {
-    console.error("Erro ao buscar questões:", error);
-    return [];
+    console.warn({ event: "question_list", outcome: "unavailable" });
+    throw error;
   }
 }
 

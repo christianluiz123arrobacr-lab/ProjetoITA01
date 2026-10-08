@@ -63,7 +63,7 @@ export default function AdminQuestionBatchImportPage() {
   const bulkImagesInput = useRef<HTMLInputElement | null>(null);
   const utils = trpc.useUtils();
   const draftsQuery = trpc.admin.listQuestionImportDrafts.useQuery();
-  const suggestionsQuery = trpc.admin.getQuestionSuggestions.useQuery();
+  const suggestionsQuery = trpc.admin.getQuestionSuggestions.useQuery(undefined, { staleTime: 60000, retry: false });
   const createDraft = trpc.admin.createQuestionImportDraft.useMutation();
   const prepareUpload = trpc.admin.prepareQuestionImportImageUpload.useMutation();
   const confirmUpload = trpc.admin.confirmQuestionImportImageUpload.useMutation();
@@ -191,7 +191,7 @@ export default function AdminQuestionBatchImportPage() {
       {(draftsQuery.data?.length ?? 0) > 0 && <Card className="border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900"><h2 className="font-bold">Lotes salvos</h2><div className="mt-3 space-y-2">{draftsQuery.data?.map((item: any) => <button key={item.id} className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={async () => applyDraft(await utils.client.admin.getQuestionImportDraft.query({ batchId: item.id }))}><span>{item.source_name || item.format} · {item.validation_summary?.total ?? 0} questão(ões)</span><span className="text-xs font-bold uppercase">{item.status}</span></button>)}</div></Card>}
     </> : <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Questões", previews.length], ["Válidas", previews.length - invalidCount], ["Inválidas", invalidCount], ["Com imagens", questionsWithImages], ["Imagens vinculadas", readyCount], ["Obrigatórias pendentes", pendingRequired], ["Conteúdos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newContents], ["Assuntos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newSubjects]].map(([label, value]) => <Card key={String(label)} className="border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></Card>)}</div>
-      {suggestionsQuery.isError && <p className="text-sm text-amber-700 dark:text-amber-300">Não foi possível comparar conteúdos e assuntos com as questões cadastradas. Atualize a página para tentar novamente.</p>}
+      {suggestionsQuery.isError && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">Não foi possível comparar conteúdos e assuntos com as questões cadastradas. <Button variant="outline" onClick={()=>void suggestionsQuery.refetch()}>Tentar novamente</Button></p>}
       <Card className="flex flex-wrap items-center gap-3 border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
         <input ref={bulkImagesInput} multiple type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { void uploadMany(Array.from(event.target.files ?? [])); event.target.value = ""; }}/>
         <Button variant="outline" className="rounded-2xl" onClick={() => bulkImagesInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4"/>Associar vários arquivos</Button>
