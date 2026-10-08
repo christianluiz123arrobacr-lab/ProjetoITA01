@@ -270,7 +270,7 @@ export default function VetPrioritiesPage() {
   }, [engine, selectedFilter]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50">
+    <div className="vet-theme theme-page min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100">
       <header className="sticky top-0 z-50 bg-white/85 backdrop-blur-md border-b border-slate-200/50">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/vet">

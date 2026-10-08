@@ -1,10 +1,14 @@
+import { referralRouter, registerReferralAttribution, referralCodeSchema } from "./billing/referralService.js";
+import { loadPlanCapacity } from "./billing/planCapacity.js";
+import { getPaymentHistory } from "./billing/paymentHistory.js";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { chemistryResolutionBlockSchema, safeChemistryLatexSchema, safeResolutionTextSchema } from "../shared/chemistryContent.js";
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies.js";
 import { systemRouter } from "./_core/systemRouter.js";
-import { adminOrEditorProcedure, adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
+import { adminOrEditorProcedure, adminProcedure, platformAccessProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
 import { invokeLLM } from "./_core/llm.js";
 import { assertRateLimit, assertRequestRateLimit } from "./_core/rateLimit.js";
 import { supabaseAdmin } from "./_core/supabaseAdmin.js";
@@ -13,12 +17,15 @@ import {
   cancelUserMercadoPagoSubscription,
   createCardSubscriptionCheckout,
   createPixPayment,
+  createPrepaidCheckout,
   getBillingCapabilities,
   getMyPayments,
   reconcileDuplicateMercadoPagoSubscriptions,
   reconcileMercadoPagoPaymentByAdmin,
   syncMyMercadoPagoPaymentStatus,
 } from "./billing/billingService.js";
+import { buildBillingConsistencyReport, resolveEffectiveBillingAccess } from "./billing/accessConsistency.js";
+import { isWhatsAppRemindersEnabled, retryBillingReminder, runBillingReminderJob } from "./billing/whatsappReminders.js";
 import {
   buildQuestionInsertPayload,
   getQuestionImportSourceId,
@@ -27,18 +34,43 @@ import {
   type ImportResultStatus,
 } from "../shared/questionImportSchema.js";
 import {
-  QUESTION_PDF_EXPORT_LIMIT,
   questionPdfFiltersSchema,
-  questionRowMatchesPdfFilters,
 } from "../shared/questionPdf.js";
+import { selectQuestionPdfData } from "./questionPdfExport.js";
+import { questionBrowseSchema } from "../shared/questionBrowse.js";
+import { browseQuestions, performanceRpc, type DashboardResult, type StudentStatisticsRow } from "./performanceStageTwo.js";
 import { NOTEBOOK_DEVELOPMENT_MESSAGE, NOTEBOOK_FEATURE_AVAILABLE } from "../shared/featureAvailability.js";
 import { createGoogleDriveConnectUrl, createNotebook, disconnectGoogleDrive, getNotebook, googleDriveStatus, listNotebooks, renameNotebook, trashNotebook, updateNotebook, uploadNotebookPdf } from "./googleDrive/googleDriveService.js";
 import { createQuestionReport } from "./questionReports.js";
-import { assertUserCanCheckoutPlan, hasLegacyFounderEligibility, isSamePlanFamily, LEGACY_FOUNDER_SLUG, publicPlanAvailability } from "./billing/legacyFounderPricing.js";
+import { assertUserCanCheckoutPlan, hasLegacyFounderEligibility, hasValidPlanInvite, isSamePlanFamily, LEGACY_FOUNDER_SLUG, publicPlanAvailability } from "./billing/legacyFounderPricing.js";
 import { getCanonicalVetAnalysis, safeQuestionDto, VET_ENGINE_VERSION } from "./vet/vetService.js";
+import { getExamAnalysis } from "./vet/examAnalysisService.js";
+import { examAnalysisFiltersSchema } from "../shared/vet/examAnalysis.js";
 import { normalizeVetText } from "../shared/vet/vetEngine.js";
 import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetContent, postgrestAliasFilter, prioritizeVetCandidates } from "./vet/vetQuestionSelection.js";
 import { fetchAllQuestionPages } from "./questions/questionPagination.js";
+import { getQuestionsWithoutResolution, summarizeAttempts } from "../shared/statistics.js";
+import { setPublicQuestionPublication } from "./publicQuestions.js";
+import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
+import { lessonRouter } from "./lessons/lessonRouter.js";
+import { accessQuery, getPlatformAccessDecision } from "./_core/platformAccess.js";
+import { assertAuthenticationAvailable, ensureAuthentication } from "./_core/context.js";
+import {
+  cancelQuestionImportDraft,
+  cleanupSkippedQuestionImportImages,
+  cleanupExpiredQuestionImportDrafts,
+  completeQuestionImportDraft,
+  confirmQuestionImportSlotUpload,
+  createQuestionImportDraft,
+  getQuestionImportDraft,
+  listQuestionImportDrafts,
+  prepareQuestionImportFinalization,
+  prepareQuestionImportSlotUpload,
+  removeInvalidQuestionFromImportDraft,
+  removeQuestionImportSlotUpload,
+  updateQuestionImportSlotMetadata,
+} from "./questions/questionImportBatchService.js";
+import { MAX_QUESTION_IMPORT_IMAGE_BYTES } from "../shared/questionImportSchema.js";
 
 const notebookPaperSchema = z.object({ size: z.enum(["a5", "a4", "a3", "infinite"]), lined: z.boolean() });
 const stableVetOrder = (seed: string, value: string) => Array.from(`${seed}:${value}`).reduce((hash, char) => ((hash * 31) ^ char.charCodeAt(0)) >>> 0, 2166136261);
@@ -70,10 +102,15 @@ async function assertQuestionPdfAccess(userId: string, tokenRole?: string) {
 
 const resolutionBlockInputSchema = z.object({
   id: z.string().uuid().optional(),
-  tipo: z.enum(["texto", "latex", "imagem"]),
+  tipo: z.enum(["texto", "latex", "imagem", "equacao_quimica", "molecula"]),
   texto: z.string().max(20000).nullable().optional(),
   url_imagem: z.string().url().nullable().optional(),
+  smiles: z.string().max(512).optional(),
+  legenda: z.string().max(300).optional(),
   ordem: z.number().int().min(1).max(500),
+}).superRefine((block, context) => {
+  if (block.tipo === "texto" && !safeResolutionTextSchema.safeParse(block.texto).success) context.addIssue({ code: "custom", message: "Texto de resolução inválido." });
+  if (block.tipo === "latex" && !safeChemistryLatexSchema.safeParse(block.texto).success) context.addIssue({ code: "custom", message: "LaTeX de resolução inválido." });
 });
 
 const scratchpadPointInputSchema = z.object({
@@ -91,7 +128,7 @@ const scratchpadStrokeInputSchema = z.object({
   size: z.number().min(0).max(500),
   points: z.array(scratchpadPointInputSchema).max(20000),
   brush: z.enum(["pen", "brush", "highlighter"]).optional(),
-  shape: z.enum(["line", "arrow", "rectangle", "ellipse", "triangle"]).optional(),
+  shape: z.enum(["line", "arrow", "rectangle", "square", "ellipse", "circle", "triangle", "diamond", "pentagon"]).optional(),
   opacity: z.number().min(0).max(1).optional(),
   text: z.string().max(20000).optional(),
   imageData: z.string().max(2_000_000).optional(),
@@ -109,11 +146,23 @@ const questionNoteInputSchema = z.object({
   title: z.string().max(160).nullable().optional(),
 });
 
-function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeof resolutionBlockInputSchema>) {
+function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeof resolutionBlockInputSchema>): {
+  questao_id: string; tipo: string; texto: string | null; url_imagem: string | null; ordem: number;
+} {
+  if (block.tipo === "equacao_quimica") {
+    const parsed = chemistryResolutionBlockSchema.options[2].parse({ tipo: "equacao_quimica", latex: block.texto });
+    return { questao_id: questaoId, tipo: block.tipo, texto: parsed.latex, url_imagem: null, ordem: block.ordem };
+  }
+  if (block.tipo === "molecula") {
+    let source: unknown = { smiles: block.smiles, legenda: block.legenda };
+    if (!block.smiles && block.texto) { try { source = JSON.parse(block.texto); } catch { source = {}; } }
+    const parsed = chemistryResolutionBlockSchema.options[3].parse({ tipo: "molecula", ...(source as object) });
+    return { questao_id: questaoId, tipo: block.tipo, texto: JSON.stringify({ smiles: parsed.smiles, ...(parsed.legenda ? { legenda: parsed.legenda } : {}) }), url_imagem: null, ordem: block.ordem };
+  }
   return {
     questao_id: questaoId,
     tipo: block.tipo,
-    texto: block.tipo === "imagem" ? null : (block.texto?.trim() || null),
+    texto: block.texto?.trim() || null,
     url_imagem: block.tipo === "imagem" ? (block.url_imagem?.trim() || null) : null,
     ordem: block.ordem,
   };
@@ -162,6 +211,60 @@ async function getResolutionBlocksCount(questionId: string) {
   }
 
   return count ?? 0;
+}
+
+async function executePreparedQuestionImport(questions: z.infer<typeof questionImportPayloadSchema>["questions"], batchId: string, userId: string) {
+  const startedAt = Date.now();
+  const results: Array<{ index: number; importSourceId: string; status: ImportResultStatus; questionId: string | null; codigo: string | null; resolutionBlocksSaved: number; message: string }> = [];
+  for (const question of questions) {
+    const preview = validateQuestionImportItem(question);
+    const importSourceId = getQuestionImportSourceId(question);
+    if (preview.status === "invalida") {
+      results.push({ index: question.raw_index, importSourceId, status: "falhou", questionId: null, codigo: question.codigo, resolutionBlocksSaved: 0, message: preview.errors.join(" ") || "Questão inválida." });
+      continue;
+    }
+    try {
+      const duplicate = await supabaseAdmin.from("questoes").select("id,codigo").eq("import_source_id", importSourceId).maybeSingle();
+      if (duplicate.error) throw new Error("Não foi possível verificar duplicidade da questão.");
+      if (duplicate.data?.id) {
+        const existing = await getResolutionBlocksCount(duplicate.data.id);
+        const repaired = existing === 0 && question.resolucao_blocos.length ? await saveImportedResolutionBlocks(duplicate.data.id, question.resolucao_blocos) : 0;
+        results.push({ index: question.raw_index, importSourceId, status: "duplicada", questionId: duplicate.data.id, codigo: (duplicate.data as any).codigo ?? question.codigo, resolutionBlocksSaved: repaired, message: repaired ? "Questão já existia; blocos ausentes foram recuperados." : "Questão já importada anteriormente." });
+        continue;
+      }
+      const payload = buildQuestionInsertPayload(question, batchId, userId);
+      const { data, error } = await supabaseAdmin.from("questoes").insert([payload]).select("id,codigo").single();
+      if (error?.code === "23505") {
+        const concurrentDuplicate = await supabaseAdmin.from("questoes").select("id,codigo").eq("import_source_id", importSourceId).maybeSingle();
+        if (concurrentDuplicate.data?.id) {
+          const existing = await getResolutionBlocksCount(concurrentDuplicate.data.id);
+          const repaired = existing === 0 && question.resolucao_blocos.length ? await saveImportedResolutionBlocks(concurrentDuplicate.data.id, question.resolucao_blocos) : 0;
+          results.push({ index: question.raw_index, importSourceId, status: "duplicada", questionId: concurrentDuplicate.data.id, codigo: (concurrentDuplicate.data as any).codigo ?? question.codigo, resolutionBlocksSaved: repaired, message: "Questão já criada por outra tentativa do mesmo lote." });
+          continue;
+        }
+      }
+      if (error || !data?.id) throw new Error("Não foi possível criar a questão.");
+      let resolutionBlocksSaved = 0;
+      try {
+        resolutionBlocksSaved = await saveImportedResolutionBlocks(data.id, question.resolucao_blocos);
+      } catch (resolutionError) {
+        await supabaseAdmin.from("resolucoes_meta").delete().eq("questao_id", data.id);
+        await supabaseAdmin.from("resolucoes").delete().eq("questao_id", data.id);
+        await supabaseAdmin.from("questoes").delete().eq("id", data.id);
+        throw resolutionError;
+      }
+      results.push({ index: question.raw_index, importSourceId, status: "criada", questionId: data.id, codigo: (data as any).codigo ?? question.codigo, resolutionBlocksSaved, message: "Questão e resolução importadas com sucesso." });
+    } catch (error) {
+      results.push({ index: question.raw_index, importSourceId, status: "falhou", questionId: null, codigo: question.codigo, resolutionBlocksSaved: 0, message: error instanceof Error ? error.message : "Falha inesperada ao importar a questão." });
+    }
+  }
+  const createdCount = results.filter((result) => result.status === "criada").length;
+  const duplicatedCount = results.filter((result) => result.status === "duplicada").length;
+  const failedCount = results.filter((result) => result.status === "falhou").length;
+  const resolutionBlocksSaved = results.reduce((sum, result) => sum + result.resolutionBlocksSaved, 0);
+  const response = { batchId, createdCount, duplicatedCount, failedCount, resolutionBlocksSaved, durationMs: Date.now() - startedAt, results };
+  await supabaseAdmin.from("admin_logs").insert({ actor_user_id: userId, action: "question_batch_imported", entity_type: "question_import_batch", entity_id: batchId, description: `Importação em lote: ${createdCount} criada(s), ${duplicatedCount} duplicada(s), ${failedCount} falha(s)`, level: failedCount ? "warning" : "info", metadata: { ...response, results: undefined } });
+  return response;
 }
 
 type ResolutionSummaryRow = {
@@ -248,8 +351,16 @@ function flattenBillingSubscription(row: any) {
   };
 }
 
-async function getLatestUserBillingSubscription(userId: string) {
+async function loadBillingAccessPayments() {
   const { data, error } = await supabaseAdmin
+    .from("billing_payments")
+    .select("user_id, status, access_applied_at, subscription_id, original_subscription_id, applied_to_subscription_id");
+  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+  return data ?? [];
+}
+
+async function getLatestUserBillingSubscription(userId: string, accessCorrelationId?: string) {
+  const query = supabaseAdmin
     .from("billing_subscriptions")
     .select(
       `
@@ -269,22 +380,18 @@ async function getLatestUserBillingSubscription(userId: string) {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const { data, error } = await (accessCorrelationId
+    ? accessQuery(query, accessCorrelationId, "subscription_metadata") : query);
 
   if (error) {
+    if (accessCorrelationId) {
+      console.warn({ event: "platform_access_check", correlation_id: accessCorrelationId, stage: "subscription_metadata", outcome: "unavailable" });
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível consultar sua assinatura. Tente novamente." });
+    }
     throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
   }
 
   return data ?? null;
-}
-
-function isBlockingBillingSubscription(row: any) {
-  if (!row) return false;
-  if (row.status === "manual_review") return true;
-  if (!["active", "trialing"].includes(row.status)) return false;
-  if (!row.current_period_end) return true;
-
-  const end = new Date(row.current_period_end).getTime();
-  return Number.isFinite(end) && end >= Date.now();
 }
 
 function getBillingPlanSlugCandidates(slug: string) {
@@ -341,21 +448,45 @@ export const appRouter = router({
     linkedQuestions: protectedProcedure.input(z.object({ questionIds: z.array(z.string().uuid()).max(100) })).query(async ({ input }) => {
       assertNotebooksAvailable();
       if (!input.questionIds.length) return [];
-      const { data, error } = await supabaseAdmin.from("questoes").select("*").in("id", input.questionIds).eq("publicada", true);
+      const { data, error } = await supabaseAdmin
+        .from("questoes")
+        .select("id,codigo,instituição,ano,disciplina,enunciado,enunciado_pos_imagem,url_imagem")
+        .in("id", input.questionIds)
+        .eq("publicada", true);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar as questões desta lista." });
-      return ((data ?? []) as Array<Record<string, unknown>>).map(row => ({ id: String(row.id), codigo: typeof row.codigo === "string" ? row.codigo : null, instituição: typeof row["instituição"] === "string" ? row["instituição"] : null, ano: typeof row.ano === "number" ? row.ano : null, disciplina: typeof row.disciplina === "string" ? row.disciplina : null, enunciado: typeof row.enunciado === "string" ? row.enunciado : "" }));
+      return ((data ?? []) as Array<Record<string, unknown>>).map(row => ({
+        id: String(row.id),
+        codigo: typeof row.codigo === "string" ? row.codigo : null,
+        instituição: typeof row["instituição"] === "string" ? row["instituição"] : null,
+        ano: typeof row.ano === "number" ? row.ano : null,
+        disciplina: typeof row.disciplina === "string" ? row.disciplina : null,
+        statement: typeof row.enunciado === "string" ? row.enunciado : "",
+        statementAfterImage: typeof row.enunciado_pos_imagem === "string" ? row.enunciado_pos_imagem : null,
+        imageUrl: typeof row.url_imagem === "string" ? row.url_imagem : null,
+      }));
     }),
   }),
   system: systemRouter,
+  referrals: referralRouter,
+  legal: legalRouter,
+  lessons: lessonRouter,
 
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
+    me: publicProcedure.query(async ({ ctx }) => {
+      await ensureAuthentication(ctx);
+      assertAuthenticationAvailable(ctx);
+      if (ctx.authentication?.status === "invalid") throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida. Entre novamente." });
+      return ctx.user;
+    }),
 
     registerStudent: publicProcedure
       .input(
         z.object({
+          referralCode: referralCodeSchema,
           nome: z.string().min(2, "Nome muito curto"),
           telefone: z.string().min(8, "Digite um telefone válido"),
+          billingWhatsappOptIn: z.boolean().optional().default(false),
+          legalAccepted: z.literal(true),
           email: z.string().email("E-mail inválido"),
           senha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
         })
@@ -365,20 +496,25 @@ export const appRouter = router({
         const telefone = input.telefone.trim();
         const email = input.email.trim().toLowerCase();
 
-        await assertRequestRateLimit(ctx.req, "auth:register:ip", {
-          limit: 10,
-          windowMs: 15 * 60 * 1000,
-        });
-        await assertRateLimit({
-          key: `auth:register:email:${email}`,
-          limit: 3,
-          windowMs: 60 * 60 * 1000,
-        });
+        await Promise.all([
+          assertRequestRateLimit(ctx.req, "auth:register:ip", {
+            limit: 10,
+            windowMs: 15 * 60 * 1000,
+          }),
+          assertRateLimit({
+            key: `auth:register:email:${email}`,
+            limit: 3,
+            windowMs: 60 * 60 * 1000,
+          }),
+        ]);
 
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email,
           password: input.senha,
-          email_confirm: false,
+          // Public registration is completed server-side so the client can
+          // establish a session immediately and continue to plan selection.
+          // This confirms identity only; subscription access remains guarded.
+          email_confirm: true,
           user_metadata: {
             nome,
             telefone,
@@ -403,6 +539,7 @@ export const appRouter = router({
               email,
               role: "student",
               ativo: true,
+              billing_whatsapp_opt_in: input.billingWhatsappOptIn,
             },
             {
               onConflict: "id",
@@ -419,8 +556,42 @@ export const appRouter = router({
           });
         }
 
+        try {
+          await recordLegalAcceptance(data.user.id, "registration");
+          if (input.billingWhatsappOptIn) {
+            await recordWhatsAppConsent(data.user.id, true, "registration");
+          }
+        } catch {
+          await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não foi possível registrar o aceite dos termos.",
+          });
+        }
+
+        let referralStatus: "missing" | "attached" | "pending" | "rejected" | "unavailable" = "missing";
+        let referralWarning: string | null = null;
+        if (input.referralCode) {
+          try {
+            const attribution = await registerReferralAttribution(data.user.id, input.referralCode);
+            referralStatus = attribution.status === "attached"
+              ? "attached"
+              : attribution.status === "queued" || attribution.status === "pending"
+                ? "pending"
+                : "rejected";
+            if (referralStatus === "rejected")
+              referralWarning = "A conta foi criada, mas este convite não pôde ser vinculado.";
+            if (referralStatus === "pending")
+              referralWarning = "A conta foi criada e a indicação ficou pendente para nova verificação após o login.";
+          } catch {
+            referralStatus = "unavailable";
+            referralWarning = "A conta foi criada, mas não foi possível registrar o convite. Tente novamente mais tarde.";
+          }
+        }
         return {
           success: true,
+          referralStatus,
+          referralWarning,
           userId: data.user.id,
           email,
         } as const;
@@ -467,26 +638,26 @@ export const appRouter = router({
 
 
     getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
-      const { data: profile, error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .select("role, ativo")
-        .eq("id", ctx.user.id)
-        .maybeSingle();
-
-      if (profileError) throw new TRPCError({ code: "BAD_REQUEST", message: profileError.message });
-
-      const profileRole = (profile as any)?.role;
-      const role =
-        ctx.user.role === "admin" || ctx.user.role === "editor"
-          ? ctx.user.role
-          : profileRole ?? ctx.user.role;
-      const ativo = (profile as any)?.ativo;
-
-      if (role === "admin" || role === "editor") {
+      const access = await getPlatformAccessDecision(ctx.user, supabaseAdmin, {
+        correlationId: ctx.authentication?.correlationId || randomUUID(),
+        validatedProfile: ctx.validatedProfile,
+      });
+      if (access.allowed) {
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - 15 * 60_000).toISOString();
+        try {
+          const { error: seenError } = await accessQuery(supabaseAdmin.from("profiles")
+            .update({ last_seen_at: now.toISOString() })
+            .eq("id", ctx.user.id)
+            .or(`last_seen_at.is.null,last_seen_at.lt.${cutoff}`), access.correlationId, "last_seen", 1000);
+          if (seenError) console.warn("Não foi possível registrar o último acesso autenticado.");
+        } catch { /* Last-seen telemetry cannot deny otherwise validated access. */ }
+      }
+      if (access.source === "role") {
         return {
           accessState: "allowed",
-          role,
-          ativo: ativo ?? true,
+          role: access.role,
+          ativo: true,
           hasActiveSubscription: true,
           subscriptionStatus: "admin_override",
           currentPeriodEnd: null,
@@ -495,12 +666,11 @@ export const appRouter = router({
           source: "role",
         } as const;
       }
-
-      if (ativo === false) {
+      if (!access.profileActive) {
         return {
           accessState: "blocked",
-          role,
-          ativo,
+          role: access.role,
+          ativo: false,
           hasActiveSubscription: false,
           subscriptionStatus: null,
           currentPeriodEnd: null,
@@ -510,41 +680,31 @@ export const appRouter = router({
         } as const;
       }
 
-      const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
+      const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id, access.correlationId);
       const latestSubscriptionDetails = flattenBillingSubscription(latestSubscription);
-
-      const rpcResponse = await supabaseAdmin.rpc("user_has_active_subscription", {
-        target_user_id: ctx.user.id,
-      });
-
-      if (rpcResponse.error || typeof rpcResponse.data !== "boolean") {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Não foi possível validar o acesso canônico à plataforma.",
-          cause: rpcResponse.error ?? new Error("Resposta inválida de user_has_active_subscription."),
-        });
-      }
 
       const localStatus = latestSubscriptionDetails?.status ?? null;
       const localSubscriptionLooksActive =
         localStatus === "active" || localStatus === "trialing";
 
       return {
-        accessState: rpcResponse.data ? "allowed" : "blocked",
-        role,
-        ativo: ativo ?? true,
-        hasActiveSubscription: rpcResponse.data,
+        accessState: access.allowed ? "allowed" : "blocked",
+        role: access.role,
+        ativo: true,
+        hasActiveSubscription: access.allowed,
         subscriptionStatus: localStatus,
         currentPeriodEnd: latestSubscriptionDetails?.current_period_end ?? null,
         planName: latestSubscriptionDetails?.plan_name ?? null,
-        blockReason: rpcResponse.data
+        blockReason: access.allowed
           ? null
-          : localSubscriptionLooksActive
+          : access.hasPendingPayment
+            ? "payment_pending"
+            : localSubscriptionLooksActive
             ? "access_processing"
             : latestSubscriptionDetails
               ? "expired_subscription"
               : "no_subscription",
-        source: "rpc",
+        source: access.hasPendingPayment ? "local_pending_payment" : "rpc",
       } as const;
     }),
 
@@ -581,10 +741,28 @@ export const appRouter = router({
         })
       ),
 
+    createPrepaidCheckout: protectedProcedure
+      .input(z.object({
+        planSlug: z.string().min(1).max(120),
+        durationMonths: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+        paymentMethod: z.enum(["card", "pix"]),
+      }))
+      .mutation(async ({ ctx, input }) =>
+        createPrepaidCheckout({
+          userId: ctx.user.id,
+          userEmail: ctx.user.email ?? null,
+          planSlug: input.planSlug,
+          durationMonths: input.durationMonths,
+          paymentMethod: input.paymentMethod,
+        })
+      ),
+
     getMySubscription: protectedProcedure.query(async ({ ctx }) => {
       const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
       return flattenBillingSubscription(latestSubscription);
     }),
+
+    getPaymentHistory: protectedProcedure.input(z.object({ page: z.number().int().min(0).max(100000).default(0) })).query(({ ctx, input }) => getPaymentHistory(ctx.user.id, input.page)),
 
     getMyPayments: protectedProcedure.query(async ({ ctx }) => getMyPayments(ctx.user.id)),
 
@@ -602,6 +780,9 @@ export const appRouter = router({
     }),
 
     listPublicPlans: publicProcedure.query(async ({ ctx }) => {
+      // This public response is optionally personalized; preserve its real
+      // server-validated identity despite lazy authentication for public calls.
+      await ensureAuthentication(ctx);
       const { data, error } = await supabaseAdmin
         .from("billing_plans")
         .select("id, slug, name, description, price_cents, currency, billing_cycle, is_active, is_public, requires_legacy_founder_eligibility, display_order, max_active_subscriptions")
@@ -622,9 +803,12 @@ export const appRouter = router({
         const { data: current } = await supabaseAdmin.from("billing_subscriptions").select("plan_id, billing_plans(slug)").eq("user_id", userId).in("status", ["active", "trialing"]).or(`current_period_end.is.null,current_period_end.gte.${now}`).limit(1).maybeSingle();
         currentPlanId = current?.plan_id ? String(current.plan_id) : null;
         currentPlanSlug = pickBillingPlan(current)?.slug ?? null;
+        // Promotional time is access, not a paid plan or an existing recurring contract.
+        if (currentPlanSlug === "referral-promotional-access") currentPlanId = null;
       }
 
-      return (data ?? []).map((plan: any) => ({
+      const capacity = await loadPlanCapacity();
+      return Promise.all((data ?? []).map(async (plan: any) => ({
         id: String(plan.id),
         slug: plan.slug,
         name: plan.name,
@@ -634,14 +818,10 @@ export const appRouter = router({
         billing_cycle: plan.billing_cycle,
         is_active: plan.is_active,
         max_active_subscriptions: plan.max_active_subscriptions ?? null,
-        active_subscriptions_count: 0,
-        manual_review_count: 0,
-        used_slots: 0,
-        remaining_slots: plan.max_active_subscriptions ?? null,
-        has_available_slots: true,
+        ...capacity.get(String(plan.id)),
         display_order: Number(plan.display_order ?? 100),
-        ...publicPlanAvailability(plan, eligible, currentPlanId === String(plan.id) || isSamePlanFamily(plan.slug, currentPlanSlug), currentPlanId !== null),
-      }));
+        ...publicPlanAvailability(plan, eligible, currentPlanId === String(plan.id) || isSamePlanFamily(plan.slug, currentPlanSlug), currentPlanId !== null, Boolean(userId && plan.requires_legacy_founder_eligibility && await hasValidPlanInvite(userId, String(plan.id)))),
+      })));
     }),
 
     requestManualSubscription: protectedProcedure
@@ -678,27 +858,6 @@ export const appRouter = router({
         }
         await assertUserCanCheckoutPlan(ctx.user.id, billingPlan);
 
-        const { data: existingSubscriptions, error: existingSubscriptionsError } = await supabaseAdmin
-          .from("billing_subscriptions")
-          .select("*")
-          .eq("user_id", ctx.user.id)
-          .in("status", ["manual_review", "active", "trialing"])
-          .order("created_at", { ascending: false })
-          .limit(5);
-
-        if (existingSubscriptionsError) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: existingSubscriptionsError.message });
-        }
-
-        const existingSubscription = (existingSubscriptions ?? []).find(isBlockingBillingSubscription);
-
-        if (existingSubscription) {
-          return {
-            ...existingSubscription,
-            table_used: "billing_subscriptions",
-          };
-        }
-
         const { data: profile } = await supabaseAdmin
           .from("profiles")
           .select("id, nome, telefone, email, role, ativo")
@@ -725,20 +884,10 @@ export const appRouter = router({
           },
         };
 
-        const payload = {
-          user_id: ctx.user.id,
-          plan_id: billingPlan.id,
-          status: "manual_review",
-          gateway: "manual",
-          payment_url: null,
-          metadata,
-        };
-
-        const { data, error } = await supabaseAdmin
-          .from("billing_subscriptions")
-          .insert(payload)
-          .select("*")
-          .single();
+        const { data: reserved, error } = await supabaseAdmin.rpc("reserve_manual_billing_checkout", {
+          p_user_id: ctx.user.id, p_plan_id: billingPlan.id, p_metadata: metadata,
+        });
+        const data = Array.isArray(reserved) ? reserved[0] : reserved;
 
         if (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
@@ -858,6 +1007,16 @@ export const appRouter = router({
   }),
 
   questions: router({
+    browse: publicProcedure.input(questionBrowseSchema).query(async ({ ctx, input }) => {
+      await ensureAuthentication(ctx);
+      assertAuthenticationAvailable(ctx);
+      return browseQuestions(supabaseAdmin, input, false, ctx.user?.id ?? null);
+    }),
+    details: publicProcedure.input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) })).query(async ({ input }) => {
+      const rows = await performanceRpc<Record<string, any>[]>(supabaseAdmin, "vet_question_details", { p_ids: input.ids });
+      return rows.map(row => ({ ...safeQuestionDto(row), diciplina: row.diciplina,
+        ...(Array.isArray(row.options) && row.options.length ? { options: row.options.filter((o: any) => /^[a-e]$/i.test(String(o.id))).map((o: any) => ({ id: o.id, label: o.label, text: o.text, imageUrl: o.imageUrl, imageAlt: o.imageAlt, imageCaption: o.imageCaption })) } : {}) }));
+    }),
     exportPdfData: protectedProcedure
       .input(questionPdfFiltersSchema)
       .mutation(async ({ ctx, input }) => {
@@ -871,48 +1030,7 @@ export const appRouter = router({
         });
         await assertQuestionPdfAccess(ctx.user.id, ctx.user.role);
 
-        const matched: Record<string, unknown>[] = [];
-        const batchSize = 200;
-        const scanLimit = 4_000;
-        for (let offset = 0; offset < scanLimit && (input.practiceStatus !== "all" || matched.length <= QUESTION_PDF_EXPORT_LIMIT); offset += batchSize) {
-          const { data, error } = await supabaseAdmin.from("questoes").select(`
-            *,
-            resolucoes (id, tipo, texto, ordem, url_imagem)
-          `).eq("publicada", true).order("created_at", { ascending: false }).range(offset, offset + batchSize - 1);
-          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível buscar as questões para exportação." });
-          const rows = (data ?? []) as Record<string, unknown>[];
-          matched.push(...rows.filter(row => questionRowMatchesPdfFilters(row, input)));
-          if (rows.length < batchSize) break;
-        }
-
-        let filtered = matched;
-        if (input.practiceStatus !== "all" && matched.length) {
-          const ids = matched.map(row => String(row.id));
-          const attempts: Array<{ question_id: string; is_correct: boolean | null; answered_at: string }> = [];
-          for (let offset = 0; offset < ids.length; offset += batchSize) {
-            const { data, error } = await supabaseAdmin.from("user_question_attempts")
-              .select("question_id, is_correct, answered_at")
-              .eq("user_id", ctx.user.id).in("question_id", ids.slice(offset, offset + batchSize))
-              .order("answered_at", { ascending: false });
-            if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível aplicar o filtro de prática." });
-            attempts.push(...(data ?? []));
-          }
-          const latest = new Map<string, boolean>();
-          for (const attempt of attempts) if (!latest.has(attempt.question_id)) latest.set(attempt.question_id, Boolean(attempt.is_correct));
-          filtered = matched.filter(row => {
-            const value = latest.get(String(row.id));
-            if (input.practiceStatus === "unanswered") return value === undefined;
-            if (input.practiceStatus === "answered") return value !== undefined;
-            if (input.practiceStatus === "correct") return value === true;
-            return value === false;
-          });
-        }
-        return {
-          rows: filtered.slice(0, QUESTION_PDF_EXPORT_LIMIT),
-          totalMatched: filtered.length,
-          limit: QUESTION_PDF_EXPORT_LIMIT,
-          truncated: filtered.length > QUESTION_PDF_EXPORT_LIMIT,
-        };
+        return selectQuestionPdfData(supabaseAdmin, ctx.user.id, input);
       }),
 
     list: publicProcedure
@@ -1055,108 +1173,7 @@ export const appRouter = router({
   }),
 
   admin: router({
-    getDashboardStats: adminOrEditorProcedure.query(async () => {
-      const [
-        usersCountResult,
-        adminsCountResult,
-        questionsCountResult,
-        unpublishedQuestionsCountResult,
-        resolutionsCountResult,
-        resolutionImagesResult,
-        latestQuestionsResult,
-        latestResolutionsResult,
-        latestUsersResult,
-        allQuestionsResult,
-        allResolutionQuestionIdsResult,
-      ] = await Promise.all([
-        supabaseAdmin.from("profiles").select("id", { count: "exact", head: true }),
-        supabaseAdmin.from("admin_users").select("id", { count: "exact", head: true }),
-        supabaseAdmin.from("questoes").select("id", { count: "exact", head: true }),
-        supabaseAdmin
-          .from("questoes")
-          .select("id", { count: "exact", head: true })
-          .eq("publicada", false),
-        supabaseAdmin.from("resolucoes").select("id", { count: "exact", head: true }),
-        supabaseAdmin
-          .from("resolucoes")
-          .select("id", { count: "exact", head: true })
-          .not("url_imagem", "is", null),
-        supabaseAdmin
-          .from("questoes")
-          .select("id,codigo,enunciado,banca,ano,created_at,publicada")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        supabaseAdmin
-          .from("resolucoes")
-          .select("id,questao_id,tipo,ordem,codigo_resolucao,created_at")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        supabaseAdmin
-          .from("profiles")
-          .select("id,nome,email,role,ativo,created_at")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        supabaseAdmin
-          .from("questoes")
-          .select("id,codigo,enunciado,banca,ano,created_at")
-          .order("created_at", { ascending: false }),
-        supabaseAdmin.from("resolucoes").select("questao_id"),
-      ]);
-
-      const possibleError =
-        usersCountResult.error ||
-        adminsCountResult.error ||
-        questionsCountResult.error ||
-        unpublishedQuestionsCountResult.error ||
-        resolutionsCountResult.error ||
-        resolutionImagesResult.error ||
-        latestQuestionsResult.error ||
-        latestResolutionsResult.error ||
-        latestUsersResult.error ||
-        allQuestionsResult.error ||
-        allResolutionQuestionIdsResult.error;
-
-      if (possibleError) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: possibleError.message ?? "Não foi possível carregar o dashboard administrativo.",
-        });
-      }
-
-      const resolutionQuestionIds = new Set(
-        ((allResolutionQuestionIdsResult.data as Array<{ questao_id: string | null }> | null) ?? [])
-          .map((item) => item.questao_id)
-          .filter(Boolean)
-      );
-      const allQuestions =
-        (allQuestionsResult.data as Array<{
-          id: string;
-          codigo?: string | null;
-          enunciado?: string | null;
-          banca?: string | null;
-          ano?: number | null;
-          created_at?: string | null;
-        }> | null) ?? [];
-      const questionsWithoutResolution = allQuestions.filter(
-        (question) => !resolutionQuestionIds.has(question.id)
-      );
-
-      return {
-        stats: {
-          totalUsers: usersCountResult.count ?? 0,
-          totalAdmins: adminsCountResult.count ?? 0,
-          totalQuestions: questionsCountResult.count ?? 0,
-          totalQuestionsWithoutResolution: questionsWithoutResolution.length,
-          totalUnpublishedQuestions: unpublishedQuestionsCountResult.count ?? 0,
-          totalResolutions: resolutionsCountResult.count ?? 0,
-          totalResolutionImages: resolutionImagesResult.count ?? 0,
-        },
-        latestQuestions: latestQuestionsResult.data ?? [],
-        latestResolutions: latestResolutionsResult.data ?? [],
-        latestUsers: latestUsersResult.data ?? [],
-        latestQuestionsWithoutResolution: questionsWithoutResolution.slice(0, 5),
-      } as const;
-    }),
+    getDashboardStats: adminOrEditorProcedure.query(() => performanceRpc<DashboardResult>(supabaseAdmin, "vet_admin_dashboard")),
     listAdminLogs: adminProcedure.query(async () => {
       const { data, error } = await supabaseAdmin
         .from("admin_logs")
@@ -1369,21 +1386,8 @@ export const appRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: plansError.message });
       }
 
-      const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
-        .from("billing_subscriptions")
-        .select("id, plan_id, status");
-
-      if (subscriptionsError) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
-      }
-
+      const capacity = await loadPlanCapacity();
       return (plans ?? []).map((plan: any) => {
-        const planSubscriptions = (subscriptions ?? []).filter((item: any) => String(item.plan_id) === String(plan.id));
-        const activeCount = planSubscriptions.filter((item: any) => ["active", "trialing"].includes(item.status)).length;
-        const manualReviewCount = planSubscriptions.filter((item: any) => item.status === "manual_review").length;
-        const usedSlots = activeCount + manualReviewCount;
-        const maxSlots = plan.max_active_subscriptions ?? null;
-
         return {
           id: String(plan.id),
           slug: plan.slug,
@@ -1398,12 +1402,8 @@ export const appRouter = router({
           display_order: Number(plan.display_order ?? 100),
           updated_at: plan.updated_at ?? null,
           updated_by: plan.updated_by ?? null,
-          max_active_subscriptions: maxSlots,
-          active_subscriptions_count: activeCount,
-          manual_review_count: manualReviewCount,
-          used_slots: usedSlots,
-          remaining_slots: maxSlots == null ? null : Math.max(maxSlots - usedSlots, 0),
-          has_available_slots: maxSlots == null || usedSlots < maxSlots,
+          max_active_subscriptions: plan.max_active_subscriptions ?? null,
+          ...capacity.get(String(plan.id)),
         };
       });
     }),
@@ -1458,10 +1458,14 @@ export const appRouter = router({
       }
 
       const profileMap = new Map((profiles ?? []).map((profile: any) => [String(profile.id), profile]));
+      const payments = await loadBillingAccessPayments();
+      const { effectiveByUser } = resolveEffectiveBillingAccess(subscriptions ?? [], payments);
 
       return (subscriptions ?? []).map((subscription: any) => {
         const profile = profileMap.get(String(subscription.user_id));
         const plan = pickBillingPlan(subscription);
+        const effective = effectiveByUser.get(String(subscription.user_id));
+        const isEffective = effective?.subscriptionId === String(subscription.id);
 
         return {
           subscription_id: String(subscription.id),
@@ -1492,6 +1496,10 @@ export const appRouter = router({
           next_due_date: subscription.next_due_date ?? null,
           created_at: subscription.created_at,
           updated_at: subscription.updated_at,
+          effective_subscription_id: effective?.subscriptionId ?? null,
+          is_effective_subscription: isEffective,
+          has_valid_access: Boolean(isEffective && effective?.hasValidAccess),
+          is_historical_subscription: Boolean(effective?.subscriptionId && !isEffective),
         };
       });
     }),
@@ -1540,14 +1548,7 @@ export const appRouter = router({
     }),
 
     listStudentsWithBilling: adminProcedure.query(async () => {
-      const { data: profiles, error: profilesError } = await supabaseAdmin
-        .from("profiles")
-        .select("id, nome, email, telefone, role, ativo, created_at, last_seen_at")
-        .order("created_at", { ascending: false });
-
-      if (profilesError) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: profilesError.message });
-      }
+      const profiles = await performanceRpc<StudentStatisticsRow[]>(supabaseAdmin, "vet_admin_student_statistics");
 
       const { data: subscriptions, error: subscriptionsError } = await supabaseAdmin
         .from("billing_subscriptions")
@@ -1581,14 +1582,13 @@ export const appRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
       }
 
-      const subscriptionMap = new Map<string, any>();
-      for (const subscription of subscriptions ?? []) {
-        const userId = String((subscription as any).user_id);
-        if (!subscriptionMap.has(userId)) subscriptionMap.set(userId, subscription);
-      }
+      const payments = await loadBillingAccessPayments();
+      const { effectiveByUser } = resolveEffectiveBillingAccess(subscriptions ?? [], payments);
+      const subscriptionById = new Map((subscriptions ?? []).map((subscription: any) => [String(subscription.id), subscription]));
 
-      return (profiles ?? []).map((profile: any) => {
-        const subscription = subscriptionMap.get(String(profile.id));
+      return profiles.map((profile: any) => {
+        const effective = effectiveByUser.get(String(profile.id));
+        const subscription = effective?.subscriptionId ? subscriptionById.get(effective.subscriptionId) : null;
         const plan = pickBillingPlan(subscription);
 
         return {
@@ -1618,12 +1618,49 @@ export const appRouter = router({
           next_due_date: subscription?.next_due_date ?? null,
           subscription_created_at: subscription?.created_at ?? null,
           updated_at: subscription?.updated_at ?? null,
-          attempts_count: 0,
-          correct_count: 0,
-          wrong_count: 0,
-          last_answered_at: null,
+          has_valid_access: Boolean(effective?.hasValidAccess),
+          effective_subscription_id: effective?.subscriptionId ?? null,
+          attempts_count: profile.attempts_count,
+          correct_count: profile.correct_count,
+          wrong_count: profile.attempts_count - profile.correct_count,
+          distinct_answered: profile.distinct_answered,
+          distinct_correct: profile.distinct_correct,
+          accuracy: profile.accuracy,
+          last_answered_at: profile.last_answered_at,
         };
       });
+    }),
+
+    getBillingConsistencyReport: adminProcedure.query(async () => {
+      const [{ data: subscriptions, error: subscriptionsError }, payments] = await Promise.all([
+        supabaseAdmin
+          .from("billing_subscriptions")
+          .select("id, user_id, status, current_period_end, updated_at, created_at, canonical_access_subscription_id"),
+        loadBillingAccessPayments(),
+      ]);
+      if (subscriptionsError) throw new TRPCError({ code: "BAD_REQUEST", message: subscriptionsError.message });
+      return buildBillingConsistencyReport(subscriptions ?? [], payments);
+    }),
+
+    listBillingNotificationLogs: adminProcedure.query(async () => {
+      const { data, error } = await supabaseAdmin
+        .from("billing_notification_log")
+        .select("id,user_id,subscription_id,notification_type,due_date,channel,status,error_message,created_at,sent_at,profiles(nome,email)")
+        .order("created_at", { ascending: false }).limit(200);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      return { enabled: isWhatsAppRemindersEnabled(), logs: data ?? [] };
+    }),
+
+    runBillingReminders: adminProcedure.mutation(async ({ ctx }) => {
+      const result = await runBillingReminderJob();
+      await supabaseAdmin.from("admin_logs").insert({ actor_user_id: ctx.user.id, actor_email: ctx.user.email, action: "billing_reminders_run", entity_type: "billing_notification_log", entity_id: null, description: "Job administrativo de avisos de cobrança executado.", level: "info", metadata: result });
+      return result;
+    }),
+
+    retryBillingReminder: adminProcedure.input(z.object({ notificationId: z.string().uuid() })).mutation(async ({ ctx, input }) => {
+      const result = await retryBillingReminder(input.notificationId);
+      await supabaseAdmin.from("admin_logs").insert({ actor_user_id: ctx.user.id, actor_email: ctx.user.email, action: "billing_reminder_retried", entity_type: "billing_notification_log", entity_id: input.notificationId, description: "Aviso de cobrança reenviado administrativamente.", level: "info", metadata: result });
+      return result;
     }),
 
     updateStudentProfile: adminProcedure
@@ -1652,7 +1689,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "student_profile_updated",
           entity_type: "profile",
           entity_id: input.id,
@@ -1719,7 +1756,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_user_subscription_renewed",
           entity_type: "billing_subscription",
           entity_id: input.userId,
@@ -1740,7 +1777,7 @@ export const appRouter = router({
         });
 
         const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_mercadopago_subscription_canceled_now",
           entity_type: "billing_subscription",
           entity_id: input.subscriptionId,
@@ -1769,7 +1806,7 @@ export const appRouter = router({
       .query(async ({ input }) => {
         let query = supabaseAdmin
           .from("billing_payments")
-          .select("id, subscription_id, original_subscription_id, applied_to_subscription_id, user_id, plan_id, gateway, gateway_payment_id, payment_method, status, amount_cents, currency, approved_at, access_applied_at, current_period_start, current_period_end, access_duration_value, access_duration_unit, gateway_reconciliation_status, gateway_reconciliation_error, refunded_at, expires_at, payment_url, metadata, created_at, updated_at")
+          .select("id, subscription_id, original_subscription_id, applied_to_subscription_id, user_id, plan_id, gateway, gateway_payment_id, payment_method, status, amount_cents, currency, approved_at, access_applied_at, current_period_start, current_period_end, access_duration_value, access_duration_unit, gateway_reconciliation_status, gateway_reconciliation_error, last_webhook_received_at, gateway_last_checked_at, gateway_last_status, gateway_sync_attempts, refunded_at, expires_at, payment_url, metadata, created_at, updated_at")
           .order("created_at", { ascending: false })
           .limit(100);
 
@@ -1780,7 +1817,44 @@ export const appRouter = router({
 
         const { data, error } = await query;
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-        return data ?? [];
+        const payments = data ?? [];
+        const gatewayPaymentIds = payments.flatMap(payment =>
+          payment.gateway === "mercadopago" && payment.gateway_payment_id
+            ? [String(payment.gateway_payment_id)]
+            : []
+        );
+        if (!gatewayPaymentIds.length) return payments;
+
+        const { data: webhookEvents, error: webhookError } = await supabaseAdmin
+          .from("billing_webhook_events")
+          .select("resource_id, status, error_message, received_at, processed_at, created_at")
+          .eq("provider", "mercadopago")
+          .in("resource_id", gatewayPaymentIds)
+          .order("created_at", { ascending: false });
+        if (webhookError) throw new TRPCError({ code: "BAD_REQUEST", message: webhookError.message });
+
+        const latestWebhookByPayment = new Map<string, any>();
+        for (const event of webhookEvents ?? []) {
+          const resourceId = String(event.resource_id ?? "");
+          if (resourceId && !latestWebhookByPayment.has(resourceId)) {
+            latestWebhookByPayment.set(resourceId, event);
+          }
+        }
+
+        return payments.map(payment => {
+          const event = payment.gateway_payment_id
+            ? latestWebhookByPayment.get(String(payment.gateway_payment_id))
+            : null;
+          return {
+            ...payment,
+            last_webhook_received_at: payment.last_webhook_received_at
+              ?? event?.received_at
+              ?? event?.created_at
+              ?? null,
+            last_webhook_status: event?.status ?? null,
+            last_webhook_error: event?.error_message ?? null,
+          };
+        });
       }),
 
     reconcileMercadoPagoPayment: adminProcedure
@@ -1839,7 +1913,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_subscription_renewed",
           entity_type: "billing_subscription",
           entity_id: input.subscriptionId,
@@ -1875,7 +1949,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_subscription_canceled",
           entity_type: "billing_subscription",
           entity_id: input.subscriptionId,
@@ -1937,7 +2011,7 @@ export const appRouter = router({
         if (updateError) throw new TRPCError({ code: "BAD_REQUEST", message: updateError.message });
 
         const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_plan_updated",
           entity_type: "billing_plan",
           entity_id: input.planId,
@@ -1978,7 +2052,7 @@ export const appRouter = router({
         if (error || !data?.id) throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Não foi possível criar o convite." });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_plan_invite_created",
           entity_type: "billing_plan_invite",
           entity_id: data.id,
@@ -2001,7 +2075,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "billing_plan_invite_deleted",
           entity_type: "billing_plan_invite",
           entity_id: input.inviteId,
@@ -2074,17 +2148,9 @@ export const appRouter = router({
       }),
 
 
-    getQuestionSuggestions: adminOrEditorProcedure.query(async () => {
-      const { data, error } = await supabaseAdmin
-        .from("questoes")
-        .select("conteudo, conteudos, assunto, assuntos, assuntos_por_conteudo, banca, instituição");
+    getQuestionSuggestions: adminOrEditorProcedure.query(() => performanceRpc<Record<string, unknown>[]>(supabaseAdmin, "vet_question_suggestions")),
 
-      if (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-      }
-
-      return data ?? [];
-    }),
+    browseQuestions: adminOrEditorProcedure.input(questionBrowseSchema).query(({ input }) => browseQuestions(supabaseAdmin, input, true, null)),
 
     getQuestionById: adminOrEditorProcedure
       .input(z.object({ id: z.string().uuid() }))
@@ -2108,20 +2174,26 @@ export const appRouter = router({
 
 
     listQuestions: adminOrEditorProcedure.query(async () => {
-      const [questionsResult, resolutionSummaries] = await Promise.all([
-        supabaseAdmin
-          .from("questoes")
-          .select("*")
-          .order("created_at", { ascending: false }),
+      const [questions, resolutionSummaries] = await Promise.all([
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin
+            .from("questoes")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: true })
+            .range(from, to);
+
+          if (error) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+          }
+
+          return data ?? [];
+        }),
         loadAllResolutionSummaries(),
       ]);
 
-      if (questionsResult.error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: questionsResult.error.message });
-      }
-
       return {
-        questions: questionsResult.data ?? [],
+        questions,
         resolutions: [],
         resolutionSummaries,
       };
@@ -2145,7 +2217,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_created",
           entity_type: "questao",
           entity_id: data.id,
@@ -2157,7 +2229,65 @@ export const appRouter = router({
         return { id: data.id } as const;
       }),
 
-    importQuestionBatch: adminProcedure
+    createQuestionImportDraft: adminOrEditorProcedure
+      .input(z.object({ rawJson: z.string().min(2).max(2 * 1024 * 1024), sourceName: z.string().trim().max(180).optional() }))
+      .mutation(({ ctx, input }) => createQuestionImportDraft(ctx.user.id, input.rawJson, input.sourceName)),
+
+    listQuestionImportDrafts: adminOrEditorProcedure.query(({ ctx }) => listQuestionImportDrafts(ctx.user.id)),
+
+    getQuestionImportDraft: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid() }))
+      .query(({ ctx, input }) => getQuestionImportDraft(input.batchId, ctx.user.id)),
+
+    prepareQuestionImportImageUpload: adminOrEditorProcedure
+      .input(z.object({
+        batchId: z.string().uuid(),
+        importKey: z.string().trim().min(1).max(180),
+        slotId: z.string().trim().min(1).max(100),
+        originalName: z.string().trim().min(1).max(180),
+        contentType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+        byteSize: z.number().int().min(1).max(MAX_QUESTION_IMPORT_IMAGE_BYTES),
+      }))
+      .mutation(({ ctx, input }) => prepareQuestionImportSlotUpload(input, ctx.user.id)),
+
+    confirmQuestionImportImageUpload: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional() }))
+      .mutation(({ ctx, input }) => confirmQuestionImportSlotUpload(input, ctx.user.id)),
+
+    removeQuestionImportImageUpload: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100) }))
+      .mutation(({ ctx, input }) => removeQuestionImportSlotUpload(input.batchId, input.importKey, input.slotId, ctx.user.id)),
+
+    updateQuestionImportImageMetadata: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional() }))
+      .mutation(({ ctx, input }) => updateQuestionImportSlotMetadata(input, ctx.user.id)),
+
+    cancelQuestionImportDraft: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid() }))
+      .mutation(({ ctx, input }) => cancelQuestionImportDraft(input.batchId, ctx.user.id)),
+
+    removeInvalidQuestionFromImportDraft: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid(), questionIndex: z.number().int().nonnegative() }))
+      .mutation(({ ctx, input }) => removeInvalidQuestionFromImportDraft(input.batchId, input.questionIndex, ctx.user.id)),
+
+    cleanupExpiredQuestionImportDrafts: adminOrEditorProcedure
+      .mutation(({ ctx }) => cleanupExpiredQuestionImportDrafts(ctx.user.id)),
+
+    finalizeQuestionImportDraft: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const prepared = await prepareQuestionImportFinalization(input.batchId, ctx.user.id);
+        if (prepared.batch.status === "completed" && prepared.batch.result) return prepared.batch.result;
+        await cleanupSkippedQuestionImportImages(input.batchId, prepared.skippedImportKeys, ctx.user.id);
+        const result = {
+          ...await executePreparedQuestionImport(questionImportPayloadSchema.shape.questions.parse(prepared.questions), input.batchId, ctx.user.id),
+          skippedInvalidCount: prepared.skippedInvalidCount,
+        };
+        await completeQuestionImportDraft(input.batchId, ctx.user.id, result);
+        return result;
+      }),
+
+    importQuestionBatch: adminOrEditorProcedure
       .input(questionImportPayloadSchema)
       .mutation(async ({ ctx, input }) => {
         const startedAt = Date.now();
@@ -2286,7 +2416,7 @@ export const appRouter = router({
         const durationMs = Date.now() - startedAt;
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_batch_imported",
           entity_type: "question_import_batch",
           entity_id: input.batchId,
@@ -2354,7 +2484,7 @@ export const appRouter = router({
           .getPublicUrl(path);
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "admin_image_signed_upload_created",
           entity_type: "storage_object",
           entity_id: path,
@@ -2443,7 +2573,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_author_saved",
           entity_type: "resolucao_meta",
           entity_id: input.questaoId,
@@ -2481,7 +2611,7 @@ export const appRouter = router({
           }
 
           await supabaseAdmin.from("admin_logs").insert({
-            admin_user_id: ctx.user.id,
+            actor_user_id: ctx.user.id,
             action: "resolution_block_updated",
             entity_type: "resolucao",
             entity_id: data.id,
@@ -2504,7 +2634,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_block_created",
           entity_type: "resolucao",
           entity_id: data.id,
@@ -2568,7 +2698,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_blocks_saved",
           entity_type: "resolucao",
           entity_id: input.questaoId,
@@ -2614,7 +2744,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "resolution_block_deleted",
           entity_type: "resolucao",
           entity_id: input.id,
@@ -2639,7 +2769,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_updated",
           entity_type: "questao",
           entity_id: input.id,
@@ -2674,7 +2804,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: input.publicada ? "question_published" : "question_unpublished",
           entity_type: "questao",
           entity_id: input.id,
@@ -2687,6 +2817,12 @@ export const appRouter = router({
         });
 
         return { success: true } as const;
+      }),
+
+    setPublicQuestionPublication: adminProcedure
+      .input(z.object({ id: z.string().uuid(), publish: z.boolean() }).strict())
+      .mutation(async ({ ctx, input }) => {
+        return setPublicQuestionPublication(input.id, input.publish, ctx.user.id);
       }),
 
 
@@ -2751,7 +2887,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_report_updated",
           entity_type: "question_report",
           entity_id: input.id,
@@ -2809,7 +2945,7 @@ export const appRouter = router({
         }
 
         await supabaseAdmin.from("admin_logs").insert({
-          admin_user_id: ctx.user.id,
+          actor_user_id: ctx.user.id,
           action: "question_deleted",
           entity_type: "questao",
           entity_id: input.id,
@@ -2826,71 +2962,77 @@ export const appRouter = router({
 
   publicStats: router({
     getRankingData: publicProcedure.query(async () => {
-      const [attemptsResult, profilesResult] = await Promise.all([
-        supabaseAdmin
-          .from("user_question_attempts")
-          .select("user_id,is_correct,time_spent_seconds,answered_at,subject,difficulty")
-          .order("answered_at", { ascending: false }),
-        supabaseAdmin
-          .from("profiles")
-          .select("id,nome,avatar_key,ativo")
-          .eq("ativo", true),
+      const [attemptRows, profiles] = await Promise.all([
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("user_question_attempts")
+            .select("user_id,question_id,is_correct,time_spent_seconds,answered_at,subject,difficulty")
+            .order("answered_at", { ascending: false }).order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar o ranking." });
+          return data ?? [];
+        }),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("profiles")
+            .select("id,nome,avatar_key,ativo").eq("ativo", true).order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar os perfis do ranking." });
+          return data ?? [];
+        }),
       ]);
 
-      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
-      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
-
       const groups = new Map<string, any>();
-      for (const attempt of attemptsResult.data ?? []) {
+      for (const attempt of attemptRows) {
         const day = String(attempt.answered_at ?? "").slice(0, 10);
-        const key = [attempt.user_id, day, attempt.subject ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
-        const current = groups.get(key) ?? { user_id: attempt.user_id, answered_at: `${day}T12:00:00.000Z`, subject: attempt.subject, difficulty: attempt.difficulty, is_correct: attempt.is_correct, count: 0, total_time: 0, timed: 0 };
+        const key = [attempt.user_id, attempt.question_id, day, attempt.subject ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
+        const current = groups.get(key) ?? { user_id: attempt.user_id, question_id: attempt.question_id, answered_at: `${day}T12:00:00.000Z`, subject: attempt.subject, difficulty: attempt.difficulty, is_correct: attempt.is_correct, count: 0, total_time: 0, timed: 0 };
         current.count += 1;
         if (typeof attempt.time_spent_seconds === "number") { current.total_time += attempt.time_spent_seconds; current.timed += 1; }
         groups.set(key, current);
       }
-      const attempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: group.user_id, answered_at: group.answered_at, subject: group.subject, difficulty: group.difficulty, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null })));
-      return { attempts, profiles: profilesResult.data ?? [] };
+      const attempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: group.user_id, question_id: group.question_id, answered_at: group.answered_at, subject: group.subject, difficulty: group.difficulty, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null })));
+      return { attempts, profiles };
     }),
 
     getPublicProfile: publicProcedure
       .input(z.object({ userId: z.string().uuid() }))
       .query(async ({ input }) => {
-        const [profileResult, attemptsResult, profilesResult] = await Promise.all([
+        const [profileResult, attemptRows] = await Promise.all([
           supabaseAdmin
             .from("profiles")
             .select("id,nome,ativo,created_at,last_seen_at,avatar_key,bio,prova_alvo,foco_atual,meta_semanal_questoes")
             .eq("id", input.userId)
             .maybeSingle(),
-          supabaseAdmin
-            .from("user_question_attempts")
-            .select("user_id,is_correct,time_spent_seconds,answered_at,subject,conteudo,assunto,banca,ano,difficulty")
-            .eq("user_id", input.userId)
-            .order("answered_at", { ascending: false }),
-          supabaseAdmin
-            .from("profiles")
-            .select("id,nome,avatar_key,ativo")
-            .eq("ativo", true),
+          fetchAllQuestionPages(async (from, to) => {
+            const { data, error } = await supabaseAdmin.from("user_question_attempts")
+              .select("user_id,question_id,is_correct,time_spent_seconds,answered_at,subject,conteudo,assunto,banca,ano,difficulty")
+              .eq("user_id", input.userId).order("answered_at", { ascending: false }).order("id").range(from, to);
+            if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar as tentativas do perfil." });
+            return data ?? [];
+          }),
         ]);
 
         if (profileResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profileResult.error.message });
-        if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
-        if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
 
         if (!profileResult.data || profileResult.data.ativo === false) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Perfil não disponível." });
         }
 
       const groups = new Map<string, any>();
-      for (const attempt of attemptsResult.data ?? []) {
+      for (const attempt of attemptRows) {
         const month = String(attempt.answered_at ?? "").slice(0, 7);
-        const key = [month, attempt.subject ?? "", attempt.conteudo ?? "", attempt.assunto ?? "", attempt.banca ?? "", attempt.ano ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
+        const key = [month, attempt.question_id ?? "", attempt.subject ?? "", attempt.conteudo ?? "", attempt.assunto ?? "", attempt.banca ?? "", attempt.ano ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
         const current = groups.get(key) ?? { ...attempt, answered_at: `${month}-15T12:00:00.000Z`, count: 0, total_time: 0, timed: 0 };
         current.count += 1;
         if (typeof attempt.time_spent_seconds === "number") { current.total_time += attempt.time_spent_seconds; current.timed += 1; }
         groups.set(key, current);
       }
-      const publicAttempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: input.userId, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null, answered_at: group.answered_at, subject: group.subject, conteudo: group.conteudo, assunto: group.assunto, banca: group.banca, ano: group.ano, difficulty: group.difficulty })));
+      // Preserve distinct-question counts without publishing real question IDs.
+      const publicQuestionAliases = new Map<string, string>();
+      const publicAttempts = Array.from(groups.values()).flatMap(group => {
+        const questionId = String(group.question_id ?? "");
+        if (questionId && !publicQuestionAliases.has(questionId)) {
+          publicQuestionAliases.set(questionId, `question-${publicQuestionAliases.size + 1}`);
+        }
+        return Array.from({ length: group.count }, () => ({ user_id: input.userId, question_id: publicQuestionAliases.get(questionId) ?? null, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null, answered_at: group.answered_at, subject: group.subject, conteudo: group.conteudo, assunto: group.assunto, banca: group.banca, ano: group.ano, difficulty: group.difficulty }));
+      });
       return {
         profile: profileResult.data,
         attempts: publicAttempts,
@@ -2900,6 +3042,7 @@ export const appRouter = router({
   }),
 
   vet: router({
+    getExamAnalysis: platformAccessProcedure.input(examAnalysisFiltersSchema).query(({ input }) => getExamAnalysis(input)),
     getAnalysis: protectedProcedure.query(async ({ ctx }) => getCanonicalVetAnalysis(ctx.user.id)),
 
     getObjective: protectedProcedure.query(async ({ ctx }) => {
@@ -3137,7 +3280,7 @@ export const appRouter = router({
       const query = existing?.id ? supabaseAdmin.from("vet_exam_content_weights").update(payload).eq("id", existing.id) : supabaseAdmin.from("vet_exam_content_weights").insert(payload);
       const { data, error } = await query.select("*").single();
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-      await supabaseAdmin.from("admin_logs").insert({ admin_user_id: ctx.user.id, action: "vet_weight_updated", entity_type: "vet_exam_content_weight", entity_id: data.id, description: "Peso editorial do VET atualizado", level: "info", metadata: input });
+      await supabaseAdmin.from("admin_logs").insert({ actor_user_id: ctx.user.id, action: "vet_weight_updated", entity_type: "vet_exam_content_weight", entity_id: data.id, description: "Peso editorial do VET atualizado", level: "info", metadata: input });
       return data;
     }),
   }),
@@ -3325,24 +3468,29 @@ export const appRouter = router({
       }),
 
     getProfileStats: protectedProcedure.query(async ({ ctx }) => {
-      const [profileResult, attemptsResult, profilesResult] = await Promise.all([
+      const [profileResult, attempts, profiles] = await Promise.all([
         supabaseAdmin.from("profiles").select("*").eq("id", ctx.user.id).maybeSingle(),
-        supabaseAdmin
-          .from("user_question_attempts")
-          .select("*")
-          .eq("user_id", ctx.user.id)
-          .order("answered_at", { ascending: false }),
-        supabaseAdmin.from("profiles").select("id, nome, avatar_key"),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("user_question_attempts")
+            .select("*").eq("user_id", ctx.user.id)
+            .order("answered_at", { ascending: false }).order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar as tentativas do aluno." });
+          return data ?? [];
+        }),
+        fetchAllQuestionPages(async (from, to) => {
+          const { data, error } = await supabaseAdmin.from("profiles")
+            .select("id, nome, avatar_key").order("id").range(from, to);
+          if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar os perfis do ranking." });
+          return data ?? [];
+        }),
       ]);
 
       if (profileResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profileResult.error.message });
-      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
-      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
 
       return {
         profile: profileResult.data ?? null,
-        attempts: attemptsResult.data ?? [],
-        profiles: profilesResult.data ?? [],
+        attempts,
+        profiles,
       };
     }),
   }),

@@ -15,10 +15,11 @@ import {
 import PublicHeader from "@/components/layout/PublicHeader";
 import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { bounded } from "@shared/authRecovery";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
+  const { isAuthenticated, loading: authLoading, error: authError, retry: retrySession } = useSupabaseAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,10 +29,10 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (!authLoading && !authError && isAuthenticated) {
       navigate("/plataforma");
     }
-  }, [authLoading, isAuthenticated, navigate]);
+  }, [authLoading, authError, isAuthenticated, navigate]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,10 +48,10 @@ export default function LoginPage() {
       setSubmitting(true);
       setErrorMessage("");
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await bounded(supabase.auth.signInWithPassword({
         email: cleanEmail,
         password,
-      });
+      }), 15000);
 
       if (error) {
         const message = error.message.toLowerCase();
@@ -76,7 +77,6 @@ export default function LoginPage() {
 
       navigate("/plataforma");
     } catch (error) {
-      console.error("Erro inesperado no login:", error);
       setErrorMessage(
         "Ocorreu um erro inesperado ao tentar acessar sua conta. Tente novamente em instantes."
       );
@@ -106,6 +106,11 @@ export default function LoginPage() {
       </main>
     );
   }
+
+  if (authError) return <main className="min-h-screen flex items-center justify-center" role="alert">
+    <div><p>Não foi possível carregar sua sessão. Tente novamente em instantes.</p>
+      <button onClick={() => void retrySession()}>Tentar novamente</button></div>
+  </main>;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">

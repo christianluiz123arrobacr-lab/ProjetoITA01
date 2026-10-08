@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 
 type SubscriptionGuardProps = {
   children: ReactNode;
+  bypass?: boolean;
 };
 
 type AccessState = "checking" | "allowed" | "blocked" | "error" | "unauthenticated";
@@ -14,45 +15,48 @@ type AccessState = "checking" | "allowed" | "blocked" | "error" | "unauthenticat
 const ACCESS_RECHECK_MS = 5 * 60 * 1000;
 const ACCESS_CACHE_MS = 30 * 60 * 1000;
 
-export default function SubscriptionGuard({ children }: SubscriptionGuardProps) {
-  const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
+export default function SubscriptionGuard({ children, bypass = false }: SubscriptionGuardProps) {
+  const { isAuthenticated, loading: authLoading, error: authError, recovering, retry: retrySession } = useSupabaseAuth();
 
   const [accessState, setAccessState] = useState<AccessState>("checking");
 
   const accessStatusQuery = trpc.auth.getAccessStatus.useQuery(undefined, {
-    enabled: !authLoading && isAuthenticated,
+    enabled: !bypass && !authLoading && !authError && isAuthenticated,
     retry: false,
     staleTime: ACCESS_RECHECK_MS,
     gcTime: ACCESS_CACHE_MS,
     refetchOnMount: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
-    refetchInterval: ACCESS_RECHECK_MS,
+    refetchInterval: query => query.state.status === "error" ? false : ACCESS_RECHECK_MS,
     refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
+    if (bypass) {
+      setAccessState("allowed");
+      return;
+    }
+
     if (authLoading) {
       setAccessState("checking");
       return;
     }
+
+    if (authError) { setAccessState("error"); return; }
 
     if (!isAuthenticated) {
       setAccessState("unauthenticated");
       return;
     }
 
-    if (
-      accessStatusQuery.isLoading ||
-      (accessStatusQuery.isFetching && !accessStatusQuery.data)
-    ) {
-      setAccessState("checking");
+    if (accessStatusQuery.error) {
+      setAccessState("error");
       return;
     }
 
-    if (accessStatusQuery.error) {
-      console.error("Erro ao verificar assinatura:", accessStatusQuery.error);
-      setAccessState("error");
+    if (accessStatusQuery.isLoading || (accessStatusQuery.isFetching && !accessStatusQuery.data)) {
+      setAccessState("checking");
       return;
     }
 
@@ -65,10 +69,14 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
     accessStatusQuery.isFetching,
     accessStatusQuery.isLoading,
     authLoading,
+    authError,
+    bypass,
     isAuthenticated,
   ]);
 
-  if (authLoading || accessState === "checking") {
+  if (bypass) return <>{children}</>;
+
+  if (authLoading || (!authError && !accessStatusQuery.error && accessState === "checking")) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center px-6">
         <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl">
@@ -88,11 +96,11 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
     );
   }
 
-  if (accessState === "unauthenticated") {
-    return <Redirect to="/" />;
+  if (!authError && !isAuthenticated) {
+    return <Redirect to="/login" />;
   }
 
-  if (accessState === "error") {
+  if (authError || accessStatusQuery.error || accessState === "error") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-6">
         <div className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-8 text-center shadow-xl">
@@ -108,9 +116,11 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
           </p>
           <button
             type="button"
+            disabled={accessStatusQuery.isFetching || authLoading || recovering}
             onClick={() => {
               setAccessState("checking");
-              void accessStatusQuery.refetch();
+              if (authError) void retrySession();
+              else void accessStatusQuery.refetch();
             }}
             className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
           >
@@ -126,5 +136,5 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
     return <Redirect to="/assinatura-pendente" />;
   }
 
-  return <>{children}</>;
+  return accessState === "allowed" ? <>{children}</> : null;
 }

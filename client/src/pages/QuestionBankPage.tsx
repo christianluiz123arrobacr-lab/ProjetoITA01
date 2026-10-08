@@ -4,12 +4,16 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InteractiveQuiz } from "@/components/InteractiveQuiz";
-import { exportQuestionsForPdf, getQuestions } from "@/services/questions.service";
+import { exportQuestionsForPdf, getQuestionSelection, mapQuestao } from "@/services/questions.service";
+import { useFilterPage } from "@/hooks/useFilterPage";
+import { questionPdfFailureMessage } from "@/lib/questionPdfDiagnostics";
 import { buildPdfFilterSummary } from "@/lib/questionPdfLayout";
 import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
+import { getDifficultyLabel, getDifficultyOrder, normalizeDifficulty } from "@shared/difficulty";
+import { parseQuestionBankUrlFilters } from "@shared/questionBankUrlFilters";
 import {
   ArrowLeft,
   Zap,
@@ -41,34 +45,7 @@ function normalizeText(value?: string | null) {
 }
 
 function parseVetFiltersFromUrl() {
-  if (typeof window === "undefined") {
-    return {
-      subjects: [] as string[],
-      institution: "",
-      topics: [] as string[],
-      block: "",
-    };
-  }
-
-  const params = new URLSearchParams(window.location.search);
-
-  const subject = params.get("subject") || "";
-  const institution = params.get("institution") || "";
-  const block = params.get("block") || "";
-  const topicsParam = params.get("topics") || "";
-
-  const topics = topicsParam
-    .split(",")
-    .map((item) => decodeURIComponent(item))
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return {
-    subjects: subject ? [subject] : [],
-    institution,
-    topics,
-    block,
-  };
+  return parseQuestionBankUrlFilters(typeof window === "undefined" ? "" : window.location.search);
 }
 
 function toggleValue(list: string[], value: string) {
@@ -151,15 +128,8 @@ function formatSubjectLabel(value: string) {
 }
 
 function formatDifficultyLabel(value: string) {
-  const normalized = normalizeText(value);
-
-  if (normalized === "facil") return "Fácil";
-  if (normalized === "medio") return "Médio";
-  if (normalized === "dificil") return "Difícil";
-
-  return value;
+  return getDifficultyLabel(value);
 }
-
 function sortSubjects(values: string[]) {
   const order: Record<string, number> = {
     fisica: 1,
@@ -175,15 +145,9 @@ function sortSubjects(values: string[]) {
 }
 
 function sortDifficulties(values: string[]) {
-  const order: Record<string, number> = {
-    facil: 1,
-    medio: 2,
-    dificil: 3,
-  };
-
   return [...values].sort(
     (a, b) =>
-      (order[normalizeText(a)] ?? 99) - (order[normalizeText(b)] ?? 99) ||
+      getDifficultyOrder(a) - getDifficultyOrder(b) ||
       a.localeCompare(b, "pt-BR")
   );
 }
@@ -410,7 +374,7 @@ function ActiveFilterChip({ label, onRemove }: ActiveFilterChipProps) {
     <button
       type="button"
       onClick={onRemove}
-      className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 text-violet-700 px-3 py-1.5 text-xs font-semibold hover:bg-violet-100 transition-colors"
+      className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-100 transition-colors"
     >
       <span>{label}</span>
       <X className="w-3.5 h-3.5" />
@@ -422,22 +386,22 @@ export default function QuestionBankPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
   const initialVetFilters = useMemo(() => parseVetFiltersFromUrl(), []);
 
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
+  const [linkedExam, setLinkedExam] = useState(initialVetFilters.exam);
+  const [linkedInterval, setLinkedInterval] = useState(initialVetFilters.interval);
 
   const [searchTerm, setSearchTerm] = useState("");
 
   const [selectedInstitutions, setSelectedInstitutions] = useState<string[]>(
     initialVetFilters.institution ? [initialVetFilters.institution] : []
   );
-  const [selectedYears, setSelectedYears] = useState<string[]>([]);
+  const [selectedYears, setSelectedYears] = useState<string[]>(initialVetFilters.years);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(
     initialVetFilters.subjects
   );
   const [selectedTopics, setSelectedTopics] = useState<string[]>(
     initialVetFilters.topics
   );
-  const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
+  const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>(initialVetFilters.subtopics);
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([]);
   const [selectedPracticeStatus, setSelectedPracticeStatus] =
     useState<PracticeStatusFilter>("all");
@@ -451,12 +415,19 @@ export default function QuestionBankPage() {
   const [notebookName, setNotebookName] = useState("Lista de exercícios");
   const [notebookPaper, setNotebookPaper] = useState<"a5" | "a4" | "a3" | "infinite">("a4");
   const createNotebook = trpc.notebooks.create.useMutation();
+  const [notebookLoading, setNotebookLoading] = useState(false);
+  const [notebookError, setNotebookError] = useState('');
 
   async function handleCreateLinkedNotebook() {
     const name = notebookName.trim();
-    if (!name || filteredQuestions.length === 0) return;
-    const result = await createNotebook.mutateAsync({ name, paper: { size: notebookPaper, lined: false }, questionIds: filteredQuestions.slice(0, 100).map(question => question.id) });
-    window.location.assign(`/caderno/${result.id}`);
+    if (!name || totalFiltered === 0 || notebookLoading) return;
+    setNotebookLoading(true); setNotebookError('');
+    try {
+      const selected = await getQuestionSelection(filters, 100);
+      const result = await createNotebook.mutateAsync({ name, paper: { size: notebookPaper, lined: false }, questionIds: selected.map(question => question.id) });
+      window.location.assign(`/caderno/${result.id}`);
+    } catch (error) { setNotebookError(error instanceof Error ? error.message : 'Não foi possível criar o caderno.'); }
+    finally { setNotebookLoading(false); }
   }
 
   const [vetTopics, setVetTopics] = useState<string[]>(initialVetFilters.topics);
@@ -467,295 +438,53 @@ export default function QuestionBankPage() {
   const effectiveTopics =
     selectedTopics.length > 0 ? selectedTopics : vetTopics;
 
-  const availableInstitutions = useMemo(() => {
-    return Array.from(
-      new Set(
-        questions
-          .map((q) => q.institution?.trim())
-          .filter(
-            (institution): institution is string =>
-              !!institution && institution !== ""
-          )
-      )
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [questions]);
-
-  const questionsForYears = useMemo(() => {
-    return questions.filter((q) =>
-      matchesMulti(q.institution, selectedInstitutions)
-    );
-  }, [questions, selectedInstitutions]);
-
-  const availableYears = useMemo(() => {
-    return Array.from(
-      new Set(questionsForYears.map((q) => String(q.year)).filter(Boolean))
-    ).sort((a, b) => Number(b) - Number(a));
-  }, [questionsForYears]);
-
-  const questionsForSubjects = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-
-      return matchesInstitution && matchesYear;
-    });
-  }, [questions, selectedInstitutions, selectedYears]);
-
-  const availableSubjects = useMemo(() => {
-    return sortSubjects(
-      Array.from(
-        new Set(questionsForSubjects.map((q) => q.subject).filter(Boolean))
-      )
-    );
-  }, [questionsForSubjects]);
-
-  const questionsForTopics = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-      const matchesSubject = matchesMulti(q.subject, selectedSubjects);
-
-      return matchesInstitution && matchesYear && matchesSubject;
-    });
-  }, [questions, selectedInstitutions, selectedYears, selectedSubjects]);
-
-  const availableTopics = useMemo(() => {
-    return Array.from(
-      new Set(
-        questionsForTopics
-          .flatMap((q) => getQuestionTopics(q))
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [questionsForTopics]);
-
-  const questionsForSubtopics = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-      const matchesSubject = matchesMulti(q.subject, selectedSubjects);
-      const matchesTopic = matchesMultiList(
-        getQuestionTopics(q),
-        effectiveTopics
-      );
-
-      return matchesInstitution && matchesYear && matchesSubject && matchesTopic;
-    });
-  }, [
-    questions,
-    selectedInstitutions,
-    selectedYears,
-    selectedSubjects,
-    effectiveTopics,
-  ]);
-
-  const availableSubtopics = useMemo(() => {
-    return Array.from(
-      new Set(
-        questionsForSubtopics
-          .flatMap((q) => getQuestionSubtopicsForTopics(q, effectiveTopics))
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [questionsForSubtopics, effectiveTopics]);
-
-  const questionsForDifficulties = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesInstitution = matchesMulti(
-        q.institution,
-        selectedInstitutions
-      );
-      const matchesYear = matchesMulti(String(q.year), selectedYears);
-      const matchesSubject = matchesMulti(q.subject, selectedSubjects);
-      const matchesTopic = matchesMultiList(
-        getQuestionTopics(q),
-        effectiveTopics
-      );
-      const matchesSubtopic = matchesMultiList(
-        getQuestionSubtopicsForTopics(q, effectiveTopics),
-        selectedSubtopics
-      );
-
-      return (
-        matchesInstitution &&
-        matchesYear &&
-        matchesSubject &&
-        matchesTopic &&
-        matchesSubtopic
-      );
-    });
-  }, [
-    questions,
-    selectedInstitutions,
-    selectedYears,
-    selectedSubjects,
-    effectiveTopics,
-    selectedSubtopics,
-  ]);
-
-  const availableDifficulties = useMemo(() => {
-    return sortDifficulties(
-      Array.from(
-        new Set(
-          questionsForDifficulties
-            .map((q) => String(q.difficulty ?? ""))
-            .filter(Boolean)
-        )
-      )
-    );
-  }, [questionsForDifficulties]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedYears((prev) => keepOnlyAvailableSelected(prev, availableYears));
-  }, [availableYears, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedSubjects((prev) =>
-      keepOnlyAvailableSelected(prev, availableSubjects)
-    );
-  }, [availableSubjects, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedTopics((prev) =>
-      keepOnlyAvailableSelected(prev, availableTopics)
-    );
-  }, [availableTopics, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedSubtopics((prev) =>
-      keepOnlyAvailableSelected(prev, availableSubtopics)
-    );
-  }, [availableSubtopics, questions.length]);
-
-  useEffect(() => {
-    if (!questions.length) return;
-    setSelectedDifficulties((prev) =>
-      keepOnlyAvailableSelected(prev, availableDifficulties)
-    );
-  }, [availableDifficulties, questions.length]);
-
-  const totalSubjects = useMemo(
-    () => new Set(questions.map((q) => q.subject).filter(Boolean)).size,
-    [questions]
-  );
-
-  const totalDifficulties = useMemo(
-    () => new Set(questions.map((q) => q.difficulty).filter(Boolean)).size,
-    [questions]
-  );
-
-  const practiceStats = useMemo(() => {
-    const total = questions.length;
-    const answered = questions.filter((q) => userQuestionStatus[q.id]?.attempted)
-      .length;
-    const correct = questions.filter(
-      (q) => userQuestionStatus[q.id]?.latestIsCorrect === true
-    ).length;
-    const wrong = questions.filter(
-      (q) => userQuestionStatus[q.id]?.latestIsCorrect === false
-    ).length;
-
-    return {
-      total,
-      answered,
-      unanswered: Math.max(0, total - answered),
-      correct,
-      wrong,
-    };
-  }, [questions, userQuestionStatus]);
-
-  const subjectStats = useMemo(() => {
-    const labels: Record<string, string> = {
-      fisica: "Física",
-      matematica: "Matemática",
-      quimica: "Química",
-    };
-
-    const counts = questions.reduce<Record<string, number>>((acc, q) => {
-      if (!q.subject) return acc;
-      acc[q.subject] = (acc[q.subject] || 0) + 1;
-      return acc;
-    }, {});
-
-    return Object.entries(counts)
-      .map(([key, count]) => ({
-        key,
-        label: labels[key] ?? key,
-        count,
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [questions]);
-
-  const difficultyStats = useMemo(() => {
-    const labels: Record<string, string> = {
-      facil: "Fácil",
-      medio: "Médio",
-      dificil: "Difícil",
-    };
-
-    const counts = questions.reduce<Record<string, number>>((acc, q) => {
-      if (!q.difficulty) return acc;
-      acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
-      return acc;
-    }, {});
-
-    const order: Record<string, number> = {
-      facil: 1,
-      medio: 2,
-      dificil: 3,
-    };
-
-    return Object.entries(counts)
-      .map(([key, count]) => ({
-        key,
-        label: labels[key] ?? key,
-        count,
-      }))
-      .sort((a, b) => (order[a.key] ?? 99) - (order[b.key] ?? 99));
-  }, [questions]);
-
-  const filteredDifficultyStats = useMemo(() => {
-    const counts = filteredQuestions.reduce<Record<string, number>>((acc, q) => {
-      const difficulty = String(q.difficulty ?? "");
-      if (!difficulty) return acc;
-      acc[difficulty] = (acc[difficulty] || 0) + 1;
-      return acc;
-    }, {});
-
-    return [
-      {
-        key: "facil",
-        label: "Fácil",
-        count: counts.facil || 0,
-        colorClass: "bg-emerald-500",
-      },
-      {
-        key: "medio",
-        label: "Médio",
-        count: counts.medio || 0,
-        colorClass: "bg-amber-500",
-      },
-      {
-        key: "dificil",
-        label: "Difícil",
-        count: counts.dificil || 0,
-        colorClass: "bg-rose-500",
-      },
-    ];
-  }, [filteredQuestions]);
+  const filters = useMemo(() => ({
+    search: searchTerm, institutions: selectedInstitutions, years: selectedYears.map(Number), subjects: selectedSubjects,
+    topics: effectiveTopics, subtopics: selectedSubtopics, difficulties: selectedDifficulties, practiceStatus: selectedPracticeStatus,
+    exams: linkedExam ? [linkedExam] : [], yearFrom: linkedInterval?.from, yearTo: linkedInterval?.to,
+  }), [searchTerm, selectedInstitutions, selectedYears, selectedSubjects, effectiveTopics, selectedSubtopics, selectedDifficulties, selectedPracticeStatus, linkedExam, linkedInterval]);
+  const { page, setPage } = useFilterPage(filters);
+  const pageQuery = trpc.questions.browse.useQuery({ filters, page, pageSize: 20 }, { enabled: !authLoading, staleTime: 30000, retry: false, trpc: { abortOnUnmount: true } });
+  const ids = pageQuery.data?.rows.map(row => row.id) ?? [];
+  const detailsQuery = trpc.questions.details.useQuery({ ids }, { enabled: ids.length>0, staleTime: 30000, retry: false, trpc: { abortOnUnmount: true } });
+  const pageQuestions = useMemo(() => (detailsQuery.data ?? []).map(row => mapQuestao(row as Parameters<typeof mapQuestao>[0])), [detailsQuery.data]);
+  const availableInstitutions = pageQuery.data?.facets.institutions ?? [];
+  const availableYears = pageQuery.data?.facets.years ?? [];
+  const availableSubjects = sortSubjects(pageQuery.data?.facets.subjects ?? []);
+  const availableTopics = pageQuery.data?.facets.topics ?? [];
+  const availableSubtopics = pageQuery.data?.facets.subtopics ?? [];
+  const availableDifficulties = sortDifficulties(pageQuery.data?.facets.difficulties ?? []);
+  const totalQuestions = pageQuery.data?.stats.total ?? 0;
+  const totalFiltered = pageQuery.data?.total ?? 0;
+  const totalSubjects = Object.keys(pageQuery.data?.stats.subjects ?? {}).length;
+  const totalDifficulties = pageQuery.data?.stats.totalDifficulties ?? 0;
+  const practiceStats = pageQuery.data?.stats ?? { answered:0, unanswered:0, correct:0, wrong:0 };
+  const subjectStats = Object.entries(pageQuery.data?.stats.subjects ?? {}).map(([key,count]) => ({key,count,label:formatSubjectLabel(key)})).sort((a,b)=>b.count-a.count);
+  const difficultyStats = Object.entries(pageQuery.data?.stats.difficulties ?? {}).map(([key,count]) => ({key,count,label:formatDifficultyLabel(key)})).sort((a,b)=>getDifficultyOrder(a.key)-getDifficultyOrder(b.key));
+  const filteredDifficultyStats = [
+    { key: "facil", label: "Fácil", colorClass: "bg-emerald-500" },
+    { key: "medio", label: "Médio", colorClass: "bg-amber-500" },
+    { key: "dificil", label: "Difícil", colorClass: "bg-rose-500" },
+    { key: "muito_dificil", label: "Muito difícil", colorClass: "bg-indigo-700" },
+  ].map(item=>({...item,count:pageQuery.data?.stats.filteredDifficulties[item.key] ?? 0}));
+  const [completeQuiz, setCompleteQuiz] = useState<{ key: string; questions: Question[] } | null>(null);
+  const [selectionLoading, setSelectionLoading] = useState(false);
+  const [selectionError, setSelectionError] = useState('');
+  const selectionController = useRef<AbortController | null>(null);
+  const selectionKey = JSON.stringify({ filters, user: user?.id });
+  const filteredQuestions = completeQuiz?.key === selectionKey ? completeQuiz.questions : pageQuestions;
+  useEffect(() => { selectionController.current?.abort(); setSelectionLoading(false); setSelectionError(''); }, [selectionKey]);
+  useEffect(() => () => selectionController.current?.abort(), []);
+  async function startCompleteQuiz() {
+    if (selectionLoading) return;
+    const controller = new AbortController(); selectionController.current = controller;
+    setSelectionLoading(true); setSelectionError('');
+    try {
+      const loaded = await getQuestionSelection(filters, Infinity, controller.signal);
+      if (!controller.signal.aborted) setCompleteQuiz({ key: selectionKey, questions: loaded });
+    } catch (error) { if (!controller.signal.aborted) setSelectionError(error instanceof Error ? error.message : 'Não foi possível carregar o quiz.'); }
+    finally { if (!controller.signal.aborted) setSelectionLoading(false); }
+  }
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{
@@ -860,124 +589,11 @@ export default function QuestionBankPage() {
 
   const trpcUtils = trpc.useUtils();
 
-  useEffect(() => {
-    async function loadQuestions() {
-      const data = await getQuestions();
-      setQuestions(data);
-      setFilteredQuestions(data);
-    }
-
-    loadQuestions();
-  }, []);
-
-  useEffect(() => {
-    async function loadUserAttempts() {
-      if (authLoading) return;
-
-      if (!user?.id) {
-        setUserQuestionStatus({});
-        setAttemptsLoading(false);
-        return;
-      }
-
-      setAttemptsLoading(true);
-
-      try {
-        const data = await trpcUtils.quiz.getMyAttempts.fetch({ summary: true });
-
-        const nextStatus: Record<string, UserQuestionAttemptStatus> = {};
-
-        ((data as unknown as UserAttemptSummaryRow[]) || []).forEach((attempt) => {
-        if (!attempt.question_id) return;
-
-        const current = nextStatus[attempt.question_id];
-
-        if (!current) {
-          nextStatus[attempt.question_id] = {
-            attempted: true,
-            latestIsCorrect: attempt.is_correct ?? false,
-            attempts: 1,
-            lastAnsweredAt: attempt.answered_at ?? null,
-          };
-          return;
-        }
-
-        current.attempts += 1;
-      });
-
-        setUserQuestionStatus(nextStatus);
-      } catch (error) {
-        console.error("Erro ao carregar tentativas do usuário:", error);
-        setUserQuestionStatus({});
-      } finally {
-        setAttemptsLoading(false);
-      }
-    }
-
-    loadUserAttempts();
-  }, [authLoading, trpcUtils, user?.id]);
-
-  useEffect(() => {
-    let filtered = questions;
-
-    filtered = filtered.filter((q) => questionMatchesSearch(q, searchTerm));
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(q.institution, selectedInstitutions)
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(String(q.year), selectedYears)
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(q.subject, selectedSubjects)
-    );
-
-    if (effectiveTopics.length > 0) {
-      filtered = filtered.filter((q) =>
-        matchesMultiList(getQuestionTopics(q), effectiveTopics)
-      );
-    }
-
-    filtered = filtered.filter((q) =>
-      matchesMultiList(
-        getQuestionSubtopicsForTopics(q, effectiveTopics),
-        selectedSubtopics
-      )
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesMulti(q.difficulty, selectedDifficulties)
-    );
-
-    filtered = filtered.filter((q) =>
-      matchesPracticeStatus(
-        q.id,
-        selectedPracticeStatus,
-        userQuestionStatus,
-        !!user?.id
-      )
-    );
-
-    setFilteredQuestions(filtered);
-  }, [
-    questions,
-    searchTerm,
-    selectedInstitutions,
-    selectedYears,
-    selectedSubjects,
-    effectiveTopics,
-    selectedSubtopics,
-    selectedDifficulties,
-    selectedPracticeStatus,
-    userQuestionStatus,
-    user?.id,
-  ]);
-
   function clearAllFilters() {
     setSearchTerm("");
     setSelectedInstitutions([]);
+    setLinkedExam("");
+    setLinkedInterval(undefined);
     setSelectedYears([]);
     setSelectedSubjects([]);
     setSelectedTopics([]);
@@ -994,7 +610,7 @@ export default function QuestionBankPage() {
   }
 
   async function handleExportPdf() {
-    if (pdfGenerating || filteredQuestions.length === 0) return;
+    if (pdfGenerating || totalFiltered === 0) return;
     const filters: QuestionPdfFilters = {
       search: searchTerm.trim(),
       institutions: selectedInstitutions,
@@ -1007,6 +623,7 @@ export default function QuestionBankPage() {
     };
     setPdfGenerating(true);
     setPdfMessage("");
+    let pdfStage: "server_search" | "generation" = "server_search";
     try {
       const result = await exportQuestionsForPdf(filters);
       if (!result.questions.length) {
@@ -1014,34 +631,21 @@ export default function QuestionBankPage() {
         return;
       }
       const summary = buildPdfFilterSummary(filters);
+      pdfStage = "generation";
       const { generateQuestionPdf } = await import("@/lib/questionPdfGenerator");
-      const generated = await generateQuestionPdf({ questions: result.questions, filterSummary: summary });
+      const generated = await generateQuestionPdf({ questions: result.questions, filterSummary: summary, correlationId: result.correlationId });
       setPdfMessage(result.truncated
         ? `PDF concluído com ${generated.questions} questões (limite seguro de ${result.limit} por arquivo).`
         : `PDF concluído com ${generated.questions} questões.`);
     } catch (error) {
-      console.error("Falha ao gerar lista de questões em PDF", { name: error instanceof Error ? error.name : "UnknownError" });
-      const message = error instanceof Error ? error.message : "";
-      const safeMessage = [
-        "assinatura",
-        "acesso",
-        "sessão",
-        "limite de requisições",
-        "Muitas tentativas",
-        "buscar as questões",
-        "aplicar o filtro",
-        "navegador não conseguiu preparar",
-        "Nenhuma questão",
-      ].some(fragment => message.includes(fragment));
-      setPdfMessage(safeMessage
-        ? message
-        : "Não foi possível gerar o PDF neste navegador. Atualize a página e tente novamente.");
+      setPdfMessage(questionPdfFailureMessage(error, pdfStage));
     } finally {
       setPdfGenerating(false);
     }
   }
 
   function handleQuestionAnswered(questionId: string, isCorrect: boolean) {
+    void trpcUtils.questions.browse.invalidate();
     setUserQuestionStatus((prev) => ({
       ...prev,
       [questionId]: {
@@ -1053,8 +657,10 @@ export default function QuestionBankPage() {
     }));
   }
 
+  if (!pageQuery.data) return <main className="theme-page min-h-screen p-8"><h1>Banco de Questões</h1>{pageQuery.isLoading || authLoading ? <p role="status">Carregando questões...</p> : <div role="alert"><p>{pageQuery.error?.message || 'Não foi possível carregar os dados.'}</p><Button onClick={()=>void pageQuery.refetch()}>Tentar novamente</Button></div>}</main>;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-100">
+    <div className="theme-page min-h-screen bg-slate-50">
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/70">
         <div className="container py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -1066,7 +672,7 @@ export default function QuestionBankPage() {
             </Link>
 
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-500 flex items-center justify-center shadow-md shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm shrink-0">
                 <Zap className="w-5 h-5 text-white" />
               </div>
 
@@ -1082,17 +688,17 @@ export default function QuestionBankPage() {
             </div>
           </div>
 
-          <Card className="hidden sm:flex items-center gap-3 px-4 py-2.5 border-violet-100 bg-white shadow-sm rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center">
+          <Card className="hidden sm:flex items-center gap-3 px-4 py-2.5 border-slate-200 bg-white shadow-sm rounded-xl">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
               <BookMarked className="w-5 h-5 text-white" />
             </div>
 
             <div>
               <p className="text-xl font-bold text-slate-900 leading-none">
-                {filteredQuestions.length}
+                {totalFiltered}
               </p>
 
-              <p className="text-xs font-semibold text-violet-700">
+              <p className="text-xs font-semibold text-blue-700">
                 questões
               </p>
             </div>
@@ -1101,9 +707,15 @@ export default function QuestionBankPage() {
       </header>
 
       <main className="container py-8 space-y-7">
+        {(pageQuery.error || detailsQuery.error) && <Card role="alert" className="p-4 text-amber-700 dark:text-amber-300">Não foi possível atualizar o banco. {pageQuery.error?.message || detailsQuery.error?.message} <Button variant="outline" onClick={() => { void pageQuery.refetch(); if(ids.length) void detailsQuery.refetch(); }}>Tentar novamente</Button></Card>}
+        {pageQuery.isLoading && <p role="status">Carregando questões...</p>}
+        {(linkedExam || linkedInterval) && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+          <span>Recorte da análise: {linkedExam || "Todas as bancas"}{linkedInterval ? ` · ${linkedInterval.from}–${linkedInterval.to}` : ""}</span>
+          <Button variant="outline" onClick={() => { setLinkedExam(""); setLinkedInterval(undefined); }}>Remover recorte</Button>
+        </div>}
         {hasVetFilter ? (
           <section>
-            <Card className="p-4 md:p-5 border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50">
+            <Card className="p-4 md:p-5 border-emerald-200 bg-emerald-50/70 shadow-sm">
               <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
@@ -1148,15 +760,15 @@ export default function QuestionBankPage() {
         <section className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
           <div className="space-y-5">
             <div className="grid md:grid-cols-3 gap-4">
-              <Card className="p-4 border-violet-100 bg-white shadow-sm">
+              <Card className="p-4 border-slate-200 bg-white shadow-sm rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-violet-100 flex items-center justify-center">
-                    <BookMarked className="w-5 h-5 text-violet-600" />
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <BookMarked className="w-5 h-5 text-blue-600" />
                   </div>
 
                   <div>
                     <p className="text-2xl font-bold text-slate-900 leading-tight">
-                      {questions.length}
+                      {totalQuestions}
                     </p>
 
                     <p className="text-sm font-semibold text-slate-800">
@@ -1168,9 +780,9 @@ export default function QuestionBankPage() {
                 </div>
               </Card>
 
-              <Card className="p-4 border-blue-100 bg-white shadow-sm">
+              <Card className="p-4 border-slate-200 bg-white shadow-sm rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-blue-100 flex items-center justify-center">
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
                     <GraduationCap className="w-5 h-5 text-blue-600" />
                   </div>
 
@@ -1188,10 +800,10 @@ export default function QuestionBankPage() {
                 </div>
               </Card>
 
-              <Card className="p-4 border-orange-100 bg-white shadow-sm">
+              <Card className="p-4 border-slate-200 bg-white shadow-sm rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-orange-100 flex items-center justify-center">
-                    <BarChart3 className="w-5 h-5 text-orange-600" />
+                  <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-slate-600" />
                   </div>
 
                   <div>
@@ -1212,7 +824,7 @@ export default function QuestionBankPage() {
             </div>
 
             <div className="grid lg:grid-cols-2 gap-4">
-              <Card className="p-5 bg-white border-slate-200 shadow-sm">
+              <Card className="p-5 bg-white border-slate-200 shadow-sm rounded-xl">
                 <h3 className="text-base font-bold text-slate-900 mb-4">
                   Questões por disciplina
                 </h3>
@@ -1221,8 +833,8 @@ export default function QuestionBankPage() {
                   {subjectStats.length > 0 ? (
                     subjectStats.map((item) => {
                       const percentage =
-                        questions.length > 0
-                          ? Math.round((item.count / questions.length) * 100)
+                        totalQuestions > 0
+                          ? Math.round((item.count / totalQuestions) * 100)
                           : 0;
 
                       return (
@@ -1239,7 +851,7 @@ export default function QuestionBankPage() {
 
                           <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-violet-500"
+                              className="h-full rounded-full bg-blue-600"
                               style={{ width: `${percentage}%` }}
                             />
                           </div>
@@ -1254,7 +866,7 @@ export default function QuestionBankPage() {
                 </div>
               </Card>
 
-              <Card className="p-5 bg-white border-slate-200 shadow-sm">
+              <Card className="p-5 bg-white border-slate-200 shadow-sm rounded-xl">
                 <h3 className="text-base font-bold text-slate-900 mb-4">
                   Questões por nível
                 </h3>
@@ -1263,8 +875,8 @@ export default function QuestionBankPage() {
                   {difficultyStats.length > 0 ? (
                     difficultyStats.map((item) => {
                       const percentage =
-                        questions.length > 0
-                          ? Math.round((item.count / questions.length) * 100)
+                        totalQuestions > 0
+                          ? Math.round((item.count / totalQuestions) * 100)
                           : 0;
 
                       const colorClass =
@@ -1272,7 +884,9 @@ export default function QuestionBankPage() {
                           ? "bg-emerald-500"
                           : item.key === "medio"
                             ? "bg-amber-500"
-                            : "bg-rose-500";
+                            : item.key === "dificil"
+                              ? "bg-rose-500"
+                              : "bg-indigo-700";
 
                       return (
                         <div key={item.key}>
@@ -1304,14 +918,14 @@ export default function QuestionBankPage() {
               </Card>
             </div>
 
-            <Card className="p-4 bg-white border-slate-200 shadow-sm">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
-                    <Filter className="w-4 h-4 text-violet-600" />
+            <Card className="p-4 bg-white border-slate-200 shadow-sm rounded-xl">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Filter className="w-4 h-4 text-blue-600" />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="text-base font-bold text-slate-900">
                       Filtros
                     </h3>
@@ -1322,30 +936,34 @@ export default function QuestionBankPage() {
                   </div>
                 </div>
 
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                  <Button
-                    variant="outline"
-                    onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
-                    disabled={filteredQuestions.length === 0 || authLoading || !user}
-                    className="rounded-xl h-9 px-4 text-sm"
-                  >
-                    <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
-                  </Button>
-                  <Button
-                    onClick={handleExportPdf}
-                    disabled={pdfGenerating || filteredQuestions.length === 0 || authLoading || !user}
-                    className="rounded-xl h-9 px-4 text-sm bg-cyan-600 hover:bg-cyan-700"
-                  >
-                    {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                    {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={clearAllFilters}
-                    className="rounded-xl h-9 px-4 text-sm"
-                  >
-                    Limpar filtros
-                  </Button>
+                <div className="grid w-full grid-cols-1 gap-3 xl:w-auto xl:shrink-0 xl:grid-cols-[auto_auto] xl:items-center">
+                  <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
+                    <Button
+                      variant="outline"
+                      onClick={() => { setNotebookName(`${selectedSubjects[0] || effectiveTopics[0] || "Questões"} — Lista de exercícios`); setNotebookDialogOpen(true); }}
+                      disabled={totalFiltered === 0 || authLoading || !user}
+                      className="h-9 shrink-0 rounded-xl px-4 text-sm sm:flex-1 xl:flex-none"
+                    >
+                      <NotebookPen className="mr-2 h-4 w-4" />Resolver no Caderno
+                    </Button>
+                    <Button
+                      onClick={handleExportPdf}
+                      disabled={pdfGenerating || totalFiltered === 0 || authLoading || !user}
+                      className="h-9 shrink-0 rounded-lg bg-blue-600 px-4 text-sm hover:bg-blue-700 sm:flex-1 xl:flex-none"
+                    >
+                      {pdfGenerating ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                      {pdfGenerating ? "Gerando PDF..." : "Exportar PDF"}
+                    </Button>
+                  </div>
+                  <div className="flex w-full justify-end border-t border-slate-100 pt-3 xl:w-auto xl:border-l xl:border-t-0 xl:pl-3 xl:pt-0">
+                    <Button
+                      variant="outline"
+                      onClick={clearAllFilters}
+                      className="h-9 shrink-0 rounded-xl px-4 text-sm text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                    >
+                      Limpar filtros
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -1464,7 +1082,7 @@ export default function QuestionBankPage() {
                         event.target.value as PracticeStatusFilter
                       )
                     }
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {PRACTICE_STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -1606,11 +1224,11 @@ export default function QuestionBankPage() {
               </p>
 
               <p className="text-3xl font-bold text-slate-900">
-                {filteredQuestions.length}
+                {totalFiltered}
               </p>
             </div>
 
-            <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4 mb-5">
+            <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 mb-5">
               <p className="text-sm font-bold text-slate-900 mb-3">
                 Seu histórico
               </p>
@@ -1619,7 +1237,7 @@ export default function QuestionBankPage() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-slate-500">Já feitas</p>
-                    <p className="text-xl font-bold text-violet-700">
+                    <p className="text-xl font-bold text-blue-700">
                       {practiceStats.answered}
                     </p>
                   </div>
@@ -1657,9 +1275,9 @@ export default function QuestionBankPage() {
               <div className="space-y-4">
                 {filteredDifficultyStats.map((item) => {
                   const percentage =
-                    filteredQuestions.length > 0
+                    totalFiltered > 0
                       ? Math.round(
-                          (item.count / filteredQuestions.length) * 100
+                          (item.count / totalFiltered) * 100
                         )
                       : 0;
 
@@ -1696,7 +1314,17 @@ export default function QuestionBankPage() {
         </section>
 
         <section>
-          {filteredQuestions.length > 0 ? (
+          <div className="flex flex-wrap gap-3 items-center mb-4">
+            <Button variant="outline" disabled={page===0 || pageQuery.isFetching} onClick={()=>{setCompleteQuiz(null);setPage(page-1);}}>Página anterior</Button>
+            <span>Página {page+1} · {totalFiltered} questões no conjunto filtrado</span>
+            <Button variant="outline" disabled={(page+1)*20>=totalFiltered || pageQuery.isFetching} onClick={()=>{setCompleteQuiz(null);setPage(page+1);}}>Próxima página</Button>
+            <Button disabled={!totalFiltered || selectionLoading} onClick={()=>void startCompleteQuiz()}>Praticar conjunto completo ({totalFiltered})</Button>
+            {selectionLoading && <Button variant="outline" onClick={()=>{selectionController.current?.abort();setSelectionLoading(false);}}>Cancelar carregamento</Button>}
+          </div>
+          {selectionError && <p role="alert">{selectionError}</p>}
+          {filteredQuestions.length > 0 && !pageQuery.error ? (
+            <div>
+            <p className="text-sm mb-3">{completeQuiz?.key===selectionKey ? 'Quiz do conjunto completo' : 'Prática das questões desta página (20 por página)'}</p>
             <InteractiveQuiz
               key={[
                 searchTerm,
@@ -1708,11 +1336,14 @@ export default function QuestionBankPage() {
                 selectedDifficulties.join("|"),
                 selectedPracticeStatus,
                 vetTopics.join("|"),
+                String(page), completeQuiz?.key===selectionKey ? 'complete' : 'page',
               ].join("::")}
               questions={filteredQuestions}
               onQuestionAnswered={handleQuestionAnswered}
+              optionFeedbackTheme="question-bank"
             />
-          ) : (
+            </div>
+          ) : pageQuery.isLoading || detailsQuery.isLoading ? <p role="status">Carregando...</p> : !pageQuery.error && !detailsQuery.error ? (
             <Card className="p-12 text-center bg-white border-slate-200">
               <p className="text-lg font-semibold text-slate-800 mb-3">
                 Nenhuma questão encontrada com os filtros selecionados.
@@ -1724,7 +1355,7 @@ export default function QuestionBankPage() {
 
               <Button onClick={clearAllFilters}>Limpar Filtros</Button>
             </Card>
-          )}
+          ) : null}
         </section>
       </main>
 
@@ -1732,11 +1363,11 @@ export default function QuestionBankPage() {
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="linked-notebook-title">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h2 id="linked-notebook-title" className="text-xl font-bold text-slate-900">Resolver no Caderno</h2>
-            <p className="mt-1 text-sm text-slate-500">Crie um arquivo ligado às {Math.min(filteredQuestions.length, 100)} questões desta lista.</p>
+            <p className="mt-1 text-sm text-slate-500">Crie um arquivo ligado às {Math.min(totalFiltered, 100)} questões desta lista.</p>
             <label className="mt-5 block text-sm font-semibold">Nome<input autoFocus maxLength={80} value={notebookName} onChange={event => setNotebookName(event.target.value)} className="mt-1 w-full rounded-xl border px-3 py-2" /></label>
             <label className="mt-4 block text-sm font-semibold">Papel<select value={notebookPaper} onChange={event => setNotebookPaper(event.target.value as typeof notebookPaper)} className="mt-1 w-full rounded-xl border px-3 py-2"><option value="a5">A5</option><option value="a4">A4</option><option value="a3">A3</option><option value="infinite">Folha infinita</option></select></label>
-            {createNotebook.error ? <p className="mt-3 text-sm text-red-600">Não foi possível criar o caderno. Confirme a conexão com o Google Drive.</p> : null}
-            <div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setNotebookDialogOpen(false)}>Cancelar</Button><Button onClick={() => void handleCreateLinkedNotebook()} disabled={!notebookName.trim() || createNotebook.isPending}>{createNotebook.isPending ? "Criando..." : "Criar caderno"}</Button></div>
+            {notebookError && <p role="alert" className="mt-3 text-sm text-red-600">{notebookError}</p>}
+            <div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setNotebookDialogOpen(false)}>Cancelar</Button><Button onClick={() => void handleCreateLinkedNotebook()} disabled={!notebookName.trim() || notebookLoading || createNotebook.isPending}>{notebookLoading || createNotebook.isPending ? "Criando..." : "Criar caderno"}</Button></div>
           </div>
         </div>
       ) : null}

@@ -3,6 +3,7 @@ import { z } from "zod";
 export const QUESTION_PDF_EXPORT_LIMIT = 120;
 
 export const questionPdfFiltersSchema = z.object({
+  correlationId: z.string().uuid().optional(),
   search: z.string().trim().max(160).default(""),
   institutions: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
   years: z.array(z.number().int().min(1900).max(2200)).max(50).default([]),

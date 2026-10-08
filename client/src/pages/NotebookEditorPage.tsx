@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Save } from "lucide-react";
-import { Link, useRoute } from "wouter";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
+import { Link, useLocation, useRoute } from "wouter";
 import {
   StudyCanvasWorkspace,
   type StudyCanvasDocument,
@@ -15,8 +19,63 @@ import {
   type NotebookPaperSize,
 } from "@/lib/notebookDocument";
 import type { ScratchpadStroke } from "@/services/question-notes.service";
+import { KATEX_RENDER_OPTIONS, normalizeMathSource } from "@/lib/mathRendering";
+import {
+  buildQuestionRichContent,
+  groupRichQuestionContent,
+  parseRichQuestionText,
+  serializeRichQuestionText,
+} from "@/lib/richQuestionContent";
 
 type SaveState = "saved" | "dirty" | "saving" | "error" | "conflict";
+
+type LinkedQuestionContent = {
+  statement: string;
+  statementAfterImage: string | null;
+  imageUrl: string | null;
+};
+
+function QuestionRichContent({ question }: { question: LinkedQuestionContent }) {
+  const content = useMemo(
+    () => groupRichQuestionContent(buildQuestionRichContent(question)),
+    [question],
+  );
+
+  return (
+    <div className="mt-3 space-y-3 text-sm leading-6 text-slate-800">
+      {content.map((group, index) => {
+        if (group.type === "image") {
+          return (
+            <img
+              key={`${group.url}-${index}`}
+              src={group.url}
+              alt="Imagem da questão"
+              className="h-auto max-w-full rounded-lg border border-slate-200"
+            />
+          );
+        }
+
+        return (
+          <div key={index} className="prose prose-slate max-w-none prose-p:my-2">
+            <ReactMarkdown
+              remarkPlugins={[remarkMath]}
+              rehypePlugins={[[rehypeKatex, KATEX_RENDER_OPTIONS]]}
+              components={{
+                p: ({ children }) => <p className="leading-relaxed">{children}</p>,
+                strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                ul: ({ children }) => <ul className="mb-3 list-disc pl-5">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-3 list-decimal pl-5">{children}</ol>,
+                li: ({ children }) => <li className="mb-1">{children}</li>,
+              }}
+            >
+              {normalizeMathSource(serializeRichQuestionText(group.nodes))}
+            </ReactMarkdown>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function elementToStroke(value: unknown): ScratchpadStroke | null {
   if (!value || typeof value !== "object") return null;
@@ -53,12 +112,15 @@ function toStudyDocument(document: NotebookDocument): StudyCanvasDocument {
 
 export default function NotebookEditorPage() {
   const [, params] = useRoute("/caderno/:documentId");
+  const [, navigate] = useLocation();
   const documentId = params?.documentId ?? "";
+  const activeDocumentIdRef = useRef(documentId);
   const query = trpc.notebooks.get.useQuery({ documentId }, { enabled: Boolean(documentId), retry: false });
   const update = trpc.notebooks.update.useMutation();
   const updateRef = useRef(update);
   const documentRef = useRef<NotebookDocument | null>(null);
   const modifiedTimeRef = useRef("");
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [document, setDocument] = useState<NotebookDocument | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveRequest, setSaveRequest] = useState(0);
@@ -77,39 +139,50 @@ export default function NotebookEditorPage() {
   useEffect(() => {
     if (!query.data) return;
     const loaded = query.data.document as NotebookDocument;
+    const canonicalId = query.data.id ?? documentId;
+    activeDocumentIdRef.current = canonicalId;
     documentRef.current = loaded;
     modifiedTimeRef.current = query.data.modifiedTime;
     setDocument(loaded);
-  }, [query.data]);
+    if (canonicalId !== documentId) navigate(`/caderno/${canonicalId}`, { replace: true });
+  }, [query.data, documentId, navigate]);
 
-  const saveStudyDocument = useCallback(async (study: StudyCanvasDocument) => {
-    const current = documentRef.current;
-    if (!current) throw new Error("Documento indisponível.");
-    setSaveState("saving");
-    const next: NotebookDocument = {
-      ...current,
-      modifiedAt: new Date().toISOString(),
-      pages: study.pages.map(page => ({ id: page.id, elements: page.strokes as unknown as NotebookElement[] })),
-    };
-    try {
-      const result = await updateRef.current.mutateAsync({
-        documentId,
-        document: next,
-        expectedModifiedTime: modifiedTimeRef.current,
-        force: false,
-      });
-      const saved = result.document as NotebookDocument;
-      documentRef.current = saved;
-      modifiedTimeRef.current = result.modifiedTime;
-      setDocument(saved);
-      setPaperDirty(false);
-      setSaveState("saved");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setSaveState(message.includes("outro dispositivo") ? "conflict" : "error");
-      throw error;
-    }
-  }, [documentId]);
+  const saveStudyDocument = useCallback((study: StudyCanvasDocument) => {
+    const save = saveQueueRef.current.catch(() => undefined).then(async () => {
+      const current = documentRef.current;
+      if (!current) throw new Error("Documento indisponível.");
+      setSaveState("saving");
+      const next: NotebookDocument = {
+        ...current,
+        modifiedAt: new Date().toISOString(),
+        pages: study.pages.map(page => ({ id: page.id, elements: page.strokes as unknown as NotebookElement[] })),
+      };
+      try {
+        const result = await updateRef.current.mutateAsync({
+          documentId: activeDocumentIdRef.current,
+          document: next,
+          expectedModifiedTime: modifiedTimeRef.current,
+          force: false,
+        });
+        const saved = result.document as NotebookDocument;
+        if (result.id && result.id !== activeDocumentIdRef.current) {
+          activeDocumentIdRef.current = result.id;
+          navigate(`/caderno/${result.id}`, { replace: true });
+        }
+        documentRef.current = saved;
+        modifiedTimeRef.current = result.modifiedTime;
+        setDocument(saved);
+        setPaperDirty(false);
+        setSaveState("saved");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        setSaveState(message.includes("outro dispositivo") ? "conflict" : "error");
+        throw error;
+      }
+    });
+    saveQueueRef.current = save.catch(() => undefined);
+    return save;
+  }, [navigate]);
 
   const persistence = useMemo<StudyCanvasPersistence | null>(() => document ? ({
     load: async () => documentRef.current ? toStudyDocument(documentRef.current) : null,
@@ -153,8 +226,8 @@ export default function NotebookEditorPage() {
     const bytes = new Uint8Array(await pdfExport.blob.arrayBuffer());
     let binary = ""; for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...Array.from(bytes.subarray(offset, offset + 0x8000)));
     const current = documentRef.current; if (!current) return;
-    try { const result = await exportPdf.mutateAsync({ documentId, name: current.name, pdfBase64: btoa(binary) }); setPdfMessage("PDF exportado e atualizado no Google Drive."); setPdfDriveLink(result.webViewLink ?? ""); setPdfExport(null); }
-    catch { setPdfMessage("Não foi possível salvar o PDF no Google Drive. Tente novamente."); }
+    try { const result = await exportPdf.mutateAsync({ documentId: activeDocumentIdRef.current, name: current.name, pdfBase64: btoa(binary) }); modifiedTimeRef.current = result.notebookModifiedTime; setPdfMessage("PDF exportado e atualizado no Google Drive."); setPdfDriveLink(result.webViewLink ?? ""); setPdfExport(null); }
+    catch (error) { const message = error instanceof Error ? error.message : ""; setPdfMessage(message.toLowerCase().includes("reconecte") ? "Reconecte seu Google Drive para salvar o PDF." : "Não foi possível salvar o PDF no Google Drive. Tente novamente."); }
   }
 
   if (query.isLoading || !document || !persistence) return <main className="flex min-h-[70vh] items-center justify-center bg-slate-50 font-semibold text-slate-500">Carregando caderno...</main>;
@@ -172,14 +245,42 @@ export default function NotebookEditorPage() {
         <span className={`text-xs font-bold ${saveState === "error" || saveState === "conflict" ? "text-red-300" : "text-emerald-300"}`}>{statusLabel}</span>
         <label className="text-xs font-semibold text-slate-200">Papel <select value={document.paper.size} onChange={event => updatePaper({ size: event.target.value as NotebookPaperSize })} className="ml-1 rounded-lg border border-slate-600 bg-slate-800 px-2 py-1"><option value="a5">A5</option><option value="a4">A4</option><option value="a3">A3</option><option value="infinite">Infinita</option></select></label>
         <label className="flex items-center gap-1 text-xs font-semibold text-slate-200"><input type="checkbox" checked={document.paper.lined} onChange={event => updatePaper({ lined: event.target.checked })} />Com linhas</label>
-        <Button size="sm" onClick={() => setSaveRequest(value => value + 1)}><Save className="mr-2 h-4 w-4" />Salvar agora</Button>
+        <Button size="sm" disabled={saveState === "saving"} onClick={() => setSaveRequest(value => value + 1)}><Save className="mr-2 h-4 w-4" />Salvar agora</Button>
         {pdfDriveLink ? <Button size="sm" variant="outline" onClick={() => window.open(pdfDriveLink, "_blank", "noopener,noreferrer")}>Abrir PDF no Google Drive</Button> : null}
         {linkedIds.length ? <Button variant="outline" size="sm" onClick={() => setQuestionPanelOpen(value => !value)}>Questões da lista</Button> : null}
       </header>
       <section className="flex h-[calc(100dvh-57px)] overflow-hidden p-2 sm:p-3">
-        {linkedIds.length && questionPanelOpen ? <aside className="mr-3 hidden w-[34%] min-w-[280px] max-w-[480px] overflow-auto rounded-2xl border bg-white p-4 shadow-sm md:block"><h2 className="font-bold">Questões da lista</h2><div className="mt-3 flex gap-2 overflow-x-auto">{document.linkedQuestions?.map((item, index) => <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>{index + 1}</button>)}</div>{activeQuestion ? <article className="mt-4"><p className="text-xs font-bold text-blue-700">{activeQuestion.instituição} · {activeQuestion.ano} · {activeQuestion.disciplina}</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">{activeQuestion.enunciado}</p></article> : <p className="mt-4 text-sm text-slate-500">Carregando questão...</p>}</aside> : null}
+        {linkedIds.length && questionPanelOpen ? (
+          <aside className="mr-3 hidden w-[34%] min-w-[280px] max-w-[480px] overflow-auto rounded-2xl border bg-white p-4 shadow-sm md:block">
+            <h2 className="font-bold">Questões da lista</h2>
+            <div className="mt-3 flex gap-2 overflow-x-auto">
+              {document.linkedQuestions?.map((item, index) => (
+                <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+            {activeQuestion ? (
+              <article className="mt-4">
+                <p className="text-xs font-bold text-blue-700">{activeQuestion.instituição} · {activeQuestion.ano} · {activeQuestion.disciplina}</p>
+                <QuestionRichContent question={activeQuestion} />
+              </article>
+            ) : <p className="mt-4 text-sm text-slate-500">Carregando questão...</p>}
+          </aside>
+        ) : null}
         <div className="min-w-0 flex-1 overflow-auto">
-        {linkedIds.length && questionPanelOpen ? <div className="mb-2 max-h-[42dvh] overflow-auto rounded-xl border bg-white p-3 md:hidden"><div className="flex gap-2 overflow-x-auto">{document.linkedQuestions?.map((item, index) => <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>Questão {index + 1}</button>)}</div>{activeQuestion ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{activeQuestion.enunciado}</p> : null}</div> : null}
+        {linkedIds.length && questionPanelOpen ? (
+          <div className="mb-2 max-h-[42dvh] overflow-auto rounded-xl border bg-white p-3 md:hidden">
+            <div className="flex gap-2 overflow-x-auto">
+              {document.linkedQuestions?.map((item, index) => (
+                <button key={item.questionId} onClick={() => setActiveQuestionId(item.questionId)} className={`rounded-lg px-3 py-2 text-xs font-bold ${(activeQuestionId || linkedIds[0]) === item.questionId ? "bg-blue-600 text-white" : "bg-slate-100"}`}>
+                  Questão {index + 1}
+                </button>
+              ))}
+            </div>
+            {activeQuestion ? <QuestionRichContent question={activeQuestion} /> : null}
+          </div>
+        ) : null}
         <StudyCanvasWorkspace
           questionId={documentId}
           titleOverride={document.name}
@@ -204,7 +305,7 @@ export default function NotebookEditorPage() {
         </div>
       </section>
       {pdfMessage ? <div role="status" className="fixed bottom-4 right-4 z-[150] rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl">{pdfMessage}</div> : null}
-      {pdfExport ? <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><h2 className="text-lg font-bold">Exportar PDF</h2><p className="mt-2 text-sm text-slate-500">O arquivo editável continuará intacto. O PDF é um arquivo binário separado.</p><div className="mt-5 grid gap-2"><Button onClick={downloadPdf}>Baixar neste dispositivo</Button><Button variant="outline" onClick={() => void savePdfToDrive()} disabled={exportPdf.isPending}>{exportPdf.isPending ? "Enviando..." : "Salvar PDF no Google Drive"}</Button><Button variant="ghost" onClick={() => setPdfExport(null)}>Cancelar</Button></div></div></div> : null}
+      {pdfExport ? <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><h2 className="text-lg font-bold">Exportar PDF</h2><p className="mt-2 text-sm text-slate-500">Seu caderno continua editável no Projeto Vetor. O PDF será salvo no seu Google Drive.</p><div className="mt-5 grid gap-2"><Button onClick={downloadPdf}>Baixar neste dispositivo</Button><Button variant="outline" onClick={() => void savePdfToDrive()} disabled={exportPdf.isPending}>{exportPdf.isPending ? "Enviando..." : "Salvar PDF no Google Drive"}</Button><Button variant="ghost" onClick={() => setPdfExport(null)}>Cancelar</Button></div></div></div> : null}
     </main>
   );
 }

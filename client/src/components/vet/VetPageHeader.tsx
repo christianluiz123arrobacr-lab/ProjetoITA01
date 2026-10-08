@@ -17,7 +17,7 @@ export function VetPageHeader({
 }: VetPageHeaderProps) {
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 dark:bg-slate-900/95 dark:border-slate-700">
         <div className="container py-4 flex items-center gap-4">
           <Link href={backHref}>
             <Button variant="ghost" size="sm" className="rounded-xl">

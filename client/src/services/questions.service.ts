@@ -1,6 +1,31 @@
 import { trpcClient } from "@/lib/trpcClient";
 import type { Question, QuestionSubtopicsByTopic } from "@/types/question";
 import type { QuestionPdfFilters } from "@shared/questionPdf";
+import { logPdfStage } from "@/lib/questionPdfDiagnostics";
+import { QuestionPdfError } from "@/lib/questionPdfErrors";
+import type { BrowseFilters } from "@shared/questionBrowse";
+
+/** Explicit larger selection for quiz/notebook; never implicitly uses page 1. */
+export async function getQuestionSelection(filters: Partial<BrowseFilters>, limit = Infinity, signal?: AbortSignal): Promise<Question[]> {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  let total: number | undefined;
+  for (let page = 0; ; page++) {
+    const result = await trpcClient.questions.browse.query({ filters, page, pageSize: 100 }, { signal });
+    if (total !== undefined && total !== result.total) throw new Error("A lista mudou durante a seleção. Atualize e tente novamente.");
+    total = result.total;
+    for (const row of result.rows) if (!seen.has(row.id) && ids.length < limit) { seen.add(row.id); ids.push(row.id); }
+    if (ids.length >= Math.min(limit, result.total)) break;
+    if (!result.rows.length) throw new Error("A lista mudou durante a seleção. Atualize e tente novamente.");
+  }
+  const questions: Question[] = [];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const data = await trpcClient.questions.details.query({ ids: ids.slice(offset, offset + 100) }, { signal });
+    questions.push(...data.map(row => mapQuestao(row as QuestaoRow)));
+  }
+  if (questions.length !== ids.length) throw new Error("Uma questão deixou de estar disponível. Atualize e tente novamente.");
+  return questions;
+}
 
 type QuestionDifficulty = Question["difficulty"];
 type QuestionSubject = Question["subject"];
@@ -32,6 +57,7 @@ type QuestaoRow = {
   enunciado?: string | null;
   enunciado_pos_imagem?: string | null;
   url_imagem?: string | null;
+  image_metadata?: Array<{ slot_id?: string; local?: string; alternativa?: string | null; texto_alternativo?: string; legenda?: string | null }> | null;
   formula?: string | null;
 
   a?: string | null;
@@ -51,6 +77,8 @@ type QuestaoRow = {
     label?: string | null;
     text?: string | null;
     imageUrl?: string | null;
+    imageAlt?: string | null;
+    imageCaption?: string | null;
   }> | null;
 
   a_url_imagem?: string | null;
@@ -192,6 +220,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
         label: String(option.label ?? id).trim().toUpperCase(),
         text,
         imageUrl,
+        imageAlt: normalizarTexto(option.imageAlt),
+        imageCaption: normalizarTexto(option.imageCaption),
       }];
     });
 
@@ -203,6 +233,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
   const altC = row.c ?? row.C ?? "";
   const altD = row.d ?? row.D ?? "";
   const altE = row.e ?? row.E ?? "";
+  const imageMeta = Array.isArray(row.image_metadata) ? row.image_metadata : [];
+  const optionMeta = (letter: string) => imageMeta.find((item) => item.local === "alternativa" && item.alternativa === letter);
 
   return [
     altA || row.a_url_imagem
@@ -211,6 +243,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "A",
           text: altA || undefined,
           imageUrl: row.a_url_imagem ?? undefined,
+          imageAlt: optionMeta("a")?.texto_alternativo,
+          imageCaption: optionMeta("a")?.legenda ?? undefined,
         }
       : null,
 
@@ -220,6 +254,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "B",
           text: altB || undefined,
           imageUrl: row.b_url_imagem ?? undefined,
+          imageAlt: optionMeta("b")?.texto_alternativo,
+          imageCaption: optionMeta("b")?.legenda ?? undefined,
         }
       : null,
 
@@ -229,6 +265,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "C",
           text: altC || undefined,
           imageUrl: row.c_url_imagem ?? undefined,
+          imageAlt: optionMeta("c")?.texto_alternativo,
+          imageCaption: optionMeta("c")?.legenda ?? undefined,
         }
       : null,
 
@@ -238,6 +276,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "D",
           text: altD || undefined,
           imageUrl: row.d_url_imagem ?? undefined,
+          imageAlt: optionMeta("d")?.texto_alternativo,
+          imageCaption: optionMeta("d")?.legenda ?? undefined,
         }
       : null,
 
@@ -247,6 +287,8 @@ function normalizarAlternativas(row: QuestaoRow): Question["options"] {
           label: "E",
           text: altE || undefined,
           imageUrl: row.e_url_imagem ?? undefined,
+          imageAlt: optionMeta("e")?.texto_alternativo,
+          imageCaption: optionMeta("e")?.legenda ?? undefined,
         }
       : null,
   ].filter(Boolean) as Question["options"];
@@ -260,10 +302,14 @@ export function mapQuestao(row: QuestaoRow): Question {
         const tipo = (r.tipo || "").toLowerCase().trim();
 
         if (tipo === "imagem") {
+          let metadata: { alt?: string; caption?: string } = {};
+          try { metadata = r.texto ? JSON.parse(r.texto) : {}; } catch { metadata = {}; }
           return {
             type: "imagem" as const,
             imageUrl: r.url_imagem ?? undefined,
             order: r.ordem ?? 0,
+            imageAlt: metadata.alt,
+            imageCaption: metadata.caption,
           };
         }
 
@@ -305,6 +351,8 @@ export function mapQuestao(row: QuestaoRow): Question {
   const subtopicsByTopic = normalizarAssuntosPorConteudo(
     row.assuntos_por_conteudo
   );
+  const imageMetadata = Array.isArray(row.image_metadata) ? row.image_metadata : [];
+  const statementImage = imageMetadata.find((item) => item.local === "enunciado" || item.local === "contexto");
 
   return {
     id: row.id,
@@ -326,6 +374,8 @@ export function mapQuestao(row: QuestaoRow): Question {
     statementAfterImage: row.enunciado_pos_imagem ?? undefined,
     formula: row.formula ?? undefined,
     imageUrl: row.url_imagem ?? undefined,
+    imageAlt: statementImage?.texto_alternativo,
+    imageCaption: statementImage?.legenda ?? undefined,
 
     options: normalizarAlternativas(row),
     correctOptionId: normalizarTexto(row.alternativa_correta)?.toLowerCase() ?? "",
@@ -344,8 +394,25 @@ export function mapQuestao(row: QuestaoRow): Question {
 }
 
 export async function exportQuestionsForPdf(filters: QuestionPdfFilters) {
-  const result = await trpcClient.questions.exportPdfData.mutate(filters);
-  return { ...result, questions: (result.rows as QuestaoRow[]).map(mapQuestao) };
+  const correlationId = filters.correlationId ?? crypto.randomUUID();
+  const started = performance.now();
+  let result;
+  try {
+    result = await trpcClient.questions.exportPdfData.mutate({ ...filters, correlationId });
+    logPdfStage("server_search", correlationId, performance.now() - started);
+  } catch (error) {
+    logPdfStage("server_search", correlationId, performance.now() - started, error);
+    throw error;
+  }
+  const mappingStarted = performance.now();
+  try {
+    const questions = (result.rows as QuestaoRow[]).map(mapQuestao);
+    logPdfStage("mapping", correlationId, performance.now() - mappingStarted);
+    return { ...result, questions };
+  } catch (error) {
+    logPdfStage("mapping", correlationId, performance.now() - mappingStarted, error);
+    throw new QuestionPdfError("Mapeamento PDF inválido", "As questões foram recebidas, mas não foi possível prepará-las para o PDF. Tente novamente.");
+  }
 }
 
 export async function getQuestions(
@@ -380,8 +447,8 @@ export async function getQuestions(
 
     return questions;
   } catch (error) {
-    console.error("Erro ao buscar questões:", error);
-    return [];
+    console.warn({ event: "question_list", outcome: "unavailable" });
+    throw error;
   }
 }
 

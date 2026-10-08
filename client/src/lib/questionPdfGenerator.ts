@@ -1,3 +1,6 @@
+import { loadPdfUnicodeFont } from "./questionPdfUnicodeFont";
+import { logPdfStage } from "./questionPdfDiagnostics";
+import { QuestionPdfError } from "./questionPdfErrors";
 import type { Question } from "@/types/question";
 import { normalizeMathSource, renderMathToMathMl } from "./mathRendering";
 import { buildPdfFileName, chunkAnswers, fitPdfImage, getQuestionPdfTags, QUESTION_PDF_LAYOUT } from "./questionPdfLayout";
@@ -34,26 +37,34 @@ function rgb(hex: string) {
   return [0, 2, 4].map(index => Number.parseInt(full.slice(index, index + 2), 16) / 255).map(value => value.toFixed(3)).join(" ");
 }
 
-function pdfString(value: string) {
+// WinAnsi is Windows-1252, not a direct truncation of Unicode to one byte.
+const winAnsiExtras = "€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ";
+function winAnsiCode(char: string) {
+  const code = char.codePointAt(0)!;
+  if (code === 10 || (code >= 32 && code <= 126) || (code >= 160 && code <= 255)) return code;
+  const index = winAnsiExtras.indexOf(char);
+  return index >= 0 && !/^[\u0080-\u009f]$/.test(char) ? index + 128 : undefined;
+}
+function pdfString(value: string, rawBytes = false) {
   return `(${Array.from(value).map(char => {
-    const code = char.charCodeAt(0);
+    const code = rawBytes ? char.charCodeAt(0) : winAnsiCode(char);
+    if (code === undefined || code > 255) throw new Error(`Caractere sem codificação PDF: ${char}`);
     if (char === "(" || char === ")" || char === "\\") return `\\${char}`;
     if (code === 10) return "\\n";
     if (code >= 32 && code <= 126) return char;
-    if (code >= 127 && code <= 255) return `\\${code.toString(8).padStart(3, "0")}`;
-    return "?";
+    return `\\${code.toString(8).padStart(3, "0")}`;
   }).join("")})`;
 }
 
 function pdfUnicode(value: string) {
   const bytes = [0xfe, 0xff];
-  for (const char of value) { const code = char.charCodeAt(0); bytes.push(code >> 8, code & 255); }
+  for (let i = 0; i < value.length; i++) { const code = value.charCodeAt(i); bytes.push(code >> 8, code & 255); }
   return `<${bytes.map(byte => byte.toString(16).padStart(2, "0")).join("").toUpperCase()}>`;
 }
 
 const greekSymbolMap: Record<string, string> = {
   "α": "a", "β": "b", "γ": "g", "δ": "d", "ε": "e", "ζ": "z", "η": "h", "θ": "q", "ι": "i", "κ": "k", "λ": "l", "μ": "m", "ν": "n", "ξ": "x", "ο": "o", "π": "p", "ρ": "r", "σ": "s", "τ": "t", "υ": "u", "φ": "f", "χ": "c", "ψ": "y", "ω": "w",
-  "Γ": "G", "Δ": "D", "Θ": "Q", "Λ": "L", "Ξ": "X", "Π": "P", "Σ": "S", "Φ": "F", "Ψ": "Y", "Ω": "W", "∑": "S", "∏": "P", "∞": "¥", "±": "±", "×": "´", "≤": "£", "≥": "³", "≠": "¹", "∈": "Î", "→": "®", "−": "-", "′": "'", "·": "×",
+  "Γ": "G", "Δ": "D", "Θ": "Q", "Λ": "L", "Ξ": "X", "Π": "P", "Σ": "S", "Φ": "F", "Ψ": "Y", "Ω": "W", "∑": "å", "∏": "Õ", "∞": "¥", "±": "±", "×": "´", "≤": "£", "≥": "³", "≠": "¹", "∈": "Î", "∉": "Ï", "√": "Ö", "→": "®", "−": "-", "′": "¢", "·": "×",
 };
 
 // Widths from Adobe's Helvetica/Helvetica-Bold AFM files, in 1/1000 em. PDF's
@@ -72,6 +83,14 @@ const HELVETICA_BOLD_WIDTHS: Record<string, number> = {
   A: 722, B: 722, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 556, K: 722, L: 611, M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667, T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611,
   a: 556, b: 611, c: 556, d: 611, e: 556, f: 333, g: 611, h: 611, i: 278, j: 278, k: 556, l: 278, m: 889, n: 611, o: 611, p: 611, q: 611, r: 389, s: 556, t: 333, u: 611, v: 556, w: 778, x: 556, y: 556, z: 500,
 };
+
+// Drawing advances use the actual base-font metrics between font runs only.
+// Wrapping, line heights and pagination continue using textWidth unchanged.
+const SYMBOL_WIDTHS: Record<number, number> = {"32":250,"33":333,"34":713,"35":500,"36":549,"37":833,"38":778,"39":439,"40":333,"41":333,"42":500,"43":549,"44":250,"45":549,"46":250,"47":278,"48":500,"49":500,"50":500,"51":500,"52":500,"53":500,"54":500,"55":500,"56":500,"57":500,"58":278,"59":278,"60":549,"61":549,"62":549,"63":444,"64":549,"65":722,"66":667,"67":722,"68":612,"69":611,"70":763,"71":603,"72":722,"73":333,"74":631,"75":722,"76":686,"77":889,"78":722,"79":722,"80":768,"81":741,"82":556,"83":592,"84":611,"85":690,"86":439,"87":768,"88":645,"89":795,"90":611,"91":333,"92":863,"93":333,"94":658,"95":500,"96":500,"97":631,"98":549,"99":549,"100":494,"101":439,"102":521,"103":411,"104":603,"105":329,"106":603,"107":549,"108":549,"109":576,"110":521,"111":549,"112":549,"113":521,"114":549,"115":603,"116":439,"117":576,"118":713,"119":686,"120":493,"121":686,"122":494,"123":480,"124":200,"125":480,"126":549,"160":750,"161":620,"162":247,"163":549,"164":167,"165":713,"166":500,"167":753,"168":753,"169":753,"170":753,"171":1042,"172":987,"173":603,"174":987,"175":603,"176":400,"177":549,"178":411,"179":549,"180":549,"181":713,"182":494,"183":460,"184":549,"185":549,"186":549,"187":549,"188":1000,"189":603,"190":1000,"191":658,"192":823,"193":686,"194":795,"195":987,"196":768,"197":768,"198":823,"199":768,"200":768,"201":713,"202":713,"203":713,"204":713,"205":713,"206":713,"207":713,"208":768,"209":713,"210":790,"211":790,"212":890,"213":823,"214":549,"215":250,"216":713,"217":603,"218":603,"219":1042,"220":987,"221":603,"222":987,"223":603,"224":494,"225":329,"226":790,"227":790,"228":786,"229":713,"230":384,"231":384,"232":384,"233":384,"234":384,"235":384,"236":494,"237":494,"238":494,"239":494,"241":329,"242":274,"243":686,"244":686,"245":686,"246":384,"247":384,"248":384,"249":384,"250":384,"251":384,"252":494,"253":494,"254":494};
+const WINANSI_DRAW_WIDTHS: Record<number, number>[] = [{"128":556,"129":350,"130":222,"131":556,"132":333,"133":1000,"134":556,"135":556,"136":333,"137":1000,"138":667,"139":333,"140":1000,"141":350,"142":611,"143":350,"144":350,"145":222,"146":222,"147":333,"148":333,"149":350,"150":556,"151":1000,"152":333,"153":1000,"154":500,"155":333,"156":944,"157":350,"158":500,"159":667,"160":278,"161":333,"162":556,"163":556,"164":556,"165":556,"166":260,"167":556,"168":333,"169":737,"170":370,"171":556,"172":584,"173":333,"174":737,"175":333,"176":400,"177":584,"178":333,"179":333,"180":333,"181":556,"182":537,"183":278,"184":333,"185":333,"186":365,"187":556,"188":834,"189":834,"190":834,"191":611,"192":667,"193":667,"194":667,"195":667,"196":667,"197":667,"198":1000,"199":722,"200":667,"201":667,"202":667,"203":667,"204":278,"205":278,"206":278,"207":278,"208":722,"209":722,"210":778,"211":778,"212":778,"213":778,"214":778,"215":584,"216":778,"217":722,"218":722,"219":722,"220":722,"221":667,"222":667,"223":611,"224":556,"225":556,"226":556,"227":556,"228":556,"229":556,"230":889,"231":500,"232":556,"233":556,"234":556,"235":556,"236":278,"237":278,"238":278,"239":278,"240":556,"241":556,"242":556,"243":556,"244":556,"245":556,"246":556,"247":584,"248":611,"249":556,"250":556,"251":556,"252":556,"253":500,"254":556,"255":500},{"128":556,"129":350,"130":278,"131":556,"132":500,"133":1000,"134":556,"135":556,"136":333,"137":1000,"138":667,"139":333,"140":1000,"141":350,"142":611,"143":350,"144":350,"145":278,"146":278,"147":500,"148":500,"149":350,"150":556,"151":1000,"152":333,"153":1000,"154":556,"155":333,"156":944,"157":350,"158":500,"159":667,"160":278,"161":333,"162":556,"163":556,"164":556,"165":556,"166":280,"167":556,"168":333,"169":737,"170":370,"171":556,"172":584,"173":333,"174":737,"175":333,"176":400,"177":584,"178":333,"179":333,"180":333,"181":611,"182":556,"183":278,"184":333,"185":333,"186":365,"187":556,"188":834,"189":834,"190":834,"191":611,"192":722,"193":722,"194":722,"195":722,"196":722,"197":722,"198":1000,"199":722,"200":667,"201":667,"202":667,"203":667,"204":278,"205":278,"206":278,"207":278,"208":722,"209":722,"210":778,"211":778,"212":778,"213":778,"214":778,"215":584,"216":778,"217":722,"218":722,"219":722,"220":722,"221":667,"222":667,"223":611,"224":556,"225":556,"226":556,"227":556,"228":556,"229":556,"230":889,"231":556,"232":556,"233":556,"234":556,"235":556,"236":278,"237":278,"238":278,"239":278,"240":611,"241":611,"242":611,"243":611,"244":611,"245":611,"246":611,"247":584,"248":611,"249":611,"250":611,"251":611,"252":611,"253":556,"254":611,"255":556}];
+function drawnTextWidth(value: string, size: number, bold: boolean) {
+  return Array.from(value).reduce((sum, char) => sum + (WINANSI_DRAW_WIDTHS[bold ? 1 : 0][winAnsiCode(char)!] ?? textWidth(char, 1000, bold)) * size / 1000, 0);
+}
 
 function winAnsiBaseCharacter(char: string) {
   return char.normalize("NFD").replace(/[\u0300-\u036f]/g, "").charAt(0) || "?";
@@ -131,6 +150,8 @@ export function buildPdfLogoForm(svg: string) {
 export class VectorPdf {
   pages: Page[] = [];
   images: PdfImage[] = [];
+  private unicodeChars = new Map<string, number>();
+  private unicodeRuns: { marker: string; char: string; width: number }[] = [];
   page!: Page;
   constructor(private readonly logoForm: string) {}
 
@@ -138,15 +159,45 @@ export class VectorPdf {
   command(value: string) { this.page.commands.push(value); }
   text(value: string, x: number, top: number, size = 10.5, bold = false, color = BODY, symbol = false) {
     if (!value) return;
-    this.command(`BT /${symbol ? "FS" : bold ? "FB" : "FR"} ${size.toFixed(2)} Tf ${rgb(color)} rg 1 0 0 1 ${x.toFixed(2)} ${(PAGE_HEIGHT - top).toFixed(2)} Tm ${pdfString(value)} Tj ET`);
+    if (!symbol && Array.from(value).some(char => winAnsiCode(char) === undefined)) {
+      let cursor = x; let buffer = "";
+      const flush = () => { if (buffer) { this.text(buffer, cursor, top, size, bold, color); cursor += drawnTextWidth(buffer, size, bold); buffer = ""; } };
+      for (const char of value) {
+        if (winAnsiCode(char) !== undefined) { buffer += char; continue; }
+        flush();
+        const mapped = greekSymbolMap[char];
+        this.command(`/Span << /ActualText ${pdfUnicode(char)} >> BDC`);
+        if (mapped) this.symbolText(mapped, cursor, top, size, color, textWidth(char, size, bold));
+        else this.unicodeText(char, cursor, top, size, bold, color);
+        this.command("EMC");
+        cursor += textWidth(char, size, bold);
+      }
+      flush(); return;
+    }
+    this.command(`BT /${symbol ? "FS" : bold ? "FB" : "FR"} ${size.toFixed(2)} Tf ${rgb(color)} rg 1 0 0 1 ${x.toFixed(2)} ${(PAGE_HEIGHT - top).toFixed(2)} Tm ${pdfString(value, symbol)} Tj ET`);
+  }
+  private symbolText(mapped: string, x: number, top: number, size: number, color: string, advance: number) {
+    const width = SYMBOL_WIDTHS[mapped.charCodeAt(0)];
+    this.command(`q BT ${(advance / (width * size / 1000) * 100).toFixed(5)} Tz ET`);
+    this.text(mapped, x, top, size, false, color, true);
+    this.command("Q");
+  }
+  private unicodeText(char: string, x: number, top: number, size: number, bold: boolean, color: string) {
+    let cid = this.unicodeChars.get(char);
+    if (cid === undefined) { cid = this.unicodeChars.size + 1; this.unicodeChars.set(char, cid); }
+    const marker = `__unicode_scale_${this.unicodeRuns.length}__`;
+    this.unicodeRuns.push({ marker, char, width: textWidth(char, 1000, bold) });
+    this.command(`q BT /FU ${size.toFixed(2)} Tf ${marker} Tz ${rgb(color)} rg 1 0 0 1 ${x.toFixed(2)} ${(PAGE_HEIGHT - top).toFixed(2)} Tm <${cid.toString(16).padStart(4, "0")}> Tj ET Q`);
   }
   mixedText(value: string, x: number, top: number, size: number, color: string) {
     let cursor = x; let buffer = "";
     const flush = () => { if (buffer) { this.text(buffer, cursor, top, size, false, color); cursor += textWidth(buffer, size); buffer = ""; } };
     for (const char of value) {
       const mapped = greekSymbolMap[char];
-      if (mapped) { flush(); this.text(mapped, cursor, top, size, false, color, true); cursor += size * 0.6; }
-      else buffer += char;
+      if (mapped) {
+        flush(); this.command(`/Span << /ActualText ${pdfUnicode(char)} >> BDC`);
+        this.symbolText(mapped, cursor, top, size, color, size * 0.6); this.command("EMC"); cursor += size * 0.6;
+      } else buffer += char;
     }
     flush();
   }
@@ -167,7 +218,13 @@ export class VectorPdf {
     this.page.images.add(index);
     this.command(`q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${x.toFixed(2)} ${(PAGE_HEIGHT - top - height).toFixed(2)} cm /Im${index} Do Q`);
   }
-  blob(subject: string) {
+  async blob(subject: string, onFontLoaded?: (durationMs: number, error?: unknown) => void) {
+    const fontStarted = performance.now();
+    let unicodeFont: Awaited<ReturnType<typeof loadPdfUnicodeFont>> | null;
+    try { unicodeFont = this.unicodeChars.size ? await loadPdfUnicodeFont() : null; }
+    catch (error) { onFontLoaded?.(performance.now() - fontStarted, error); throw error; }
+    onFontLoaded?.(performance.now() - fontStarted);
+    const unicodeGlyphs = Array.from(this.unicodeChars, ([char, cid]) => ({ char, cid, ...unicodeFont!.glyph(char) }));
     const objects: Uint8Array[] = [];
     const put = (id: number, value: string | Uint8Array) => { objects[id - 1] = typeof value === "string" ? enc.encode(value) : value; };
     put(1, "<< /Type /Catalog /Pages 2 0 R >>");
@@ -182,15 +239,38 @@ export class VectorPdf {
       const header = enc.encode(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.bytes.length} >>\nstream\n`);
       put(imageStart + index, concat([header, image.bytes, enc.encode("\nendstream")]));
     });
-    const pageStart = imageStart + this.images.length;
+    let pageStart = imageStart + this.images.length;
+    const streamObject = (id: number, bytes: Uint8Array, extra = "") => put(id, concat([enc.encode(`<< /Length ${bytes.length} ${extra} >>\nstream\n`), bytes, enc.encode("\nendstream")]));
+    const cmap = (entries: string[], bytes: number) => enc.encode(`/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def /CMapName /Unicode def /CMapType 2 def 1 begincodespacerange <${"00".repeat(bytes)}> <${"ff".repeat(bytes)}> endcodespacerange\n${Array.from({ length: Math.ceil(entries.length / 100) }, (_, i) => { const batch = entries.slice(i * 100, i * 100 + 100); return `${batch.length} beginbfchar\n${batch.join("\n")}\nendbfchar`; }).join("\n")}\nendcmap CMapName currentdict /CMap defineresource pop end end`);
+    // Symbol has its own encoding; map the visible glyphs back to Unicode.
+    const symbolCmapId = pageStart++;
+    const symbolEntries = new Map<string, string>();
+    for (const [char, byte] of Object.entries(greekSymbolMap)) if (!symbolEntries.has(byte)) symbolEntries.set(byte, char);
+    streamObject(symbolCmapId, cmap(Array.from(symbolEntries, ([byte, char]) => `<${byte.charCodeAt(0).toString(16).padStart(2, "0")}> ${pdfUnicode(char).replace("FEFF", "")}`), 1));
+    put(6, `<< /Type /Font /Subtype /Type1 /BaseFont /Symbol /ToUnicode ${symbolCmapId} 0 R >>`);
+    let unicodeResource = "";
+    if (unicodeFont) {
+      const fontId = pageStart; const descendantId = pageStart + 1; const descriptorId = pageStart + 2;
+      const fileId = pageStart + 3; const mapId = pageStart + 4; const cmapId = pageStart + 5; pageStart += 6;
+      unicodeResource = `/FU ${fontId} 0 R`;
+      put(fontId, `<< /Type /Font /Subtype /Type0 /BaseFont /DejaVuSans /Encoding /Identity-H /DescendantFonts [${descendantId} 0 R] /ToUnicode ${cmapId} 0 R >>`);
+      put(descendantId, `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /DejaVuSans /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${descriptorId} 0 R /CIDToGIDMap ${mapId} 0 R /W [1 [${unicodeGlyphs.map(g => g.width.toFixed(4)).join(" ")}]] >>`);
+      put(descriptorId, `<< /Type /FontDescriptor /FontName /DejaVuSans /Flags 32 /FontBBox [-1021 -463 1793 1233] /ItalicAngle 0 /Ascent 928 /Descent -236 /CapHeight 729 /StemV 80 /FontFile2 ${fileId} 0 R >>`);
+      streamObject(fileId, unicodeFont.bytes, `/Length1 ${unicodeFont.bytes.length}`);
+      const gids = new Uint8Array((unicodeGlyphs.length + 1) * 2);
+      for (const glyph of unicodeGlyphs) { gids[glyph.cid * 2] = glyph.id >> 8; gids[glyph.cid * 2 + 1] = glyph.id & 255; }
+      streamObject(mapId, gids);
+      streamObject(cmapId, cmap(unicodeGlyphs.map(g => `<${g.cid.toString(16).padStart(4, "0")}> ${pdfUnicode(g.char).replace("FEFF", "")}`), 2));
+    }
+    const scales = new Map(this.unicodeRuns.map(run => [run.marker, (unicodeFont!.glyph(run.char).width ? run.width / unicodeFont!.glyph(run.char).width * 100 : 100).toFixed(5)]));
     const pageIds: number[] = [];
     this.pages.forEach((page, index) => {
       const contentId = pageStart + index * 2;
       const pageId = contentId + 1; pageIds.push(pageId);
-      const stream = page.commands.join("\n");
+      const stream = page.commands.join("\n").replace(/__unicode_scale_\d+__/g, marker => scales.get(marker)!);
       put(contentId, `<< /Length ${enc.encode(stream).length} >>\nstream\n${stream}\nendstream`);
       const xObjects = Array.from(page.images).map(image => `/Im${image} ${imageStart + image} 0 R`).join(" ");
-      put(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /FR 4 0 R /FB 5 0 R /FS 6 0 R >> /ExtGState << /GS1 7 0 R >> /XObject << /Logo 8 0 R ${xObjects} >> >> /Contents ${contentId} 0 R >>`);
+      put(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /FR 4 0 R /FB 5 0 R /FS 6 0 R ${unicodeResource} >> /ExtGState << /GS1 7 0 R >> /XObject << /Logo 8 0 R ${xObjects} >> >> /Contents ${contentId} 0 R >>`);
     });
     put(2, `<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] >>`);
     const header = enc.encode("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n"); const parts = [header]; const offsets = [0]; let cursor = header.length;
@@ -223,15 +303,52 @@ function parseMathMl(value: string): MathTree {
   return root;
 }
 
+// KaTeX represents stretchy braces as U+23DF/U+23DE in MathML. The embedded
+// prose font lacks those glyphs; draw the actual brace to the expression width.
+function horizontalBraceBox(width: number, size: number, under: boolean): MathBox {
+  const height = size * 0.45;
+  const half = width / 2;
+  const bend = Math.min(size * 0.55, width / 4);
+  return { width, height, baseline: height, draw: (pdf, x, top, color) => {
+    const y = PAGE_HEIGHT - top - (under ? 0 : height);
+    pdf.command(`q 1 0 0 ${under ? -1 : 1} ${x.toFixed(2)} ${y.toFixed(2)} cm ${rgb(color)} RG 0.65 w
+0 0 m 0 ${height * 0.4} ${bend * 0.4} ${height * 0.5} ${bend} ${height * 0.5} c
+${half - bend} ${height * 0.5} l ${half - bend * 0.3} ${height * 0.5} ${half} ${height * 0.65} ${half} ${height} c
+${half} ${height * 0.65} ${half + bend * 0.3} ${height * 0.5} ${half + bend} ${height * 0.5} c
+${width - bend} ${height * 0.5} l ${width - bend * 0.4} ${height * 0.5} ${width} ${height * 0.4} ${width} 0 c S Q`);
+  } };
+}
+
+function hasHorizontalBrace(node: MathTree) {
+  return node.children.length === 2 && node.children[1].tag === "mo"
+    && ((node.tag === "munder" && node.children[1].text.trim() === "⏟")
+      || (node.tag === "mover" && node.children[1].text.trim() === "⏞"));
+}
+
 function mathBox(node: MathTree, size: number): MathBox {
+  if (["munder", "mover"].includes(node.tag) && node.children.length === 2
+    && (hasHorizontalBrace(node) || hasHorizontalBrace(node.children[0]))) {
+    const under = node.tag === "munder";
+    const base = mathBox(node.children[0], size);
+    const decoration = node.children[1];
+    const brace = decoration.tag === "mo" && decoration.text.trim() === (under ? "⏟" : "⏞");
+    const annotation = brace ? horizontalBraceBox(base.width, size, under) : mathBox(decoration, size * 0.7);
+    const width = Math.max(base.width, annotation.width);
+    const gap = brace ? 1 : 2;
+    const offset = annotation.height + gap;
+    return { width, height: base.height + offset, baseline: base.baseline + (under ? 0 : offset), draw: (pdf, x, top, color) => {
+      base.draw(pdf, x + (width - base.width) / 2, top + (under ? 0 : offset), color);
+      annotation.draw(pdf, x + (width - annotation.width) / 2, top + (under ? base.height + gap : 0), color);
+    } };
+  }
   const childSize = node.tag === "mfrac" ? size * 0.82 : ["msup", "msub", "msubsup"].includes(node.tag) ? size * 0.7 : size;
-  const children = node.children.map((child, index) => mathBox(child, index === 0 && ["msup", "msub", "msubsup"].includes(node.tag) ? size : childSize)); const leaf = node.text.trim();
+  const children = node.children.map((child, index) => mathBox(child, index === 0 && ["msup", "msub", "msubsup"].includes(node.tag) ? size : childSize)); const leaf = node.tag === "mtext" ? node.text : node.text.trim();
   if (leaf && !children.length) {
     const width = Math.max(size * 0.28, textWidth(leaf, size));
     return { width, height: size * 1.18, baseline: size * 0.88, draw: (pdf, x, top, color) => pdf.mixedText(leaf, x, top + size * 0.88, size, color) };
   }
   if (node.tag === "mfrac") {
-    const numerator = children[0] ?? mathBox({ tag: "mn", text: "?", children: [] }, size * 0.82); const denominator = children[1] ?? numerator; const width = Math.max(numerator.width, denominator.width) + 6; const gap = 3;
+    const numerator = children[0] ?? mathBox({ tag: "mn", text: "", children: [] }, size * 0.82); const denominator = children[1] ?? numerator; const width = Math.max(numerator.width, denominator.width) + 6; const gap = 3;
     return { width, height: numerator.height + denominator.height + gap * 2, baseline: numerator.height + gap, draw: (pdf, x, top, color) => { numerator.draw(pdf, x + (width - numerator.width) / 2, top, color); const lineTop = top + numerator.height + gap; pdf.line(x, lineTop, x + width, lineTop, color, 0.65); denominator.draw(pdf, x + (width - denominator.width) / 2, lineTop + gap, color); } };
   }
   if (node.tag === "msqrt" || node.tag === "mroot") {
@@ -257,10 +374,17 @@ function sequence(children: MathBox[], size: number, own = ""): MathBox {
 export function measurePdfMath(value: string, fontSize = 10.5) {
   try {
     const key = `${fontSize}|${value}`; const cached = PDF_MATH_CACHE.get(key); if (cached) return cached;
-    const tree = parseMathMl(renderMathToMathMl(normalizeMathSource(value))); const box = mathBox(tree, fontSize); PDF_MATH_CACHE.set(key, box); return box;
+    const tree = parseMathMl(renderMathToMathMl(normalizeMathSource(value)));
+    const rendered = mathBox(tree, fontSize);
+    const box: MathBox = { ...rendered, draw: (pdf, x, top, color) => {
+      pdf.command(`/Span << /ActualText ${pdfUnicode(mathTreeToText(tree))} >> BDC`);
+      rendered.draw(pdf, x, top, color);
+      pdf.command("EMC");
+    } };
+    PDF_MATH_CACHE.set(key, box); return box;
   } catch (error) {
     if (import.meta.env?.DEV) console.warn("Fórmula inválida no PDF; usando texto seguro.", { formula: value, error });
-    return mathBox({ tag: "mtext", text: value.replace(/[{}$]/g, ""), children: [] }, fontSize);
+    return mathBox({ tag: "mtext", text: value, children: [] }, fontSize);
   }
 }
 
@@ -291,7 +415,7 @@ const subscriptMap: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂
 function mappedScript(value: string, map: Record<string, string>, fallback: "^" | "_") { const converted = Array.from(value).map(char => map[char]).join(""); return converted.length === value.length ? converted : `${fallback}(${value})`; }
 function mathTreeToText(node: MathTree): string {
   if (node.tag === "annotation" || node.tag === "annotation-xml") return "";
-  const children = node.children.map(mathTreeToText); const own = node.text.trim();
+  const children = node.children.map(mathTreeToText); const own = node.tag === "mtext" ? node.text : node.text.trim();
   if (node.tag === "mspace") return " ";
   if (node.tag === "mfrac") return `(${children[0] ?? ""})/(${children[1] ?? ""})`;
   if (node.tag === "msqrt") return `√(${children.join("")})`;
@@ -318,7 +442,7 @@ export function getPdfMathVectorSize(viewBoxWidth: number, viewBoxHeight: number
 export async function buildVectorPdfTestDocument(text = "Enunciado selecionável", pageCount = 1, logoSvg = '<svg viewBox="0 0 512 512"><circle cx="256" cy="256" r="238" fill="#04284d"/></svg>') {
   const pdf = new VectorPdf(buildPdfLogoForm(logoSvg));
   for (let page = 0; page < pageCount; page += 1) { pdf.addPage(); pdf.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, IVORY); pdf.watermark(); pdf.logo(MARGIN, 19, 34); pdf.text(text, MARGIN, 100, 11, false, BODY); }
-  return new Uint8Array(await pdf.blob("Teste vetorial").arrayBuffer());
+  return new Uint8Array(await (await pdf.blob("Teste vetorial")).arrayBuffer());
 }
 
 async function loadPdfImage(url?: string): Promise<PdfImage | null> {
@@ -334,11 +458,36 @@ async function loadPdfImage(url?: string): Promise<PdfImage | null> {
   } catch { return null; }
 }
 
-export async function generateQuestionPdf(input: { questions: Question[]; filterSummary: string; logoUrl?: string }) {
+type QuestionPdfInput = { questions: Question[]; filterSummary: string; logoUrl?: string; correlationId?: string };
+export async function generateQuestionPdf(input: QuestionPdfInput) {
+  const correlationId = input.correlationId ?? crypto.randomUUID();
+  const started = performance.now();
+  try { return await generateQuestionPdfDocument({ ...input, correlationId }); }
+  catch (error) {
+    logPdfStage("generation", correlationId, performance.now() - started, error);
+    throw error;
+  }
+}
+
+async function generateQuestionPdfDocument(input: QuestionPdfInput) {
+  const correlationId = input.correlationId ?? crypto.randomUUID();
+  const started = performance.now();
+  let resourceDurationMs = 0;
+  const resource = async <T,>(load: () => Promise<T>): Promise<T> => {
+    const resourceStarted = performance.now();
+    try { return await load(); }
+    catch (error) {
+      logPdfStage("resources", correlationId, performance.now() - resourceStarted, error);
+      throw error;
+    } finally { resourceDurationMs += performance.now() - resourceStarted; }
+  };
   if (!input.questions.length) throw new Error("Nenhuma questão encontrada para exportar.");
-  const logoResponse = await fetch(input.logoUrl ?? "/brand/projeto-vetor-logo.svg");
-  if (!logoResponse.ok) throw new Error("Não foi possível carregar o logo do Projeto Vetor para o PDF.");
-  const pdf = new VectorPdf(buildPdfLogoForm(await logoResponse.text())); let y = CONTENT_TOP; let pageNumber = 0;
+  const logoSvg = await resource(async () => {
+    const response = await fetch(input.logoUrl ?? "/brand/projeto-vetor-logo.svg");
+    if (!response.ok) throw new QuestionPdfError("Não foi possível carregar o logo do Projeto Vetor para o PDF. Verifique sua conexão e tente novamente.");
+    return response.text();
+  });
+  const pdf = new VectorPdf(buildPdfLogoForm(logoSvg)); let y = CONTENT_TOP; let pageNumber = 0;
   const startPage = () => { pdf.addPage(); pageNumber += 1; pdf.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, IVORY); pdf.watermark(); pdf.logo(MARGIN, 19, 34); pdf.text("PROJETO VETOR", MARGIN + 43, 31, 13, true, NAVY); pdf.text("LISTA PERSONALIZADA", MARGIN + 43, 48, 8.5, true, CYAN); pdf.line(MARGIN, 61, PAGE_WIDTH - MARGIN, 61, "#b9d8df", 0.8); y = CONTENT_TOP; };
   const footer = () => { pdf.text("projetovetor • lista personalizada", MARGIN, 812, 7.5, false, NAVY); pdf.text(`Página ${pageNumber}`, PAGE_WIDTH - 78, 812, 7.5, false, NAVY); };
   const ensure = (height: number) => { if (y + height > CONTENT_BOTTOM) { footer(); startPage(); } };
@@ -391,7 +540,8 @@ export async function generateQuestionPdf(input: { questions: Question[]; filter
   };
 
   const drawQuestionImage = async (url: string | undefined, maxWidth: number, maxHeight: number, x: number) => {
-    const image = await loadPdfImage(url); if (!image) { ensure(18); pdf.text("Imagem indisponível", x, y + 11, 8.5, false, "#64748b"); y += 18; return; }
+    const image = await resource(() => loadPdfImage(url));
+    if (!image) { ensure(18); pdf.text("Imagem indisponível", x, y + 11, 8.5, false, "#64748b"); y += 18; return; }
     const fitted = fitPdfImage(image.width, image.height, maxWidth, maxHeight); ensure(fitted.height + 8); pdf.addImage(image, x, y, fitted.width, fitted.height); y += fitted.height + 8;
   };
 
@@ -424,6 +574,26 @@ export async function generateQuestionPdf(input: { questions: Question[]; filter
     startPage(); pdf.text("GABARITO", MARGIN, y + 15, 16, true, NAVY); y += 34; const columnWidth = (PAGE_WIDTH - MARGIN * 2) / 5;
     columns.forEach((column, columnIndex) => column.forEach((item, row) => { const top = y + row * 21; if (row % 2) pdf.rect(MARGIN + columnIndex * columnWidth, top - 11, columnWidth - 5, 18, "#f0f8f8"); pdf.text(`${item.number}. ${item.answer}`, MARGIN + columnIndex * columnWidth + 6, top + 2, 10, true, NAVY); })); footer();
   }
-  const blob = pdf.blob(input.filterSummary); const fileName = buildPdfFileName(); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = fileName; link.hidden = true; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  return { fileName, pages: pdf.pages.length, questions: input.questions.length };
+  const blob = await pdf.blob(input.filterSummary, (durationMs, error) => {
+    resourceDurationMs += durationMs;
+    if (error) logPdfStage("resources", correlationId, durationMs, error);
+  });
+  const generationDurationMs = performance.now() - started - resourceDurationMs;
+  logPdfStage("resources", correlationId, resourceDurationMs);
+  logPdfStage("generation", correlationId, generationDurationMs);
+  const downloadStarted = performance.now();
+  const fileName = buildPdfFileName();
+  let url: string | undefined;
+  try {
+    url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = fileName; link.hidden = true;
+    document.body.appendChild(link); link.click(); link.remove();
+    logPdfStage("download", correlationId, performance.now() - downloadStarted);
+  } catch (error) {
+    logPdfStage("download", correlationId, performance.now() - downloadStarted, error);
+    throw new QuestionPdfError("Download do PDF não iniciado", "O PDF foi montado, mas não foi possível iniciar o download. Tente novamente.");
+  } finally {
+    if (url) window.setTimeout(() => URL.revokeObjectURL(url!), 1_000);
+  }
+  return { fileName, pages: pdf.pages.length, questions: input.questions.length, resourceDurationMs, generationDurationMs };
 }

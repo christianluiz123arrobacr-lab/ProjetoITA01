@@ -35,7 +35,7 @@ export type VectorPdfPoint = { x: number; y: number };
 export type VectorPdfElement = {
   tool: "pen" | "eraser" | "shape" | "text" | "image" | "meta";
   brush?: "pen" | "brush" | "highlighter";
-  shape?: "line" | "arrow" | "rectangle" | "ellipse" | "triangle";
+  shape?: "line" | "arrow" | "rectangle" | "square" | "ellipse" | "circle" | "triangle" | "diamond" | "pentagon";
   color?: string;
   size?: number;
   opacity?: number;
@@ -97,11 +97,20 @@ export function buildVectorStudyCanvasPdf(input: {
         const p = element.points[0];
         commands.push(`BT /F1 ${Math.max(7, (element.size ?? 16) * sy).toFixed(2)} Tf ${point(p)} Td (${pdfText(element.text ?? "")}) Tj ET`);
       } else if (element.tool === "shape" && element.points.length >= 2) {
-        const a = element.points[0], z = element.points[element.points.length - 1];
-        if (element.shape === "rectangle") commands.push(`${(Math.min(a.x,z.x)*sx).toFixed(2)} ${(paper.height-(Math.max(a.y,z.y)-yOffset)*sy).toFixed(2)} ${(Math.abs(z.x-a.x)*sx).toFixed(2)} ${(Math.abs(z.y-a.y)*sy).toFixed(2)} re S`);
-        else if (element.shape === "ellipse") {
+        let a = element.points[0], z = element.points[element.points.length - 1];
+        if (element.shape === "square" || element.shape === "circle") {
+          const side=Math.max(Math.abs(z.x-a.x),Math.abs(z.y-a.y)),cx=(a.x+z.x)/2,cy=(a.y+z.y)/2;
+          a={x:cx-side/2,y:cy-side/2}; z={x:cx+side/2,y:cy+side/2};
+        }
+        if (element.shape === "rectangle" || element.shape === "square") commands.push(`${(Math.min(a.x,z.x)*sx).toFixed(2)} ${(paper.height-(Math.max(a.y,z.y)-yOffset)*sy).toFixed(2)} ${(Math.abs(z.x-a.x)*sx).toFixed(2)} ${(Math.abs(z.y-a.y)*sy).toFixed(2)} re S`);
+        else if (element.shape === "ellipse" || element.shape === "circle") {
           const cx=(a.x+z.x)/2*sx, cy=paper.height-((a.y+z.y)/2-yOffset)*sy, rx=Math.abs(z.x-a.x)/2*sx, ry=Math.abs(z.y-a.y)/2*sy, k=.5522848;
           commands.push(`${(cx-rx).toFixed(2)} ${cy.toFixed(2)} m ${(cx-rx).toFixed(2)} ${(cy+k*ry).toFixed(2)} ${(cx-k*rx).toFixed(2)} ${(cy+ry).toFixed(2)} ${cx.toFixed(2)} ${(cy+ry).toFixed(2)} c ${(cx+k*rx).toFixed(2)} ${(cy+ry).toFixed(2)} ${(cx+rx).toFixed(2)} ${(cy+k*ry).toFixed(2)} ${(cx+rx).toFixed(2)} ${cy.toFixed(2)} c ${(cx+rx).toFixed(2)} ${(cy-k*ry).toFixed(2)} ${(cx+k*rx).toFixed(2)} ${(cy-ry).toFixed(2)} ${cx.toFixed(2)} ${(cy-ry).toFixed(2)} c ${(cx-k*rx).toFixed(2)} ${(cy-ry).toFixed(2)} ${(cx-rx).toFixed(2)} ${(cy-k*ry).toFixed(2)} ${(cx-rx).toFixed(2)} ${cy.toFixed(2)} c S`);
+        } else if (["triangle", "diamond", "pentagon"].includes(element.shape ?? "")) {
+          const count=element.shape === "triangle" ? 3 : element.shape === "diamond" ? 4 : 5;
+          const cx=(a.x+z.x)/2, cy=(a.y+z.y)/2, rx=Math.abs(z.x-a.x)/2, ry=Math.abs(z.y-a.y)/2;
+          const vertices=Array.from({length:count},(_,i)=>({x:cx+Math.cos(-Math.PI/2+i*Math.PI*2/count)*rx,y:cy+Math.sin(-Math.PI/2+i*Math.PI*2/count)*ry}));
+          commands.push(`${point(vertices[0])} m ${vertices.slice(1).map(v=>`${point(v)} l`).join(" ")} h S`);
         } else commands.push(`${point(a)} m ${point(z)} l S`);
       } else {
         commands.push(`${point(element.points[0])} m`);

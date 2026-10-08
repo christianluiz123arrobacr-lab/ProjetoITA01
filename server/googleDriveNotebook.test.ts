@@ -1,10 +1,15 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   decryptGoogleToken,
+  DRIVE_SCOPES,
+  editableNotebookMetadata,
   encryptGoogleToken,
   isProjectVetorNotebookMetadata,
+  notebookListUrl,
   notebookPdfUploadTarget,
   safeNotebookName,
+  visibleNotebookPdfMetadata,
 } from "./googleDrive/googleDriveService";
 import {
   NOTEBOOK_AUTOSAVE_MS,
@@ -69,6 +74,26 @@ describe("segurança do Caderno no Google Drive", () => {
     expect(update.method).toBe("PATCH");
     expect(update.path).toContain("/pdf_file_12345?uploadType=multipart");
   });
+  it("mantém o editável no appDataFolder e o PDF na pasta visível", () => {
+    const editable = editableNotebookMetadata("Mecânica", { size: "a4", lined: true });
+    expect(editable.parents).toEqual(["appDataFolder"]);
+    expect(editable.appProperties.storageSpace).toBe("appDataFolder");
+    expect(notebookListUrl("appDataFolder", "query", "files(id)")).toContain("spaces=appDataFolder");
+
+    const pdf = visibleNotebookPdfMetadata("Mecânica", "visible-folder", "editable-id", false);
+    expect(pdf.parents).toEqual(["visible-folder"]);
+    expect(pdf.appProperties.sourceNotebookId).toBe("editable-id");
+    expect(visibleNotebookPdfMetadata("Mecânica", "visible-folder", "editable-id", true)).not.toHaveProperty("parents");
+  });
+  it("solicita os dois escopos mínimos e marca conexões antigas para reconexão", () => {
+    expect(DRIVE_SCOPES).toEqual([
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive.appdata",
+    ]);
+    const migration = readFileSync("supabase/migrations/202608160001_google_drive_appdata_scope.sql", "utf8");
+    expect(migration).toContain("appdata_enabled_at");
+    expect(migration).not.toMatch(/json|strokes|pages/i);
+  });
   it("normaliza nome válido e rejeita nome perigoso", () => {
     expect(safeNotebookName("  Dinâmica   — exercícios ")).toBe(
       "Dinâmica — exercícios"
@@ -80,6 +105,18 @@ describe("segurança do Caderno no Google Drive", () => {
 });
 
 describe("configuração e autosave do editor", () => {
+  const editorSource = readFileSync(
+    new URL("../client/src/pages/NotebookEditorPage.tsx", import.meta.url),
+    "utf8"
+  );
+  const workspaceSource = readFileSync(
+    new URL(
+      "../client/src/components/study-canvas/StudyCanvasWorkspace.tsx",
+      import.meta.url
+    ),
+    "utf8"
+  );
+
   it.each(["a5", "a4", "a3", "infinite"] as const)(
     "oferece %s com ou sem linhas sem transformar fundo em traços",
     size => {
@@ -98,5 +135,35 @@ describe("configuração e autosave do editor", () => {
     expect(shouldAutosave(true, 0, 119_999)).toBe(false);
     expect(shouldAutosave(true, 0, 120_000)).toBe(true);
     expect(shouldAutosave(false, 0, 240_000)).toBe(false);
+  });
+  it("serializa gravações e consome cada pedido manual uma única vez", () => {
+    expect(editorSource).toContain("saveQueueRef.current.catch");
+    expect(editorSource).toContain("saveQueueRef.current = save.catch");
+    expect(workspaceSource).toContain(
+      "saveRequest <= processedSaveRequestRef.current"
+    );
+  });
+  it("não trata a persistência do Drive como sessão anônima", () => {
+    expect(workspaceSource).toContain("!userId && !persistence");
+  });
+  it("sincroniza o relógio do caderno depois de vincular o PDF", () => {
+    expect(editorSource).toContain(
+      "modifiedTimeRef.current = result.notebookModifiedTime"
+    );
+  });
+  it("migra legados sem apagá-los e troca o editor para o ID privado", () => {
+    const service = readFileSync(new URL("./googleDrive/googleDriveService.ts", import.meta.url), "utf8");
+    expect(service).toContain("migrateLegacyNotebook");
+    expect(service).toContain("legacySourceFileId");
+    expect(service).toContain("migratedEditableFileId");
+    const migrationFlow = service.slice(service.indexOf("async function migrateLegacyNotebook"), service.indexOf("export function notebookPdfUploadTarget"));
+    expect(migrationFlow).not.toContain("trashed: true");
+    expect(editorSource).toContain("activeDocumentIdRef.current = result.id");
+    expect(editorSource).toContain("replace: true");
+  });
+  it("gera PDF somente por ação explícita e explica a separação ao aluno", () => {
+    expect(editorSource).toContain("Seu caderno continua editável no Projeto Vetor. O PDF será salvo no seu Google Drive.");
+    expect(editorSource).toContain("onClick={() => void savePdfToDrive()}");
+    expect(editorSource).not.toMatch(/autosave[\s\S]{0,300}exportPdf\.mutate/i);
   });
 });

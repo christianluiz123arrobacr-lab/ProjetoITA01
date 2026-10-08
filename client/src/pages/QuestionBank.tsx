@@ -7,20 +7,29 @@ export default function QuestionBank() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [subject, setSubject] = useState<QuestionSubject | "">("");
   const [difficulty, setDifficulty] = useState<QuestionDifficulty | "">("");
+  const [loadError, setLoadError] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
 
   useEffect(() => {
+    let current = true;
     async function loadQuestions() {
+      setQuestionsLoading(true);
+      try {
       const data = await getQuestions({
         subject: subject || undefined,
         difficulty: difficulty || undefined,
         isPublished: true,
       });
 
-      setQuestions(data);
+      if (current) { setQuestions(data); setLoadError(false); }
+      } catch { if (current) setLoadError(true); }
+      finally { if (current) setQuestionsLoading(false); }
     }
 
-    loadQuestions();
-  }, [subject, difficulty]);
+    void loadQuestions();
+    return () => { current = false; };
+  }, [subject, difficulty, reload]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -70,7 +79,7 @@ export default function QuestionBank() {
           </div>
         </div>
 
-        <InteractiveQuiz questions={questions} />
+        {loadError ? <div role="alert">Não foi possível carregar as questões. <button onClick={() => setReload(value => value + 1)}>Tentar novamente</button></div> : questionsLoading ? <p role="status">Carregando questões...</p> : <InteractiveQuiz questions={questions} />}
       </div>
     </div>
   );
