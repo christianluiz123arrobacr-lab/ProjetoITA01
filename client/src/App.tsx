@@ -19,7 +19,6 @@ import LegalPage from "./pages/LegalPage";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import {
   checkPlatformAccess,
-  getCachedPlatformAccess,
 } from "@/services/access.service";
 
 import Landing from "./pages/Landing";
@@ -311,14 +310,16 @@ import FisicaModernaTopicAplicacoes from "./pages/FisicaModernaTopicAplicacoes";
 type RootAccessState = "checking" | "allowed" | "blocked" | "public" | "error";
 
 function RootGate() {
-  const { isAuthenticated, loading: authLoading, user } = useSupabaseAuth();
+  const { isAuthenticated, loading: authLoading, user, error: authError, retry: retrySession } = useSupabaseAuth();
   const [accessState, setAccessState] = useState<RootAccessState>("checking");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function checkRootAccess() {
       if (authLoading) return;
+      if (authError) { setAccessState("error"); return; }
 
       if (!isAuthenticated || !user) {
         if (!cancelled) {
@@ -328,13 +329,7 @@ function RootGate() {
         return;
       }
 
-      const cached = getCachedPlatformAccess(user.id);
-
-      if (cached && !cancelled) {
-        setAccessState(cached.status === "allowed" ? "allowed" : "blocked");
-      } else if (!cancelled) {
-        setAccessState("checking");
-      }
+      if (!cancelled) setAccessState("checking");
 
       try {
         const freshAccess = await checkPlatformAccess(user.id, {
@@ -347,9 +342,7 @@ function RootGate() {
           );
         }
       } catch (error) {
-        console.warn("Erro inesperado na entrada do site:", error);
-
-        if (!cancelled && cached?.status !== "allowed") {
+        if (!cancelled) {
           setAccessState("error");
         }
       }
@@ -360,9 +353,9 @@ function RootGate() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAuthenticated, user]);
+  }, [authLoading, authError, isAuthenticated, user?.id, attempt]);
 
-  if (authLoading || accessState === "checking") {
+  if (authLoading || (!authError && accessState === "checking")) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
         <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-8 py-6 text-center shadow-2xl">
@@ -376,15 +369,15 @@ function RootGate() {
     );
   }
 
-  if (accessState === "allowed") {
+  if (!authError && isAuthenticated && accessState === "allowed") {
     return <Redirect to="/plataforma" />;
   }
 
-  if (accessState === "blocked") {
+  if (!authError && isAuthenticated && accessState === "blocked") {
     return <Redirect to="/assinatura-pendente" />;
   }
 
-  if (accessState === "error") {
+  if (authError || accessState === "error") {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
         <div className="w-full max-w-md rounded-3xl border border-amber-300/30 bg-white/[0.06] p-8 text-center shadow-2xl">
@@ -392,7 +385,7 @@ function RootGate() {
           <p className="mt-3 text-sm leading-6 text-slate-300">
             O serviço está temporariamente indisponível. Nenhuma alteração foi feita na sua conta.
           </p>
-          <button type="button" onClick={() => window.location.reload()} className="mt-6 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950">
+          <button type="button" onClick={() => { if (authError) void retrySession(); else setAttempt(value => value + 1); }} className="mt-6 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950">
             Tentar novamente
           </button>
         </div>
@@ -404,8 +397,9 @@ function RootGate() {
 }
 
 function MySubscriptionRoute() {
-  const { isAuthenticated, loading } = useSupabaseAuth();
+  const { isAuthenticated, loading, error, retry } = useSupabaseAuth();
   if (loading) return <p role="status" className="p-8">Carregando...</p>;
+  if (error) return <div className="p-8" role="alert">Não foi possível carregar sua sessão. <button onClick={() => void retry()}>Tentar novamente</button></div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
   return <MinhaAssinaturaPage />;
 }

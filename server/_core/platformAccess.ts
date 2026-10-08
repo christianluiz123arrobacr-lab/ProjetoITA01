@@ -1,6 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { supabaseAdmin } from "./supabaseAdmin.js";
+import { bounded, safeErrorCode } from "../../shared/authRecovery.js";
+
+export async function accessQuery<T>(operation: PromiseLike<T>, correlationId: string, stage: string, ms = 3000): Promise<T> {
+  const started = Date.now();
+  try { return await bounded(operation, ms); }
+  catch (error) {
+    console.warn({ event: "platform_access_check", correlation_id: correlationId, stage,
+      outcome: "unavailable", code: safeErrorCode(error), duration_ms: Date.now() - started });
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível validar o acesso à plataforma." });
+  }
+}
 
 type AccessUser = { id: string; role: string };
 type AccessClient = Pick<typeof supabaseAdmin, "from" | "rpc">;
@@ -26,7 +37,7 @@ function logAccess(input: {
     correlation_id: input.correlationId,
     stage: input.stage,
     outcome: input.outcome,
-    code: input.code ?? null,
+    code: input.code ? safeErrorCode({ code: input.code }) : null,
   });
 }
 
@@ -40,13 +51,13 @@ export async function getPlatformAccessDecision(
     return { allowed: true, source: "role", role: user.role, profileActive: true, hasPendingPayment: false, correlationId };
   }
 
-  const { data: profile, error: profileError } = await client.from("profiles")
+  const { data: profile, error: profileError } = await accessQuery(client.from("profiles")
     .select("role, ativo")
     .eq("id", user.id)
-    .maybeSingle();
+    .maybeSingle(), correlationId, "profile");
   if (profileError) {
     logAccess({ correlationId, stage: "profile", outcome: "error", code: profileError.code });
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível validar o acesso à plataforma." });
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível validar o acesso à plataforma." });
   }
 
   const role = typeof profile?.role === "string" ? profile.role : user.role;
@@ -57,26 +68,26 @@ export async function getPlatformAccessDecision(
     return { allowed: false, source: "profile", role, profileActive: false, hasPendingPayment: false, correlationId };
   }
 
-  const { data: pendingPayment, error: pendingPaymentError } = await client.from("billing_payments")
+  const { data: pendingPayment, error: pendingPaymentError } = await accessQuery(client.from("billing_payments")
     .select("id")
     .eq("user_id", user.id)
     .eq("gateway", "mercadopago")
     .eq("status", "pending")
-    .maybeSingle();
+    .maybeSingle(), correlationId, "pending_payment");
   if (pendingPaymentError) {
     logAccess({ correlationId, stage: "pending_payment", outcome: "error", code: pendingPaymentError.code });
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível validar o acesso à plataforma." });
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível validar o acesso à plataforma." });
   }
 
   const hasPendingPayment = Boolean((pendingPayment as { id?: string } | null)?.id);
-  const { data, error } = await client.rpc("user_has_active_subscription", { target_user_id: user.id });
+  const { data, error } = await accessQuery(client.rpc("user_has_active_subscription", { target_user_id: user.id }), correlationId, "canonical_rpc");
   if (error || typeof data !== "boolean") {
     if (hasPendingPayment) {
       logAccess({ correlationId, stage: "canonical_rpc", outcome: "blocked", code: error?.code });
       return { allowed: false, source: "subscription", role, profileActive: true, hasPendingPayment, correlationId };
     }
     logAccess({ correlationId, stage: "canonical_rpc", outcome: "error", code: error?.code });
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível validar o acesso à plataforma." });
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível validar o acesso à plataforma." });
   }
   return { allowed: data, source: "subscription", role, profileActive: true, hasPendingPayment, correlationId };
 }

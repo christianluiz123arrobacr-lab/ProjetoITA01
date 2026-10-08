@@ -34,11 +34,12 @@ export default async function vercelTrpcHandler(req: any, res: any) {
     router: appRouter,
     path: getTrpcPath(req),
     createContext,
-    onError({ error, path }) {
+    onError({ error, path, ctx }) {
       console.error("[trpc] request failed", {
         path,
         code: error.code,
-        message: error.message,
+        auth_status: ctx?.authentication?.status,
+        correlation_id: ctx?.authentication?.correlationId,
       });
     },
   });

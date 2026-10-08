@@ -1,41 +1,48 @@
 import { trpc } from "@/lib/trpc";
 import { initializeAnalytics } from "@/lib/analytics";
 import { createAuthenticatedTrpcLink } from "@/lib/trpcTransport";
-import { UNAUTHED_ERR_MSG } from "@shared/const";
+import { authSession } from "@/lib/authSession";
+import { clearCachedPlatformAccess } from "@/services/access.service";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import "./index.css";
 import "katex/dist/katex.min.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: {
+  retry: (count, error) => count < 1 && error instanceof TRPCClientError &&
+    !["UNAUTHORIZED", "FORBIDDEN", "SERVICE_UNAVAILABLE"].includes(error.data?.code),
+  retryDelay: 2000,
+} } });
 
-const redirectToLoginIfUnauthorized = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
+let sessionUserId: string | null = null;
+authSession.subscribe(() => {
+  const nextId = authSession.getSnapshot().session?.user.id ?? null;
+  if (nextId !== sessionUserId) {
+    clearCachedPlatformAccess(sessionUserId);
+    queryClient.clear(); // Permissions cached for a previous user must not survive a session switch.
+    sessionUserId = nextId;
+  }
+});
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
-  if (!isUnauthorized) return;
-
-  window.location.href = getLoginUrl();
+const logApiError = (error: unknown) => {
+  const data = error instanceof TRPCClientError ? error.data : undefined;
+  console.warn({ event: "api_request_failed", code: data?.code ?? "client_transport_error",
+    http_status: data?.httpStatus, correlation_id: data?.correlationId });
 };
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
+    logApiError(error);
   }
 });
 
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
+    logApiError(error);
   }
 });
 

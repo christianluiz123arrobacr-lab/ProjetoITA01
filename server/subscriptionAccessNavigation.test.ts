@@ -178,8 +178,8 @@ describe("integração da tela pendente e do guard", () => {
   });
 
   it("mantém erros estáveis e não submete rotas administrativas à assinatura", () => {
-    expect(guard).toContain("accessStatusQuery.error && !accessStatusQuery.data");
-    expect(adminGuard).toContain("meQuery.error && !meQuery.data");
+    expect(guard).toContain("if (accessStatusQuery.error)");
+    expect(adminGuard).toContain("if (meQuery.error)");
     expect(guard).toContain("refetchOnReconnect: false");
     expect(adminGuard).toContain("refetchOnReconnect: false");
     expect(app).toContain("<SubscriptionGuard bypass={isAdminRoute}>");
@@ -195,7 +195,7 @@ describe("integração da tela pendente e do guard", () => {
     expect(platformAccess).toContain('rpc("user_has_active_subscription"');
     expect(procedure).not.toContain('source: "fallback"');
     expect(procedure).not.toContain('.in("status", ["active", "trialing"])');
-    expect(platformAccess).toContain('code: "INTERNAL_SERVER_ERROR"');
+    expect(platformAccess).toContain('code: "SERVICE_UNAVAILABLE"');
     expect(procedure).toContain('"payment_pending"');
     expect(platformAccess).toContain("hasPendingPayment");
   });

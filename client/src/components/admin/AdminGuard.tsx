@@ -29,17 +29,17 @@ export default function AdminGuard({
   children,
   allowedRoles = DEFAULT_ALLOWED_ROLES,
 }: AdminGuardProps) {
-  const { user, loading } = useSupabaseAuth();
+  const { user, loading, error: authError, retry: retrySession } = useSupabaseAuth();
   const [, setLocation] = useLocation();
   const meQuery = trpc.auth.me.useQuery(undefined, {
-    enabled: !loading && Boolean(user?.id),
+    enabled: !loading && !authError && Boolean(user?.id),
     retry: false,
     staleTime: ADMIN_ACCESS_RECHECK_MS,
     gcTime: ADMIN_ACCESS_CACHE_MS,
     refetchOnMount: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
-    refetchInterval: ADMIN_ACCESS_RECHECK_MS,
+    refetchInterval: query => query.state.status === "error" ? false : ADMIN_ACCESS_RECHECK_MS,
     refetchIntervalInBackground: false,
   });
 
@@ -58,16 +58,17 @@ export default function AdminGuard({
       return;
     }
 
+    if (authError) { setStatus("error"); setErrorMessage("Não foi possível carregar sua sessão. Tente novamente."); return; }
+
     if (!user?.id) {
       setStatus("redirecting");
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setLocation("/login");
       }, 150);
-      return;
+      return () => clearTimeout(timer);
     }
 
-    if (meQuery.error && !meQuery.data) {
-      console.error("Erro ao verificar acesso administrativo no backend:", meQuery.error);
+    if (meQuery.error) {
       setStatus("error");
       setErrorMessage(
         "Não foi possível validar suas permissões administrativas no momento."
@@ -95,6 +96,7 @@ export default function AdminGuard({
   }, [
     user?.id,
     loading,
+    authError,
     setLocation,
     allowedRolesKey,
     meQuery.data?.role,
@@ -103,14 +105,14 @@ export default function AdminGuard({
     meQuery.isLoading,
   ]);
 
-  if (status === "allowed") {
+  if (status === "allowed" && !loading && !authError && user && !meQuery.error) {
     return <>{children}</>;
   }
 
   if (
-    status === "checking-auth" ||
+    !authError && !meQuery.error && (loading || status === "checking-auth" ||
     status === "checking-role" ||
-    status === "redirecting"
+    status === "redirecting")
   ) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6">
@@ -193,7 +195,9 @@ export default function AdminGuard({
         </p>
 
         <div className="flex justify-center gap-3 flex-wrap">
-          <Button variant="outline" onClick={() => window.location.reload()}>
+          <Button variant="outline" disabled={loading || meQuery.isFetching} onClick={() => {
+            if (authError) void retrySession(); else void meQuery.refetch();
+          }}>
             Tentar novamente
           </Button>
 

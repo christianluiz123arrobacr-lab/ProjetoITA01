@@ -39,7 +39,9 @@ describe("cadastro automático do aluno", () => {
   it("configura tempo de execução e resposta diagnosticável no endpoint tRPC", () => {
     const handler = readFileSync(new URL("../api/trpc/[trpc].ts", import.meta.url), "utf8");
     expect(handler).toContain("export const config = { maxDuration: 30 }");
-    expect(handler).toContain("onError({ error, path })");
+    expect(handler).toContain("onError({ error, path, ctx })");
+    expect(handler).toContain("correlation_id: ctx?.authentication?.correlationId");
+    expect(handler).not.toContain("message: error.message");
   });
 
   it("usa extensão ESM no conteúdo químico carregado pelo router serverless", () => {

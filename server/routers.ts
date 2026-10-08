@@ -51,7 +51,8 @@ import { getQuestionsWithoutResolution, summarizeAttempts } from "../shared/stat
 import { setPublicQuestionPublication } from "./publicQuestions.js";
 import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
 import { lessonRouter } from "./lessons/lessonRouter.js";
-import { getPlatformAccessDecision } from "./_core/platformAccess.js";
+import { accessQuery, getPlatformAccessDecision } from "./_core/platformAccess.js";
+import { assertAuthenticationAvailable } from "./_core/context.js";
 import {
   cancelQuestionImportDraft,
   cleanupSkippedQuestionImportImages,
@@ -356,8 +357,8 @@ async function loadBillingAccessPayments() {
   return data ?? [];
 }
 
-async function getLatestUserBillingSubscription(userId: string) {
-  const { data, error } = await supabaseAdmin
+async function getLatestUserBillingSubscription(userId: string, accessCorrelationId?: string) {
+  const query = supabaseAdmin
     .from("billing_subscriptions")
     .select(
       `
@@ -377,8 +378,14 @@ async function getLatestUserBillingSubscription(userId: string) {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const { data, error } = await (accessCorrelationId
+    ? accessQuery(query, accessCorrelationId, "subscription_metadata") : query);
 
   if (error) {
+    if (accessCorrelationId) {
+      console.warn({ event: "platform_access_check", correlation_id: accessCorrelationId, stage: "subscription_metadata", outcome: "unavailable" });
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível consultar sua assinatura. Tente novamente." });
+    }
     throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
   }
 
@@ -463,7 +470,11 @@ export const appRouter = router({
   lessons: lessonRouter,
 
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
+    me: publicProcedure.query(({ ctx }) => {
+      assertAuthenticationAvailable(ctx);
+      if (ctx.authentication?.status === "invalid") throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida. Entre novamente." });
+      return ctx.user;
+    }),
 
     registerStudent: publicProcedure
       .input(
@@ -624,20 +635,19 @@ export const appRouter = router({
 
 
     getAccessStatus: protectedProcedure.query(async ({ ctx }) => {
-      const requestId = Array.isArray(ctx.req.headers["x-request-id"])
-        ? ctx.req.headers["x-request-id"][0]
-        : ctx.req.headers["x-request-id"];
       const access = await getPlatformAccessDecision(ctx.user, supabaseAdmin, {
-        correlationId: requestId || randomUUID(),
+        correlationId: ctx.authentication?.correlationId || randomUUID(),
       });
       if (access.allowed) {
         const now = new Date();
         const cutoff = new Date(now.getTime() - 15 * 60_000).toISOString();
-        const { error: seenError } = await supabaseAdmin.from("profiles")
-          .update({ last_seen_at: now.toISOString() })
-          .eq("id", ctx.user.id)
-          .or(`last_seen_at.is.null,last_seen_at.lt.${cutoff}`);
-        if (seenError) console.warn("Não foi possível registrar o último acesso autenticado.");
+        try {
+          const { error: seenError } = await accessQuery(supabaseAdmin.from("profiles")
+            .update({ last_seen_at: now.toISOString() })
+            .eq("id", ctx.user.id)
+            .or(`last_seen_at.is.null,last_seen_at.lt.${cutoff}`), access.correlationId, "last_seen", 1000);
+          if (seenError) console.warn("Não foi possível registrar o último acesso autenticado.");
+        } catch { /* Last-seen telemetry cannot deny otherwise validated access. */ }
       }
       if (access.source === "role") {
         return {
@@ -666,7 +676,7 @@ export const appRouter = router({
         } as const;
       }
 
-      const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
+      const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id, access.correlationId);
       const latestSubscriptionDetails = flattenBillingSubscription(latestSubscription);
 
       const localStatus = latestSubscriptionDetails?.status ?? null;
