@@ -14,6 +14,7 @@ import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import type { Question } from "@/types/question";
 import { getDifficultyLabel, getDifficultyOrder, normalizeDifficulty } from "@shared/difficulty";
 import { parseQuestionBankUrlFilters } from "@shared/questionBankUrlFilters";
+import "./questionBankLoading.css";
 import {
   ArrowLeft,
   Zap,
@@ -54,6 +55,22 @@ function toggleValue(list: string[], value: string) {
   return list.some((item) => normalizeText(item) === normalized)
     ? list.filter((item) => normalizeText(item) !== normalized)
     : [...list, value];
+}
+
+function QuestionBankLoadingState() {
+  return (
+    <main className="question-bank-loading-screen" aria-busy="true">
+      <section className="question-bank-loading-card" role="status" aria-live="polite">
+        <div className="question-bank-loading-mark" aria-hidden="true">
+          <span className="question-bank-loading-ring" />
+          <BookMarked className="question-bank-loading-book" />
+        </div>
+        <h1 className="question-bank-loading-title">Banco de Questões</h1>
+        <p className="question-bank-loading-message">Carregando questões...</p>
+        <p className="question-bank-loading-hint">Estamos preparando seu banco para você.</p>
+      </section>
+    </main>
+  );
 }
 
 function matchesMulti(
@@ -657,7 +674,19 @@ export default function QuestionBankPage() {
     }));
   }
 
-  if (!pageQuery.data) return <main className="theme-page min-h-screen p-8"><h1>Banco de Questões</h1>{pageQuery.isLoading || authLoading ? <p role="status">Carregando questões...</p> : <div role="alert"><p>{pageQuery.error?.message || 'Não foi possível carregar os dados.'}</p><Button onClick={()=>void pageQuery.refetch()}>Tentar novamente</Button></div>}</main>;
+  if (!pageQuery.data) {
+    if (pageQuery.isLoading || authLoading) return <QuestionBankLoadingState />;
+
+    return (
+      <main className="theme-page min-h-screen p-8">
+        <h1>Banco de Questões</h1>
+        <div role="alert">
+          <p>{pageQuery.error?.message || 'Não foi possível carregar os dados.'}</p>
+          <Button onClick={() => void pageQuery.refetch()}>Tentar novamente</Button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="theme-page min-h-screen bg-slate-50">
