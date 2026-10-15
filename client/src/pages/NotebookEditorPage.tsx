@@ -33,6 +33,7 @@ type LinkedQuestionContent = {
   statement: string;
   statementAfterImage: string | null;
   imageUrl: string | null;
+  statementImages?: import("@shared/questionImages").StatementImage[];
 };
 
 function QuestionRichContent({ question }: { question: LinkedQuestionContent }) {
@@ -46,12 +47,13 @@ function QuestionRichContent({ question }: { question: LinkedQuestionContent }) 
       {content.map((group, index) => {
         if (group.type === "image") {
           return (
-            <img
+            <figure key={`${group.url}-${index}`}><img
               key={`${group.url}-${index}`}
               src={group.url}
-              alt="Imagem da questão"
+              alt={group.alt || "Imagem da questão"}
+              loading="lazy"
               className="h-auto max-w-full rounded-lg border border-slate-200"
-            />
+            />{group.caption && <figcaption className="mt-2 text-xs text-slate-600">{group.caption}</figcaption>}</figure>
           );
         }
 

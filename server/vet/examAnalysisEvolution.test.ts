@@ -20,7 +20,7 @@ const row = (
   conteudos,
 });
 describe("Evolução da análise das provas", () => {
-  it("valida intervalos e elimina os incompatíveis com filtros dependentes", () => {
+  it("valida intervalos e preserva limites sem dados no recorte", () => {
     expect(
       examAnalysisFiltersSchema.safeParse({ period: { from: 2025, to: 2020 } })
         .success
@@ -33,7 +33,7 @@ describe("Evolução da análise das provas", () => {
     expect(
       buildExamAnalysis([row("a", 2020)], { period: { from: 2020, to: 2021 } })
         .filters.period
-    ).toBeUndefined();
+    ).toEqual({ from: 2020, to: 2021 });
   });
   it("distribui peso um por questão, deduplica tags e não confunde participação com incidência", () => {
     const a = row("a", 2020, ["Dinâmica", "Dinâmica", "Óptica"]);
@@ -51,7 +51,7 @@ describe("Evolução da análise das provas", () => {
   });
   it("inclui conteúdo não informado e conserva todos os membros de Outros", () => {
     const data = buildExamAnalysis([
-      ...Array.from({ length: 29 }, (_, i) => row(String(i), 2020)),
+      ...Array.from({ length: 39 }, (_, i) => row(String(i), 2020)),
       row("other", 2020, ["Óptica"]),
       row("missing", 2020, []),
     ]);
@@ -62,13 +62,13 @@ describe("Evolução da análise das provas", () => {
   });
   it("preserva a maior fatia mesmo quando todas são pequenas", () => {
     const data = buildExamAnalysis(
-      Array.from({ length: 30 }, (_, i) =>
+      Array.from({ length: 40 }, (_, i) =>
         row(String(i), 2020, ["Conteúdo " + i])
       )
     );
     expect(data.donut).toHaveLength(2);
     expect(data.donut[0].members).toHaveLength(1);
-    expect(data.donut[1].members).toHaveLength(29);
+    expect(data.donut[1].members).toHaveLength(39);
   });
   it("distingue lacuna, zero real e ano desconhecido", () => {
     const data = buildExamAnalysis(

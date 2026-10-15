@@ -1,6 +1,6 @@
 export const LEGAL_DOCUMENT_VERSIONS = {
   terms: "2026-09-07",
-  privacy: "2026-09-07",
+  privacy: "2026-10-14",
   whatsappConsent: "2026-09-07",
 } as const;
 

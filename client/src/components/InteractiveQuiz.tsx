@@ -390,7 +390,7 @@ export function InteractiveQuiz({
     setReportSuccess("");
     setReportError("");
     setReportSending(false);
-  }, [currentQuestion, questions]);
+  }, [question?.id]);
 
   useEffect(() => {
     setHasSentCompletion(false);
@@ -703,7 +703,7 @@ export function InteractiveQuiz({
 
           {questionContent.map((group, index) => group.type === "image" ? (
             <div className="mt-5" key={`statement-image-${index}`}>
-              <figure><img src={group.url} alt={question.imageAlt || "Imagem da questão"} className="max-w-full rounded-2xl border border-slate-200 bg-white" />{question.imageCaption ? <figcaption className="mt-2 text-sm text-slate-600">{question.imageCaption}</figcaption> : null}</figure>
+              <figure><img src={group.url} alt={group.alt || "Imagem da questão"} loading="lazy" className="h-auto max-w-full rounded-2xl border border-slate-200 bg-white" />{group.caption ? <figcaption className="mt-2 text-sm text-slate-600">{group.caption}</figcaption> : null}</figure>
             </div>
           ) : (
             <div className={index ? "mt-5" : ""} key={`statement-content-${index}`}>

@@ -18,6 +18,7 @@ import { VetModuleNav } from "@/components/vet/VetModuleNav";
 import { Button } from "@/components/ui/button";
 import {
   examAnalysisBankLink,
+  changeExamAnalysisFilters,
   MISSING_ANALYSIS_VALUE,
   type ExamAnalysisFilters,
   type ExamAnalysis,
@@ -237,30 +238,27 @@ export default function VetExamAnalysisPage() {
   const query = trpc.vet.getExamAnalysis.useQuery(requested, {
     retry: false,
     staleTime: 60_000,
+    placeholderData: previous => previous,
   });
   const data = query.data;
-  const filters = data?.filters ?? requested;
+  const filters = requested;
   const globalChange = (next: Partial<ExamAnalysisFilters>) => {
-    setRequested({
-      institution: filters.institution,
-      subject: filters.subject,
-      exam: filters.exam,
+    setRequested(current => changeExamAnalysisFilters(current, {
+      content: undefined,
+      topic: undefined,
       ...next,
-    });
+    }));
     setSeriesKeys([]);
     setSeriesKind("content");
     setMetric("count");
-    setFrom(undefined);
-    setTo(undefined);
-    setRangeMode(false);
   };
   const selectContent = (key?: string) => {
-    setRequested({ ...filters, content: key, topic: undefined });
+    setRequested(current => changeExamAnalysisFilters(current, { content: key, topic: undefined }));
     setSeriesKind("content");
     setSeriesKeys(key ? [key] : []);
   };
   const selectTopic = (key: string) => {
-    setRequested({ ...filters, topic: key });
+    setRequested(current => changeExamAnalysisFilters(current, { topic: key }));
     setSeriesKind("topic");
     setSeriesKeys([key]);
   };
@@ -282,9 +280,8 @@ export default function VetExamAnalysisPage() {
     });
   const selected =
     data?.contents.find(c => c.key === filters.content) ?? data?.contents[0];
-  const years =
-    data?.options.years.map(y => ({ value: String(y), label: String(y) })) ??
-    [];
+  const years = Array.from(new Set([...(data?.options.years ?? []), filters.year, filters.period?.from, filters.period?.to, from, to].filter((year): year is number => year !== undefined)))
+    .sort((a, b) => a - b).map(y => ({ value: String(y), label: String(y) }));
   const selectedTopic = data?.topics.find(t => t.key === filters.topic);
   const compared = data?.comparison;
   const rangeInvalid = !!from && !!to && from > to;
@@ -309,6 +306,8 @@ export default function VetExamAnalysisPage() {
           </Button>
         </div>
         <VetModuleNav />
+        {query.isFetching && data && <p role="status" className={muted}><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Atualizando análise…</p>}
+        {data && !query.isFetching && data.total === 0 && <p role="status" className={panel}>Nenhuma questão nesta combinação e período. O período selecionado foi mantido.</p>}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Filter
             title="Instituição"

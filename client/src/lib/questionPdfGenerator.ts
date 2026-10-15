@@ -96,6 +96,18 @@ function winAnsiBaseCharacter(char: string) {
   return char.normalize("NFD").replace(/[\u0300-\u036f]/g, "").charAt(0) || "?";
 }
 
+export function wrapQuestionCode(code: string | undefined, width: number, measure: (value: string) => number): string[] {
+  if (!code?.trim()) return [];
+  const lines: string[] = [];
+  let line = "Código: ";
+  for (const char of code.trim().replace(/[\r\n\t]+/g, " ")) {
+    if (measure(line + char) > width && line) { lines.push(line); line = ""; }
+    line += char;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 export function textWidth(value: string, size: number, bold = false) {
   const widths = bold ? HELVETICA_BOLD_WIDTHS : HELVETICA_WIDTHS;
   return Array.from(value).reduce((sum, char) => sum + (widths[char] ?? widths[winAnsiBaseCharacter(char)] ?? 556) * size / 1000, 0);
@@ -551,10 +563,12 @@ async function generateQuestionPdfDocument(input: QuestionPdfInput) {
     const statementHeight = groupRichQuestionContent(buildQuestionRichContent(question)).reduce((height, group) => height + (group.type === "image" ? QUESTION_PDF_LAYOUT.statementImageMaxHeight + 8 : estimatePdfRichTextHeight(serializeRichQuestionText(group.nodes), PAGE_WIDTH - MARGIN * 2)), 0);
     const alternativesHeight = question.options.reduce((height, option) => height + estimatePdfRichTextHeight(option.text ?? "", PAGE_WIDTH - MARGIN * 2 - 29, 10) + 16 + (option.imageUrl ? QUESTION_PDF_LAYOUT.optionImageMaxHeight + 8 : 0), 0);
     const minimumQuestionHeight = 43 + statementHeight + alternativesHeight + QUESTION_PDF_LAYOUT.resolutionSpaceHeight;
-    ensure(Math.min(minimumQuestionHeight, CONTENT_BOTTOM - CONTENT_TOP)); pdf.text(`${index + 1}.`, MARGIN, y + 12, 12, true, NAVY); y += 20;
+    const codeLines = wrapQuestionCode(question.codigo, PAGE_WIDTH - MARGIN * 2, value => textWidth(value, 8.5));
+    ensure(Math.min(minimumQuestionHeight + codeLines.length * 14, CONTENT_BOTTOM - CONTENT_TOP)); pdf.text(`${index + 1}.`, MARGIN, y + 12, 12, true, NAVY); y += 20;
+    for (const line of codeLines) { ensure(14); pdf.text(line, MARGIN, y + 10, 8.5, false, "#52677b"); y += 14; }
     let tagX = MARGIN; for (const tag of getQuestionPdfTags(question)) { const label = tag.toUpperCase(); const tagWidth = Math.min(textWidth(label, 7, true) + 12, 145); if (tagX + tagWidth > PAGE_WIDTH - MARGIN) { tagX = MARGIN; y += 17; } pdf.rect(tagX, y, tagWidth, 14, "#dff5f7"); pdf.text(label, tagX + 6, y + 10, 7, true, NAVY); tagX += tagWidth + 5; } y += 23;
     for (const group of groupRichQuestionContent(buildQuestionRichContent(question))) {
-      if (group.type === "image") await drawQuestionImage(group.url, QUESTION_PDF_LAYOUT.statementImageMaxWidth, QUESTION_PDF_LAYOUT.statementImageMaxHeight, MARGIN);
+      if (group.type === "image") { await drawQuestionImage(group.url, QUESTION_PDF_LAYOUT.statementImageMaxWidth, QUESTION_PDF_LAYOUT.statementImageMaxHeight, MARGIN); if (group.caption) await richText(group.caption, MARGIN, PAGE_WIDTH - MARGIN * 2, 8.5, "#52677b"); }
       else await richText(serializeRichQuestionText(group.nodes), MARGIN, PAGE_WIDTH - MARGIN * 2);
     }
     y += 7;

@@ -10,6 +10,7 @@ import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { getDifficultyLabel } from "@shared/difficulty";
 import { MAX_QUESTION_IMPORT_IMAGE_BYTES, MAX_QUESTION_IMPORT_JSON_BYTES, type NormalizedQuestionImageSlot, type QuestionImportPreviewItem } from "@shared/questionImportSchema";
 import { getExistingQuestionTaxonomy, normalizeQuestionTaxonomyKey } from "@shared/questionImportTaxonomy";
+import { StatementImagesPreview } from "@/components/admin/StatementImagesEditor";
 
 type SlotRow = {
   id: string; import_key: string; slot_id: string; required: boolean; location: NormalizedQuestionImageSlot["local"];
@@ -94,9 +95,13 @@ export default function AdminQuestionBatchImportPage() {
   const busy = createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending || removeInvalidQuestion.isPending;
   const slotsByQuestion = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
-    for (const slot of slots) map.set(slot.import_key, [...(map.get(slot.import_key) ?? []), slot]);
+    for (const preview of previews) {
+      const key = preview.item.chave_importacao || preview.item.id_importacao || preview.item.import_hash;
+      const order = preview.item.imagens.map(item => item.slot_id);
+      map.set(key, slots.filter(slot => slot.import_key === key).sort((a,b) => order.indexOf(a.slot_id) - order.indexOf(b.slot_id)));
+    }
     return map;
-  }, [slots]);
+  }, [slots, previews]);
 
   function applyDraft(value: unknown) {
     const next = value as Draft;
@@ -210,6 +215,8 @@ export default function AdminQuestionBatchImportPage() {
             <p><strong>Banca:</strong> {question.banca || "—"}</p>
           </div>
           <p className="mt-3 line-clamp-2 text-sm">{question.enunciado}</p>
+          <StatementImagesPreview images={questionSlots.flatMap((slot, ordem) => slot.public_url && ["enunciado", "contexto"].includes(slot.location) ? [{ slot_id: slot.slot_id, local: slot.location as "enunciado" | "contexto", url_imagem: slot.public_url, ordem, texto_alternativo: slot.alt_text, legenda: slot.caption }] : [])} />
+          {question.enunciado_pos_imagem && <p className="mt-3 whitespace-pre-wrap text-sm">{question.enunciado_pos_imagem}</p>}
           <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
             <div><h3 className="font-semibold">Conteúdos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.conteudos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeQuestionTaxonomyKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">Conteúdo novo: {value}</span>)}</div>
             <div><h3 className="font-semibold">Assuntos</h3><p className="mt-1 text-slate-700 dark:text-slate-300">{question.assuntos.join(", ") || "—"}</p>{!suggestionsQuery.isLoading && !suggestionsQuery.isError && question.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeQuestionTaxonomyKey(value))).map((value) => <span key={value} className="mr-2 mt-2 inline-block rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">Assunto novo: {value}</span>)}</div>

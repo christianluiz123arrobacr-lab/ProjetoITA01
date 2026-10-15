@@ -2,6 +2,8 @@ import { referralRouter, registerReferralAttribution, referralCodeSchema } from 
 import { loadPlanCapacity } from "./billing/planCapacity.js";
 import { getPaymentHistory } from "./billing/paymentHistory.js";
 import { randomUUID } from "node:crypto";
+import { getStatementImages, normalizeQuestionImagePayload } from "../shared/questionImages.js";
+import { inspectQuestionImportImage } from "./questions/questionImportImages.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { chemistryResolutionBlockSchema, safeChemistryLatexSchema, safeResolutionTextSchema } from "../shared/chemistryContent.js";
@@ -37,7 +39,7 @@ import {
   questionPdfFiltersSchema,
 } from "../shared/questionPdf.js";
 import { selectQuestionPdfData } from "./questionPdfExport.js";
-import { questionBrowseSchema } from "../shared/questionBrowse.js";
+import { questionBrowseSchema, questionBrowseFiltersSchema, questionFilterOptionsSchema } from "../shared/questionBrowse.js";
 import { browseQuestions, performanceRpc, type DashboardResult, type StudentStatisticsRow } from "./performanceStageTwo.js";
 import { NOTEBOOK_DEVELOPMENT_MESSAGE, NOTEBOOK_FEATURE_AVAILABLE } from "../shared/featureAvailability.js";
 import { createGoogleDriveConnectUrl, createNotebook, disconnectGoogleDrive, getNotebook, googleDriveStatus, listNotebooks, renameNotebook, trashNotebook, updateNotebook, uploadNotebookPdf } from "./googleDrive/googleDriveService.js";
@@ -98,6 +100,11 @@ async function assertQuestionPdfAccess(userId: string, tokenRole?: string) {
   if (profile?.ativo === false) throw new TRPCError({ code: "FORBIDDEN", message: "Seu perfil não possui acesso à exportação." });
   const { data, error } = await supabaseAdmin.rpc("user_has_active_subscription", { target_user_id: userId });
   if (error || data !== true) throw new TRPCError({ code: "FORBIDDEN", message: "É necessária uma assinatura ativa para exportar questões." });
+}
+
+function validatedQuestionImagePayload(payload: Record<string, any>) {
+  try { return normalizeQuestionImagePayload(payload); }
+  catch { throw new TRPCError({ code: "BAD_REQUEST", message: "Revise as URLs, os textos e os identificadores das imagens da questão." }); }
 }
 
 const resolutionBlockInputSchema = z.object({
@@ -450,7 +457,7 @@ export const appRouter = router({
       if (!input.questionIds.length) return [];
       const { data, error } = await supabaseAdmin
         .from("questoes")
-        .select("id,codigo,instituição,ano,disciplina,enunciado,enunciado_pos_imagem,url_imagem")
+        .select("id,codigo,instituição,ano,disciplina,enunciado,enunciado_pos_imagem,url_imagem,image_metadata")
         .in("id", input.questionIds)
         .eq("publicada", true);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível carregar as questões desta lista." });
@@ -463,6 +470,7 @@ export const appRouter = router({
         statement: typeof row.enunciado === "string" ? row.enunciado : "",
         statementAfterImage: typeof row.enunciado_pos_imagem === "string" ? row.enunciado_pos_imagem : null,
         imageUrl: typeof row.url_imagem === "string" ? row.url_imagem : null,
+        statementImages: getStatementImages(row.image_metadata, row.url_imagem as string | null),
       }));
     }),
   }),
@@ -1007,6 +1015,11 @@ export const appRouter = router({
   }),
 
   questions: router({
+    filterOptions: protectedProcedure.input(questionBrowseFiltersSchema).query(async ({ input }) => {
+      const result = questionFilterOptionsSchema.safeParse(await performanceRpc(supabaseAdmin, "vet_question_filter_facets", { p_filters: input }));
+      if (!result.success) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar as opções de filtros." });
+      return result.data;
+    }),
     browse: publicProcedure.input(questionBrowseSchema).query(async ({ ctx, input }) => {
       await ensureAuthentication(ctx);
       assertAuthenticationAvailable(ctx);
@@ -2204,7 +2217,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { data, error } = await supabaseAdmin
           .from("questoes")
-          .insert([input.payload])
+          .insert([validatedQuestionImagePayload(input.payload)])
           .select("id, codigo")
           .single();
 
@@ -2444,6 +2457,26 @@ export const appRouter = router({
         } as const;
       }),
 
+    confirmAdminStatementImage: adminOrEditorProcedure
+      .input(z.object({ path: z.string().max(300), contentType: z.enum(["image/png", "image/jpeg", "image/webp"]) }))
+      .mutation(async ({ ctx, input }) => {
+        const prefix = `statement-images/${ctx.user.id}/`;
+        if (!input.path.startsWith(prefix) || !/^\d+-[0-9a-f-]+\.(png|jpg|webp)$/.test(input.path.slice(prefix.length))) throw new TRPCError({ code: "FORBIDDEN", message: "Arquivo não pertence a este envio." });
+        const bucket = supabaseAdmin.storage.from("questoes-imagens");
+        const { data: blob, error } = await bucket.download(input.path);
+        if (error || !blob) throw new TRPCError({ code: "BAD_REQUEST", message: "Imagem não encontrada." });
+        try {
+          if (blob.size > 3 * 1024 * 1024) throw new Error("Cada imagem deve ter no máximo 3 MB.");
+          const info = inspectQuestionImportImage(new Uint8Array(await blob.arrayBuffer()), input.contentType);
+          const extension = info.mime === "image/png" ? "png" : info.mime === "image/jpeg" ? "jpg" : "webp";
+          if (!input.path.endsWith(`.${extension}`)) throw new Error("Extensão e conteúdo da imagem não correspondem.");
+          return { publicUrl: bucket.getPublicUrl(input.path).data.publicUrl, width: info.width, height: info.height };
+        } catch (cause) {
+          await bucket.remove([input.path]);
+          throw new TRPCError({ code: "BAD_REQUEST", message: cause instanceof Error ? cause.message : "Imagem inválida." });
+        }
+      }),
+
     createAdminImageUpload: adminOrEditorProcedure
       .input(
         z.object({
@@ -2451,6 +2484,7 @@ export const appRouter = router({
           originalName: z.string().min(1).max(180),
           contentType: z.enum(["image/png", "image/jpeg", "image/webp"]),
           context: z.string().min(1).max(120).optional(),
+          purpose: z.literal("statement").optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -2466,7 +2500,8 @@ export const appRouter = router({
           .replace(/^-+|-+$/g, "")
           .slice(0, 100) || "admin-upload";
         const extension = extensionByType[input.contentType];
-        const path = `${safeContext}/${Date.now()}-${randomUUID()}.${extension}`;
+        if (input.purpose === "statement" && (input.bucket !== "questoes-imagens" || !/\.(png|jpe?g|webp)$/i.test(input.originalName))) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo de imagem inválido." });
+        const path = `${input.purpose === "statement" ? `statement-images/${ctx.user.id}` : safeContext}/${Date.now()}-${randomUUID()}.${extension}`;
 
         const { data, error } = await supabaseAdmin.storage
           .from(input.bucket)
@@ -2761,7 +2796,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { error } = await supabaseAdmin
           .from("questoes")
-          .update(input.payload)
+          .update(validatedQuestionImagePayload(input.payload))
           .eq("id", input.id);
 
         if (error) {

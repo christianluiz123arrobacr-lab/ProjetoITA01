@@ -51,6 +51,7 @@ export type Question = {
   imageCaption?: string;
 
   options: QuestionOption[];
+  statementImages?: import("../../../shared/questionImages").StatementImage[];
   correctOptionId: string;
 
   explanation?: string;

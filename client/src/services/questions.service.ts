@@ -4,6 +4,7 @@ import type { QuestionPdfFilters } from "@shared/questionPdf";
 import { logPdfStage } from "@/lib/questionPdfDiagnostics";
 import { QuestionPdfError } from "@/lib/questionPdfErrors";
 import type { BrowseFilters } from "@shared/questionBrowse";
+import { getStatementImages } from "@shared/questionImages";
 
 /** Explicit larger selection for quiz/notebook; never implicitly uses page 1. */
 export async function getQuestionSelection(filters: Partial<BrowseFilters>, limit = Infinity, signal?: AbortSignal): Promise<Question[]> {
@@ -57,7 +58,7 @@ type QuestaoRow = {
   enunciado?: string | null;
   enunciado_pos_imagem?: string | null;
   url_imagem?: string | null;
-  image_metadata?: Array<{ slot_id?: string; local?: string; alternativa?: string | null; texto_alternativo?: string; legenda?: string | null }> | null;
+  image_metadata?: Array<{ slot_id?: string; local?: string; alternativa?: string | null; texto_alternativo?: string; legenda?: string | null; url_imagem?: string; ordem?: number }> | null;
   formula?: string | null;
 
   a?: string | null;
@@ -374,6 +375,7 @@ export function mapQuestao(row: QuestaoRow): Question {
     statementAfterImage: row.enunciado_pos_imagem ?? undefined,
     formula: row.formula ?? undefined,
     imageUrl: row.url_imagem ?? undefined,
+    statementImages: getStatementImages(row.image_metadata, row.url_imagem),
     imageAlt: statementImage?.texto_alternativo,
     imageCaption: statementImage?.legenda ?? undefined,
 

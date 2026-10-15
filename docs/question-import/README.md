@@ -22,6 +22,20 @@ O rascunho é persistido por 30 dias e pode ser retomado na própria tela. Cance
 - `alternativa`: letra `A`–`E` (ou índice zero-based via `indice_alternativa`) quando `local` for `alternativa`.
 - `obrigatoria`: impede a finalização sem arquivo válido.
 - `texto_alternativo`: obrigatório para slots obrigatórios; fica separado da legenda e do nome do arquivo.
+- Vários slots de `enunciado`/`contexto` são exibidos na ordem declarada em `imagens`, mesmo se os arquivos forem enviados em outra ordem. O texto de `enunciado` fica antes da lista, e `enunciado_pos_imagem` depois dela.
+- A finalização grava cada URL, localização, `slot_id`, ordem, texto alternativo e legenda em `image_metadata`. `url_imagem` recebe a primeira imagem como fallback legado; o renderer não a duplica.
+- Cadastro e edição individuais usam a mesma lista: é possível enviar vários arquivos, adicionar URL HTTPS, editar textos, remover associações e usar **Subir/Descer** para ordenar. Salvar sem alterar mantém as imagens e os metadados de alternativas/resolução.
+
+Exemplo de dois slots no mesmo objeto de questão (além dos demais campos canônicos):
+
+```json
+"imagens": [
+  { "slot_id": "figura-1", "local": "enunciado", "obrigatoria": true, "nome_arquivo_esperado": "figura-1.png", "texto_alternativo": "Diagrama inicial", "legenda": "Figura 1" },
+  { "slot_id": "figura-2", "local": "enunciado", "obrigatoria": true, "nome_arquivo_esperado": "figura-2.png", "texto_alternativo": "Diagrama complementar", "legenda": "Figura 2" }
+]
+```
+
+O armazenamento de várias imagens reutiliza o JSONB existente; não exige criar outra coluna. URLs sobrescritas por uma versão anterior do importador e que nunca foram guardadas nos metadados não podem ser reconstruídas automaticamente: nesses casos é necessário reenviar os arquivos.
 
 Veja [`public/question-import/questoes-v2.example.json`](../../public/question-import/questoes-v2.example.json).
 

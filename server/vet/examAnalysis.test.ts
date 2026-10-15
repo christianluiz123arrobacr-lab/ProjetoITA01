@@ -58,7 +58,7 @@ describe("Análise das provas: questões distintas e taxonomia canônica", () =>
     expect(result.total).toBe(1);
     expect(result.options.exams.map(option => option.label)).toEqual(["ITA"]);
   });
-  it("limpa seleções incompatíveis ao mudar de instituição", () => {
+  it("limpa seleções dependentes incompatíveis, preservando o ano aplicado", () => {
     expect(
       buildExamAnalysis(sample, {
         institution: "EsPCEx",
@@ -66,7 +66,7 @@ describe("Análise das provas: questões distintas e taxonomia canônica", () =>
         exam: "ITA",
         year: 2025,
       }).filters
-    ).toEqual({ institution: "EsPCEx" });
+    ).toEqual({ institution: "EsPCEx", year: 2025 });
   });
   it("conta um ID uma vez e tags repetidas uma vez, mesmo com conteúdos sobrepostos", () => {
     const result = buildExamAnalysis([...sample, sample[0]], {

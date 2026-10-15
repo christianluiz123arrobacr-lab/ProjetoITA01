@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isQuestionImageUrl } from "./questionImages.js";
 import { normalizeDifficulty, type QuestionDifficulty } from "./difficulty.js";
 
 export const MAX_QUESTION_IMPORT_ITEMS = 50;
@@ -36,7 +37,7 @@ export type NormalizedQuestionImageSlot = {
   legenda: string | null;
 };
 
-export type QuestionImageMetadata = Pick<NormalizedQuestionImageSlot, "slot_id" | "local" | "alternativa" | "texto_alternativo" | "legenda">;
+export type QuestionImageMetadata = Pick<NormalizedQuestionImageSlot, "slot_id" | "local" | "alternativa" | "texto_alternativo" | "legenda"> & { url_imagem?: string; ordem?: number };
 
 export type NormalizedQuestionImportItem = {
   chave_importacao: string | null;
@@ -165,6 +166,8 @@ export const normalizedQuestionImportItemSchema = z.object({
     alternativa: z.enum(["a", "b", "c", "d", "e"]).nullable(),
     texto_alternativo: safeImportMetadataText,
     legenda: safeImportMetadataText.nullable(),
+    url_imagem: z.string().max(2048).refine(isQuestionImageUrl).optional(),
+    ordem: z.number().int().min(0).max(100).optional(),
   })).max(30),
   import_hash: z.string().trim().min(1).max(80),
   raw_index: z.number().int().min(0).max(MAX_QUESTION_IMPORT_ITEMS - 1),

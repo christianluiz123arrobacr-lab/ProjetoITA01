@@ -23,6 +23,7 @@ export function invalidateQuestionCaches(
   if (path[0] !== "admin" || !mutations.has(path.at(-1) ?? "")) return;
   void client.invalidateQueries({
     predicate: query => {
+      if (query.queryKey[0] === "question-bank-progressive") return true;
       const key = Array.isArray(query.queryKey[0])
         ? (query.queryKey[0] as string[])
         : [];

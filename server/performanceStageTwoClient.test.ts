@@ -27,6 +27,21 @@ function caller(role: "student" | "editor" | "admin" | null) {
 afterEach(() => vi.clearAllMocks());
 
 describe("Etapa 2: contratos, autorização e cache", () => {
+  it("opções compactas exigem autenticação e não disparam listagem de questões", async () => {
+    await expect(caller(null).questions.filterOptions({})).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(database.rpc).not.toHaveBeenCalled();
+    database.rpc.mockResolvedValue({ data: { institutions: ["ITA"], years: ["2023"], subjects: [], topics: [], subtopics: [], difficulties: [] }, error: null });
+    const result = await caller("student").questions.filterOptions({ institutions: ["ITA"] });
+    expect(result.institutions).toEqual(["ITA"]);
+    expect(database.rpc).toHaveBeenCalledTimes(1);
+    expect(database.rpc.mock.calls[0][0]).toBe("vet_question_filter_facets");
+    expect(database.from).not.toHaveBeenCalled();
+  });
+  it("confirmação de imagem individual bloqueia aluno e arquivo de outro usuário", async () => {
+    await expect(caller("student").admin.confirmAdminStatementImage({ path: "x", contentType: "image/png" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller("editor").admin.confirmAdminStatementImage({ path: "statement-images/outro/1-x.png", contentType: "image/png" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(database.from).not.toHaveBeenCalled();
+  });
   it("mudar A → B → A sempre reinicia a página, sem reutilizar página antiga", () => {
     const first = { key: "A", page: 5 };
     const second = synchronizeFilterPage(first, "B");

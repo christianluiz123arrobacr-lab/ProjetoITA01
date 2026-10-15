@@ -25,7 +25,21 @@ export const questionBrowseSchema = z.object({
   pageSize: z.number().int().min(1).max(100).default(20),
 });
 export type BrowseFilters = z.infer<typeof questionBrowseFiltersSchema>;
+export function hasMeaningfulBrowseFilters(filters: Partial<BrowseFilters>) {
+  return Boolean(filters.search?.trim() || filters.yearFrom || filters.yearTo ||
+    (filters.practiceStatus && filters.practiceStatus !== "all") ||
+    [filters.institutions, filters.years, filters.subjects, filters.topics, filters.subtopics, filters.difficulties, filters.exams].some(values => values?.length));
+}
+
+export function appendUniqueQuestions<T extends { id: string }>(pages: T[][]): T[] {
+  const seen = new Set<string>();
+  return pages.flat().filter(row => { if (seen.has(row.id)) return false; seen.add(row.id); return true; });
+}
 export type BrowseInput = z.infer<typeof questionBrowseSchema>;
+export const questionFilterOptionsSchema = z.object({
+  institutions: z.array(z.string()), years: z.array(z.string()), subjects: z.array(z.string()),
+  topics: z.array(z.string()), subtopics: z.array(z.string()), difficulties: z.array(z.string()),
+});
 export type BrowseRow = Record<string, any> & { id: string };
 export type BrowseResult = {
   rows: BrowseRow[];

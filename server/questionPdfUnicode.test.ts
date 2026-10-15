@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { VectorPdf, generateQuestionPdf, measurePdfMath } from "../client/src/lib/questionPdfGenerator";
+import { VectorPdf, generateQuestionPdf, measurePdfMath, wrapQuestionCode, textWidth } from "../client/src/lib/questionPdfGenerator";
 import { PdfUnicodeFont } from "../client/src/lib/questionPdfUnicodeFont";
 import { QuestionPdfError } from "../client/src/lib/questionPdfErrors";
 import type { Question } from "../client/src/types/question";
@@ -41,6 +41,25 @@ async function extract(blob: Blob) {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("Unicode no PDF real de questões", () => {
+  it("código correto acompanha a numeração de cada questão e quebra códigos longos", async () => {
+    mockAssets();
+    let exported: Blob | undefined;
+    vi.spyOn(URL, "createObjectURL").mockImplementation(blob => { exported = blob as Blob; return "blob:test"; });
+    vi.stubGlobal("document", { createElement: () => ({ click: vi.fn(), remove: vi.fn() }), body: { appendChild: vi.fn() } });
+    vi.stubGlobal("window", { setTimeout: vi.fn() });
+    const firstCode = "IME-2023-MAT-001";
+    const longCode = "ITA-" + "CODIGO-LONGO-".repeat(14);
+    const base: Question = { id: "q", subject: "fisica", topic: "Dinâmica", exam: "ITA", year: 2023, statement: "Enunciado primeiro", options: [{ id: "a", label: "A", text: "Opção" }], correctOptionId: "a", difficulty: "medio" };
+    await generateQuestionPdf({ questions: [{ ...base, codigo: firstCode }, { ...base, id: "q2", codigo: longCode, statement: "Enunciado segundo" }], filterSummary: "Teste" });
+    const contents = (await extract(exported!)).join("");
+    expect(contents.indexOf("1.Código: " + firstCode)).toBeGreaterThan(0);
+    expect(contents.indexOf("2.Código: " + longCode)).toBeGreaterThan(contents.indexOf("Enunciado primeiro"));
+    expect(contents.indexOf(longCode)).toBeLessThan(contents.indexOf("Enunciado segundo"));
+    const wrapped = wrapQuestionCode(longCode, 150, value => textWidth(value, 8.5));
+    expect(wrapped.length).toBeGreaterThan(1);
+    expect(wrapped.every(line => textWidth(line, 8.5) <= 150)).toBe(true);
+    expect(wrapQuestionCode(undefined, 150, value => value.length)).toEqual([]);
+  });
   it("extrai símbolos, scripts, acentos e somente a interrogação original", async () => {
     mockAssets();
     const pdf = new VectorPdf(""); pdf.addPage();

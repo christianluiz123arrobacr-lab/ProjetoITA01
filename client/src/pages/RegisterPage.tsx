@@ -276,7 +276,7 @@ export default function RegisterPage() {
 
             <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={legalAccepted} onChange={event => setLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4" required /><span>Li e concordo com os <Link href="/termos-de-uso"><a target="_blank" className="font-bold text-cyan-200 underline">Termos de Uso</a></Link> e a <Link href="/politica-de-privacidade"><a target="_blank" className="font-bold text-cyan-200 underline">Política de Privacidade</a></Link>.</span></label>
 
-            {legalConfig.data?.whatsappConsentAvailable && <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={billingWhatsappOptIn} onChange={event => setBillingWhatsappOptIn(event.target.checked)} className="mt-1 h-4 w-4" />Quero receber comunicações do Projeto Vetor pelo WhatsApp.</label>}
+            {legalConfig.data?.whatsappConsentAvailable && <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={billingWhatsappOptIn} onChange={event => setBillingWhatsappOptIn(event.target.checked)} className="mt-1 h-4 w-4" />Quero receber lembretes de cobrança e vencimento pelo WhatsApp (opcional).</label>}
 
             {erro && (
               <div className="flex gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">

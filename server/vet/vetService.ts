@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { publicQuestionImageMetadata } from "../../shared/questionImages.js";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
 import { buildVetEngineResult, normalizeVetText, type VetProfile } from "../../shared/vet/vetEngine.js";
 
@@ -78,7 +79,7 @@ export async function getCanonicalVetAnalysis(userId: string) {
 }
 
 export function safeQuestionDto(row: any) {
-  const imageMetadata = Array.isArray(row.image_metadata) ? row.image_metadata : [];
+  const imageMetadata = publicQuestionImageMetadata(row.image_metadata);
   const option = (id: "a" | "b" | "c" | "d" | "e") => {
     const upperId = id.toUpperCase();
     const text = row[id] ?? row[upperId] ?? null;

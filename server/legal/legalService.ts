@@ -3,6 +3,7 @@ import { z } from "zod";
 import { LEGAL_DOCUMENT_VERSIONS, LEGAL_RESPONSIBLE_FALLBACK } from "../../shared/legalDocuments.js";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc.js";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
+import { parseLegalContactPhone } from "./legalConfig.js";
 
 function configuredValue(value: string | undefined) {
   const normalized = value?.trim();
@@ -27,6 +28,7 @@ export function getPublicLegalConfig() {
     responsibleName: responsibleName ?? LEGAL_RESPONSIBLE_FALLBACK,
     responsibleNameConfigured: Boolean(responsibleName),
     contactEmail: configuredContactEmail(),
+    contactPhone: parseLegalContactPhone(process.env.LEGAL_CONTACT_PHONE),
     whatsappConsentAvailable: isWhatsAppConsentAvailable(),
   };
 }

@@ -1,3 +1,5 @@
+import { StatementImagesEditor, StatementImagesPreview } from "@/components/admin/StatementImagesEditor";
+import { getStatementImages, getEditableStatementImages, replaceStatementImages } from "@shared/questionImages";
 import { useEffect, useState } from "react";
 import type {
   ChangeEvent,
@@ -54,6 +56,7 @@ type QuestionFormData = {
   enunciado_pos_imagem: string;
   formula: string;
   url_imagem: string;
+  image_metadata?: unknown[];
 
   alternativa_a: string;
   alternativa_b: string;
@@ -640,16 +643,7 @@ function QuestionPreview({ form }: { form: QuestionFormData }) {
           />
         </div>
 
-        {form.url_imagem.trim() ? (
-          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
-            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">Imagem</p>
-            <img
-              src={form.url_imagem.trim()}
-              alt="Imagem da questão"
-              className="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-            />
-          </div>
-        ) : null}
+        <StatementImagesPreview images={getStatementImages(form.image_metadata, form.url_imagem)} />
 
         {form.enunciado_pos_imagem.trim() ? (
           <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5">
@@ -825,6 +819,7 @@ export default function AdminQuestionEditPage() {
           enunciado_pos_imagem: data.enunciado_pos_imagem ?? "",
           formula: data.formula ?? "",
           url_imagem: data.url_imagem ?? "",
+          image_metadata: data.image_metadata ?? [],
 
           alternativa_a: data.a ?? data.A ?? "",
           alternativa_b: data.b ?? data.B ?? "",
@@ -859,60 +854,6 @@ export default function AdminQuestionEditPage() {
       ...prev,
       [field]: value,
     }));
-  }
-
-  async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || !questionId) return;
-
-    try {
-      validarImagemUpload(file);
-      setUploadingImage(true);
-      setError("");
-      setSuccessMessage("");
-
-      const pastaBase =
-        form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
-      const upload = await createImageUploadMutation.mutateAsync({
-        bucket: QUESTION_IMAGES_BUCKET,
-        originalName: file.name,
-        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
-        context: `${pastaBase}/enunciado`,
-      });
-
-      const { error: uploadError } = await uploadToSignedStorageUrl({
-        bucket: upload.bucket,
-        path: upload.path,
-        token: upload.token,
-        file,
-        contentType: file.type,
-      });
-
-      if (uploadError) {
-        console.error("Erro ao enviar imagem da questão:", uploadError);
-        setError(
-          uploadError.message
-            ? `Não foi possível enviar a imagem da questão: ${uploadError.message}`
-            : "Não foi possível enviar a imagem da questão."
-        );
-        return;
-      }
-
-      if (!upload.publicUrl) {
-        setError("Não foi possível gerar a URL pública da imagem.");
-        return;
-      }
-
-      updateField("url_imagem", upload.publicUrl);
-
-      setSuccessMessage("Imagem da questão enviada com sucesso.");
-    } catch (err) {
-      console.error("Erro inesperado ao enviar imagem da questão:", err);
-      setError("Ocorreu um erro inesperado ao enviar a imagem.");
-    } finally {
-      setUploadingImage(false);
-      event.target.value = "";
-    }
   }
 
   async function handleAlternativeImageUpload(
@@ -1056,7 +997,8 @@ export default function AdminQuestionEditPage() {
       enunciado: valorLimpo(form.enunciado),
       enunciado_pos_imagem: valorLimpo(form.enunciado_pos_imagem),
       formula: valorLimpo(form.formula),
-      url_imagem: valorLimpo(form.url_imagem),
+url_imagem: valorLimpo(form.url_imagem),
+        image_metadata: replaceStatementImages(form.image_metadata, getEditableStatementImages(form.image_metadata, form.url_imagem)),
 
       A: valorLimpo(form.alternativa_a),
       B: valorLimpo(form.alternativa_b),
@@ -1422,59 +1364,7 @@ export default function AdminQuestionEditPage() {
                   />
                 </div>
 
-                <div className="flex flex-wrap gap-3">
-                  <label className="inline-flex">
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      className="hidden"
-                      onChange={handleImageUpload}
-                    />
-                    <span className="inline-flex items-center rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                      {uploadingImage ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Enviando imagem...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-4 h-4 mr-2" />
-                          Enviar imagem da questão
-                        </>
-                      )}
-                    </span>
-                  </label>
-                </div>
-
-                <div>
-                  <FieldLabel>URL da imagem</FieldLabel>
-                  <TextInput
-                    value={form.url_imagem}
-                    onChange={(e) => updateField("url_imagem", e.target.value)}
-                    placeholder="https://..."
-                  />
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <ImageIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Preview da imagem da questão
-                    </p>
-                  </div>
-
-                  {form.url_imagem ? (
-                    <img
-                      src={form.url_imagem}
-                      alt="Preview da imagem da questão"
-                      className="max-w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-                    />
-                  ) : (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      Envie uma imagem ou cole uma URL para visualizar o preview.
-                    </p>
-                  )}
-                </div>
+                <StatementImagesEditor value={getEditableStatementImages(form.image_metadata, form.url_imagem)} onBusyChange={setUploadingImage} onChange={images => setForm(previous => ({ ...previous, url_imagem: images[0]?.url_imagem || "", image_metadata: replaceStatementImages(previous.image_metadata, images) }))} />
 
                 <div>
                   <FieldLabel>Fórmula</FieldLabel>
@@ -1609,7 +1499,7 @@ export default function AdminQuestionEditPage() {
               <Button
                 variant="outline"
                 onClick={handleSaveAndGoToResolution}
-                disabled={saving}
+                disabled={saving || uploadingImage || uploadingAlternative !== null}
                 className="rounded-2xl min-w-[220px]"
               >
                 {saving ? (
@@ -1627,7 +1517,7 @@ export default function AdminQuestionEditPage() {
 
               <Button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || uploadingImage || uploadingAlternative !== null}
                 className="rounded-2xl min-w-[180px]"
               >
                 {saving ? (

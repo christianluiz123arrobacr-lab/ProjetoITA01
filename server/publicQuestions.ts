@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
+import { getStatementImages } from "../shared/questionImages.js";
 import { supabaseAdmin } from "./_core/supabaseAdmin.js";
 import { formatDifficultyLabel } from "../shared/difficulty.js";
 
@@ -102,6 +103,7 @@ export function toInitialPublicQuestion(row: PublicQuestionRow, related: PublicQ
     statementAfterImage: String(row.enunciado_pos_imagem || ""),
     formula: String(row.formula || ""),
     imageUrl: safePublicImageUrl(row.url_imagem),
+    statementImages: getStatementImages(row.image_metadata, row.url_imagem),
     imageAlt: statementMetadata?.texto_alternativo || null,
     imageCaption: statementMetadata?.legenda || null,
     options: (["a", "b", "c", "d", "e"] as const).map((key) => optionDto(row, key)).filter(Boolean),

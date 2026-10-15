@@ -144,6 +144,13 @@ function incidence(
     );
 }
 
+export const OTHER_CONTENT_SHARE_THRESHOLD = 3;
+
+/** Only an explicit period edit/clear changes the applied time range. */
+export function changeExamAnalysisFilters(current: ExamAnalysisFilters, next: Partial<ExamAnalysisFilters>): ExamAnalysisFilters {
+  return { ...current, ...next };
+}
+
 export function buildExamAnalysis(
   source: ExamAnalysisRow[],
   requested: ExamAnalysisFilters = {}
@@ -170,13 +177,11 @@ export function buildExamAnalysis(
   const years = Array.from(
     new Set(base.flatMap(row => (row.year === null ? [] : [row.year])))
   ).sort((a, b) => a - b);
-  if (requested.year && years.includes(requested.year))
+  if (requested.year)
     filters.year = requested.year;
   if (
     !filters.year &&
     requested.period &&
-    years.includes(requested.period.from) &&
-    years.includes(requested.period.to) &&
     requested.period.from <= requested.period.to
   )
     filters.period = requested.period;
@@ -250,7 +255,7 @@ export function buildExamAnalysis(
     );
   // Keep the most important slice, even in a very fragmented bank.
   const small = distribution.filter(
-    (item, index) => index > 0 && item.share < 5
+    (item, index) => index > 0 && item.share < OTHER_CONTENT_SHARE_THRESHOLD - 1e-9
   );
   const donut = distribution
     .filter(item => !small.includes(item))
