@@ -40,18 +40,32 @@ export function appliedQuestionBrowseOptions(
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    queryFn: async ({ pageParam, signal }) => {
-      const page = await client.browse.query(
+    refetchOnMount: false,
+    queryFn: async ({ pageParam, signal, client: cache, queryKey }) => {
+      const previous = cache.getQueryData<{ pages: BrowseResult[] }>(queryKey)?.pages ?? [];
+      const snapshot = previous[0];
+      // Keep the applied selection stable as answers change practice-status membership.
+      // Only compact IDs are captured; bodies are still transferred in batches of 20.
+      const page = pageParam > 0 && snapshot?.selectionIds ? {
+        ...snapshot, page: pageParam,
+        rows: snapshot.selectionIds.slice(pageParam * 20, (pageParam + 1) * 20).map(id => ({id})),
+      } : await client.browse.query(
         { filters: filters!, page: pageParam, pageSize: 20 },
         { signal }
       );
       const ids = page.rows.map(row => row.id);
+      if (page.selectionIds && (page.selectionIds.length !== page.total || new Set(page.selectionIds).size !== page.total))
+        throw new Error("A seleção recebida está inconsistente. Reaplique os filtros.");
       const details = ids.length
         ? await client.details.query({ ids }, { signal })
         : [];
       if (signal.aborted)
         throw new DOMException("Consulta cancelada", "AbortError");
       const byId = new Map(details.map(row => [row.id, row]));
+      const previousIds = new Set(previous.slice(0, pageParam).flatMap(p => p.rows.map(row => row.id)));
+      if (details.length !== ids.length || ids.some(id => !byId.has(id)) || (pageParam > 0 && (
+        previous[0]?.total !== page.total || previous[0]?.selectionRevision !== page.selectionRevision || !ids.length || ids.some(id => previousIds.has(id))
+      ))) throw new Error("A lista mudou durante o treino. Tente novamente; se persistir, reaplique os filtros.");
       return {
         ...page,
         questions: ids.flatMap(id =>

@@ -3,17 +3,13 @@ import { z } from "zod";
 import { LEGAL_DOCUMENT_VERSIONS, LEGAL_RESPONSIBLE_FALLBACK } from "../../shared/legalDocuments.js";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc.js";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
-import { parseLegalContactPhone } from "./legalConfig.js";
+import { LEGAL_CONTACT } from "../../shared/legalContact.js";
 
 function configuredValue(value: string | undefined) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
 }
 
-function configuredContactEmail() {
-  const value = configuredValue(process.env.LEGAL_CONTACT_EMAIL);
-  return value && z.string().email().safeParse(value).success ? value : null;
-}
 
 export function isWhatsAppConsentAvailable() {
   return process.env.WHATSAPP_REMINDERS_ENABLED === "true" &&
@@ -27,8 +23,9 @@ export function getPublicLegalConfig() {
     versions: LEGAL_DOCUMENT_VERSIONS,
     responsibleName: responsibleName ?? LEGAL_RESPONSIBLE_FALLBACK,
     responsibleNameConfigured: Boolean(responsibleName),
-    contactEmail: configuredContactEmail(),
-    contactPhone: parseLegalContactPhone(process.env.LEGAL_CONTACT_PHONE),
+    contactEmail: LEGAL_CONTACT.email,
+    contactPhone: LEGAL_CONTACT.phone,
+    contactPhoneDisplay: LEGAL_CONTACT.phoneDisplay,
     whatsappConsentAvailable: isWhatsAppConsentAvailable(),
   };
 }

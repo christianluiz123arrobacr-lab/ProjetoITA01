@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./ranking.css";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { summarizeAttempts } from "@shared/statistics";
@@ -955,7 +956,7 @@ export default function RankingPage() {
   }
 
   return (
-    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-slate-50 dark:from-slate-950 dark:via-amber-950/20 dark:to-slate-950">
+    <div className="theme-page ranking-page min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-slate-50 dark:from-slate-950 dark:via-amber-950/20 dark:to-slate-950">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700 dark:bg-slate-950/85">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/">

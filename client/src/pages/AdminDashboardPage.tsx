@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { trpc } from "@/lib/trpc";
+import { retryTransientRead } from "@/lib/transientRetry";
 import {
   Users,
   FileText,
@@ -169,7 +170,7 @@ export default function AdminDashboardPage() {
   const [latestQuestionsWithoutResolution, setLatestQuestionsWithoutResolution] =
     useState<QuestionWithoutResolution[]>([]);
 
-  const dashboardQuery = trpc.admin.getDashboardStats.useQuery(undefined, { staleTime: 30000, retry: false });
+  const dashboardQuery = trpc.admin.getDashboardStats.useQuery(undefined, { staleTime: 30000, retry: retryTransientRead, retryDelay: 1000 });
 
   useEffect(() => {
     async function loadDashboard() {

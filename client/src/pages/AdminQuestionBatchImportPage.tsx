@@ -6,6 +6,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
+import { retryTransientRead } from "@/lib/transientRetry";
 import { uploadToSignedStorageUrl } from "@/lib/signedStorageUpload";
 import { getDifficultyLabel } from "@shared/difficulty";
 import { MAX_QUESTION_IMPORT_IMAGE_BYTES, MAX_QUESTION_IMPORT_JSON_BYTES, type NormalizedQuestionImageSlot, type QuestionImportPreviewItem } from "@shared/questionImportSchema";
@@ -63,16 +64,16 @@ export default function AdminQuestionBatchImportPage() {
   const jsonInput = useRef<HTMLInputElement | null>(null);
   const bulkImagesInput = useRef<HTMLInputElement | null>(null);
   const utils = trpc.useUtils();
-  const draftsQuery = trpc.admin.listQuestionImportDrafts.useQuery();
+  const draftsQuery = trpc.admin.listQuestionImportDrafts.useQuery(undefined, { retry: retryTransientRead, retryDelay: 1000 });
   const suggestionsQuery = trpc.admin.getQuestionSuggestions.useQuery(undefined, { staleTime: 60000, retry: false });
-  const createDraft = trpc.admin.createQuestionImportDraft.useMutation();
+  const createDraft = trpc.admin.createQuestionImportDraft.useMutation({ retry: false });
   const prepareUpload = trpc.admin.prepareQuestionImportImageUpload.useMutation();
   const confirmUpload = trpc.admin.confirmQuestionImportImageUpload.useMutation();
   const removeUpload = trpc.admin.removeQuestionImportImageUpload.useMutation();
   const updateMetadata = trpc.admin.updateQuestionImportImageMetadata.useMutation();
   const cancelDraft = trpc.admin.cancelQuestionImportDraft.useMutation();
   const removeInvalidQuestion = trpc.admin.removeInvalidQuestionFromImportDraft.useMutation();
-  const finalizeDraft = trpc.admin.finalizeQuestionImportDraft.useMutation();
+  const finalizeDraft = trpc.admin.finalizeQuestionImportDraft.useMutation({ retry: false });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [rawJson, setRawJson] = useState("");
   const [sourceName, setSourceName] = useState<string | undefined>();
@@ -125,6 +126,19 @@ export default function AdminQuestionBatchImportPage() {
   async function refreshDraft() {
     if (!draft) return;
     applyDraft(await utils.client.admin.getQuestionImportDraft.query({ batchId: draft.id }));
+  }
+
+  async function resumeDraft(batchId: string) {
+    setError("");
+    try { applyDraft(await utils.client.admin.getQuestionImportDraft.query({ batchId })); }
+    catch { setError("Não foi possível retomar o lote. Ele continua salvo; tente novamente."); }
+  }
+
+  async function cancelCurrentDraft() {
+    if (!draft) return;
+    setError("");
+    try { await cancelDraft.mutateAsync({batchId:draft.id}); setDraft(null); await draftsQuery.refetch(); }
+    catch { setError("Não foi possível confirmar o cancelamento. Atualize os lotes salvos antes de tentar novamente."); }
   }
 
   async function uploadFile(slot: SlotRow, file: File) {
@@ -182,6 +196,7 @@ export default function AdminQuestionBatchImportPage() {
     <div className="flex flex-wrap gap-3"><Link href="/admin/questoes"><Button variant="outline" className="rounded-2xl"><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Button></Link><a href="/question-import/questoes-v2.example.json" download><Button variant="outline" className="rounded-2xl"><FileJson className="mr-2 h-4 w-4" />Exemplo questoes-v2</Button></a></div>
     {error && <Card className="border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"><AlertTriangle className="mr-2 inline h-5 w-5" />{error}</Card>}
     {notice && <Card className="border-blue-300 bg-blue-50 p-4 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">{notice}</Card>}
+    {draftsQuery.error && <Card role="alert" className="p-4">Não foi possível atualizar os lotes salvos. <Button variant="outline" onClick={() => void draftsQuery.refetch()}>Tentar novamente</Button></Card>}
 
     {!draft ? <>
       <Card className="space-y-4 border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
@@ -193,7 +208,7 @@ export default function AdminQuestionBatchImportPage() {
         <textarea value={rawJson} onChange={(event) => setRawJson(event.target.value)} rows={12} placeholder='{"formato":"questoes-v2","questoes":[...]}' className="w-full rounded-2xl border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"/>
         <div className="flex justify-end"><Button disabled={!rawJson.trim() || createDraft.isPending} className="rounded-2xl" onClick={() => void createFromJson()}>{createDraft.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}Validar e salvar rascunho</Button></div>
       </Card>
-      {(draftsQuery.data?.length ?? 0) > 0 && <Card className="border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900"><h2 className="font-bold">Lotes salvos</h2><div className="mt-3 space-y-2">{draftsQuery.data?.map((item: any) => <button key={item.id} className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={async () => applyDraft(await utils.client.admin.getQuestionImportDraft.query({ batchId: item.id }))}><span>{item.source_name || item.format} · {item.validation_summary?.total ?? 0} questão(ões)</span><span className="text-xs font-bold uppercase">{item.status}</span></button>)}</div></Card>}
+{(draftsQuery.data?.length ?? 0) > 0 && <Card className="border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900"><h2 className="font-bold">Lotes salvos</h2><div className="mt-3 space-y-2">{draftsQuery.data?.map((item: any) => <button key={item.id} className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={() => void resumeDraft(item.id)}><span>{item.source_name || item.format} · {item.validation_summary?.total ?? 0} questão(ões)</span><span className="text-xs font-bold uppercase">{item.status}</span></button>)}</div></Card>}
     </> : <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Questões", previews.length], ["Válidas", previews.length - invalidCount], ["Inválidas", invalidCount], ["Com imagens", questionsWithImages], ["Imagens vinculadas", readyCount], ["Obrigatórias pendentes", pendingRequired], ["Conteúdos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newContents], ["Assuntos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newSubjects]].map(([label, value]) => <Card key={String(label)} className="border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></Card>)}</div>
       {suggestionsQuery.isError && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">Não foi possível comparar conteúdos e assuntos com as questões cadastradas. <Button variant="outline" onClick={()=>void suggestionsQuery.refetch()}>Tentar novamente</Button></p>}
@@ -202,7 +217,7 @@ export default function AdminQuestionBatchImportPage() {
         <Button variant="outline" className="rounded-2xl" onClick={() => bulkImagesInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4"/>Associar vários arquivos</Button>
         <Button className="rounded-2xl" disabled={busy || validCount === 0 || pendingRequired > 0 || draft.status === "completed"} onClick={() => void finish()}><CheckCircle2 className="mr-2 h-4 w-4"/>{draft.status === "completed" ? "Lote concluído" : invalidCount > 0 ? `Importar ${validCount} válida(s)` : "Concluir importação"}</Button>
         <Button variant="outline" className="rounded-2xl" onClick={() => { setDraft(null); setRawJson(""); setNotice("Rascunho salvo para continuar depois."); }}><Save className="mr-2 h-4 w-4"/>Salvar e sair</Button>
-        {draft.status === "draft" && <Button variant="outline" className="rounded-2xl text-red-700" onClick={async () => { await cancelDraft.mutateAsync({ batchId: draft.id }); setDraft(null); await draftsQuery.refetch(); }}><Trash2 className="mr-2 h-4 w-4"/>Cancelar lote</Button>}
+        {draft.status === "draft" && <Button variant="outline" className="rounded-2xl text-red-700" onClick={() => void cancelCurrentDraft()}><Trash2 className="mr-2 h-4 w-4"/>Cancelar lote</Button>}
       </Card>
       <div className="space-y-4">{previews.map((preview) => {
         const question = preview.item; const key = question.chave_importacao || question.id_importacao || question.import_hash; const questionSlots = slotsByQuestion.get(key) ?? []; const state = statusLabel(preview, questionSlots);

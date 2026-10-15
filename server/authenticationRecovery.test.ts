@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
-const mocks = vi.hoisted(() => ({ getUser: vi.fn(), from: vi.fn() }));
-vi.mock("./_core/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: { getUser: mocks.getUser }, from: mocks.from } }));
+const mocks = vi.hoisted(() => ({ getUser: vi.fn(), from: vi.fn(), rpc: vi.fn() }));
+vi.mock("./_core/supabaseAdmin.js", () => ({ supabaseAdmin: { auth: { getUser: mocks.getUser }, from: mocks.from, rpc: (...args: unknown[]) => ({ abortSignal: () => mocks.rpc(...args) }) } }));
 import { createContext, createTrpcContext, ensureAuthentication, assertAuthenticationAvailable } from "./_core/context.js";
 import { router, protectedProcedure, publicProcedure, adminProcedure, adminOrEditorProcedure } from "./_core/trpc.js";
 import { getPlatformAccessDecision, accessQuery } from "./_core/platformAccess.js";
@@ -27,14 +27,15 @@ describe("authentication recovery (mocked Supabase)", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(console, "info").mockImplementation(() => {});
-    mocks.getUser.mockReset(); mocks.from.mockReset();
+    mocks.getUser.mockReset(); mocks.from.mockReset(); mocks.rpc.mockReset();
+    mocks.rpc.mockResolvedValue({ data: { role: "student", profile: null }, error: null });
     mocks.getUser.mockResolvedValue({ data: { user: { id: "test-user", email: "private@example.test" } }, error: null });
     mocks.from.mockReturnValue(query({ data: null, error: null }));
   });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
   it.each(["student", "admin", "editor"])("validates a %s session", async role => {
-    mocks.from.mockImplementation(table => query({ data: table === "admin_users" && role !== "student" ? { role } : null, error: null }));
+    mocks.rpc.mockResolvedValue({ data: { role, profile: null }, error: null });
     const ctx = await createContext(options("private-token"));
     expect(ctx.authentication?.status).toBe("verified");
     expect(await routes.createCaller(ctx).access()).toBe(role);
@@ -93,31 +94,43 @@ describe("authentication recovery (mocked Supabase)", () => {
     expect(JSON.stringify(payload)).not.toContain("secret-token");
   });
   it("does not silently downgrade or grant a role when role lookup fails", async () => {
-    mocks.from.mockReturnValue(query({ data: { role: "admin" }, error: { code: "connection_error" } }));
+    mocks.rpc.mockResolvedValue({ data: { role: "admin" }, error: { code: "connection_error" } });
     const ctx = await createContext(options("token"));
     expect(ctx.user).toBeNull();
     await expect(routes.createCaller(ctx).admin()).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
   });
+  it("bounds role lookup separately from token validation and rejects malformed snapshots", async () => {
+    mocks.rpc.mockResolvedValueOnce({data:{role:"admin"},error:null});
+    expect((await createContext(options("token"))).authentication?.status).toBe("unavailable");
+    vi.useFakeTimers(); mocks.rpc.mockReturnValueOnce(new Promise(()=>{}));
+    const pending = createContext(options("token"));
+    await vi.advanceTimersByTimeAsync(4001);
+    const ctx = await pending;
+    expect(ctx.authentication?.status).toBe("unavailable");
+    expect(ctx.user).toBeNull();
+    for (const call of [routes.createCaller(ctx).admin, routes.createCaller(ctx).editor])
+      await expect(call()).rejects.toMatchObject({code:"SERVICE_UNAVAILABLE"});
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toMatch(/private@example|Bearer|token"/);
+  });
   it("public-only requests avoid token and role checks, while concurrent protected calls share one check", async () => {
-    mocks.from.mockImplementation(table => query({ data: table === "admin_users" ? { role: "admin" } : null, error: null }));
+    mocks.rpc.mockResolvedValue({ data: { role: "admin", profile: null }, error: null });
     const ctx = createTrpcContext(options("token"));
     const caller = routes.createCaller(ctx);
     expect(await caller.publicConfig()).toBe(true);
     expect(mocks.getUser).not.toHaveBeenCalled();
     expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
     expect(await Promise.all([caller.access(), caller.admin(), caller.editor(), caller.me()])).toMatchObject(["admin", true, true, { role: "admin" }]);
     expect(mocks.getUser).toHaveBeenCalledTimes(1);
-    expect(mocks.from).toHaveBeenCalledTimes(2);
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
     await routes.createCaller(createTrpcContext(options("token"))).access();
     expect(mocks.getUser).toHaveBeenCalledTimes(2); // No cross-request role cache.
   });
   it("measured simulated public latency avoids the former eager validation delay", async () => {
     vi.useFakeTimers();
     mocks.getUser.mockImplementation(() => new Promise(r => setTimeout(() => r({ data: { user: { id: "test-user" } }, error: null }), 1000)));
-    mocks.from.mockImplementation(() => {
-      const q = { select: () => q, eq: () => q, maybeSingle: () => new Promise(r => setTimeout(() => r({ data: null, error: null }), 2000)) };
-      return q;
-    });
+    mocks.rpc.mockImplementation(() => new Promise(r => setTimeout(() => r({ data: { role: "student", profile: null }, error: null }), 2000)));
     const before = Date.now();
     const oldPath = createContext(options("token")).then(ctx => routes.createCaller(ctx).publicConfig());
     await vi.advanceTimersByTimeAsync(3000); expect(await oldPath).toBe(true);
@@ -127,9 +140,9 @@ describe("authentication recovery (mocked Supabase)", () => {
     expect(Date.now() - after).toBe(0);
   });
   it("a new request sees revocation immediately", async () => {
-    mocks.from.mockImplementation(table => query({ data: table === "admin_users" ? { role: "admin" } : null, error: null }));
+    mocks.rpc.mockResolvedValue({ data: { role: "admin", profile: null }, error: null });
     expect(await routes.createCaller(createTrpcContext(options("token"))).admin()).toBe(true);
-    mocks.from.mockReturnValue(query({ data: null, error: null }));
+    mocks.rpc.mockResolvedValue({ data: { role: "student", profile: null }, error: null });
     await expect(routes.createCaller(createTrpcContext(options("token"))).admin()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
   it("reuses a verified same-request profile for student access, never another user's", async () => {

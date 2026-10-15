@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { LEGAL_DOCUMENT_VERSIONS } from "@shared/legalDocuments";
+import { LEGAL_CONTACT } from "@shared/legalContact";
 
 type LegalKind = "terms" | "privacy" | "billing" | "referrals";
 
@@ -51,8 +52,8 @@ const documents: Record<LegalKind, { title: string; intro: string; sections: Arr
 export default function LegalPage({ kind }: { kind: LegalKind }) {
   const document = documents[kind];
   const config = trpc.legal.publicConfig.useQuery();
-  const email = config.data?.contactEmail;
-  const phone = config.data?.contactPhone;
+  const email = LEGAL_CONTACT.email;
+  const phone = LEGAL_CONTACT.phone;
   const version = (config.data?.versions ?? LEGAL_DOCUMENT_VERSIONS)[kind === "privacy" ? "privacy" : "terms"];
   return (
     <main className="theme-page min-h-screen bg-slate-50 px-4 py-10 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:px-6">
@@ -61,7 +62,7 @@ export default function LegalPage({ kind }: { kind: LegalKind }) {
         <div className="mt-6 flex items-start gap-3"><ShieldCheck className="mt-1 h-7 w-7 shrink-0 text-cyan-600 dark:text-cyan-300" /><div><h1 className="text-3xl font-black tracking-tight sm:text-4xl">{document.title}</h1><p className="mt-3 leading-7 text-slate-600 dark:text-slate-300">{document.intro}</p></div></div>
         <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Versão de {new Date(`${version}T12:00:00Z`).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Sao_Paulo" })}</p>
         <div className="mt-8 space-y-8">{document.sections.map(([title, paragraphs]) => <section key={title}><h2 className="text-xl font-bold">{title}</h2><div className="mt-3 space-y-3 text-sm leading-7 text-slate-700 dark:text-slate-300">{paragraphs.map(text => <p key={text}>{text}</p>)}</div></section>)}</div>
-        <section className="mt-10 rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-950"><h2 className="font-bold">Responsável e contato</h2><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{config.data?.responsibleName ?? "Projeto Vetor — responsável pelo tratamento de dados"}</p>{email ? <a href={`mailto:${email}`} className="mt-2 inline-block text-sm font-semibold text-cyan-700 hover:underline dark:text-cyan-300">{email}</a> : <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">E-mail de suporte em configuração.</p>}{phone ? <a href={`tel:${phone}`} className="mt-2 block text-sm font-semibold text-cyan-700 hover:underline dark:text-cyan-300">{phone}</a> : <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Telefone de suporte em configuração.</p>}</section>
+<section className="mt-10 rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-950"><h2 className="font-bold">Responsável e contato</h2><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{config.data?.responsibleName ?? "Projeto Vetor — responsável pelo tratamento de dados"}</p>{email ? <a href={`mailto:${email}`} className="mt-2 inline-block text-sm font-semibold text-cyan-700 hover:underline dark:text-cyan-300">{email}</a> : <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">E-mail de suporte em configuração.</p>}{phone ? <a href={`tel:${phone}`} className="mt-2 block text-sm font-semibold text-cyan-700 hover:underline dark:text-cyan-300">{LEGAL_CONTACT.phoneDisplay}</a> : <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Telefone de suporte em configuração.</p>}</section>
       </article>
     </main>
   );

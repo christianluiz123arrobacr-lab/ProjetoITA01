@@ -17,7 +17,7 @@ const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const rpc = vi.fn(async (name: string, args: Record<string, any> = {}) => {
   const params =
-    name === "vet_browse_questions"
+    ["vet_browse_questions", "vet_admin_browse_questions"].includes(name)
       ? [
           JSON.stringify(args.p_filters),
           args.p_page,
@@ -27,7 +27,7 @@ const rpc = vi.fn(async (name: string, args: Record<string, any> = {}) => {
         ]
       : [];
   const placeholders =
-    name === "vet_browse_questions"
+    ["vet_browse_questions", "vet_admin_browse_questions"].includes(name)
       ? "$1::jsonb,$2::int,$3::int,$4::boolean,$5::uuid"
       : "";
   const result = await db.query<{ result: unknown }>(
@@ -40,7 +40,7 @@ beforeAll(async () => {
   db = await PGlite.create();
   const fixture = `create role anon; create role authenticated; create role service_role;
  create table profiles(id uuid primary key,nome text,email text,telefone text,role text,ativo boolean,created_at timestamptz,last_seen_at timestamptz);
- create table admin_users(id uuid primary key,role text);
+ create table admin_users(id uuid primary key,role text,user_id uuid);
  create table questoes(id uuid primary key,codigo text,disciplina text,diciplina text,conteudo text,conteudos text[],assunto text,assuntos text[],assuntos_por_conteudo jsonb,banca text,ano int,dificuldade text,"instituição" text,publicada boolean,created_at timestamptz,enunciado text,enunciado_pos_imagem text,alternativa_correta text,"A" text,url_imagem text,private_note text,is_public boolean,public_slug text,public_noindex boolean);
  create table resolucoes(id uuid primary key,questao_id uuid,tipo text,texto text,url_imagem text,ordem int,codigo_resolucao text,created_at timestamptz);
  create table user_question_attempts(id uuid primary key,user_id uuid,question_id uuid,is_correct boolean,answered_at timestamptz,attempt_number int);
@@ -61,6 +61,7 @@ beforeAll(async () => {
       "utf8"
     )
   );
+  await db.exec(readFileSync("supabase/migrations/202610150001_browse_and_role_snapshot.sql", "utf8"));
 }, 30000);
 afterAll(async () => {
   await db?.close();
@@ -162,6 +163,7 @@ describe("Etapa 2: PostgreSQL local sintético (não produção)", () => {
     });
     expect(r.total).toBe(15);
     expect(r.rows).toHaveLength(15);
+    expect(r.selectionIds).toEqual(r.rows.map(row=>row.id));
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(r.rows[0].enunciado.length).toBeLessThanOrEqual(90);
     expect(JSON.stringify(r)).not.toMatch(
@@ -354,7 +356,49 @@ describe("Etapa 2: PostgreSQL local sintético (não produção)", () => {
       },
     });
   });
+  it("totais globais são agregados sem enunciados e cargos são resolvidos em snapshot com revogação", async () => {
+    const global = (await db.query<{r:any}>("select vet_question_global_stats() r")).rows[0].r;
+    expect(global.total).toBe(2499);
+    expect(global.subjects["física"]).toBe(2499);
+    expect(JSON.stringify(global)).not.toMatch(/enunciado|rows|PRIVATE/);
+    const role = async () => (await db.query<{r:any}>("select vet_resolve_access_role($1) r",[id(1)])).rows[0].r;
+    expect((await role()).role).toBe("student");
+    await db.exec(`insert into admin_users(id,user_id,role) values('${id(5001)}','${id(1)}','editor')`);
+    expect((await role()).role).toBe("editor");
+    await db.exec(`update admin_users set role='admin' where user_id='${id(1)}'`);
+    expect((await role()).role).toBe("admin");
+    await db.exec(`delete from admin_users where user_id='${id(1)}'`);
+    expect((await role()).role).toBe("student");
+    for (const fn of ["vet_resolve_access_role(uuid)","vet_question_global_stats()","vet_admin_browse_questions(jsonb,integer,integer,boolean,uuid)"])
+      for (const role of ["anon","authenticated"])
+        expect((await db.query<{ok:boolean}>("select has_function_privilege($1,$2,'execute') ok",[role,fn])).rows[0].ok).toBe(false);
+  });
+  it("RPC administrativa nova preserva exatamente filtros, facetas, contagem e ordenação da antiga", async () => {
+    const cases = [{}, { years:[2026],institutions:["ITA"],subjects:["Física"] },
+      { search:"Q-2499" },{ topics:["Cinemática"],subtopics:["Forças"] },
+      { publication:"unpublished" },{ difficulties:["medio"],exams:["Exército"],yearFrom:2026 },
+      { practiceStatus:"unanswered" }];
+    for (const filters of cases) {
+      const args = [JSON.stringify(questionBrowseSchema.parse({filters}).filters),0,25,true,null];
+      const oldStarted=performance.now();
+      const old = (await db.query<{r:any}>("select vet_browse_questions($1,$2,$3,$4,$5) r",args)).rows[0].r;
+      const oldMs=performance.now()-oldStarted, newStarted=performance.now();
+      const next = (await db.query<{r:any}>("select vet_admin_browse_questions($1,$2,$3,$4,$5) r",args)).rows[0].r;
+      if ("years" in filters) console.info({benchmark:"local-admin-comparison",before_ms:Math.round(oldMs),after_ms:Math.round(performance.now()-newStarted),matched:next.total});
+      expect(next).toEqual(old);
+    }
+  }, 60000);
+  it("mede plano real da consulta interna administrativa em PostgreSQL local, não produção", async () => {
+    const sql = readFileSync("supabase/migrations/202610150001_browse_and_role_snapshot.sql","utf8");
+    const body = sql.match(/ return \(([\s\S]+?)\n \);/)![1]
+      .replaceAll("p_filters","$1::jsonb").replaceAll("p_page","0").replaceAll("p_size","25").replaceAll("p_user","null::uuid");
+    const plan = (await db.query<any>(`explain (analyze,buffers,format json) ${body}`,[JSON.stringify({years:[2026]})])).rows[0]["QUERY PLAN"][0];
+    expect(plan.Plan["Actual Rows"]).toBe(1);
+    console.info({benchmark:"local-admin-browse-plan",planning_ms:plan["Planning Time"],execution_ms:plan["Execution Time"]});
+    expect((await browse({years:[2026]},0,25,true)).rows).toHaveLength(15);
+  }, 30000);
   it("rollback e reaplicação são testados localmente", async () => {
+    await db.exec(readFileSync("supabase/rollbacks/202610150001_browse_and_role_snapshot.rollback.sql", "utf8"));
     await db.exec(
       readFileSync(
         "supabase/rollbacks/202610080001_performance_stage_two.rollback.sql",
@@ -379,5 +423,7 @@ describe("Etapa 2: PostgreSQL local sintético (não produção)", () => {
       )
     );
     expect((await browse({ years: [2026] })).total).toBe(15);
+    await db.exec(readFileSync("supabase/migrations/202610150001_browse_and_role_snapshot.sql", "utf8"));
+    expect((await browse({ years: [2026] },0,20,true)).total).toBe(15);
   });
 });

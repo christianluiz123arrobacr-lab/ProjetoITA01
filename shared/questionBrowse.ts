@@ -42,6 +42,9 @@ export const questionFilterOptionsSchema = z.object({
 });
 export type BrowseRow = Record<string, any> & { id: string };
 export type BrowseResult = {
+  selectionRevision?: string | null;
+  /** Compact ordered IDs captured on Apply; never question bodies/answers. */
+  selectionIds?: string[] | null;
   rows: BrowseRow[];
   total: number;
   page: number;

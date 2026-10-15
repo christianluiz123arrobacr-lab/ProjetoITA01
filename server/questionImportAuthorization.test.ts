@@ -45,6 +45,14 @@ const operations = [
 afterEach(() => vi.clearAllMocks());
 
 describe("permissões do fluxo de importação em lote", () => {
+  it("retry explícito da finalização concluída retorna o mesmo resultado sem criar questões outra vez", async () => {
+    const admin = caller("editor");
+    expect(await admin.finalizeQuestionImportDraft({batchId})).toEqual({createdCount:1});
+    expect(await admin.finalizeQuestionImportDraft({batchId})).toEqual({createdCount:1});
+    expect(service.prepareQuestionImportFinalization).toHaveBeenCalledTimes(2);
+    expect(service.completeQuestionImportDraft).not.toHaveBeenCalled();
+    expect(service.cleanupSkippedQuestionImportImages).not.toHaveBeenCalled();
+  });
   it.each(["admin", "editor"] as const)("%s pode usar rascunhos, imagens e finalização com seu próprio ID", async role => {
     const admin = caller(role);
     for (const [endpoint, input, handler] of operations) {

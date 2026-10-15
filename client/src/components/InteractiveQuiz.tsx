@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { progressiveQuizState } from "@/lib/progressiveQuiz";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -40,6 +41,11 @@ export type QuizCompletionData = {
 
 type InteractiveQuizProps = {
   questions: Question[];
+  totalQuestions?: number;
+  onPositionChange?: (index: number) => void;
+  onLoadNext?: () => Promise<unknown>;
+  loadingNext?: boolean;
+  navigationError?: boolean;
   vetMockSessionId?: string | null;
   initialAnswers?: Record<number, { selectedOption: string; isCorrect: boolean; correctOption: string; resolution?: any[] }>;
   onComplete?: (data: QuizCompletionData) => void;
@@ -240,6 +246,11 @@ function MarkdownContent({
 
 export function InteractiveQuiz({
   questions,
+  totalQuestions = questions.length,
+  onPositionChange,
+  onLoadNext,
+  loadingNext = false,
+  navigationError = false,
   vetMockSessionId,
   initialAnswers = {},
   onComplete,
@@ -264,6 +275,13 @@ export function InteractiveQuiz({
     useState<Record<number, boolean>>(() => Object.fromEntries(Object.keys(initialAnswers).map(index => [index, true])));
   const [questionStartedAt, setQuestionStartedAt] = useState<number>(Date.now());
   const [hasSentCompletion, setHasSentCompletion] = useState(false);
+  const [waitingForNext, setWaitingForNext] = useState(false);
+  useEffect(() => {
+    if (waitingForNext && currentQuestion + 1 < questions.length) {
+      setCurrentQuestion(index => index + 1);
+      setWaitingForNext(false);
+    } else if (navigationError) setWaitingForNext(false);
+  }, [waitingForNext, currentQuestion, questions.length, navigationError]);
   const [resolutionAuthorsByQuestionId, setResolutionAuthorsByQuestionId] =
     useState<Record<string, string>>({});
   const [answerStatsByQuestionId, setAnswerStatsByQuestionId] = useState<
@@ -314,11 +332,12 @@ export function InteractiveQuiz({
     return Object.keys(answersByQuestion).length;
   }, [answersByQuestion]);
 
-  const isQuizComplete =
-    questions.length > 0 && totalAnswered === questions.length;
+  const isQuizComplete = progressiveQuizState(questions.length, totalQuestions, totalAnswered, currentQuestion, navigationError).complete;
+
+  useEffect(() => { onPositionChange?.(currentQuestion); }, [currentQuestion, onPositionChange]);
 
   const progressPercentage =
-    questions.length > 0 ? ((currentQuestion + 1) / questions.length) * 100 : 0;
+    totalQuestions > 0 ? ((currentQuestion + 1) / totalQuestions) * 100 : 0;
 
   const completionData = useMemo<QuizCompletionData | null>(() => {
     if (!isQuizComplete) return null;
@@ -397,14 +416,12 @@ export function InteractiveQuiz({
   }, [questions]);
 
   useEffect(() => {
+    let active = true;
     async function loadResolutionAuthors() {
       try {
-        const uniqueQuestionIds = Array.from(
-          new Set(questions.map((item) => item.id).filter(Boolean))
-        );
+        const uniqueQuestionIds = question?.id ? [question.id] : [];
 
         if (!uniqueQuestionIds.length) {
-          setResolutionAuthorsByQuestionId({});
           return;
         }
 
@@ -420,14 +437,15 @@ export function InteractiveQuiz({
           }
         });
 
-        setResolutionAuthorsByQuestionId(authorMap);
+        if (active) setResolutionAuthorsByQuestionId(previous => ({ ...previous, ...authorMap }));
       } catch (error) {
         console.error("Erro inesperado ao carregar autores das resoluções:", error);
       }
     }
 
     loadResolutionAuthors();
-  }, [questions, trpcUtils]);
+    return () => { active = false; };
+  }, [question?.id, trpcUtils]);
 
   useEffect(() => {
     if (isQuizComplete && completionData && onComplete && !hasSentCompletion) {
@@ -559,13 +577,18 @@ export function InteractiveQuiz({
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion((prev) => prev + 1);
+    } else if (currentQuestion + 1 < totalQuestions && onLoadNext) {
+      // Stay on this question until the appended page actually arrives.
+      setWaitingForNext(true);
+      try { await onLoadNext(); } catch { setWaitingForNext(false); }
     }
   };
 
   const handlePrevious = () => {
+    setWaitingForNext(false);
     if (currentQuestion > 0) {
       setCurrentQuestion((prev) => prev - 1);
     }
@@ -620,7 +643,7 @@ export function InteractiveQuiz({
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="inline-flex items-center rounded-full bg-violet-600 text-white px-3 py-1 text-xs font-bold">
-                Questão {currentQuestion + 1} de {questions.length}
+                Questão {currentQuestion + 1} de {totalQuestions}
               </span>
 
               {question.codigo ? (
@@ -1147,12 +1170,13 @@ export function InteractiveQuiz({
             Questão anterior
           </Button>
 
-          {currentQuestion < questions.length - 1 ? (
+          {currentQuestion + 1 < totalQuestions ? (
             <Button
               onClick={handleNext}
+              disabled={currentQuestion === questions.length - 1 && (loadingNext || navigationError)}
               className="flex-1 rounded-2xl py-6 bg-violet-600 hover:bg-violet-700 text-white"
             >
-              Próxima questão
+              {loadingNext && currentQuestion === questions.length - 1 ? "Carregando próxima questão…" : "Próxima questão"}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           ) : (

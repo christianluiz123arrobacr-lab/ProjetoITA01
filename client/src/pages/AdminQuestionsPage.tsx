@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminGuard from "@/components/admin/AdminGuard";
 import { useFilterPage } from "@/hooks/useFilterPage";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useQuery } from "@tanstack/react-query";
+import { adminQuestionBrowseOptions } from "@/lib/adminQuestionBrowse";
+import { questionBrowseSchema } from "@shared/questionBrowse";
 import { getDifficultyLabel, getDifficultyOrder } from "@shared/difficulty";
 import {
   Search,
@@ -157,15 +161,17 @@ export default function AdminQuestionsPage() {
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [disciplinaFiltro, setDisciplinaFiltro] = useState("");
   const [dificuldadeFiltro, setDificuldadeFiltro] = useState("");
   const [publicacaoFiltro, setPublicacaoFiltro] =
     useState<PublishFilter>("todas");
   const [instituicaoFiltro, setInstituicaoFiltro] = useState("");
   const [anoFiltro, setAnoFiltro] = useState("");
-  const filters = { search, subjects: disciplinaFiltro ? [disciplinaFiltro] : [], difficulties: dificuldadeFiltro ? [dificuldadeFiltro] : [], institutions: instituicaoFiltro ? [instituicaoFiltro] : [], years: anoFiltro ? [Number(anoFiltro)] : [], publication: publicacaoFiltro === "publicadas" ? "published" as const : publicacaoFiltro === "nao_publicadas" ? "unpublished" as const : "all" as const };
+  const filters = { search: debouncedSearch, subjects: disciplinaFiltro ? [disciplinaFiltro] : [], difficulties: dificuldadeFiltro ? [dificuldadeFiltro] : [], institutions: instituicaoFiltro ? [instituicaoFiltro] : [], years: anoFiltro ? [Number(anoFiltro)] : [], publication: publicacaoFiltro === "publicadas" ? "published" as const : publicacaoFiltro === "nao_publicadas" ? "unpublished" as const : "all" as const };
   const { page, setPage } = useFilterPage(filters);
-  const listQuestionsQuery = trpc.admin.browseQuestions.useQuery({ filters, page, pageSize: 25 }, { staleTime: 30000, retry: false });
+  const utils = trpc.useUtils();
+  const listQuestionsQuery = useQuery(adminQuestionBrowseOptions(utils.client.admin, questionBrowseSchema.parse({filters,page,pageSize:25})));
 
   useEffect(() => {
     setLoading(listQuestionsQuery.isLoading || listQuestionsQuery.isFetching);

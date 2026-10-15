@@ -39,7 +39,7 @@ import {
   questionPdfFiltersSchema,
 } from "../shared/questionPdf.js";
 import { selectQuestionPdfData } from "./questionPdfExport.js";
-import { questionBrowseSchema, questionBrowseFiltersSchema, questionFilterOptionsSchema } from "../shared/questionBrowse.js";
+import { questionBrowseSchema, questionBrowseFiltersSchema, questionFilterOptionsSchema, type BrowseResult } from "../shared/questionBrowse.js";
 import { browseQuestions, performanceRpc, type DashboardResult, type StudentStatisticsRow } from "./performanceStageTwo.js";
 import { NOTEBOOK_DEVELOPMENT_MESSAGE, NOTEBOOK_FEATURE_AVAILABLE } from "../shared/featureAvailability.js";
 import { createGoogleDriveConnectUrl, createNotebook, disconnectGoogleDrive, getNotebook, googleDriveStatus, listNotebooks, renameNotebook, trashNotebook, updateNotebook, uploadNotebookPdf } from "./googleDrive/googleDriveService.js";
@@ -1015,6 +1015,12 @@ export const appRouter = router({
   }),
 
   questions: router({
+    globalStats: protectedProcedure.query(async () => {
+      const result = await performanceRpc<Pick<BrowseResult["stats"], "total" | "totalDifficulties" | "subjects" | "difficulties">>(supabaseAdmin, "vet_question_global_stats");
+      if (!Number.isInteger(result.total) || !Number.isInteger(result.totalDifficulties) || !result.subjects || !result.difficulties)
+        throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar os totais gerais." });
+      return result;
+    }),
     filterOptions: protectedProcedure.input(questionBrowseFiltersSchema).query(async ({ input }) => {
       const result = questionFilterOptionsSchema.safeParse(await performanceRpc(supabaseAdmin, "vet_question_filter_facets", { p_filters: input }));
       if (!result.success) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar as opções de filtros." });
@@ -1023,7 +1029,7 @@ export const appRouter = router({
     browse: publicProcedure.input(questionBrowseSchema).query(async ({ ctx, input }) => {
       await ensureAuthentication(ctx);
       assertAuthenticationAvailable(ctx);
-      return browseQuestions(supabaseAdmin, input, false, ctx.user?.id ?? null);
+      return browseQuestions(supabaseAdmin, input, false, ctx.user?.id ?? null, ctx.authentication?.correlationId);
     }),
     details: publicProcedure.input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) })).query(async ({ input }) => {
       const rows = await performanceRpc<Record<string, any>[]>(supabaseAdmin, "vet_question_details", { p_ids: input.ids });
@@ -1186,7 +1192,7 @@ export const appRouter = router({
   }),
 
   admin: router({
-    getDashboardStats: adminOrEditorProcedure.query(() => performanceRpc<DashboardResult>(supabaseAdmin, "vet_admin_dashboard")),
+    getDashboardStats: adminOrEditorProcedure.query(({ctx}) => performanceRpc<DashboardResult>(supabaseAdmin, "vet_admin_dashboard", {}, ctx.authentication?.correlationId)),
     listAdminLogs: adminProcedure.query(async () => {
       const { data, error } = await supabaseAdmin
         .from("admin_logs")
@@ -2163,7 +2169,7 @@ export const appRouter = router({
 
     getQuestionSuggestions: adminOrEditorProcedure.query(() => performanceRpc<Record<string, unknown>[]>(supabaseAdmin, "vet_question_suggestions")),
 
-    browseQuestions: adminOrEditorProcedure.input(questionBrowseSchema).query(({ input }) => browseQuestions(supabaseAdmin, input, true, null)),
+    browseQuestions: adminOrEditorProcedure.input(questionBrowseSchema).query(({ ctx, input }) => browseQuestions(supabaseAdmin, input, true, null, ctx.authentication?.correlationId)),
 
     getQuestionById: adminOrEditorProcedure
       .input(z.object({ id: z.string().uuid() }))

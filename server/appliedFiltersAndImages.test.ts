@@ -118,7 +118,7 @@ describe("filtros aplicados e carregamento progressivo", () => {
         query: vi
           .fn()
           .mockImplementation(async ({ page }) =>
-            response(page ? ["19", "20"] : first, page, 22)
+            response(page ? ["20", "21"] : first, page, 22)
           ),
       },
       details: {
@@ -143,7 +143,7 @@ describe("filtros aplicados e carregamento progressivo", () => {
     const appended = appendUniqueQuestions(
       observer.getCurrentResult().data!.pages.map(page => page.questions)
     );
-    expect(appended.map(item => item.id)).toEqual([...first, "20"]);
+    expect(appended.map(item => item.id)).toEqual([...first, "20", "21"]);
     expect(appended[0]).toBe(before[0]);
     expect(
       transport.browse.query.mock.calls.map(call => call[0].pageSize)

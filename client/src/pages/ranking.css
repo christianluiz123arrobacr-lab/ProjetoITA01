@@ -1,0 +1,51 @@
+/* Scoped: common theme-page rules do not cover the ranking's pastel badges. */
+.dark .ranking-page .bg-violet-100 {
+  background-color: #2e2350;
+}
+.dark .ranking-page .bg-blue-100 {
+  background-color: #1e3256;
+}
+.dark .ranking-page .bg-emerald-100 {
+  background-color: #143c34;
+}
+.dark .ranking-page .bg-amber-100,
+.dark .ranking-page .bg-yellow-100 {
+  background-color: #42351c;
+}
+.dark .ranking-page .bg-red-100 {
+  background-color: #49232c;
+}
+.dark .ranking-page .border-violet-200 {
+  border-color: #66518b;
+}
+.dark .ranking-page .border-blue-200 {
+  border-color: #3d6391;
+}
+.dark .ranking-page .border-emerald-200 {
+  border-color: #367264;
+}
+.dark .ranking-page .border-yellow-200,
+.dark .ranking-page .border-orange-200,
+.dark .ranking-page .border-amber-200 {
+  border-color: #806331;
+}
+.dark .ranking-page .border-red-200 {
+  border-color: #914453;
+}
+.dark .ranking-page .text-amber-600 {
+  color: #fbbf24;
+}
+.dark .ranking-page .text-blue-600 {
+  color: #60a5fa;
+}
+.ranking-page main {
+  min-width: 0;
+}
+.ranking-page .truncate {
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .ranking-page h2 {
+    overflow-wrap: anywhere;
+  }
+}

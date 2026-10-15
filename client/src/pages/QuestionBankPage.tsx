@@ -470,6 +470,7 @@ export default function QuestionBankPage() {
   const hasPendingFilters = JSON.stringify(draftFilters) !== JSON.stringify(filters);
   const browse = useAppliedQuestionBrowse(appliedFilters, user?.id, !authLoading, browseRevision);
   const pageQuery = { ...browse, data: browse.summary };
+  const globalQuery = trpc.questions.globalStats.useQuery(undefined, { enabled: !authLoading && Boolean(user), staleTime: 60_000, retry: false });
   const facetFilters = { ...draftFilters, search: "", practiceStatus: "all" as const, difficulties: [], subtopics: [] };
   const facetsQuery = trpc.questions.filterOptions.useQuery(facetFilters, { enabled: !authLoading && Boolean(user), staleTime: 30_000, retry: false, placeholderData: previous => previous, trpc: { abortOnUnmount: true } });
   const availableInstitutions = facetsQuery.data?.institutions ?? [];
@@ -478,13 +479,13 @@ export default function QuestionBankPage() {
   const availableTopics = facetsQuery.data?.topics ?? [];
   const availableSubtopics = facetsQuery.data?.subtopics ?? [];
   const availableDifficulties = sortDifficulties(facetsQuery.data?.difficulties ?? []);
-  const totalQuestions = pageQuery.data?.stats.total ?? 0;
+  const totalQuestions = globalQuery.data?.total ?? 0;
   const totalFiltered = pageQuery.data?.total ?? 0;
-  const totalSubjects = Object.keys(pageQuery.data?.stats.subjects ?? {}).length;
-  const totalDifficulties = pageQuery.data?.stats.totalDifficulties ?? 0;
+  const totalSubjects = Object.keys(globalQuery.data?.subjects ?? {}).length;
+  const totalDifficulties = globalQuery.data?.totalDifficulties ?? 0;
   const practiceStats = (practiceSummary?.key === selectionKey ? practiceSummary.stats : pageQuery.data?.stats) ?? { answered:0, unanswered:0, correct:0, wrong:0 };
-  const subjectStats = Object.entries(pageQuery.data?.stats.subjects ?? {}).map(([key,count]) => ({key,count,label:formatSubjectLabel(key)})).sort((a,b)=>b.count-a.count);
-  const difficultyStats = Object.entries(pageQuery.data?.stats.difficulties ?? {}).map(([key,count]) => ({key,count,label:formatDifficultyLabel(key)})).sort((a,b)=>getDifficultyOrder(a.key)-getDifficultyOrder(b.key));
+  const subjectStats = Object.entries(globalQuery.data?.subjects ?? {}).map(([key,count]) => ({key,count,label:formatSubjectLabel(key)})).sort((a,b)=>b.count-a.count);
+  const difficultyStats = Object.entries(globalQuery.data?.difficulties ?? {}).map(([key,count]) => ({key,count,label:formatDifficultyLabel(key)})).sort((a,b)=>getDifficultyOrder(a.key)-getDifficultyOrder(b.key));
   const filteredDifficultyStats = [
     { key: "facil", label: "Fácil", colorClass: "bg-emerald-500" },
     { key: "medio", label: "Médio", colorClass: "bg-amber-500" },
@@ -492,20 +493,11 @@ export default function QuestionBankPage() {
     { key: "muito_dificil", label: "Muito difícil", colorClass: "bg-indigo-700" },
   ].map(item=>({...item,count:pageQuery.data?.stats.filteredDifficulties[item.key] ?? 0}));
   const filteredQuestions = browse.questions;
-  const loadMoreTarget = useRef<HTMLDivElement>(null);
-  const loadMoreState = useRef({ canLoad: false, load: () => {} });
-  loadMoreState.current = { canLoad: Boolean(browse.hasNextPage && !browse.isFetching && !browse.error), load: () => { void browse.fetchNextPage(); } };
+  const [quizPosition, setQuizPosition] = useState(0);
   useEffect(() => {
-    const target = loadMoreTarget.current;
-    if (!target || typeof IntersectionObserver === "undefined") return;
-    let inside = false;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && !inside && loadMoreState.current.canLoad) loadMoreState.current.load();
-      inside = entry.isIntersecting;
-    }, { rootMargin: "120px" });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [selectionKey, Boolean(filteredQuestions.length)]);
+    if (browse.hasNextPage && !browse.isFetching && !browse.error && quizPosition >= Math.max(0, filteredQuestions.length - 5)) void browse.fetchNextPage();
+  }, [quizPosition, filteredQuestions.length, browse.hasNextPage, browse.isFetching, browse.error, browse.fetchNextPage]);
+  useEffect(() => setQuizPosition(0), [selectionKey]);
 
   function applyFilters() {
     if (!hasMeaningfulBrowseFilters(draftFilters)) return;
@@ -675,7 +667,7 @@ export default function QuestionBankPage() {
     try {
       // Refresh only the aggregate after a recorded answer; never replace the
       // appended quiz with a newly filtered list that could shift its indices.
-      const summary = await trpcUtils.client.questions.browse.query({ filters: appliedFilters, page: 0, pageSize: 20 });
+      const summary = await trpcUtils.client.questions.browse.query({ filters: appliedFilters, page: 1, pageSize: 1 });
       if (latestSelectionKey.current === key && request === practiceRequest.current) {
         setPracticeSummary({ key, stats: summary.stats }); setPracticeSummaryError("");
       }
@@ -736,7 +728,8 @@ export default function QuestionBankPage() {
       </header>
 
       <main className="container py-8 space-y-7">
-        {appliedFilters && pageQuery.error && <Card role="alert" className="p-4 text-amber-700 dark:text-amber-300">Não foi possível carregar as questões. <Button variant="outline" onClick={() => { if (browse.isFetchNextPageError) void browse.fetchNextPage(); else void pageQuery.refetch(); }}>Tentar novamente</Button></Card>}
+        {globalQuery.error && <Card role="alert" className="p-4">Não foi possível atualizar os totais gerais. <Button variant="outline" onClick={() => void globalQuery.refetch()}>Tentar novamente</Button></Card>}
+        {appliedFilters && pageQuery.error && <Card role="alert" className="p-4 text-amber-700 dark:text-amber-300">Não foi possível avançar na lista. Suas respostas continuam preservadas. Tente novamente; se a lista mudou, reaplique os filtros. <Button variant="outline" onClick={() => { if (browse.isFetchNextPageError) void browse.fetchNextPage(); else void pageQuery.refetch(); }}>Tentar novamente</Button></Card>}
         {hasPendingFilters && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Há alterações pendentes. Os resultados e ações continuam usando os últimos filtros aplicados até você clicar em Aplicar filtros.</p>}
         {facetsQuery.error && <p role="alert">Não foi possível carregar as opções de filtros. <Button variant="outline" onClick={() => void facetsQuery.refetch()}>Tentar novamente</Button></p>}
         {appliedFilters && practiceSummaryError && <p role="alert">{practiceSummaryError} <Button variant="outline" onClick={() => void refreshPracticeSummary()}>Atualizar resumo</Button></p>}
@@ -799,7 +792,7 @@ export default function QuestionBankPage() {
 
                   <div>
                     <p className="text-2xl font-bold text-slate-900 leading-tight">
-                      {pageQuery.data ? totalQuestions : "—"}
+                      {globalQuery.data ? totalQuestions : "—"}
                     </p>
 
                     <p className="text-sm font-semibold text-slate-800">
@@ -819,7 +812,7 @@ export default function QuestionBankPage() {
 
                   <div>
                     <p className="text-2xl font-bold text-slate-900 leading-tight">
-                      {pageQuery.data ? totalSubjects : "—"}
+                      {globalQuery.data ? totalSubjects : "—"}
                     </p>
 
                     <p className="text-sm font-semibold text-slate-800">
@@ -839,7 +832,7 @@ export default function QuestionBankPage() {
 
                   <div>
                     <p className="text-2xl font-bold text-slate-900 leading-tight">
-                      {pageQuery.data ? totalDifficulties : "—"}
+                      {globalQuery.data ? totalDifficulties : "—"}
                     </p>
 
                     <p className="text-sm font-semibold text-slate-800">
@@ -1349,10 +1342,15 @@ export default function QuestionBankPage() {
         <section>
           {!appliedFilters ? <Card className="p-10 text-center"><Filter className="mx-auto mb-3 h-8 w-8 text-blue-600"/><h2 className="font-bold">Escolha os filtros para começar</h2><p className="mt-2 text-sm text-slate-600">Selecione ao menos um filtro ou digite uma busca e clique em Aplicar filtros.</p></Card> : filteredQuestions.length > 0 ? (
             <div>
-            <p className="text-sm mb-3">{filteredQuestions.length} de {totalFiltered} questões carregadas · filtros aplicados</p>
+            <p className="text-sm mb-3">{totalFiltered} questões encontradas · filtros aplicados</p>
             <InteractiveQuiz
               key={selectionKey}
               questions={filteredQuestions}
+              totalQuestions={totalFiltered}
+              onPositionChange={setQuizPosition}
+              onLoadNext={() => browse.fetchNextPage()}
+              loadingNext={browse.isFetchingNextPage}
+              navigationError={Boolean(browse.error)}
               onQuestionAnswered={handleQuestionAnswered}
               optionFeedbackTheme="question-bank"
             />
@@ -1370,9 +1368,6 @@ export default function QuestionBankPage() {
               <Button onClick={clearAllFilters}>Limpar Filtros</Button>
             </Card>
           ) : null}
-          <div ref={loadMoreTarget} className="mt-5 flex justify-center">
-            {appliedFilters && browse.hasNextPage && <Button variant="outline" disabled={browse.isFetching} onClick={() => void browse.fetchNextPage()}>{browse.isFetchingNextPage ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin"/>Carregando mais questões…</> : "Carregar mais questões"}</Button>}
-          </div>
         </section>
       </main>
 

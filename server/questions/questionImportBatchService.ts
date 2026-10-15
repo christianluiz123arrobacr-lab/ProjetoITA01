@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
+import { safeErrorCode } from "../../shared/authRecovery.js";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
 import {
   MAX_QUESTION_IMPORT_IMAGE_BYTES,
@@ -16,6 +17,8 @@ const BATCH_SELECT = "id,created_by,status,format,source_name,payload,validation
 const SLOT_SELECT = "id,batch_id,import_key,slot_id,required,location,alternative_key,expected_filename,description,alt_text,caption,bucket,storage_path,public_url,original_name,mime_type,byte_size,width,height,status,created_at,updated_at";
 
 function dbError(message: string, error?: { message?: string }) {
+  // Only constant operation descriptions and provider codes, never SQL messages/files.
+  console.warn({ event: "question_import_database", stage: message, code: safeErrorCode(error) });
   return new TRPCError({ code: "BAD_REQUEST", message: error?.message?.includes("question_import_") ? "A migration dos rascunhos de importação ainda não foi aplicada." : message });
 }
 

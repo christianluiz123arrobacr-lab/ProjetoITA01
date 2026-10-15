@@ -35,7 +35,8 @@ export type StudentStatisticsRow = Record<string, any> & {
 export async function performanceRpc<T>(
   db: Database,
   name: string,
-  args: Record<string, unknown> = {}
+  args: Record<string, unknown> = {},
+  correlationId?: string
 ): Promise<T> {
   const start = performance.now();
   const controller = new AbortController();
@@ -107,14 +108,18 @@ export async function performanceRpc<T>(
     console.warn({
       event: "performance_stage_two",
       operation: name,
+      correlation_id: correlationId,
       outcome: "error",
       code,
       duration_ms: Math.round(performance.now() - start),
     });
     throw new TRPCError({
-      code: "SERVICE_UNAVAILABLE",
+      code: ["PGRST202", "42883"].includes(code) ? "PRECONDITION_FAILED"
+        : code === "22023" ? "BAD_REQUEST"
+        : code === "INVALID_RPC_RESULT" || /^42/.test(code) ? "INTERNAL_SERVER_ERROR"
+        : "SERVICE_UNAVAILABLE",
       message: ["PGRST202", "42883"].includes(code)
-        ? "Esta consulta depende da migration de desempenho Etapa 2. Solicite ao administrador sua aplicação antes de publicar."
+        ? "Esta consulta depende de uma migration pendente. Solicite ao administrador sua aplicação antes de publicar."
         : "Não foi possível atualizar os dados. Tente novamente em instantes.",
     });
   } finally {
@@ -122,6 +127,7 @@ export async function performanceRpc<T>(
     console.info({
       event: "performance_stage_two",
       operation: name,
+      correlation_id: correlationId,
       queries: 1,
       rows,
       bytes,
@@ -134,18 +140,20 @@ export async function browseQuestions(
   db: Database,
   input: BrowseInput,
   administrative: boolean,
-  userId: string | null
+  userId: string | null,
+  correlationId?: string
 ): Promise<BrowseResult> {
   const result = await performanceRpc<BrowseResult>(
     db,
-    "vet_browse_questions",
+    administrative ? "vet_admin_browse_questions" : "vet_browse_questions",
     {
       p_filters: input.filters,
       p_page: input.page,
       p_size: input.pageSize,
       p_admin: administrative,
       p_user: userId,
-    }
+    },
+    correlationId
   );
   if (
     !Array.isArray(result.rows) ||

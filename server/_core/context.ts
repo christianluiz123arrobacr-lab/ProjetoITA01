@@ -3,6 +3,12 @@ import { supabaseAdmin } from "./supabaseAdmin.js";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { bounded, isInvalidCredential, safeErrorCode } from "../../shared/authRecovery.js";
+import { z } from "zod";
+
+const roleSnapshot = z.object({
+  role: z.enum(["admin", "editor", "student"]),
+  profile: z.object({ role: z.string().nullable(), ativo: z.boolean().nullable() }).nullable(),
+});
 
 export type AuthUser = {
   id: string;
@@ -89,26 +95,15 @@ export async function createContext(
         stage = "roles";
         const rolesStarted = Date.now();
         const cancellation = new AbortController();
-        const adminQuery = supabaseAdmin.from("admin_users").select("role").eq("user_id", data.user.id);
-        const profileQuery = supabaseAdmin.from("profiles").select("role, ativo").eq("id", data.user.id);
-
-        const [{ data: adminUser, error: adminUserError }, { data: profile, error: profileError }] =
-          await bounded(Promise.all([
-            (adminQuery.abortSignal?.(cancellation.signal) ?? adminQuery).maybeSingle(),
-            (profileQuery.abortSignal?.(cancellation.signal) ?? profileQuery).maybeSingle(),
-          ]), 4000).finally(() => cancellation.abort());
-
-        console.info({ event: "authentication_check", correlation_id: correlationId, stage, outcome: adminUserError || profileError ? "error" : "success", duration_ms: Date.now() - rolesStarted });
-
-        if (adminUserError || profileError) throw adminUserError || profileError;
-        validatedProfile = { userId: data.user.id, data: profile };
-
-        const resolvedRole =
-          adminUser?.role === "admin" || adminUser?.role === "editor"
-            ? adminUser.role
-            : profile?.role === "admin"
-              ? "admin"
-              : "student";
+        const query = supabaseAdmin.rpc("vet_resolve_access_role", { p_user: data.user.id });
+        const { data: snapshot, error: roleError } = await bounded(query.abortSignal(cancellation.signal), 4000).finally(() => cancellation.abort());
+        const parsed = roleSnapshot.safeParse(snapshot);
+        const roleCode = roleError ? safeErrorCode(roleError) : parsed.success ? undefined : "INVALID_ROLE_SNAPSHOT";
+        console.info({ event: "authentication_check", correlation_id: correlationId, stage, outcome: roleCode ? "error" : "success", code: roleCode, duration_ms: Date.now() - rolesStarted });
+        if (roleError) throw roleError;
+        if (!parsed.success) throw { code: "INVALID_ROLE_SNAPSHOT" };
+        const { role: resolvedRole, profile } = parsed.data;
+        validatedProfile = { userId: data.user.id, data: profile ? { role: profile.role ?? undefined, ativo: profile.ativo ?? undefined } : null };
 
         user = {
           id: data.user.id,

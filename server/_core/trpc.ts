@@ -74,11 +74,20 @@ export const adminOrEditorProcedure = t.procedure.use(
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 
-    return next({
+    const start = performance.now();
+    const result = await next({
       ctx: {
         ...ctx,
         user: ctx.user,
       },
     });
+    if (/QuestionImport|AdminImage|AdminStatementImage/.test(opts.path)) {
+      console.info({ event: "question_import_operation", operation: opts.path,
+        correlation_id: ctx.authentication?.correlationId,
+        stage: "authorized_operation", outcome: result.ok ? "success" : "error",
+        code: result.ok ? undefined : result.error.code,
+        duration_ms: Math.round(performance.now() - start) });
+    }
+    return result;
   }),
 );
