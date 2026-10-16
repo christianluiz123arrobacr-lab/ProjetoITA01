@@ -7,6 +7,7 @@ const service = vi.hoisted(() => ({
   getQuestionImportDraft: vi.fn(async () => ({ id: "draft" })),
   prepareQuestionImportSlotUpload: vi.fn(async () => ({ token: "local-test" })),
   confirmQuestionImportSlotUpload: vi.fn(async () => ({})),
+  discardQuestionImportReplacement: vi.fn(async () => ({removed:true})),
   removeQuestionImportSlotUpload: vi.fn(async () => ({})),
   updateQuestionImportSlotMetadata: vi.fn(async () => ({})),
   cancelQuestionImportDraft: vi.fn(async () => ({})),
@@ -34,6 +35,7 @@ const operations = [
   ["getQuestionImportDraft", { batchId }, "getQuestionImportDraft"],
   ["prepareQuestionImportImageUpload", { ...slot, originalName: "fig.png", contentType: "image/png", byteSize: 24 }, "prepareQuestionImportSlotUpload"],
   ["confirmQuestionImportImageUpload", { ...slot, altText: "Figura" }, "confirmQuestionImportSlotUpload"],
+  ["discardQuestionImportImageReplacement", {...slot,uploadPath:"question-imports/x/y.png"},"discardQuestionImportReplacement"],
   ["removeQuestionImportImageUpload", slot, "removeQuestionImportSlotUpload"],
   ["updateQuestionImportImageMetadata", { ...slot, altText: "Figura" }, "updateQuestionImportSlotMetadata"],
   ["cancelQuestionImportDraft", { batchId }, "cancelQuestionImportDraft"],
@@ -68,6 +70,7 @@ describe("permissões do fluxo de importação em lote", () => {
       expect(service[handler]).not.toHaveBeenCalled();
     }
     await expect(admin.importQuestionBatch({} as never)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(admin.discardAdminPreparedImage({path:"statement-images/other/file.png"})).rejects.toMatchObject({code:"FORBIDDEN"});
   });
   it("editor passa pela autorização da importação antiga e continua sujeito à validação do JSON", async () => {
     await expect(caller("editor").importQuestionBatch({} as never)).rejects.toMatchObject({ code: "BAD_REQUEST" });

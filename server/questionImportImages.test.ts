@@ -44,7 +44,7 @@ describe("importação v2 com imagens", () => {
   it("20 cancelamento remove uploads temporários", () => expect(readFileSync("server/questions/questionImportBatchService.ts", "utf8")).toMatch(/cancelQuestionImportDraft[\s\S]+storage\.from\(bucket\)\.remove/));
   it("20b limpeza controlada cancela somente rascunhos expirados do administrador", () => {
     const source = readFileSync("server/questions/questionImportBatchService.ts", "utf8");
-    expect(source).toMatch(/cleanupExpiredQuestionImportDrafts[\s\S]+\.eq\("created_by", userId\)[\s\S]+\.eq\("status", "draft"\)[\s\S]+\.lt\("expires_at"/);
+    expect(source).toMatch(/cleanupExpiredQuestionImportDrafts[\s\S]+\.eq\("created_by", userId\)[\s\S]+\.in\("status", \["draft",\s*"cancelled"\]\)[\s\S]+\.lt\("expires_at"/);
   });
   it("21 rascunho persiste e pode ser recarregado", () => { const source = readFileSync("server/routers.ts", "utf8"); expect(source).toContain("createQuestionImportDraft: adminOrEditorProcedure"); expect(source).toContain("getQuestionImportDraft: adminOrEditorProcedure"); });
   it("23 mantém metadados para a renderização canônica", () => { const question = parse([base("q", [slot("s")])]).questoes[0].item; const result = applyReadyImageSlots(question, [{ ...question.imagens[0], import_key: "q", public_url: "https://storage.test/a.png" }]); expect(result.image_metadata[0]).toEqual(expect.objectContaining({ texto_alternativo: "Descrição s" })); });

@@ -1,4 +1,6 @@
 import { StatementImagesEditor, StatementImagesPreview } from "@/components/admin/StatementImagesEditor";
+import { useImageUploadReview } from "@/components/admin/useImageUploadReview";
+import { checkImageAbort, type PreparedImageMime } from "@/lib/questionImagePreparation";
 import { getStatementImages, getEditableStatementImages, replaceStatementImages } from "@shared/questionImages";
 import { useEffect, useState } from "react";
 import type {
@@ -726,6 +728,9 @@ export default function AdminQuestionEditPage() {
   const trpcUtils = trpc.useUtils();
   const updateQuestionMutation = trpc.admin.updateQuestion.useMutation();
   const createImageUploadMutation = trpc.admin.createAdminImageUpload.useMutation();
+  const confirmImageUpload = trpc.admin.confirmAdminStatementImage.useMutation();
+  const discardImageUpload = trpc.admin.discardAdminPreparedImage.useMutation();
+  const { reviewAndUpload, reviewUi } = useImageUploadReview();
   const [match, params] = useRoute("/admin/questoes/:id");
   const [, setLocation] = useLocation();
   const questionId = match ? params.id : null;
@@ -876,37 +881,22 @@ export default function AdminQuestionEditPage() {
 
       const pastaBase =
         form.codigo.trim() || questionId || `questao-${Date.now().toString()}`;
-      const upload = await createImageUploadMutation.mutateAsync({
-        bucket: QUESTION_IMAGES_BUCKET,
-        originalName: file.name,
-        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
-        context: `${pastaBase}/alternativas/${field}`,
+      const verified = await reviewAndUpload(file, async (prepared, controls) => {
+        controls.stage("Gerando URL assinada");
+        const upload = await createImageUploadMutation.mutateAsync({
+          bucket: QUESTION_IMAGES_BUCKET, originalName: prepared.name,
+          contentType: prepared.type as PreparedImageMime, purpose: "statement",
+          context: `${pastaBase}/alternativas/${field}`,
+        });
+        try {
+        checkImageAbort(controls.signal); controls.stage("Enviando arquivo");
+        const sent = await uploadToSignedStorageUrl({ ...upload, file: prepared, contentType: prepared.type, signal: controls.signal });
+        if (sent.error) throw new Error("Não foi possível enviar a imagem da alternativa.");
+        checkImageAbort(controls.signal); controls.stage("Confirmando arquivo");
+        return await confirmImageUpload.mutateAsync({path: upload.path,contentType: prepared.type as PreparedImageMime});
+        } catch(cause) {await discardImageUpload.mutateAsync({path:upload.path}).catch(()=>{console.warn({event:"question_image_cleanup",outcome:"deferred"});});throw cause;}
       });
-
-      const { error: uploadError } = await uploadToSignedStorageUrl({
-        bucket: upload.bucket,
-        path: upload.path,
-        token: upload.token,
-        file,
-        contentType: file.type,
-      });
-
-      if (uploadError) {
-        console.error("Erro ao enviar imagem da alternativa:", uploadError);
-        setError(
-          uploadError.message
-            ? `Não foi possível enviar a imagem da alternativa: ${uploadError.message}`
-            : "Não foi possível enviar a imagem da alternativa."
-        );
-        return;
-      }
-
-      if (!upload.publicUrl) {
-        setError("Não foi possível gerar a URL pública da imagem da alternativa.");
-        return;
-      }
-
-      updateField(field, upload.publicUrl);
+      updateField(field, verified.publicUrl);
 
       setSuccessMessage("Imagem da alternativa enviada com sucesso.");
     } catch (err) {
@@ -1124,6 +1114,7 @@ url_imagem: valorLimpo(form.url_imagem),
 
   return (
     <AdminGuard>
+      {reviewUi}
       <AdminLayout
         title="Editar questão"
         subtitle="Edite os dados estruturais da questão diretamente no banco."

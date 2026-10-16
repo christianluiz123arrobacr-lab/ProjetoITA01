@@ -63,6 +63,7 @@ import {
   cleanupExpiredQuestionImportDrafts,
   completeQuestionImportDraft,
   confirmQuestionImportSlotUpload,
+  discardQuestionImportReplacement,
   createQuestionImportDraft,
   getQuestionImportDraft,
   listQuestionImportDrafts,
@@ -2269,8 +2270,12 @@ export const appRouter = router({
       }))
       .mutation(({ ctx, input }) => prepareQuestionImportSlotUpload(input, ctx.user.id)),
 
+    discardQuestionImportImageReplacement: adminOrEditorProcedure
+      .input(z.object({batchId:z.string().uuid(),importKey:z.string().min(1).max(180),slotId:z.string().min(1).max(100),uploadPath:z.string().max(400)}))
+      .mutation(({ctx,input})=>discardQuestionImportReplacement(input,ctx.user.id)),
+
     confirmQuestionImportImageUpload: adminOrEditorProcedure
-      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional() }))
+      .input(z.object({ batchId: z.string().uuid(), importKey: z.string().trim().min(1).max(180), slotId: z.string().trim().min(1).max(100), altText: z.string().max(500), caption: z.string().max(500).nullable().optional(),uploadPath:z.string().max(400).optional(),previousPath:z.string().max(400).nullable().optional(),contentType:z.enum(["image/png","image/jpeg","image/webp"]).optional(),originalName:z.string().max(180).optional() }))
       .mutation(({ ctx, input }) => confirmQuestionImportSlotUpload(input, ctx.user.id)),
 
     removeQuestionImportImageUpload: adminOrEditorProcedure
@@ -2461,6 +2466,25 @@ export const appRouter = router({
           durationMs,
           results,
         } as const;
+      }),
+
+    discardAdminPreparedImage: adminOrEditorProcedure
+      .input(z.object({path:z.string().max(300)}))
+      .mutation(async({ctx,input})=>{
+        const prefix=`statement-images/${ctx.user.id}/`;
+        if(!input.path.startsWith(prefix)||!/^\d+-[0-9a-f-]+\.(png|jpg|webp)$/.test(input.path.slice(prefix.length)))throw new TRPCError({code:"FORBIDDEN",message:"Arquivo não pertence a este envio."});
+        const bucket=supabaseAdmin.storage.from("questoes-imagens");
+        const url=bucket.getPublicUrl(input.path).data.publicUrl;
+        const references=await Promise.all([
+          supabaseAdmin.from("questoes").select("id").or(["url_imagem","a_url_imagem","b_url_imagem","c_url_imagem","d_url_imagem","e_url_imagem"].map(column=>`${column}.eq.${url}`).join(",")).limit(1),
+          supabaseAdmin.from("questoes").select("id").contains("image_metadata",[{url_imagem:url}]).limit(1),
+          supabaseAdmin.from("resolucoes").select("id").eq("url_imagem",url).limit(1),
+        ]);
+        if(references.some(result=>result.error))throw new TRPCError({code:"SERVICE_UNAVAILABLE",message:"Não foi possível confirmar a limpeza temporária."});
+        if(references.some(result=>result.data?.length))return {removed:false};
+        const {error}=await bucket.remove([input.path]);
+        if(error)throw new TRPCError({code:"SERVICE_UNAVAILABLE",message:"A limpeza temporária ficou pendente."});
+        return {removed:true};
       }),
 
     confirmAdminStatementImage: adminOrEditorProcedure

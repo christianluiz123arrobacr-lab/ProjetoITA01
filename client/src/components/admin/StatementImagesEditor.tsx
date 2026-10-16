@@ -8,6 +8,8 @@ import {
   type StatementImage,
 } from "@shared/questionImages";
 import { MAX_QUESTION_IMPORT_IMAGE_BYTES } from "@shared/questionImportSchema";
+import { useImageUploadReview } from "./useImageUploadReview";
+import { checkImageAbort, type PreparedImageMime } from "@/lib/questionImagePreparation";
 
 export function StatementImagesPreview({
   images,
@@ -48,6 +50,8 @@ export function StatementImagesEditor({
 }) {
   const prepare = trpc.admin.createAdminImageUpload.useMutation();
   const confirm = trpc.admin.confirmAdminStatementImage.useMutation();
+  const discard = trpc.admin.discardAdminPreparedImage.useMutation();
+  const { reviewAndUpload, reviewUi } = useImageUploadReview();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -78,23 +82,31 @@ export function StatementImagesEditor({
           throw new Error("Selecione PNG, JPEG ou WebP.");
         if (!file.size || file.size > MAX_QUESTION_IMPORT_IMAGE_BYTES)
           throw new Error("Cada imagem deve ter no máximo 3 MB.");
+        const verified = await reviewAndUpload(file, async (prepared, controls) => {
+        controls.stage("Gerando URL assinada");
         const signed = await prepare.mutateAsync({
           bucket: "questoes-imagens",
-          originalName: file.name,
-          contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+          originalName: prepared.name,
+          contentType: prepared.type as PreparedImageMime,
           purpose: "statement",
         });
+        try {
+        checkImageAbort(controls.signal); controls.stage("Enviando arquivo");
         const sent = await uploadToSignedStorageUrl({
           bucket: signed.bucket,
           path: signed.path,
           token: signed.token,
-          file,
-          contentType: file.type,
+          signedUrl: signed.signedUrl, signal: controls.signal,
+          file: prepared,
+          contentType: prepared.type,
         });
         if (sent.error) throw new Error("Não foi possível enviar a imagem.");
-        const verified = await confirm.mutateAsync({
+        checkImageAbort(controls.signal); controls.stage("Confirmando arquivo");
+        return await confirm.mutateAsync({
           path: signed.path,
-          contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+          contentType: prepared.type as PreparedImageMime,
+        });
+        } catch(cause) {await discard.mutateAsync({path:signed.path}).catch(()=>{console.warn({event:"question_image_cleanup",outcome:"deferred"});});throw cause;}
         });
         next = [...next, image(verified.publicUrl)];
         setImages(next);
@@ -272,6 +284,7 @@ export function StatementImagesEditor({
           </div>
         </div>
       ))}
+      {reviewUi}
     </fieldset>
   );
 }

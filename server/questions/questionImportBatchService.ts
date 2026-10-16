@@ -119,43 +119,82 @@ export async function removeInvalidQuestionFromImportDraft(batchId: string, ques
   return getQuestionImportDraft(batchId, userId);
 }
 
-export async function prepareQuestionImportSlotUpload(input: { batchId: string; slotId: string; importKey: string; originalName: string; contentType: QuestionImportImageType; byteSize: number }, userId: string) {
-  await loadOwnedBatch(input.batchId, userId);
-  if (input.byteSize < 1 || input.byteSize > MAX_QUESTION_IMPORT_IMAGE_BYTES) throw new TRPCError({ code: "BAD_REQUEST", message: "A imagem deve ter no máximo 3 MB." });
-  const { data: slot, error } = await supabaseAdmin.from("question_import_image_slots").select(SLOT_SELECT).eq("batch_id", input.batchId).eq("import_key", input.importKey).eq("slot_id", input.slotId).maybeSingle();
-  if (error || !slot) throw new TRPCError({ code: "NOT_FOUND", message: "Slot não encontrado neste lote." });
-  if (slot.storage_path && slot.bucket) await supabaseAdmin.storage.from(slot.bucket).remove([slot.storage_path]);
-  const extension = input.contentType === "image/png" ? "png" : input.contentType === "image/webp" ? "webp" : "jpg";
-  const safeKey = sanitizeImportFileName(input.importKey) || "questao";
-  const safeSlot = sanitizeImportFileName(input.slotId) || "imagem";
-  const path = `question-imports/${input.batchId}/${safeKey}/${safeSlot}-${randomUUID()}.${extension}`;
-  const bucket = slot.location === "resolucao" ? "resolucoes-imagens" : "questoes-imagens";
-  const { data: upload, error: uploadError } = await supabaseAdmin.storage.from(bucket).createSignedUploadUrl(path);
-  if (uploadError || !upload?.token) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível preparar o upload." });
-  await supabaseAdmin.from("question_import_image_slots").update({ bucket, storage_path: path, public_url: null, original_name: sanitizeImportFileName(input.originalName), mime_type: input.contentType, byte_size: input.byteSize, width: null, height: null, status: "uploading", updated_at: new Date().toISOString() }).eq("id", slot.id);
-  return { bucket, path, token: upload.token, signedUrl: upload.signedUrl };
+export type ImportUploadIdentity = { batchId:string;importKey:string;slotId:string };
+function replacementPrefix(batchId:string,slot:any) { return `question-imports/${batchId}/${slot.id}/`; }
+function assertReplacementPath(batchId:string,slot:any,path:string) {
+  const prefix=replacementPrefix(batchId,slot);
+  if(!path.startsWith(prefix) || !/^[0-9a-f-]{36}\.(png|jpg|webp)$/.test(path.slice(prefix.length)))
+    throw new TRPCError({code:"FORBIDDEN",message:"Arquivo não pertence a este lote e slot."});
 }
-
-export async function confirmQuestionImportSlotUpload(input: { batchId: string; slotId: string; importKey: string; altText: string; caption?: string | null }, userId: string) {
-  await loadOwnedBatch(input.batchId, userId);
-  const { data: slot } = await supabaseAdmin.from("question_import_image_slots").select(SLOT_SELECT).eq("batch_id", input.batchId).eq("import_key", input.importKey).eq("slot_id", input.slotId).maybeSingle();
-  if (!slot?.bucket || !slot?.storage_path || slot.status !== "uploading") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Não há upload pendente para este slot." });
-  const { data: blob, error } = await supabaseAdmin.storage.from(slot.bucket).download(slot.storage_path);
-  if (error || !blob) throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo enviado não foi encontrado." });
+async function getUploadSlot(input:ImportUploadIdentity) {
+  const {data,error}=await supabaseAdmin.from("question_import_image_slots").select(SLOT_SELECT).eq("batch_id",input.batchId).eq("import_key",input.importKey).eq("slot_id",input.slotId).maybeSingle();
+  if(error)throw dbError("Não foi possível consultar o slot.",error);
+  if(!data)throw new TRPCError({code:"NOT_FOUND",message:"Slot não encontrado neste lote."});
+  return data as any;
+}
+export async function prepareQuestionImportSlotUpload(input: ImportUploadIdentity & { originalName: string; contentType: QuestionImportImageType; byteSize: number }, userId: string) {
+  await loadOwnedBatch(input.batchId,userId);
+  if(input.byteSize<1 || input.byteSize>MAX_QUESTION_IMPORT_IMAGE_BYTES)throw new TRPCError({code:"BAD_REQUEST",message:"A imagem deve ter no máximo 3 MiB."});
+  const slot=await getUploadSlot(input);
+  const extension=input.contentType==="image/png"?"png":input.contentType==="image/webp"?"webp":"jpg";
+  if(!/\.(png|jpe?g|webp)$/i.test(input.originalName))throw new TRPCError({code:"BAD_REQUEST",message:"Nome de imagem inválido."});
+  const path=`${replacementPrefix(input.batchId,slot)}${randomUUID()}.${extension}`;
+  const bucket=slot.location==="resolucao"?"resolucoes-imagens":"questoes-imagens";
+  const {data:upload,error}=await supabaseAdmin.storage.from(bucket).createSignedUploadUrl(path);
+  if(error || !upload?.token)throw dbError("Não foi possível preparar o upload.",error??undefined);
+  // The persisted ready slot is NEVER cleared here. No image is deleted before confirmation.
+  return {bucket,path,previousPath:slot.storage_path??null,token:upload.token,signedUrl:upload.signedUrl};
+}
+export async function discardQuestionImportReplacement(input:ImportUploadIdentity & {uploadPath:string},userId:string) {
+  const batch=await loadOwnedBatch(input.batchId,userId,false);
+  const slot=await getUploadSlot(input); assertReplacementPath(input.batchId,slot,input.uploadPath);
+  if(batch.status==="completed" || slot.storage_path===input.uploadPath)return {removed:false};
+  const bucket=slot.location==="resolucao"?"resolucoes-imagens":"questoes-imagens";
+  const {error}=await supabaseAdmin.storage.from(bucket).remove([input.uploadPath]);
+  if(error)throw dbError("Não foi possível limpar o upload temporário.",error);
+  return {removed:true};
+}
+export async function confirmQuestionImportSlotUpload(input:ImportUploadIdentity & {altText:string;caption?:string|null;uploadPath?:string;previousPath?:string|null;contentType?:QuestionImportImageType;originalName?:string},userId:string) {
+  await loadOwnedBatch(input.batchId,userId);
+  const slot=await getUploadSlot(input);
+  const legacy=!input.uploadPath && slot.status==="uploading" && slot.storage_path;
+  const path=input.uploadPath || (legacy?slot.storage_path:null);
+  if(!path)throw new TRPCError({code:"PRECONDITION_FAILED",message:"Selecione o arquivo novamente para preparar o upload."});
+  if(!legacy)assertReplacementPath(input.batchId,slot,path);
+  const bucket=slot.location==="resolucao"?"resolucoes-imagens":"questoes-imagens";
+  if(slot.storage_path===path && slot.status==="ready")return getQuestionImportDraft(input.batchId,userId);
+  const previous=legacy?slot.storage_path:input.previousPath??null;
+  if((slot.storage_path??null)!==previous)throw new TRPCError({code:"CONFLICT",message:"A imagem deste slot mudou. Atualize o lote antes de substituir."});
+  const storage=supabaseAdmin.storage.from(bucket);
+  const {data:blob,error}=await storage.download(path);
+  if(error || !blob)throw dbError("O arquivo enviado não foi encontrado.",error??undefined);
   try {
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    const info = inspectQuestionImportImage(bytes, slot.mime_type || "");
-    const { data: url } = supabaseAdmin.storage.from(slot.bucket).getPublicUrl(slot.storage_path);
-    const altText = input.altText.trim().replace(/[<>]/g, "").slice(0, 500);
-    const caption = input.caption?.trim().replace(/[<>]/g, "").slice(0, 500) || null;
-    if (slot.required && !altText) throw new Error("Informe o texto alternativo da imagem obrigatória.");
-    await supabaseAdmin.from("question_import_image_slots").update({ public_url: url.publicUrl, alt_text: altText, caption, mime_type: info.mime, byte_size: info.byteSize, width: info.width, height: info.height, status: "ready", updated_at: new Date().toISOString() }).eq("id", slot.id);
-    return getQuestionImportDraft(input.batchId, userId);
-  } catch (validationError) {
-    await supabaseAdmin.storage.from(slot.bucket).remove([slot.storage_path]);
-    await supabaseAdmin.from("question_import_image_slots").update({ bucket: null, storage_path: null, public_url: null, status: "rejected", updated_at: new Date().toISOString() }).eq("id", slot.id);
-    throw new TRPCError({ code: "BAD_REQUEST", message: validationError instanceof Error ? validationError.message : "Imagem inválida." });
+    const info=inspectQuestionImportImage(new Uint8Array(await blob.arrayBuffer()),input.contentType || slot.mime_type || "");
+    const extension=info.mime==="image/png"?"png":info.mime==="image/webp"?"webp":"jpg";
+    if(!path.endsWith(`.${extension}`))throw new Error("Extensão e conteúdo real não correspondem.");
+    const altText=input.altText.trim().replace(/[<>]/g,"").slice(0,500);
+    const caption=input.caption?.trim().replace(/[<>]/g,"").slice(0,500)||null;
+    if(slot.required && !altText)throw new Error("Informe o texto alternativo da imagem obrigatória.");
+    const {data:url}=storage.getPublicUrl(path);
+    let update=supabaseAdmin.from("question_import_image_slots").update({bucket,storage_path:path,public_url:url.publicUrl,
+      original_name:sanitizeImportFileName(input.originalName || slot.original_name || path.split("/").pop()!),
+      alt_text:altText,caption,mime_type:info.mime,byte_size:info.byteSize,width:info.width,height:info.height,status:"ready",updated_at:new Date().toISOString()}).eq("id",slot.id);
+    update=previous?update.eq("storage_path",previous):update.is("storage_path",null);
+    const {data:committed,error:updateError}=await update.select("id").maybeSingle();
+    if(updateError)throw dbError("Não foi possível confirmar a nova imagem.",updateError);
+    if(!committed)throw new TRPCError({code:"CONFLICT",message:"O slot mudou durante a confirmação. Atualize o lote."});
+  } catch(cause) {
+    // Keep the candidate for a retry (e.g. a transient database failure). The old
+    // reference remains unchanged. Explicit cancellation/expiry cleans candidates
+    // after checking the current reference, including ambiguous commit responses.
+    throw cause instanceof TRPCError?cause:new TRPCError({code:"BAD_REQUEST",message:cause instanceof Error?cause.message:"Imagem inválida."});
   }
+  // Reference committed first. Cleanup failure must not turn a successful replacement into a failed retry.
+  if(previous && previous!==path) {
+    const {error:cleanupError}=await storage.remove([previous]);
+    if(cleanupError)console.warn({event:"question_import_cleanup",outcome:"deferred"});
+  }
+  return getQuestionImportDraft(input.batchId,userId);
 }
 
 export async function removeQuestionImportSlotUpload(batchId: string, importKey: string, slotId: string, userId: string) {
@@ -230,11 +269,25 @@ export async function completeQuestionImportDraft(batchId: string, userId: strin
 }
 
 export async function cancelQuestionImportDraft(batchId: string, userId: string) {
-  await loadOwnedBatch(batchId, userId);
-  const { data: slots } = await supabaseAdmin.from("question_import_image_slots").select("bucket,storage_path").eq("batch_id", batchId).not("storage_path", "is", null);
+  const batch=await loadOwnedBatch(batchId,userId,false);
+  if(!["draft","cancelled"].includes(batch.status))throw new TRPCError({code:"PRECONDITION_FAILED",message:"Um lote concluído não pode ser cancelado."});
+  const { data: slots,error:slotsError } = await supabaseAdmin.from("question_import_image_slots").select("id,bucket,storage_path,location").eq("batch_id", batchId);
+  if(slotsError)throw dbError("Não foi possível consultar os arquivos do lote.",slotsError);
   for (const bucket of ["questoes-imagens", "resolucoes-imagens"] as const) {
     const paths = (slots ?? []).filter((slot: any) => slot.bucket === bucket && slot.storage_path).map((slot: any) => slot.storage_path);
-    if (paths.length) await supabaseAdmin.storage.from(bucket).remove(paths);
+    // Include unassociated replacement candidates abandoned by a closed browser.
+    // Enumerate only UUID slot directories of this owned, non-completed batch.
+    for(const slot of slots??[]) {
+      if((slot.location==="resolucao"?"resolucoes-imagens":"questoes-imagens")!==bucket)continue;
+      for(let offset=0;;offset+=100) {
+        const {data:files,error:listError}=await supabaseAdmin.storage.from(bucket).list(replacementPrefix(batchId,slot).slice(0,-1),{limit:100,offset});
+        if(listError)throw dbError("Não foi possível localizar os arquivos temporários.",listError);
+        for(const file of files??[])if(/^[0-9a-f-]{36}\.(png|jpg|webp)$/.test(file.name))paths.push(`${replacementPrefix(batchId,slot)}${file.name}`);
+        if(!files || files.length<100)break;
+      }
+    }
+    const uniquePaths=Array.from(new Set(paths));
+    for(let offset=0;offset<uniquePaths.length;offset+=1000) {const {error}=await supabaseAdmin.storage.from(bucket).remove(uniquePaths.slice(offset,offset+1000));if(error)throw dbError("Não foi possível limpar os arquivos temporários.",error);}
   }
   await supabaseAdmin.from("question_import_batches").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", batchId).eq("created_by", userId);
   await supabaseAdmin.from("admin_logs").insert({ actor_user_id: userId, action: "question_import_draft_cancelled", entity_type: "question_import_batch", entity_id: batchId, description: "Rascunho de importação cancelado e uploads temporários removidos.", level: "info", metadata: {} });
@@ -246,7 +299,7 @@ export async function cleanupExpiredQuestionImportDrafts(userId: string) {
     .from("question_import_batches")
     .select("id")
     .eq("created_by", userId)
-    .eq("status", "draft")
+    .in("status", ["draft","cancelled"])
     .lt("expires_at", new Date().toISOString())
     .limit(50);
   if (error) throw dbError("Não foi possível localizar os rascunhos expirados.", error);

@@ -12,6 +12,8 @@ import { getDifficultyLabel } from "@shared/difficulty";
 import { MAX_QUESTION_IMPORT_IMAGE_BYTES, MAX_QUESTION_IMPORT_JSON_BYTES, type NormalizedQuestionImageSlot, type QuestionImportPreviewItem } from "@shared/questionImportSchema";
 import { getExistingQuestionTaxonomy, normalizeQuestionTaxonomyKey } from "@shared/questionImportTaxonomy";
 import { StatementImagesPreview } from "@/components/admin/StatementImagesEditor";
+import { useImageUploadReview } from "@/components/admin/useImageUploadReview";
+import { checkImageAbort, type PreparedImageMime } from "@/lib/questionImagePreparation";
 
 type SlotRow = {
   id: string; import_key: string; slot_id: string; required: boolean; location: NormalizedQuestionImageSlot["local"];
@@ -69,6 +71,9 @@ export default function AdminQuestionBatchImportPage() {
   const createDraft = trpc.admin.createQuestionImportDraft.useMutation({ retry: false });
   const prepareUpload = trpc.admin.prepareQuestionImportImageUpload.useMutation();
   const confirmUpload = trpc.admin.confirmQuestionImportImageUpload.useMutation();
+  const discardReplacement = trpc.admin.discardQuestionImportImageReplacement.useMutation();
+  const { reviewAndUpload, reviewUi } = useImageUploadReview();
+  const [batchProgress,setBatchProgress]=useState<{current:number;total:number}|null>(null);
   const removeUpload = trpc.admin.removeQuestionImportImageUpload.useMutation();
   const updateMetadata = trpc.admin.updateQuestionImportImageMetadata.useMutation();
   const cancelDraft = trpc.admin.cancelQuestionImportDraft.useMutation();
@@ -93,7 +98,7 @@ export default function AdminQuestionBatchImportPage() {
   const existingTaxonomy = useMemo(() => getExistingQuestionTaxonomy(suggestionsQuery.data), [suggestionsQuery.data]);
   const newContents = useMemo(() => new Set(previews.flatMap((preview) => preview.item.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
   const newSubjects = useMemo(() => new Set(previews.flatMap((preview) => preview.item.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
-  const busy = createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending || removeInvalidQuestion.isPending;
+  const busy = Boolean(workingSlot) || createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending || removeInvalidQuestion.isPending;
   const slotsByQuestion = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
     for (const preview of previews) {
@@ -141,27 +146,51 @@ export default function AdminQuestionBatchImportPage() {
     catch { setError("Não foi possível confirmar o cancelamento. Atualize os lotes salvos antes de tentar novamente."); }
   }
 
-  async function uploadFile(slot: SlotRow, file: File) {
-    setError(""); setNotice(""); setWorkingSlot(slot.id);
+  async function uploadFile(slot:SlotRow,file:File) {
+    if(!draft)return false;
+    const identity={batchId:draft.id,importKey:slot.import_key,slotId:slot.slot_id};
+    let ticket:Awaited<ReturnType<typeof prepareUpload.mutateAsync>>|null=null;
+    let chosen:File|null=null,uploaded=false;
+    setError("");setNotice("");setWorkingSlot(slot.id);
     try {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Use somente PNG, JPEG ou WebP.");
-      if (file.size > MAX_QUESTION_IMPORT_IMAGE_BYTES) throw new Error("A imagem deve ter no máximo 3 MB.");
-      const signed = await prepareUpload.mutateAsync({ batchId: draft!.id, importKey: slot.import_key, slotId: slot.slot_id, originalName: file.name, contentType: file.type as "image/png" | "image/jpeg" | "image/webp", byteSize: file.size });
-      const uploaded = await uploadToSignedStorageUrl({ ...signed, file, contentType: file.type });
-      if (uploaded.error) throw new Error("O storage recusou o upload da imagem.");
-      const values = metadata[slot.id] ?? { alt: slot.alt_text ?? "", caption: slot.caption ?? "" };
-      applyDraft(await confirmUpload.mutateAsync({ batchId: draft!.id, importKey: slot.import_key, slotId: slot.slot_id, altText: values.alt, caption: values.caption || null }));
-      setNotice(`${file.name} validado e vinculado ao slot ${slot.slot_id}.`);
-    } catch (err) { setError(err instanceof Error ? err.message : "Falha ao enviar a imagem."); }
-    finally { setWorkingSlot(null); }
+      const result=await reviewAndUpload(file,async(prepared,controls)=>{
+        if(chosen!==prepared) {
+          if(ticket)await discardReplacement.mutateAsync({...identity,uploadPath:ticket.path});
+          ticket=null;chosen=prepared;uploaded=false;
+        }
+        controls.stage("Gerando URL assinada");
+        ticket??=await prepareUpload.mutateAsync({...identity,originalName:prepared.name,contentType:prepared.type as PreparedImageMime,byteSize:prepared.size});
+        checkImageAbort(controls.signal);
+        if(!uploaded) {
+          controls.stage("Enviando arquivo");
+          const sent=await uploadToSignedStorageUrl({...ticket,file:prepared,contentType:prepared.type,signal:controls.signal});
+          if(sent.error && !("statusCode" in sent.error && Number(sent.error.statusCode)===409))throw new Error("O Storage recusou o envio. Você pode tentar novamente sem preparar outra vez.");
+          uploaded=true;
+        }
+        checkImageAbort(controls.signal);controls.stage("Confirmando arquivo");
+        const values=metadata[slot.id]??{alt:slot.alt_text??"",caption:slot.caption??""};
+        return confirmUpload.mutateAsync({...identity,uploadPath:ticket.path,previousPath:ticket.previousPath,contentType:prepared.type as PreparedImageMime,originalName:prepared.name,altText:values.alt,caption:values.caption||null});
+      });
+      applyDraft(result);setNotice(`${file.name} validado no slot ${slot.slot_id}.`);return true;
+    } catch(cause) {
+      setError(cause instanceof Error?cause.message:"Falha ao enviar a imagem.");return false;
+    } finally {
+      // The endpoint refuses to remove any file currently referenced by the slot.
+      if(ticket)await discardReplacement.mutateAsync({...identity,uploadPath:(ticket as {path:string}).path}).catch(()=>setNotice("A limpeza temporária ficou pendente; a imagem anterior permanece protegida."));
+      setWorkingSlot(null);
+    }
   }
-
-  async function uploadMany(files: File[]) {
-    if (!draft) return;
-    const { matches, warnings } = autoMatch(files, slots.filter((slot) => slot.status !== "ready"));
-    if (warnings.length) setNotice(warnings.join(" "));
-    for (const match of matches) await uploadFile(match.slot, match.file);
-    await refreshDraft();
+  async function uploadMany(files:File[]) {
+    if(!draft)return;
+    // Match ORIGINAL filenames before any conversion or generated extension.
+    const {matches,warnings}=autoMatch(files,slots.filter(slot=>slot.status!=="ready"));
+    if(warnings.length)setNotice(warnings.join(" "));
+    try {
+      for(let index=0;index<matches.length;index++) {
+        setBatchProgress({current:index+1,total:matches.length});
+        if(!await uploadFile(matches[index].slot,matches[index].file))break;
+      }
+    } finally {setBatchProgress(null);}
   }
 
   async function removeSlot(slot: SlotRow) {
@@ -193,6 +222,8 @@ export default function AdminQuestionBatchImportPage() {
   }
 
   return <AdminGuard><AdminLayout title="Importar lote JSON" subtitle="Valide o lote, vincule imagens e finalize de forma segura e idempotente.">
+    {reviewUi}
+    {batchProgress && <p role="status">Imagem {batchProgress.current} de {batchProgress.total}. Preparação e envio sequenciais; Cancelar na revisão interrompe o restante do lote.</p>}
     <div className="flex flex-wrap gap-3"><Link href="/admin/questoes"><Button variant="outline" className="rounded-2xl"><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Button></Link><a href="/question-import/questoes-v2.example.json" download><Button variant="outline" className="rounded-2xl"><FileJson className="mr-2 h-4 w-4" />Exemplo questoes-v2</Button></a></div>
     {error && <Card className="border-red-300 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"><AlertTriangle className="mr-2 inline h-5 w-5" />{error}</Card>}
     {notice && <Card className="border-blue-300 bg-blue-50 p-4 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">{notice}</Card>}
