@@ -1344,6 +1344,7 @@ export default function QuestionBankPage() {
             <div>
             <p className="text-sm mb-3">{totalFiltered} questões encontradas · filtros aplicados</p>
             <InteractiveQuiz
+              enableResolutionWorkspace
               key={selectionKey}
               questions={filteredQuestions}
               totalQuestions={totalFiltered}

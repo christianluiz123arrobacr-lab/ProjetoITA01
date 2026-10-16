@@ -5,6 +5,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { QuestionScratchpad } from "@/components/question-notes/QuestionScratchpad";
+import { QuestionResolutionLayout } from "@/components/question-notes/QuestionResolutionLayout";
 import { Button } from "@/components/ui/button";
 import {
   CheckCircle,
@@ -40,6 +41,7 @@ export type QuizCompletionData = {
 };
 
 type InteractiveQuizProps = {
+  enableResolutionWorkspace?: boolean;
   questions: Question[];
   totalQuestions?: number;
   onPositionChange?: (index: number) => void;
@@ -245,6 +247,7 @@ function MarkdownContent({
 }
 
 export function InteractiveQuiz({
+  enableResolutionWorkspace = false,
   questions,
   totalQuestions = questions.length,
   onPositionChange,
@@ -637,6 +640,7 @@ export function InteractiveQuiz({
   const difficultyClasses = getDifficultyClasses(question.difficulty);
 
   return (
+    <QuestionResolutionLayout enabled={enableResolutionWorkspace} userId={user?.id} questionId={question.id} questionCode={question.codigo}>
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-violet-50/60 px-5 md:px-7 py-5">
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
@@ -735,11 +739,11 @@ export function InteractiveQuiz({
           ))}
         </div>
 
-        <QuestionScratchpad
+        {!enableResolutionWorkspace ? <QuestionScratchpad
           userId={user?.id}
           questionId={question.id}
           questionCode={question.codigo}
-        />
+        /> : null}
 
         <div className="space-y-3 mb-6">
           {question.options.length === 0 ? (
@@ -1191,5 +1195,6 @@ export function InteractiveQuiz({
         </div>
       </div>
     </div>
+    </QuestionResolutionLayout>
   );
 }

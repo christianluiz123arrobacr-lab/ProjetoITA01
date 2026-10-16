@@ -40,7 +40,7 @@ import {
   type ScratchpadShape,
   type ScratchpadStroke,
 } from "@/services/question-notes.service";
-import { isMultitouchGesture, shouldNavigateInsteadOfDraw } from "./studyCanvasPointerGuards";
+import { isMultitouchGesture, shouldNavigateInsteadOfDraw, shouldHandleCanvasShortcut } from "./studyCanvasPointerGuards";
 import { getPaperDimensions, getPaperViewportStyle } from "./studyCanvasPaper";
 import { PaperViewport } from "./PaperViewport";
 import { BRUSH_RENDERING } from "./studyCanvasBrush";
@@ -63,6 +63,8 @@ export type StudyCanvasDocument = {
 };
 
 export type StudyCanvasPersistence = {
+  /** Omitted preserves the existing Google Drive adapter contract. */
+  destination?: "browser";
   load: () => Promise<StudyCanvasDocument | null>;
   save: (document: StudyCanvasDocument) => Promise<void>;
 };
@@ -86,6 +88,8 @@ type StudyCanvasWorkspaceProps = {
   paperSize?: "a5" | "a4" | "a3" | "infinite";
   /** Fingers only navigate; stylus and mouse can still draw. */
   lockTouchToPan?: boolean;
+  embedded?: boolean;
+  active?: boolean;
 };
 
 type ScratchpadTool = "pen" | "pan" | "areaEraser" | "strokeEraser" | "select" | "shape" | "text";
@@ -1856,15 +1860,16 @@ function writeLocalDraft({
   }
 }
 
-function getLocalDraftIndexes() {
+function getLocalDraftIndexes(userId?: string | null) {
   if (typeof window === "undefined") return [];
+  if (!userId) return [];
 
   const prefix = `${LOCAL_DRAFT_VERSION}:question-note:`;
   const items: ScratchpadListItem[] = [];
 
   for (let index = 0; index < window.localStorage.length; index += 1) {
     const key = window.localStorage.key(index);
-    if (!key || !key.startsWith(prefix)) continue;
+    if (!key || !key.startsWith(`${prefix}${userId}:`)) continue;
 
     try {
       const raw = window.localStorage.getItem(key);
@@ -1960,7 +1965,13 @@ export function StudyCanvasWorkspace({
   drawWithTouchInitially = true,
   paperSize = "a4",
   lockTouchToPan = false,
+  embedded = false,
+  active = true,
 }: StudyCanvasWorkspaceProps) {
+  const browserPersistence = persistence?.destination === "browser";
+  const localRevisionRef = useRef(0);
+  const browserLoadFailedRef = useRef(false);
+  const localSnapshotRef = useRef<{document: StudyCanvasDocument; dirty: boolean; loaded: boolean} | null>(null);
   const fullscreenRootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const paperViewportRef = useRef<HTMLDivElement | null>(null);
@@ -2050,7 +2061,7 @@ export function StudyCanvasWorkspace({
   );
 
   function refreshLocalNotesPanel() {
-    setLocalNotes(getLocalDraftIndexes());
+    setLocalNotes(getLocalDraftIndexes(userId));
   }
 
   const replaceStrokes = useCallback((nextStrokes: ScratchpadStroke[]) => {
@@ -2195,6 +2206,7 @@ export function StudyCanvasWorkspace({
   }
 
   function markDirty(message = "Alterações não salvas.") {
+    localRevisionRef.current += 1;
     dirtyRef.current = true;
     setDirty(true);
     setStatus(message);
@@ -2498,6 +2510,7 @@ export function StudyCanvasWorkspace({
       }
 
       if (persistence) {
+        browserLoadFailedRef.current = false;
         try {
           const stored = await persistence.load();
           if (cancelled) return;
@@ -2513,8 +2526,9 @@ export function StudyCanvasWorkspace({
           dirtyRef.current = false;
           setDirty(false);
         } catch (loadError) {
+          if (browserPersistence) browserLoadFailedRef.current = true;
           console.error("Erro ao carregar documento do editor:", loadError);
-          if (!cancelled) setError("Não foi possível carregar este documento.");
+          if (!cancelled) setError(browserPersistence ? `Não foi possível abrir o rascunho local. ${getReadableErrorMessage(loadError)}` : "Não foi possível carregar este documento.");
         } finally {
           if (!cancelled) setLoaded(true);
         }
@@ -2607,6 +2621,10 @@ export function StudyCanvasWorkspace({
 
   const handleSave = useCallback(
     async (nextStrokes = strokesRef.current) => {
+      if (browserPersistence && (!loaded || browserLoadFailedRef.current)) {
+        setError("O rascunho anterior não pôde ser aberto. Tente abrir novamente antes de salvar; os dados existentes não foram substituídos.");
+        return;
+      }
       if (!canSave || (!persistence && !userId)) {
         setError("Entre na sua conta para salvar o rascunho.");
         return;
@@ -2614,6 +2632,7 @@ export function StudyCanvasWorkspace({
 
       const pagesForSave = getPagesForPersistence(nextStrokes, backgroundTypeRef.current);
       const storageStrokes = encodePagesForStorage(pagesForSave, activePageId);
+      const revision = localRevisionRef.current;
 
       try {
         setSaving(true);
@@ -2635,11 +2654,12 @@ export function StudyCanvasWorkspace({
             writeLocalDraft({ userId, questionId, pages: pagesForSave, activePageId, backgroundType: backgroundTypeRef.current });
           }
         }
+        if (browserPersistence && revision !== localRevisionRef.current) return;
         setPages(pagesForSave);
         dirtyRef.current = false;
         setDirty(false);
         setLocalStatus(persistence ? "" : "Backup local e nuvem sincronizados.");
-        setStatus(persistence ? "Salvo no Google Drive." : "Rascunho salvo.");
+        setStatus(browserPersistence ? "Salvo neste navegador" : persistence ? "Salvo no Google Drive." : "Rascunho salvo.");
       } catch (saveError) {
         const readableMessage = getReadableErrorMessage(saveError);
         console.error("Erro ao salvar rascunho:", saveError);
@@ -2648,8 +2668,34 @@ export function StudyCanvasWorkspace({
         setSaving(false);
       }
     },
-    [activePageId, canSave, canvasDimensions.height, canvasDimensions.width, disableLocalDraft, pages, persistence, questionId, title, userId]
+    [activePageId, browserPersistence, canSave, canvasDimensions.height, canvasDimensions.width, disableLocalDraft, loaded, pages, persistence, questionId, title, userId]
   );
+
+  // Browser documents use their own lifecycle. Never enter the legacy cloud cleanup.
+  useEffect(() => {
+    if (!browserPersistence) return;
+    localSnapshotRef.current = { document: { pages: getPagesForPersistence(), activePageId }, dirty, loaded: loaded && !browserLoadFailedRef.current };
+    if (!loaded || !dirty) return;
+    const timer = window.setTimeout(() => void handleSave(), active ? 650 : 0);
+    return () => window.clearTimeout(timer);
+  }, [active, activePageId, backgroundType, browserPersistence, dirty, handleSave, loaded, pages, strokes]);
+
+  useEffect(() => {
+    if (!browserPersistence || !persistence) return;
+    const adapter = persistence;
+    const flush = () => {
+      const latest = localSnapshotRef.current;
+      if (latest?.loaded && latest.dirty) void adapter.save(latest.document).catch(() => {
+        // The editor's normal save path reports failures while mounted. On exit,
+        // no remote fallback is permitted and async completion is not guaranteed.
+        console.warn({event:"question_draft_local_flush",outcome:"failed"});
+      });
+    };
+    const hidden = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", hidden);
+    return () => { window.removeEventListener("pagehide", flush); document.removeEventListener("visibilitychange", hidden); flush(); };
+  }, [browserPersistence, persistence]);
 
   useEffect(() => {
     onStateChange?.({ dirty, saving, error });
@@ -2671,6 +2717,7 @@ export function StudyCanvasWorkspace({
 
   useEffect(() => {
     return () => {
+      if (browserPersistence) return;
       if (!dirtyRef.current || !canSave) return;
 
       if (persistence) {
@@ -2696,7 +2743,7 @@ export function StudyCanvasWorkspace({
         console.error("Erro ao salvar rascunho ao sair da questão:", saveError);
       });
     };
-  }, [activePageId, canSave, canvasDimensions.height, canvasDimensions.width, pages, persistence, questionId, title, userId]);
+  }, [activePageId, browserPersistence, canSave, canvasDimensions.height, canvasDimensions.width, pages, persistence, questionId, title, userId]);
 
   function updateActivePointer(event: React.PointerEvent<HTMLCanvasElement>) {
     activePointersRef.current.set(event.pointerId, {
@@ -2950,6 +2997,8 @@ export function StudyCanvasWorkspace({
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     event.preventDefault();
+    if (browserPersistence && !active) return;
+    event.currentTarget.focus({preventScroll:true});
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -4039,6 +4088,7 @@ export function StudyCanvasWorkspace({
     }
 
     function handleKeyDown(event: KeyboardEvent) {
+      if (!shouldHandleCanvasShortcut(browserPersistence, open, active, Boolean(fullscreenRootRef.current?.contains(document.activeElement)))) return;
       if (isTypingTarget(event.target)) return;
 
       const key = event.key.toLowerCase();
@@ -4096,7 +4146,7 @@ export function StudyCanvasWorkspace({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleSave, selectedIds.length]);
+  }, [active, browserPersistence, handleSave, open, selectedIds.length]);
 
   useEffect(() => {
     if (selectedIds.length === 0 && fullscreenPanel === "selection") {
@@ -4116,20 +4166,21 @@ export function StudyCanvasWorkspace({
     return Math.round(total / selectedStrokes.length);
   }, [selectedIds, size, strokes]);
 
+  const immersive = fullscreen || embedded;
   const containerClassName = fullscreen
     ? "fixed inset-0 z-[100] flex h-dvh w-dvw flex-col overflow-hidden bg-black text-slate-100"
-    : compactMode
+    : embedded ? "question-local-canvas flex min-h-0 flex-1 flex-col overflow-hidden bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100" : compactMode
       ? "h-full overflow-hidden bg-slate-100"
       : "mb-6 overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 shadow-sm";
 
-  const canvasWrapperClassName = fullscreen
+  const canvasWrapperClassName = immersive
     ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-0 bg-black p-0"
     : compactMode
       ? "flex min-h-[calc(100dvh-150px)] flex-col overflow-hidden rounded-xl bg-slate-200/70 shadow-inner"
       : "rounded-2xl border border-slate-200 bg-white p-2 shadow-inner";
 
   const paperVisualStyle = compactMode
-    ? getPaperViewportStyle(paperSize, fullscreen, view.zoom)
+    ? { ...getPaperViewportStyle(paperSize, immersive, view.zoom), ...(embedded ? {minWidth:undefined,minHeight:undefined,height:undefined,maxWidth:view.zoom<=1?"100%":undefined} : {}) }
     : undefined;
 
   const canvasCursorClass =
@@ -4148,23 +4199,23 @@ export function StudyCanvasWorkspace({
       <button
         type="button"
         onClick={() => {
-          if (!fullscreen) setOpen((value) => !value);
+          if (!immersive) setOpen((value) => !value);
         }}
         className={`${hideLauncher ? "hidden" : "flex"} w-full items-center justify-between gap-4 px-5 py-4 text-left transition md:px-6 ${
-          fullscreen ? "shrink-0 border-b border-slate-800 bg-slate-950 text-white" : "hover:bg-white/60"
+          immersive ? "shrink-0 border-b border-slate-800 bg-slate-950 text-white" : "hover:bg-white/60"
         }`}
       >
         <div className="flex items-start gap-3">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm ${fullscreen ? "bg-violet-500" : "bg-violet-600"}`}>
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm ${immersive ? "bg-violet-500" : "bg-violet-600"}`}>
             <PenLine className="h-5 w-5" />
           </div>
 
           <div>
-            <p className={`font-black ${fullscreen ? "text-white" : "text-slate-950"}`}>
-              {fullscreen ? "Rascunho" : "Rascunho manuscrito"}
+            <p className={`font-black ${immersive ? "text-white" : "text-slate-950"}`}>
+              {immersive ? "Rascunho" : "Rascunho manuscrito"}
             </p>
-            <p className={`mt-1 text-sm leading-6 ${fullscreen ? "text-slate-400" : "text-slate-600"}`}>
-              {fullscreen ? "Modo tela cheia: escreva em toda a área, como um caderno digital." : "Use presets, atalhos, páginas, texto, imagem, formas perfeitas e borracha em tempo real."}
+            <p className={`mt-1 text-sm leading-6 ${immersive ? "text-slate-400" : "text-slate-600"}`}>
+              {immersive ? "Modo tela cheia: escreva em toda a área, como um caderno digital." : "Use presets, atalhos, páginas, texto, imagem, formas perfeitas e borracha em tempo real."}
             </p>
           </div>
         </div>
@@ -4195,7 +4246,8 @@ export function StudyCanvasWorkspace({
       </button>
 
       {open ? (
-        <div className={`${fullscreen ? "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden bg-black p-0" : compactMode ? "h-full p-0" : "border-t border-violet-100 p-4 md:p-5"}`}>
+        <div className={`${immersive ? "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden bg-black p-0" : compactMode ? "h-full p-0" : "border-t border-violet-100 p-4 md:p-5"}`}>
+          {persistence ? <p role="status" className={immersive ? "shrink-0 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200" : "mb-3 text-xs font-semibold text-slate-600 dark:text-slate-300"}>{browserPersistence ? (!loaded ? "Abrindo rascunho…" : saving ? "Salvando…" : error ? "Não foi possível salvar" : dirty ? "Alterações ainda não salvas" : status || "Pronto para rascunhar neste navegador") : (!loaded ? "Abrindo caderno…" : saving ? "Salvando no Google Drive…" : error ? "Não foi possível salvar no Google Drive" : dirty ? "Alterações não salvas no Google Drive" : status || "Pronto para editar o caderno")}</p> : null}
           {!userId && !persistence ? (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -4226,7 +4278,7 @@ export function StudyCanvasWorkspace({
             }}
           />
 
-          <div className={`${compactMode && !fullscreen ? "hidden" : ""} ${fullscreen ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-2`}>
+          <div className={`${compactMode && !immersive ? "hidden" : ""} ${immersive ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-2`}>
             <span className="px-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
               Páginas
             </span>
@@ -4260,7 +4312,7 @@ export function StudyCanvasWorkspace({
             </button>
           </div>
 
-          <div className={`${fullscreen ? "mb-0 max-h-36 shrink-0 overflow-y-auto border-b border-slate-800 bg-slate-900 p-2 text-slate-100" : "mb-4 rounded-2xl border border-slate-200 bg-white p-2"} ${notesPanelOpen ? "block" : "hidden"}`}>
+          <div className={`${immersive ? "mb-0 max-h-36 shrink-0 overflow-y-auto border-b border-slate-800 bg-slate-900 p-2 text-slate-100" : "mb-4 rounded-2xl border border-slate-200 bg-white p-2"} ${notesPanelOpen && !browserPersistence ? "block" : "hidden"}`}>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="px-2 text-xs font-black uppercase tracking-wide text-slate-400">Meus rascunhos locais</p>
               <button
@@ -4277,7 +4329,7 @@ export function StudyCanvasWorkspace({
             ) : (
               <div className="grid max-h-36 gap-2 overflow-y-auto md:grid-cols-2 lg:grid-cols-3">
                 {localNotes.map((note) => (
-                  <div key={note.key} className={`${fullscreen ? "bg-slate-950 ring-slate-800" : "bg-slate-50 ring-slate-200"} rounded-xl p-3 ring-1`}>
+                  <div key={note.key} className={`${immersive ? "bg-slate-950 ring-slate-800" : "bg-slate-50 ring-slate-200"} rounded-xl p-3 ring-1`}>
                     <p className="truncate text-sm font-black">{note.title}</p>
                     <p className="mt-1 text-xs text-slate-500">
                       {note.pagesCount} página(s) • {formatLocalDate(note.updatedAt)}
@@ -4298,7 +4350,7 @@ export function StudyCanvasWorkspace({
             )}
           </div>
 
-          {fullscreen ? (
+          {immersive ? (
             <div className="shrink-0 border-b border-slate-800 bg-[#202020] text-white">
               <div className="flex h-[50px] items-center gap-2 overflow-x-auto px-3">
                 <button
@@ -4419,11 +4471,11 @@ export function StudyCanvasWorkspace({
 
                 <button
                   type="button"
-                  onClick={exitScratchpadFullscreen}
+                  onClick={toggleScratchpadFullscreen}
                   className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-slate-100 px-4 text-sm font-black text-slate-900 transition hover:bg-white"
                 >
                   <Minimize2 className="h-4 w-4" />
-                  Sair
+                  {fullscreen ? "Sair" : "Tela cheia"}
                 </button>
               </div>
 
@@ -4542,7 +4594,7 @@ export function StudyCanvasWorkspace({
                       <button type="button" onClick={exportAsPdf} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">PDF</button>
                       <button type="button" onClick={() => imageInputRef.current?.click()} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Imagem</button>
                       <button type="button" onClick={handleClear} disabled={strokes.length === 0} className="shrink-0 rounded-full bg-red-950 px-3 py-2 text-xs font-black text-red-200 hover:bg-red-900 disabled:opacity-40">Limpar</button>
-                      <button type="button" onClick={() => { refreshLocalNotesPanel(); setNotesPanelOpen((value) => !value); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Meus rascunhos</button>
+                      {!browserPersistence ? <button type="button" onClick={() => { refreshLocalNotesPanel(); setNotesPanelOpen((value) => !value); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Meus rascunhos</button> : null}
                     </>
                   ) : null}
                 </div>
@@ -4550,7 +4602,7 @@ export function StudyCanvasWorkspace({
             </div>
           ) : null}
 
-          <div className={fullscreen || compactMode ? "hidden" : "mb-4 flex shrink-0 flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"}>
+          <div className={immersive || compactMode ? "hidden" : "mb-4 flex shrink-0 flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"}>
             <ToolbarGroup label="Favoritos">
               {PEN_PRESETS.map((preset) => (
                 <button
@@ -4691,8 +4743,8 @@ export function StudyCanvasWorkspace({
                 <Move className="h-4 w-4" /> 100%
               </button>
               <button type="button" onClick={toggleScratchpadFullscreen} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
-                {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                {fullscreen ? "Sair" : "Tela cheia"}
+                {immersive ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                {immersive ? "Sair" : "Tela cheia"}
               </button>
               <button type="button" onClick={exportAsPng} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
                 <Download className="h-4 w-4" /> PNG
@@ -4725,7 +4777,7 @@ export function StudyCanvasWorkspace({
             </ToolbarGroup>
           </div>
 
-          {selectedIds.length > 0 && !fullscreen ? (
+          {selectedIds.length > 0 && !immersive ? (
             <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm">
               <span className="font-black text-violet-900">
                 {selectedIds.length} item(ns) selecionado(s)
@@ -4805,7 +4857,7 @@ export function StudyCanvasWorkspace({
           ) : null}
 
           <div className={canvasWrapperClassName}>
-            {compactMode && !fullscreen ? (
+            {compactMode && !immersive ? (
               <div className="relative z-30 mx-auto w-full max-w-5xl shrink-0 p-2 pb-0">
                 <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-slate-700 bg-slate-950/95 p-1.5 text-white shadow-xl backdrop-blur">
                   {(["pages", "tools", "style", "view"] as const).map(panel => (
@@ -4883,12 +4935,13 @@ export function StudyCanvasWorkspace({
               </div>
             ) : compactMode && paperVisualStyle ? (
               <PaperViewport
-                fullscreen={fullscreen}
+                fullscreen={immersive}
                 frameStyle={paperVisualStyle}
                 viewportRef={paperViewportRef}
               >
                 <canvas
                   ref={canvasRef}
+                  tabIndex={0}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={finishStroke}
@@ -4908,6 +4961,7 @@ export function StudyCanvasWorkspace({
             ) : (
               <canvas
                 ref={canvasRef}
+                tabIndex={0}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={finishStroke}
@@ -4922,7 +4976,7 @@ export function StudyCanvasWorkspace({
             )}
           </div>
 
-          <div className={fullscreen ? "hidden" : "mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between"}>
+          <div className={immersive ? "hidden" : "mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between"}>
             <p>
               Atalhos: P caneta, B pincel, H marca-texto, E borracha, S selecionar, M mover, T texto, L reta, A seta, Ctrl+S salvar. A borracha apaga em tempo real e “Forma perfeita” agora distingue melhor círculo e retângulo.
               {localStatus ? <span className="mt-1 block font-bold text-violet-600">{localStatus}</span> : null}
