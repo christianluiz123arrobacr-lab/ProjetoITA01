@@ -75,10 +75,13 @@
 .dark [data-testid="question-resolution-panel"] .bg-slate-200 {
   background-color: #334155;
 }
-.dark
-  [data-testid="question-resolution-panel"]
-  .bg-gradient-to-r.from-slate-50 {
-  background-image: linear-gradient(to right, #172235, #251d38);
+[data-testid="question-resolution-panel"] .bg-gradient-to-r.from-slate-50 {
+  background-image: none;
+  background-color: #fff;
+}
+.dark [data-testid="question-resolution-panel"] .bg-gradient-to-r.from-slate-50 {
+  background-image: none;
+  background-color: #172235;
 }
 .dark
   [data-testid="question-resolution-panel"]
