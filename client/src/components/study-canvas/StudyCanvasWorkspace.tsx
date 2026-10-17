@@ -44,7 +44,7 @@ import { isMultitouchGesture, shouldNavigateInsteadOfDraw, shouldHandleCanvasSho
 import { getPaperDimensions, getPaperViewportStyle } from "./studyCanvasPaper";
 import { PaperViewport } from "./PaperViewport";
 import { BRUSH_RENDERING } from "./studyCanvasBrush";
-import { calculateImmediatePointWidth, getSafeCanvasPixelRatio, normalizePointerPressure } from "./studyCanvasInk";
+import { calculateImmediatePointWidth, getSafeCanvasPixelRatio, normalizePointerPressure, shouldAppendInkSample, pointerSamples } from "./studyCanvasInk";
 import { getShapeVertices, recognizePerfectShape } from "./studyCanvasShapes";
 import { buildVectorStudyCanvasPdf, safePdfFileName, type PrintPaperSize } from "@/lib/studyCanvasPdf";
 
@@ -90,6 +90,7 @@ type StudyCanvasWorkspaceProps = {
   lockTouchToPan?: boolean;
   embedded?: boolean;
   active?: boolean;
+  secondaryActions?: React.ReactNode;
 };
 
 type ScratchpadTool = "pen" | "pan" | "areaEraser" | "strokeEraser" | "select" | "shape" | "text";
@@ -759,7 +760,8 @@ function getRenderingWidth(
   startDistance: number,
   remainingDistance: number,
   last: ScratchpadPoint,
-  previous: ScratchpadPoint
+  previous: ScratchpadPoint,
+  sampleFaithful = false
 ) {
   const width = getPointWidth(point, stroke);
   if (stroke.brush === "highlighter") return width;
@@ -772,10 +774,10 @@ function getRenderingWidth(
   const endTarget = isLightRelease ? 0.22 : 0.9;
   const endTaper = clamp(endTarget + (remainingDistance / endTaperLength) * (1 - endTarget), endTarget, 1);
 
-  return width * Math.min(startTaper, endTaper);
+  return width * (sampleFaithful ? startTaper : Math.min(startTaper, endTaper));
 }
 
-function getStrokeOutline(stroke: ScratchpadStroke) {
+function getStrokeOutline(stroke: ScratchpadStroke, sampleFaithful = false) {
   const points = stroke.points;
   const left: Array<{ x: number; y: number }> = [];
   const right: Array<{ x: number; y: number }> = [];
@@ -799,7 +801,8 @@ function getStrokeOutline(stroke: ScratchpadStroke) {
       distancesFromStart[index],
       totalDistance - distancesFromStart[index],
       last,
-      penultimate
+      penultimate,
+      sampleFaithful
     ) / 2;
     const normalX = -Math.sin(angle) * radius;
     const normalY = Math.cos(angle) * radius;
@@ -827,7 +830,7 @@ function traceSmoothClosedPath(
   ctx.closePath();
 }
 
-function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke, sampleFaithful = false) {
   if (stroke.points.length === 0) return;
 
   const firstPoint = stroke.points[0];
@@ -867,7 +870,7 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
     return;
   }
 
-  traceSmoothClosedPath(ctx, getStrokeOutline(stroke));
+  traceSmoothClosedPath(ctx, getStrokeOutline(stroke, sampleFaithful));
   ctx.fillStyle = stroke.color;
   ctx.fill();
 
@@ -1060,7 +1063,7 @@ function drawImageStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke
   ctx.restore();
 }
 
-function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke, sampleFaithful = false) {
   if (stroke.tool === "meta") return;
 
   if (stroke.tool === "eraser") {
@@ -1083,7 +1086,7 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
     return;
   }
 
-  drawPenStroke(ctx, stroke);
+  drawPenStroke(ctx, stroke, sampleFaithful);
 }
 
 function drawEraserPreview(
@@ -1967,8 +1970,10 @@ export function StudyCanvasWorkspace({
   lockTouchToPan = false,
   embedded = false,
   active = true,
+  secondaryActions,
 }: StudyCanvasWorkspaceProps) {
   const browserPersistence = persistence?.destination === "browser";
+  const responsiveQuestionInk = embedded && browserPersistence;
   const localRevisionRef = useRef(0);
   const browserLoadFailedRef = useRef(false);
   const localSnapshotRef = useRef<{document: StudyCanvasDocument; dirty: boolean; loaded: boolean} | null>(null);
@@ -1986,6 +1991,7 @@ export function StudyCanvasWorkspace({
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
   const eraserFrameRef = useRef<number | null>(null);
   const eraserLastApplyAtRef = useRef(0);
+  const eraserAppliedPointsRef = useRef(0);
   const lassoPathRef = useRef<ScratchpadPoint[]>([]);
   const panLastRawPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionLastPointRef = useRef<ScratchpadPoint | null>(null);
@@ -2268,17 +2274,17 @@ export function StudyCanvasWorkspace({
       };
 
       const coalescedEvents =
-        typeof nativeEvent.getCoalescedEvents === "function"
+        !responsiveQuestionInk && typeof nativeEvent.getCoalescedEvents === "function"
           ? nativeEvent.getCoalescedEvents()
           : [];
 
-      const sourceEvents = coalescedEvents.length > 0 ? coalescedEvents : [nativeEvent];
+      const sourceEvents = responsiveQuestionInk ? pointerSamples(nativeEvent) : coalescedEvents.length > 0 ? coalescedEvents : [nativeEvent];
 
       return sourceEvents.map((sourceEvent) =>
         getCanvasPointFromNative(sourceEvent, event.pointerType)
       );
     },
-    [getCanvasPointFromNative]
+    [getCanvasPointFromNative, responsiveQuestionInk]
   );
 
   function markCommittedLayerDirty() {
@@ -2318,7 +2324,7 @@ export function StudyCanvasWorkspace({
       applyView(layerCtx, viewRef.current);
 
       for (const stroke of strokesRef.current) {
-        drawStroke(layerCtx, stroke);
+        drawStroke(layerCtx, stroke, responsiveQuestionInk);
       }
 
       layerCtx.restore();
@@ -2357,8 +2363,9 @@ export function StudyCanvasWorkspace({
       ctx.save();
       applyView(ctx, viewRef.current);
 
-      if (extraStroke) {
-        drawStroke(ctx, extraStroke);
+      const previewStroke = extraStroke ?? (responsiveQuestionInk ? heldShapePreviewRef.current ?? currentStrokeRef.current ?? shapeStrokeRef.current : null);
+      if (previewStroke) {
+        drawStroke(ctx, previewStroke, responsiveQuestionInk);
       }
 
       if (eraserPreview) {
@@ -2377,7 +2384,7 @@ export function StudyCanvasWorkspace({
 
       ctx.restore();
     },
-    [canvasDimensions.height, canvasDimensions.width, selectedIds]
+    [canvasDimensions.height, canvasDimensions.width, selectedIds, responsiveQuestionInk]
   );
 
   useEffect(() => {
@@ -2397,9 +2404,12 @@ export function StudyCanvasWorkspace({
 
   useEffect(() => {
     strokesRef.current = strokes;
+    // Live local erasing already refreshed the committed bitmap in its animation frame.
+    // A second React-effect redraw would rebuild the same strokes and hide the cursor.
+    if (responsiveQuestionInk && interactionModeRef.current === "erase") return;
     markCommittedLayerDirty();
     redrawCanvas();
-  }, [strokes, redrawCanvas]);
+  }, [strokes, redrawCanvas, responsiveQuestionInk]);
 
   useEffect(() => {
     backgroundTypeRef.current = backgroundType;
@@ -2866,9 +2876,9 @@ export function StudyCanvasWorkspace({
     return optimized;
   }
 
-  function getEraserResultFromBase(path: ScratchpadPoint[]) {
-    const base = strokesBeforeInteractionRef.current ?? strokesRef.current;
-    const optimizedPath = getOptimizedEraserPath(path);
+  function getEraserResultFromBase(path: ScratchpadPoint[], baseOverride?: ScratchpadStroke[]) {
+    const base = baseOverride ?? strokesBeforeInteractionRef.current ?? strokesRef.current;
+    const optimizedPath = responsiveQuestionInk ? path : getOptimizedEraserPath(path);
 
     if (tool === "areaEraser") {
       return eraseStrokesByArea(base, optimizedPath, eraserSize);
@@ -2909,7 +2919,7 @@ export function StudyCanvasWorkspace({
       if (!lastPoint) return;
 
       const now = performance.now();
-      const canApplyLive = now - eraserLastApplyAtRef.current >= ERASER_LIVE_APPLY_MS;
+      const canApplyLive = responsiveQuestionInk || now - eraserLastApplyAtRef.current >= ERASER_LIVE_APPLY_MS;
 
       if (!canApplyLive) {
         redrawCanvas(null, { point: lastPoint, radius: eraserSize });
@@ -2918,7 +2928,11 @@ export function StudyCanvasWorkspace({
 
       eraserLastApplyAtRef.current = now;
 
-      const nextStrokes = getEraserResultFromBase(eraserPathRef.current);
+      // Only new path segments per frame in the local question board. Keep one overlapping
+      // endpoint so fast/coalesced movement cannot leave gaps between frames.
+      const path = responsiveQuestionInk ? eraserPathRef.current.slice(Math.max(0, eraserAppliedPointsRef.current - 1)) : eraserPathRef.current;
+      const nextStrokes = getEraserResultFromBase(path, responsiveQuestionInk ? strokesRef.current : undefined);
+      eraserAppliedPointsRef.current = eraserPathRef.current.length;
       replaceStrokes(nextStrokes);
       redrawCanvas(null, { point: lastPoint, radius: eraserSize });
     });
@@ -2956,7 +2970,7 @@ export function StudyCanvasWorkspace({
     for (const rawPoint of enrichPointPath(points)) {
       const previousPoint = nextPoints[nextPoints.length - 1];
 
-      if (!shouldAppendPoint(previousPoint, rawPoint)) {
+      if (!(responsiveQuestionInk ? shouldAppendInkSample(previousPoint, rawPoint) : shouldAppendPoint(previousPoint, rawPoint))) {
         continue;
       }
 
@@ -2998,6 +3012,7 @@ export function StudyCanvasWorkspace({
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     event.preventDefault();
     if (browserPersistence && !active) return;
+    if (responsiveQuestionInk) setFullscreenPanel(null);
     event.currentTarget.focus({preventScroll:true});
 
     const canvas = canvasRef.current;
@@ -3160,6 +3175,7 @@ export function StudyCanvasWorkspace({
 
     strokesBeforeInteractionRef.current = cloneStrokes(strokesRef.current);
     eraserLastApplyAtRef.current = 0;
+    eraserAppliedPointsRef.current = 0;
     currentStrokeRef.current = null;
     eraserPathRef.current = [point];
     setSelectedIds([]);
@@ -3337,7 +3353,7 @@ export function StudyCanvasWorkspace({
       eraserPathRef.current = [...eraserPathRef.current, ...nextPoints];
 
       const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
-      redrawCanvas(null, { point: lastPoint, radius: eraserSize });
+      if (!responsiveQuestionInk) redrawCanvas(null, { point: lastPoint, radius: eraserSize });
       scheduleLiveEraser();
     }
   }
@@ -3438,7 +3454,9 @@ export function StudyCanvasWorkspace({
     const mode = interactionModeRef.current;
 
     if (mode === "stroke" && currentStrokeRef.current) {
-      let finishedStroke = heldShapePreviewRef.current ?? smoothFreehandStroke(currentStrokeRef.current);
+      // The outline already uses quadratic curves. Keep the local preview's samples at commit,
+      // rather than moving them only on pointer-up (the notebook's renderer remains unchanged).
+      let finishedStroke = heldShapePreviewRef.current ?? (responsiveQuestionInk ? currentStrokeRef.current : smoothFreehandStroke(currentStrokeRef.current));
       const previous = strokesRef.current;
       const pointerUpTime = event?.nativeEvent.timeStamp;
 
@@ -3859,7 +3877,7 @@ export function StudyCanvasWorkspace({
     ctx.imageSmoothingQuality = "high";
 
     for (const stroke of page.strokes) {
-      drawStroke(ctx, stroke);
+      drawStroke(ctx, stroke, responsiveQuestionInk);
     }
 
     if (format === "image/jpeg") {
@@ -4247,7 +4265,7 @@ export function StudyCanvasWorkspace({
 
       {open ? (
         <div className={`${immersive ? "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden bg-black p-0" : compactMode ? "h-full p-0" : "border-t border-violet-100 p-4 md:p-5"}`}>
-          {persistence ? <p role="status" className={immersive ? "shrink-0 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200" : "mb-3 text-xs font-semibold text-slate-600 dark:text-slate-300"}>{browserPersistence ? (!loaded ? "Abrindo rascunho…" : saving ? "Salvando…" : error ? "Não foi possível salvar" : dirty ? "Alterações ainda não salvas" : status || "Pronto para rascunhar neste navegador") : (!loaded ? "Abrindo caderno…" : saving ? "Salvando no Google Drive…" : error ? "Não foi possível salvar no Google Drive" : dirty ? "Alterações não salvas no Google Drive" : status || "Pronto para editar o caderno")}</p> : null}
+          {persistence ? <p role="status" className={embedded && browserPersistence ? "sr-only" : immersive ? "shrink-0 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200" : "mb-3 text-xs font-semibold text-slate-600 dark:text-slate-300"}>{browserPersistence ? (!loaded ? "Abrindo rascunho…" : saving ? "Salvando…" : error ? "Não foi possível salvar" : dirty ? "Alterações ainda não salvas" : status || "Pronto para rascunhar neste navegador") : (!loaded ? "Abrindo caderno…" : saving ? "Salvando no Google Drive…" : error ? "Não foi possível salvar no Google Drive" : dirty ? "Alterações não salvas no Google Drive" : status || "Pronto para editar o caderno")}</p> : null}
           {!userId && !persistence ? (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -4258,7 +4276,7 @@ export function StudyCanvasWorkspace({
           ) : null}
 
           {error ? (
-            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               <p>{error}</p>
             </div>
@@ -4278,7 +4296,7 @@ export function StudyCanvasWorkspace({
             }}
           />
 
-          <div className={`${compactMode && !immersive ? "hidden" : ""} ${immersive ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-2`}>
+          <div className={`${(compactMode && !immersive) || (responsiveQuestionInk && fullscreenPanel !== "pages") ? "!hidden" : ""} ${immersive ? `mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-950 px-3 ${responsiveQuestionInk ? "py-1" : "py-2"} text-slate-100` : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-2`}>
             <span className="px-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
               Páginas
             </span>
@@ -4351,8 +4369,9 @@ export function StudyCanvasWorkspace({
           </div>
 
           {immersive ? (
-            <div className="shrink-0 border-b border-slate-800 bg-[#202020] text-white">
-              <div className="flex h-[50px] items-center gap-2 overflow-x-auto px-3">
+            <div className={`${responsiveQuestionInk ? "relative z-10" : ""} shrink-0 border-b border-slate-800 bg-[#202020] text-white`}>
+              <div className={`flex ${responsiveQuestionInk ? "h-11 gap-1 px-2" : "h-[50px] gap-2 px-3"} items-center overflow-x-auto`}>
+                {responsiveQuestionInk ? <button type="button" title="Páginas" aria-expanded={fullscreenPanel === "pages"} onClick={() => toggleFullscreenPanel("pages")} className="h-9 shrink-0 rounded-full bg-slate-800 px-3 text-xs font-bold">Pág. {pages.findIndex(page => page.id === activePageId) + 1}</button> : null}
                 <button
                   type="button"
                   onClick={() => toggleFullscreenPanel("tools")}
@@ -4480,7 +4499,8 @@ export function StudyCanvasWorkspace({
               </div>
 
               {fullscreenPanel ? (
-                <div className="flex min-h-[44px] items-center gap-2 overflow-x-auto border-t border-slate-700 bg-[#2b2b2b] px-3 py-2">
+                <div className={`${responsiveQuestionInk ? "absolute left-0 right-0 top-full shadow-xl" : ""} flex min-h-[44px] items-center gap-2 overflow-x-auto border-t border-slate-700 bg-[#2b2b2b] px-3 py-2`}>
+                  {responsiveQuestionInk ? <button type="button" aria-label="Fechar opções do quadro" onClick={() => setFullscreenPanel(null)} className="shrink-0 rounded border px-2 py-1">×</button> : null}
                   {fullscreenPanel === "tools" ? (
                     <>
                       <button type="button" onClick={() => { activatePen("pen"); setFullscreenPanel("size"); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-500"><PenLine className="h-4 w-4" />Caneta</button>
@@ -4590,6 +4610,7 @@ export function StudyCanvasWorkspace({
 
                   {fullscreenPanel === "actions" ? (
                     <>
+                      {secondaryActions}
                       <button type="button" onClick={exportAsPng} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">PNG</button>
                       <button type="button" onClick={exportAsPdf} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">PDF</button>
                       <button type="button" onClick={() => imageInputRef.current?.click()} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Imagem</button>

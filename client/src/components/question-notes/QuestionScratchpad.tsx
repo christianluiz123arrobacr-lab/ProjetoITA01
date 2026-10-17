@@ -118,20 +118,22 @@ function LocalQuestionScratchpad({
       aria-label="Rascunho local da questão"
       className={`${embedded ? "flex h-full min-h-0 flex-col" : ""} bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100`}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 text-xs dark:border-slate-700">
-        <p className="flex-1">
-          Salvo apenas neste navegador e nesta conta. Não sincroniza entre
-          dispositivos; limpar os dados do site pode apagar o rascunho.
-        </p>
-        <button
-          type="button"
-          disabled={deleting || state.saving}
-          onClick={() => void remove()}
-          className="rounded border px-3 py-2 text-red-700 disabled:opacity-50 dark:text-red-300"
-        >
-          Excluir rascunho local
-        </button>
-      </div>
+      {!embedded ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 text-xs dark:border-slate-700">
+          <p className="flex-1">
+            Salvo apenas neste navegador e nesta conta. Não sincroniza entre
+            dispositivos; limpar os dados do site pode apagar o rascunho.
+          </p>
+          <button
+            type="button"
+            disabled={deleting || state.saving}
+            onClick={() => void remove()}
+            className="rounded border px-3 py-2 text-red-700 disabled:opacity-50 dark:text-red-300"
+          >
+            Excluir rascunho local
+          </button>
+        </div>
+      ) : null}
       {legacyError ? (
         <div
           role="alert"
@@ -180,6 +182,24 @@ function LocalQuestionScratchpad({
         compactMode={embedded}
         active={active && !deleting}
         onStateChange={changed}
+        secondaryActions={
+          embedded ? (
+            <>
+              <span className="max-w-64 shrink-0 whitespace-normal text-xs text-slate-300">
+                Salvo apenas neste navegador e nesta conta. Limpar os dados do
+                site pode apagar o rascunho.
+              </span>
+              <button
+                type="button"
+                disabled={deleting || state.saving}
+                onClick={() => void remove()}
+                className="shrink-0 rounded border border-red-700 px-3 py-2 text-xs text-red-200 disabled:opacity-50"
+              >
+                Excluir rascunho local
+              </button>
+            </>
+          ) : undefined
+        }
       />
     </section>
   );

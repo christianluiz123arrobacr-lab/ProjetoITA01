@@ -25,7 +25,7 @@ describe("perfis visuais da escrita", () => {
   });
 
   it("renderiza caneta e pincel como contorno contínuo sem sobrepor segmentos", () => {
-    expect(workspace).toContain("getStrokeOutline(stroke)");
+    expect(workspace).toContain("getStrokeOutline(stroke, sampleFaithful)");
     expect(workspace).toContain("traceSmoothClosedPath");
     expect(workspace).toContain("ctx.fillStyle = stroke.color");
   });
