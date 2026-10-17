@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { publicQuestionImageMetadata } from "../../shared/questionImages.js";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
 import { buildVetEngineResult, normalizeVetText, type VetProfile } from "../../shared/vet/vetEngine.js";
 
@@ -78,6 +79,7 @@ export async function getCanonicalVetAnalysis(userId: string) {
 }
 
 export function safeQuestionDto(row: any) {
+  const imageMetadata = publicQuestionImageMetadata(row.image_metadata);
   const option = (id: "a" | "b" | "c" | "d" | "e") => {
     const upperId = id.toUpperCase();
     const text = row[id] ?? row[upperId] ?? null;
@@ -90,6 +92,12 @@ export function safeQuestionDto(row: any) {
       label: upperId,
       text: String(text ?? "").trim() || null,
       imageUrl: String(imageUrl ?? "").trim() || null,
+      ...(imageMetadata.find((item: any) => item?.local === "alternativa" && item?.alternativa === id)
+        ? {
+            imageAlt: imageMetadata.find((item: any) => item?.local === "alternativa" && item?.alternativa === id)?.texto_alternativo ?? null,
+            imageCaption: imageMetadata.find((item: any) => item?.local === "alternativa" && item?.alternativa === id)?.legenda ?? null,
+          }
+        : {}),
     };
   };
 
@@ -99,6 +107,7 @@ export function safeQuestionDto(row: any) {
     assuntos_por_conteudo: row.assuntos_por_conteudo, banca: row.banca, ano: row.ano,
     dificuldade: row.dificuldade, enunciado: row.enunciado,
     enunciado_pos_imagem: row.enunciado_pos_imagem, url_imagem: row.url_imagem,
+    image_metadata: imageMetadata,
     // The historical schema stores textual alternatives in quoted uppercase
     // columns (A-E); normalize both generations at the public boundary.
     formula: row.formula,

@@ -17,6 +17,7 @@ export type BillingPlan = {
   hasAvailableSlots?: boolean;
   requiresLegacyFounderEligibility: boolean;
   legacyFounderEligible: boolean;
+  hasValidInvite: boolean;
   canCheckout: boolean;
   checkoutBlockReason: "legacy_founder_required" | "active_subscription" | null;
   isCurrentPlan: boolean;
@@ -40,6 +41,7 @@ export type PublicBillingPlanRow = {
   has_available_slots: boolean;
   requires_legacy_founder_eligibility: boolean;
   legacy_founder_eligible: boolean;
+  has_valid_invite: boolean;
   can_checkout: boolean;
   checkout_block_reason: "legacy_founder_required" | "active_subscription" | null;
   is_current_plan: boolean;
@@ -51,6 +53,21 @@ export type BillingCapabilities = {
   mode: "mercadopago" | "manual";
   mercadoPagoEnabled: boolean;
   manualPixFallbackEnabled: boolean;
+};
+
+export type ReferralPricingPreview = {
+  linked: boolean;
+  eligible: boolean;
+  discountPercent: number | null;
+  eligibleMethods: Array<"pix" | "prepaid_card" | "prepaid_pix">;
+  plans: Array<{
+    planId: string;
+    slug: string;
+    originalCents: number;
+    pixCents: number;
+    recurringCardCents: number;
+    prepaid: Array<{ months: 1 | 2 | 3; originalCents: number; discountedCents: number }>;
+  }>;
 };
 
 export type MercadoPagoPixResult = {
@@ -121,6 +138,7 @@ function mapPublicRowToPlan(row: PublicBillingPlanRow): BillingPlan {
     hasAvailableSlots: row.has_available_slots,
     requiresLegacyFounderEligibility: row.requires_legacy_founder_eligibility,
     legacyFounderEligible: row.legacy_founder_eligible,
+    hasValidInvite: row.has_valid_invite,
     canCheckout: row.can_checkout,
     checkoutBlockReason: row.checkout_block_reason,
     isCurrentPlan: row.is_current_plan,
@@ -170,6 +188,14 @@ export async function createMercadoPagoPixPayment(
   planSlug: string
 ): Promise<MercadoPagoPixResult> {
   return trpcClient.billing.createPixPayment.mutate({ planSlug });
+}
+
+export async function createPrepaidCheckout(planSlug: string, durationMonths: 1 | 2 | 3, paymentMethod: "card" | "pix") {
+  return trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod });
+}
+
+export async function getReferralPricingPreview(): Promise<ReferralPricingPreview> {
+  return trpcClient.referrals.pricingPreview.query() as Promise<ReferralPricingPreview>;
 }
 
 export async function getMySubscription() {

@@ -49,7 +49,7 @@ export default function ContentPageRenderer({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 flex items-center justify-center">
+      <div className="theme-page min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 px-6 py-5 flex items-center gap-3">
           <Loader2 className="w-5 h-5 animate-spin text-slate-600" />
           <p className="text-slate-700 font-medium">Carregando conteúdo...</p>
@@ -60,7 +60,7 @@ export default function ContentPageRenderer({
 
   if (error || !page) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 flex items-center justify-center px-4">
+      <div className="theme-page min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 flex items-center justify-center px-4">
         <div className="max-w-xl w-full bg-white rounded-2xl shadow-lg border border-red-200 p-6">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
@@ -75,7 +75,7 @@ export default function ContentPageRenderer({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100">
       <div className="max-w-7xl mx-auto px-4 py-10">
         <header className="mb-8">
           <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 md:p-8">

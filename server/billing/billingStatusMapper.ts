@@ -47,6 +47,16 @@ export function addDaysPreservingFuturePeriod(currentPeriodEnd: string | null | 
   };
 }
 
+/** Calendar-month extension used by prepaid packages. It deliberately starts
+ * from an unexpired access end rather than from checkout/approval time. */
+export function addMonthsPreservingFuturePeriod(currentPeriodEnd: string | null | undefined, months: 1 | 2 | 3, now = new Date()) {
+  const currentEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
+  const base = currentEnd && Number.isFinite(currentEnd.getTime()) && currentEnd > now ? currentEnd : now;
+  const next = new Date(base);
+  next.setMonth(next.getMonth() + months);
+  return { start: base.toISOString(), end: next.toISOString() };
+}
+
 export function centsToMercadoPagoAmount(cents: number) {
   if (!Number.isInteger(cents) || cents < 0) {
     throw new Error("Valor em centavos inválido.");
