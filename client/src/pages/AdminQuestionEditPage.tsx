@@ -1,4 +1,5 @@
 import { StatementImagesEditor, StatementImagesPreview } from "@/components/admin/StatementImagesEditor";
+import { questionEditorialSchema } from "@shared/questionEditorial";
 import { useImageUploadReview } from "@/components/admin/useImageUploadReview";
 import { checkImageAbort, type PreparedImageMime } from "@/lib/questionImagePreparation";
 import { getStatementImages, getEditableStatementImages, replaceStatementImages } from "@shared/questionImages";
@@ -1005,7 +1006,7 @@ url_imagem: valorLimpo(form.url_imagem),
       alternativa_correta: valorLimpo(form.alternativa_correta),
     };
 
-    await updateQuestionMutation.mutateAsync({ id: questionId, payload });
+    await updateQuestionMutation.mutateAsync({ id: questionId, payload: questionEditorialSchema.parse(payload) });
 
     return { ok: true };
   }

@@ -48,7 +48,7 @@ describe("suporte canônico a muito_dificil", () => {
     expect(files[2]).toContain('key: "muito_dificil"');
     expect(files[3]).toContain('valor === "muito_dificil"');
     expect(combined).toContain("getDifficultyRankingPoints");
-    expect(files[6]).toContain('if (value === "muito_dificil") return 16');
+    expect(readFileSync(new URL("./publicRanking.ts", import.meta.url), "utf8")).toContain('if (value === "muito_dificil") return 16');
     expect(files[6]).toContain("veryHardCorrect");
     expect(files[6]).toContain("veryHard = Math.ceil(points / 16)");
   });

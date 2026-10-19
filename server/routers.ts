@@ -2,7 +2,7 @@ import { referralRouter, registerReferralAttribution, referralCodeSchema } from 
 import { loadPlanCapacity } from "./billing/planCapacity.js";
 import { getPaymentHistory } from "./billing/paymentHistory.js";
 import { randomUUID } from "node:crypto";
-import { getStatementImages, normalizeQuestionImagePayload } from "../shared/questionImages.js";
+import { getStatementImages } from "../shared/questionImages.js";
 import { inspectQuestionImportImage } from "./questions/questionImportImages.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -74,6 +74,10 @@ import {
   updateQuestionImportSlotMetadata,
 } from "./questions/questionImportBatchService.js";
 import { MAX_QUESTION_IMPORT_IMAGE_BYTES } from "../shared/questionImportSchema.js";
+import { buildQuestionEditorialPayload, questionEditorialSchema } from "../shared/questionEditorial.js";
+import { publicRankingInputSchema } from "../shared/publicRanking.js";
+import { buildPublicRanking } from "./publicRanking.js";
+import { revokeAdminAccess } from "./adminAccess.js";
 
 const notebookPaperSchema = z.object({ size: z.enum(["a5", "a4", "a3", "infinite"]), lined: z.boolean() });
 const stableVetOrder = (seed: string, value: string) => Array.from(`${seed}:${value}`).reduce((hash, char) => ((hash * 31) ^ char.charCodeAt(0)) >>> 0, 2166136261);
@@ -89,24 +93,6 @@ function assertNotebooksAvailable(): void {
   }
 }
 
-async function assertQuestionPdfAccess(userId: string, tokenRole?: string) {
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from("profiles")
-    .select("role, ativo")
-    .eq("id", userId)
-    .maybeSingle();
-  if (profileError) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível validar o acesso." });
-  const role = tokenRole === "admin" || tokenRole === "editor" ? tokenRole : profile?.role;
-  if (role === "admin" || role === "editor") return;
-  if (profile?.ativo === false) throw new TRPCError({ code: "FORBIDDEN", message: "Seu perfil não possui acesso à exportação." });
-  const { data, error } = await supabaseAdmin.rpc("user_has_active_subscription", { target_user_id: userId });
-  if (error || data !== true) throw new TRPCError({ code: "FORBIDDEN", message: "É necessária uma assinatura ativa para exportar questões." });
-}
-
-function validatedQuestionImagePayload(payload: Record<string, any>) {
-  try { return normalizeQuestionImagePayload(payload); }
-  catch { throw new TRPCError({ code: "BAD_REQUEST", message: "Revise as URLs, os textos e os identificadores das imagens da questão." }); }
-}
 
 const resolutionBlockInputSchema = z.object({
   id: z.string().uuid().optional(),
@@ -453,7 +439,7 @@ export const appRouter = router({
     rename: protectedProcedure.input(z.object({ documentId: googleFileIdSchema, name: z.string().trim().min(1).max(80) })).mutation(({ ctx, input }) => { assertNotebooksAvailable(); return renameNotebook(ctx.user.id, input.documentId, input.name); }),
     delete: protectedProcedure.input(z.object({ documentId: googleFileIdSchema })).mutation(({ ctx, input }) => { assertNotebooksAvailable(); return trashNotebook(ctx.user.id, input.documentId); }),
     exportPdf: protectedProcedure.input(z.object({ documentId: googleFileIdSchema, name: z.string().trim().min(1).max(80), pdfBase64: z.string().max(16_000_000) })).mutation(({ ctx, input }) => { assertNotebooksAvailable(); return uploadNotebookPdf(ctx.user.id, input.documentId, input.name, input.pdfBase64); }),
-    linkedQuestions: protectedProcedure.input(z.object({ questionIds: z.array(z.string().uuid()).max(100) })).query(async ({ input }) => {
+    linkedQuestions: platformAccessProcedure.input(z.object({ questionIds: z.array(z.string().uuid()).max(100) })).query(async ({ input }) => {
       assertNotebooksAvailable();
       if (!input.questionIds.length) return [];
       const { data, error } = await supabaseAdmin
@@ -962,19 +948,20 @@ export const appRouter = router({
     getBlocksByPageId: publicProcedure
       .input(z.object({ pageId: z.string().uuid() }))
       .query(async ({ input }) => {
-        const { data, error } = await supabaseAdmin
-          .from("content_blocks")
-          .select("*")
-          .eq("page_id", input.pageId)
-          .eq("is_visible", true)
-          .order("order_index", { ascending: true });
-
-        if (error) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-        }
-
-        return data ?? [];
+        const blocks = await performanceRpc<Record<string, any>[]>(supabaseAdmin, "vet_public_content_blocks", { p_page_id: input.pageId });
+        if (!Array.isArray(blocks)) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar os blocos." });
+        return blocks;
       }),
+
+    // Draft preview is never served through a public procedure.
+    preview: adminOrEditorProcedure.input(z.object({ pageId: z.string().uuid() })).query(async ({ input }) => {
+      const { data: page, error } = await supabaseAdmin.from("content_pages").select("*").eq("id", input.pageId).maybeSingle();
+      if (error) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar a página." });
+      if (!page) throw new TRPCError({ code: "NOT_FOUND", message: "Página de conteúdo não encontrada." });
+      const { data: blocks, error: blocksError } = await supabaseAdmin.from("content_blocks").select("*").eq("page_id", page.id).order("order_index", { ascending: true });
+      if (blocksError) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar os blocos." });
+      return { page, blocks: blocks ?? [] };
+    }),
 
     getWithBlocks: publicProcedure
       .input(z.object({ slug: z.string().min(1) }))
@@ -997,16 +984,8 @@ export const appRouter = router({
           });
         }
 
-        const { data: blocks, error: blocksError } = await supabaseAdmin
-          .from("content_blocks")
-          .select("*")
-          .eq("page_id", page.id)
-          .eq("is_visible", true)
-          .order("order_index", { ascending: true });
-
-        if (blocksError) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: blocksError.message });
-        }
+        const blocks = await performanceRpc<Record<string, any>[]>(supabaseAdmin, "vet_public_content_blocks", { p_page_id: page.id });
+        if (!Array.isArray(blocks)) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar os blocos." });
 
         return {
           page,
@@ -1016,44 +995,40 @@ export const appRouter = router({
   }),
 
   questions: router({
-    globalStats: protectedProcedure.query(async () => {
+    globalStats: platformAccessProcedure.query(async () => {
       const result = await performanceRpc<Pick<BrowseResult["stats"], "total" | "totalDifficulties" | "subjects" | "difficulties">>(supabaseAdmin, "vet_question_global_stats");
       if (!Number.isInteger(result.total) || !Number.isInteger(result.totalDifficulties) || !result.subjects || !result.difficulties)
         throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar os totais gerais." });
       return result;
     }),
-    filterOptions: protectedProcedure.input(questionBrowseFiltersSchema).query(async ({ input }) => {
+    filterOptions: platformAccessProcedure.input(questionBrowseFiltersSchema).query(async ({ input }) => {
       const result = questionFilterOptionsSchema.safeParse(await performanceRpc(supabaseAdmin, "vet_question_filter_facets", { p_filters: input }));
       if (!result.success) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível carregar as opções de filtros." });
       return result.data;
     }),
-    browse: publicProcedure.input(questionBrowseSchema).query(async ({ ctx, input }) => {
-      await ensureAuthentication(ctx);
-      assertAuthenticationAvailable(ctx);
-      return browseQuestions(supabaseAdmin, input, false, ctx.user?.id ?? null, ctx.authentication?.correlationId);
+    browse: platformAccessProcedure.input(questionBrowseSchema).query(async ({ ctx, input }) => {
+      return browseQuestions(supabaseAdmin, input, false, ctx.user.id, ctx.authentication?.correlationId);
     }),
-    details: publicProcedure.input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) })).query(async ({ input }) => {
+    details: platformAccessProcedure.input(z.object({ ids: z.array(z.string().uuid()).min(1).max(100) })).query(async ({ input }) => {
       const rows = await performanceRpc<Record<string, any>[]>(supabaseAdmin, "vet_question_details", { p_ids: input.ids });
       return rows.map(row => ({ ...safeQuestionDto(row), diciplina: row.diciplina,
         ...(Array.isArray(row.options) && row.options.length ? { options: row.options.filter((o: any) => /^[a-e]$/i.test(String(o.id))).map((o: any) => ({ id: o.id, label: o.label, text: o.text, imageUrl: o.imageUrl, imageAlt: o.imageAlt, imageCaption: o.imageCaption })) } : {}) }));
     }),
-    exportPdfData: protectedProcedure
+    exportPdfData: platformAccessProcedure
       .input(questionPdfFiltersSchema)
       .mutation(async ({ ctx, input }) => {
         await assertRateLimit({
           key: `question-pdf:${ctx.user.id}`,
           limit: 5,
           windowMs: 10 * 60_000,
-          // PDF export only reads already-authorized public questions. Keep it
+          // PDF export only reads already-authorized bank questions. Keep it
           // available while older environments apply the shared limiter SQL.
           allowInMemoryFallback: true,
         });
-        await assertQuestionPdfAccess(ctx.user.id, ctx.user.role);
-
         return selectQuestionPdfData(supabaseAdmin, ctx.user.id, input);
       }),
 
-    list: publicProcedure
+    list: platformAccessProcedure
       .input(
         z
           .object({
@@ -1091,7 +1066,7 @@ export const appRouter = router({
         return rows.map(safeQuestionDto);
       }),
 
-    getById: publicProcedure
+    getById: platformAccessProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ input }) => {
         const { data, error } = await supabaseAdmin
@@ -1379,9 +1354,7 @@ export const appRouter = router({
       }
 
       const userIds = Array.from(new Set((adminUsers ?? []).map((item: any) => item.user_id).filter(Boolean)));
-      const { data: profiles, error: profilesError } = userIds.length
-        ? await supabaseAdmin.from("profiles").select("*").in("id", userIds)
-        : { data: [], error: null };
+      const { data: profiles, error: profilesError } = await supabaseAdmin.from("profiles").select("*").or(`role.eq.admin${userIds.length ? `,id.in.(${userIds.join(",")})` : ""}`);
 
       if (profilesError) {
         throw new TRPCError({ code: "BAD_REQUEST", message: profilesError.message });
@@ -1389,10 +1362,14 @@ export const appRouter = router({
 
       const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.id, profile]));
 
-      return (adminUsers ?? []).map((adminUser: any) => ({
+      const entries = (adminUsers ?? []).map((adminUser: any) => ({
         ...adminUser,
         profile: profileMap.get(adminUser.user_id) ?? null,
       }));
+      const represented = new Set(userIds);
+      const legacy = (profiles ?? []).filter((profile: any) => profile.role === "admin" && !represented.has(profile.id))
+        .map((profile: any) => ({ id: profile.id, user_id: profile.id, role: "admin", created_at: profile.created_at, legacy: true, profile }));
+      return [...entries, ...legacy];
     }),
 
 
@@ -2156,16 +2133,8 @@ export const appRouter = router({
       }),
 
     removeAdminAccess: adminProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .mutation(async ({ input }) => {
-        const { error } = await supabaseAdmin.from("admin_users").delete().eq("id", input.id);
-
-        if (error) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-        }
-
-        return { success: true } as const;
-      }),
+      .input(z.object({ id: z.string().uuid(), userId: z.string().uuid().optional() }))
+      .mutation(({ ctx, input }) => revokeAdminAccess(ctx.user.id, input.id, input.userId)),
 
 
     getQuestionSuggestions: adminOrEditorProcedure.query(() => performanceRpc<Record<string, unknown>[]>(supabaseAdmin, "vet_question_suggestions")),
@@ -2220,11 +2189,11 @@ export const appRouter = router({
     }),
 
     createQuestion: adminOrEditorProcedure
-      .input(z.object({ payload: z.record(z.string(), z.any()) }))
+      .input(z.object({ payload: questionEditorialSchema }))
       .mutation(async ({ ctx, input }) => {
         const { data, error } = await supabaseAdmin
           .from("questoes")
-          .insert([validatedQuestionImagePayload(input.payload)])
+          .insert([buildQuestionEditorialPayload(input.payload)])
           .select("id, codigo")
           .single();
 
@@ -2822,11 +2791,11 @@ export const appRouter = router({
       }),
 
     updateQuestion: adminOrEditorProcedure
-      .input(z.object({ id: z.string().uuid(), payload: z.record(z.string(), z.any()) }))
+      .input(z.object({ id: z.string().uuid(), payload: questionEditorialSchema }))
       .mutation(async ({ ctx, input }) => {
         const { error } = await supabaseAdmin
           .from("questoes")
-          .update(validatedQuestionImagePayload(input.payload))
+          .update(buildQuestionEditorialPayload(input.payload))
           .eq("id", input.id);
 
         if (error) {
@@ -3026,7 +2995,7 @@ export const appRouter = router({
 
 
   publicStats: router({
-    getRankingData: publicProcedure.query(async () => {
+    getRankingData: publicProcedure.input(publicRankingInputSchema).query(async ({ input }) => {
       const [attemptRows, profiles] = await Promise.all([
         fetchAllQuestionPages(async (from, to) => {
           const { data, error } = await supabaseAdmin.from("user_question_attempts")
@@ -3043,17 +3012,7 @@ export const appRouter = router({
         }),
       ]);
 
-      const groups = new Map<string, any>();
-      for (const attempt of attemptRows) {
-        const day = String(attempt.answered_at ?? "").slice(0, 10);
-        const key = [attempt.user_id, attempt.question_id, day, attempt.subject ?? "", attempt.difficulty ?? "", attempt.is_correct ? "1" : "0"].join("|");
-        const current = groups.get(key) ?? { user_id: attempt.user_id, question_id: attempt.question_id, answered_at: `${day}T12:00:00.000Z`, subject: attempt.subject, difficulty: attempt.difficulty, is_correct: attempt.is_correct, count: 0, total_time: 0, timed: 0 };
-        current.count += 1;
-        if (typeof attempt.time_spent_seconds === "number") { current.total_time += attempt.time_spent_seconds; current.timed += 1; }
-        groups.set(key, current);
-      }
-      const attempts = Array.from(groups.values()).flatMap(group => Array.from({ length: group.count }, () => ({ user_id: group.user_id, question_id: group.question_id, answered_at: group.answered_at, subject: group.subject, difficulty: group.difficulty, is_correct: group.is_correct, time_spent_seconds: group.timed ? group.total_time / group.timed : null })));
-      return { attempts, profiles };
+      return buildPublicRanking(attemptRows, profiles, input);
     }),
 
     getPublicProfile: publicProcedure
@@ -3108,9 +3067,9 @@ export const appRouter = router({
 
   vet: router({
     getExamAnalysis: platformAccessProcedure.input(examAnalysisFiltersSchema).query(({ input }) => getExamAnalysis(input)),
-    getAnalysis: protectedProcedure.query(async ({ ctx }) => getCanonicalVetAnalysis(ctx.user.id)),
+    getAnalysis: platformAccessProcedure.query(async ({ ctx }) => getCanonicalVetAnalysis(ctx.user.id)),
 
-    getObjective: protectedProcedure.query(async ({ ctx }) => {
+    getObjective: platformAccessProcedure.query(async ({ ctx }) => {
       const { data, error } = await supabaseAdmin
         .from("user_vet_profiles")
         .select("*")
@@ -3121,7 +3080,7 @@ export const appRouter = router({
       return data ?? null;
     }),
 
-    saveObjective: protectedProcedure
+    saveObjective: platformAccessProcedure
       .input(
         z.object({
           targetExam: z.string().min(2).max(40),
@@ -3154,9 +3113,9 @@ export const appRouter = router({
       }),
 
     /** @deprecated Use getAnalysis; raw attempts and internal weights are never returned. */
-    getLearningData: protectedProcedure.query(async ({ ctx }) => getCanonicalVetAnalysis(ctx.user.id)),
+    getLearningData: platformAccessProcedure.query(async ({ ctx }) => getCanonicalVetAnalysis(ctx.user.id)),
 
-    getRecommendedQuestions: protectedProcedure
+    getRecommendedQuestions: platformAccessProcedure
       .input(z.object({ block: z.enum(["ataque", "consolidacao", "manutencao"]), limit: z.number().int().min(1).max(50).default(12) }))
       .query(async ({ ctx, input }) => {
         const analysis = await getCanonicalVetAnalysis(ctx.user.id);
@@ -3173,7 +3132,7 @@ export const appRouter = router({
         return (data ?? []).sort((a: any, b: any) => Number(attemptedIds.has(a.id)) - Number(attemptedIds.has(b.id))).slice(0, input.limit).map(safeQuestionDto);
       }),
 
-    createMockSession: protectedProcedure
+    createMockSession: platformAccessProcedure
       .input(z.object({ mode: z.enum(["ataque", "consolidacao", "manutencao", "misto"]) }))
       .mutation(async ({ ctx, input }) => {
         const { data: existingSession, error: existingError } = await supabaseAdmin
@@ -3253,7 +3212,7 @@ export const appRouter = router({
         return { id: session.id, totalQuestions: selected.length, reused: false };
       }),
 
-    getMockSession: protectedProcedure.input(z.object({ sessionId: z.string().uuid() })).query(async ({ ctx, input }) => {
+    getMockSession: platformAccessProcedure.input(z.object({ sessionId: z.string().uuid() })).query(async ({ ctx, input }) => {
       const { data: session, error } = await supabaseAdmin.from("vet_mock_sessions").select("*").eq("id", input.sessionId).eq("user_id", ctx.user.id).maybeSingle();
       if (error || !session) throw new TRPCError({ code: "NOT_FOUND", message: "Simulado não encontrado." });
       const { data: items, error: itemsError } = await supabaseAdmin.from("vet_mock_session_items").select("id,position,strategic_content,block,recommendation_score,attempt_id,selected_option,is_correct,answered_at,questoes(id,codigo,disciplina,assunto,conteudo,conteudos,assuntos,assuntos_por_conteudo,banca,ano,dificuldade,enunciado,enunciado_pos_imagem,url_imagem,formula,A,B,C,D,E,a_url_imagem,b_url_imagem,c_url_imagem,d_url_imagem,e_url_imagem,instituição,fonte,tag,publicada,created_at,alternativa_correta,resolucoes(id,tipo,texto,ordem,url_imagem))").eq("session_id", session.id).order("position");
@@ -3269,7 +3228,7 @@ export const appRouter = router({
       }) };
     }),
 
-    completeMockSession: protectedProcedure.input(z.object({ sessionId: z.string().uuid() })).mutation(async ({ ctx, input }) => {
+    completeMockSession: platformAccessProcedure.input(z.object({ sessionId: z.string().uuid() })).mutation(async ({ ctx, input }) => {
       const { data: ownedSession } = await supabaseAdmin.from("vet_mock_sessions").select("id,total_questions").eq("id", input.sessionId).eq("user_id", ctx.user.id).maybeSingle();
       if (!ownedSession) throw new TRPCError({ code: "NOT_FOUND", message: "Simulado não encontrado." });
       const { data: items } = await supabaseAdmin.from("vet_mock_session_items").select("is_correct,attempt_id").eq("session_id", input.sessionId);
@@ -3281,27 +3240,27 @@ export const appRouter = router({
       return data;
     }),
 
-    submitMockAnswer: protectedProcedure.input(z.object({ sessionId: z.string().uuid(), questionId: z.string().uuid(), selectedOption: z.enum(["a","b","c","d","e"]), timeSpentSeconds: z.number().int().min(1).max(86400) })).mutation(async ({ ctx, input }) => {
+    submitMockAnswer: platformAccessProcedure.input(z.object({ sessionId: z.string().uuid(), questionId: z.string().uuid(), selectedOption: z.enum(["a","b","c","d","e"]), timeSpentSeconds: z.number().int().min(1).max(86400) })).mutation(async ({ ctx, input }) => {
       const { data, error } = await supabaseAdmin.rpc("record_canonical_question_attempt", { p_user_id: ctx.user.id, p_question_id: input.questionId, p_selected_option: input.selectedOption, p_time_spent_seconds: input.timeSpentSeconds, p_vet_mock_session_id: input.sessionId });
       const result = Array.isArray(data) ? data[0] : data;
       if (error || !result?.attempt_id) throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Não foi possível registrar a resposta." });
       return { attemptId: result.attempt_id, attemptNumber: result.attempt_number, isCorrect: result.is_correct, correctOption: result.correct_option, resolution: result.resolution ?? [] };
     }),
 
-    getMockResult: protectedProcedure.input(z.object({ sessionId: z.string().uuid() })).query(async ({ ctx, input }) => {
+    getMockResult: platformAccessProcedure.input(z.object({ sessionId: z.string().uuid() })).query(async ({ ctx, input }) => {
       const { data, error } = await supabaseAdmin.from("vet_mock_sessions").select("id,target_exam,focus_subject,mode,status,started_at,completed_at,total_questions,total_answered,correct_answers,accuracy,engine_version,engine_snapshot,created_at").eq("id", input.sessionId).eq("user_id", ctx.user.id).eq("status", "completed").maybeSingle();
       if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Resultado não encontrado." });
       return data;
     }),
 
-    listMockHistory: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(50).default(20), offset: z.number().int().min(0).default(0) }).optional()).query(async ({ ctx, input }) => {
+    listMockHistory: platformAccessProcedure.input(z.object({ limit: z.number().int().min(1).max(50).default(20), offset: z.number().int().min(0).default(0) }).optional()).query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 20, offset = input?.offset ?? 0;
       const { data, error } = await supabaseAdmin.from("vet_mock_sessions").select("id,target_exam,focus_subject,mode,status,started_at,completed_at,total_questions,total_answered,correct_answers,accuracy,engine_version,created_at").eq("user_id", ctx.user.id).order("created_at", { ascending: false }).range(offset, offset + limit - 1);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
       return data ?? [];
     }),
 
-    getEvolution: protectedProcedure.input(z.object({ months: z.number().int().min(1).max(24).default(6) }).optional()).query(async ({ ctx, input }) => {
+    getEvolution: platformAccessProcedure.input(z.object({ months: z.number().int().min(1).max(24).default(6) }).optional()).query(async ({ ctx, input }) => {
       const since = new Date(); since.setUTCMonth(since.getUTCMonth() - (input?.months ?? 6));
       const { data, error } = await supabaseAdmin.from("user_question_attempts").select("is_correct,time_spent_seconds,answered_at,subject,conteudo,banca").eq("user_id", ctx.user.id).gte("answered_at", since.toISOString()).order("answered_at");
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
@@ -3398,7 +3357,7 @@ export const appRouter = router({
           comment: input.comment,
         });
       }),
-    getQuestionOptionStats: protectedProcedure
+    getQuestionOptionStats: platformAccessProcedure
       .input(z.object({ questionId: z.string().uuid() }))
       .query(async ({ input }) => {
         const { data, error } = await supabaseAdmin
@@ -3418,7 +3377,7 @@ export const appRouter = router({
         return Array.from(counts.entries()).map(([selected_option, total]) => ({ selected_option, total }));
       }),
 
-    recordAttempt: protectedProcedure
+    recordAttempt: platformAccessProcedure
       .input(
         z.object({
           questionId: z.string().uuid(),
@@ -3561,7 +3520,7 @@ export const appRouter = router({
   }),
 
   ai: router({
-    solvePhysics: protectedProcedure
+    solvePhysics: platformAccessProcedure
       .input(
         z.object({
           text: z.string().max(8000).optional(),

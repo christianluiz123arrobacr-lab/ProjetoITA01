@@ -92,18 +92,14 @@ export async function getPlatformAccessDecision(
   const hasPendingPayment = Boolean((pendingPayment as { id?: string } | null)?.id);
   const { data, error } = await accessQuery(client.rpc("user_has_active_subscription", { target_user_id: user.id }), correlationId, "canonical_rpc");
   if (error || typeof data !== "boolean") {
-    if (hasPendingPayment) {
-      logAccess({ correlationId, stage: "canonical_rpc", outcome: "blocked", code: error?.code });
-      return { allowed: false, source: "subscription", role, profileActive: true, hasPendingPayment, correlationId };
-    }
     logAccess({ correlationId, stage: "canonical_rpc", outcome: "error", code: error?.code });
     throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Não foi possível validar o acesso à plataforma." });
   }
   return { allowed: data, source: "subscription", role, profileActive: true, hasPendingPayment, correlationId };
 }
 
-export async function assertPlatformAccess(user: AccessUser, client: AccessClient = supabaseAdmin) {
-  const decision = await getPlatformAccessDecision(user, client);
+export async function assertPlatformAccess(user: AccessUser, client: AccessClient = supabaseAdmin, options: AccessOptions = {}) {
+  const decision = await getPlatformAccessDecision(user, client, options);
   if (!decision.allowed) {
     throw new TRPCError({ code: "FORBIDDEN", message: "É necessário ter acesso ativo à plataforma." });
   }

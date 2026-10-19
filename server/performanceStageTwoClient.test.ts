@@ -31,7 +31,7 @@ describe("Etapa 2: contratos, autorização e cache", () => {
     await expect(caller(null).questions.filterOptions({})).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     expect(database.rpc).not.toHaveBeenCalled();
     database.rpc.mockResolvedValue({ data: { institutions: ["ITA"], years: ["2023"], subjects: [], topics: [], subtopics: [], difficulties: [] }, error: null });
-    const result = await caller("student").questions.filterOptions({ institutions: ["ITA"] });
+    const result = await caller("editor").questions.filterOptions({ institutions: ["ITA"] });
     expect(result.institutions).toEqual(["ITA"]);
     expect(database.rpc).toHaveBeenCalledTimes(1);
     expect(database.rpc.mock.calls[0][0]).toBe("vet_question_filter_facets");
@@ -87,7 +87,7 @@ describe("Etapa 2: contratos, autorização e cache", () => {
       p_admin: true,
       p_user: null,
     });
-    await caller("student").questions.browse({});
+    await caller("editor").questions.browse({});
     expect(database.rpc.mock.calls[1][1]).toMatchObject({
       p_admin: false,
       p_user: id,
@@ -106,7 +106,7 @@ describe("Etapa 2: contratos, autorização e cache", () => {
       ],
       error: null,
     });
-    const result = await caller("student").questions.details({ ids: [id] });
+    const result = await caller("editor").questions.details({ ids: [id] });
     expect(result[0].options[0]).toMatchObject({ id: "a", text: "Opção" });
     expect(JSON.stringify(result)).not.toMatch(
       /isCorrect|alternativa_correta|privado/

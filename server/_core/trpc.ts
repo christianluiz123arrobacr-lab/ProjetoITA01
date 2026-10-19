@@ -40,8 +40,8 @@ export const protectedProcedure = t.procedure.use(requireUser);
 export const platformAccessProcedure = protectedProcedure.use(
   t.middleware(async ({ ctx, next }) => {
     if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-    await assertPlatformAccess(ctx.user);
-    return next({ ctx });
+    await assertPlatformAccess(ctx.user, undefined, { correlationId: ctx.authentication?.correlationId, validatedProfile: ctx.validatedProfile });
+    return next({ ctx: { ...ctx, user: ctx.user } });
   }),
 );
 

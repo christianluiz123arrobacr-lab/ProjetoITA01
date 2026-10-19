@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./ranking.css";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { summarizeAttempts } from "@shared/statistics";
+import type { PublicRankingDto, PublicRankingRow } from "@shared/publicRanking";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,28 +28,6 @@ import {
   Zap,
 } from "lucide-react";
 
-type AttemptRow = {
-  id: string;
-  user_id: string;
-  question_id: string;
-  is_correct: boolean;
-  time_spent_seconds: number | null;
-  answered_at: string;
-  subject: string | null;
-  conteudo: string | null;
-  assunto: string | null;
-  banca: string | null;
-  ano: number | null;
-  difficulty: string | null;
-};
-
-type ProfileRow = {
-  id: string;
-  nome: string | null;
-  avatar_key?: string | null;
-  ativo?: boolean | null;
-};
-
 type RankingPeriod = "24h" | "season" | "7d" | "30d" | "all";
 type RankingSubject = "all" | "matematica" | "fisica" | "quimica";
 
@@ -64,26 +42,7 @@ type DivisionInfo = {
   description: string;
 };
 
-type RankingEntry = {
-  userId: string;
-  nome: string;
-  avatarKey: string;
-  score: number;
-  correctCount: number;
-  correctAttempts: number;
-  totalAttempts: number;
-  accuracy: number;
-  avgTimeSeconds: number;
-  lastActivityAt: string | null;
-  easyCorrect: number;
-  mediumCorrect: number;
-  hardCorrect: number;
-  veryHardCorrect: number;
-  topStreak: number;
-  positionDelta: number | null;
-  badges: BadgeItem[];
-  division: DivisionInfo;
-};
+type RankingEntry = PublicRankingRow & { badges: BadgeItem[]; division: DivisionInfo };
 
 const PERIOD_OPTIONS: Array<{ key: RankingPeriod; label: string }> = [
   { key: "24h", label: "24h" },
@@ -122,14 +81,6 @@ function getAvatarConfig(avatarKey?: string | null) {
   );
 }
 
-function normalizeText(value?: string | number | null) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
 function getSubjectLabel(subject: RankingSubject) {
   return SUBJECT_OPTIONS.find((item) => item.key === subject)?.label ?? "Geral";
 }
@@ -138,125 +89,6 @@ function getRankingTitle(subject: RankingSubject) {
   if (subject === "all") return "Ranking geral por pontuação";
 
   return `Ranking de ${getSubjectLabel(subject)} por pontuação`;
-}
-
-function normalizeDifficulty(difficulty?: string | null) {
-  return normalizeText(difficulty);
-}
-
-function getDifficultyPoints(difficulty?: string | null) {
-  const value = normalizeDifficulty(difficulty);
-
-  if (value === "facil") return 2;
-  if (value === "medio") return 4;
-  if (value === "dificil") return 8;
-  if (value === "muito_dificil") return 16;
-
-  return 0;
-}
-
-function getDifficultyBucket(difficulty?: string | null) {
-  const value = normalizeDifficulty(difficulty);
-
-  if (value === "facil") return "easy";
-  if (value === "medio") return "medium";
-  if (value === "dificil") return "hard";
-  if (value === "muito_dificil") return "very_hard";
-
-  return "unknown";
-}
-
-function startOfToday(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function startOfCurrentWeek(date: Date) {
-  const day = date.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const start = startOfToday(date);
-
-  start.setDate(start.getDate() + mondayOffset);
-
-  return start;
-}
-
-function getPeriodRange(period: RankingPeriod) {
-  const now = new Date();
-
-  if (period === "all") {
-    return {
-      start: null,
-      end: null,
-      previousStart: null,
-      previousEnd: null,
-    };
-  }
-
-  if (period === "season") {
-    const start = startOfCurrentWeek(now);
-    const duration = now.getTime() - start.getTime();
-
-    const previousStart = new Date(start);
-    previousStart.setDate(previousStart.getDate() - 7);
-
-    const previousEnd = new Date(previousStart.getTime() + duration);
-
-    return {
-      start,
-      end: now,
-      previousStart,
-      previousEnd,
-    };
-  }
-
-  const hours =
-    period === "24h" ? 24 : period === "7d" ? 24 * 7 : 24 * 30;
-
-  const durationMs = hours * 60 * 60 * 1000;
-  const start = new Date(now.getTime() - durationMs);
-  const previousStart = new Date(start.getTime() - durationMs);
-  const previousEnd = start;
-
-  return {
-    start,
-    end: now,
-    previousStart,
-    previousEnd,
-  };
-}
-
-function isInsideRange(
-  date: string,
-  start: Date | null,
-  end: Date | null
-) {
-  const parsed = new Date(date);
-
-  if (Number.isNaN(parsed.getTime())) return false;
-
-  if (start && parsed < start) return false;
-  if (end && parsed > end) return false;
-
-  return true;
-}
-
-function matchesSubject(attempt: AttemptRow, subject: RankingSubject) {
-  if (subject === "all") return true;
-
-  return normalizeText(attempt.subject) === normalizeText(subject);
-}
-
-function filterAttempts(
-  attempts: AttemptRow[],
-  subject: RankingSubject,
-  start: Date | null,
-  end: Date | null
-) {
-  return attempts.filter((attempt) => {
-    if (!matchesSubject(attempt, subject)) return false;
-
-    return isInsideRange(attempt.answered_at, start, end);
-  });
 }
 
 function formatSeconds(seconds?: number | null) {
@@ -273,60 +105,15 @@ function formatSeconds(seconds?: number | null) {
 function formatDateTime(date?: string | null) {
   if (!date) return "—";
 
-  const parsed = new Date(date);
+  const parsed = new Date(date.length === 10 ? date + "T12:00:00" : date);
 
   if (Number.isNaN(parsed.getTime())) return "—";
 
   return parsed.toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+    year: "numeric",
   });
-}
-
-function getDateKey(date: string) {
-  const parsed = new Date(date);
-
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function getLongestCorrectStreak(attempts: AttemptRow[]) {
-  const days = Array.from(
-    new Set(
-      attempts
-        .filter((attempt) => attempt.is_correct)
-        .map((attempt) => getDateKey(attempt.answered_at))
-        .filter(Boolean) as string[]
-    )
-  ).sort();
-
-  if (days.length === 0) return 0;
-
-  let longest = 1;
-  let current = 1;
-
-  for (let i = 1; i < days.length; i += 1) {
-    const previous = new Date(`${days[i - 1]}T00:00:00`);
-    const actual = new Date(`${days[i]}T00:00:00`);
-    const diffDays =
-      (actual.getTime() - previous.getTime()) / (24 * 60 * 60 * 1000);
-
-    if (diffDays === 1) {
-      current += 1;
-      longest = Math.max(longest, current);
-    } else {
-      current = 1;
-    }
-  }
-
-  return longest;
 }
 
 function getDivision(score: number): DivisionInfo {
@@ -453,143 +240,6 @@ function buildPointDistanceText(points: number) {
   return `Para ultrapassar, faltam ${points} ponto(s): ${easy} fácil(is), ${medium} média(s), ${hard} difícil(eis) ou ${veryHard} muito difícil(eis).`;
 }
 
-function buildRankingRows(
-  attempts: AttemptRow[],
-  profiles: ProfileRow[]
-): Array<Omit<RankingEntry, "positionDelta" | "badges">> {
-  const profilesMap = new Map<string, ProfileRow>();
-
-  for (const profile of profiles) {
-    if (profile.ativo === false) continue;
-
-    profilesMap.set(profile.id, profile);
-  }
-
-  const byUser = new Map<string, AttemptRow[]>();
-
-  for (const attempt of attempts) {
-    if (!attempt.user_id) continue;
-    if (!profilesMap.has(attempt.user_id)) continue;
-
-    const current = byUser.get(attempt.user_id) ?? [];
-    current.push(attempt);
-    byUser.set(attempt.user_id, current);
-  }
-
-  const rows: Array<Omit<RankingEntry, "positionDelta" | "badges">> = [];
-
-  for (const [userId, userAttempts] of Array.from(byUser.entries())) {
-    const profile = profilesMap.get(userId);
-
-    if (!profile) continue;
-
-    const uniqueCorrectByQuestion = new Map<string, AttemptRow>();
-
-    for (const attempt of userAttempts) {
-      if (!attempt.is_correct) continue;
-      if (!attempt.question_id) continue;
-
-      const existing = uniqueCorrectByQuestion.get(attempt.question_id);
-
-      if (!existing) {
-        uniqueCorrectByQuestion.set(attempt.question_id, attempt);
-        continue;
-      }
-
-      const existingDate = new Date(existing.answered_at).getTime();
-      const currentDate = new Date(attempt.answered_at).getTime();
-
-      if (currentDate < existingDate) {
-        uniqueCorrectByQuestion.set(attempt.question_id, attempt);
-      }
-    }
-
-    let score = 0;
-    let easyCorrect = 0;
-    let mediumCorrect = 0;
-    let hardCorrect = 0;
-    let veryHardCorrect = 0;
-
-    for (const attempt of Array.from(uniqueCorrectByQuestion.values())) {
-      const bucket = getDifficultyBucket(attempt.difficulty);
-      const points = getDifficultyPoints(attempt.difficulty);
-
-      score += points;
-
-      if (bucket === "easy") easyCorrect += 1;
-      if (bucket === "medium") mediumCorrect += 1;
-      if (bucket === "hard") hardCorrect += 1;
-      if (bucket === "very_hard") veryHardCorrect += 1;
-    }
-
-    const correctCount = uniqueCorrectByQuestion.size;
-    const totalAttempts = userAttempts.length;
-    const { accuracy, correctAttempts } = summarizeAttempts(userAttempts);
-
-    const timedAttempts = userAttempts.filter(
-      (attempt) => typeof attempt.time_spent_seconds === "number"
-    );
-
-    const avgTimeSeconds =
-      timedAttempts.length > 0
-        ? timedAttempts.reduce(
-            (sum, attempt) => sum + (attempt.time_spent_seconds ?? 0),
-            0
-          ) / timedAttempts.length
-        : 0;
-
-    const lastActivityAt =
-      userAttempts.length > 0
-        ? userAttempts
-            .map((attempt) => attempt.answered_at)
-            .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
-        : null;
-
-    rows.push({
-      userId,
-      nome: profile.nome?.trim() || "Aluno",
-      avatarKey: profile.avatar_key || "avatar_1",
-      score,
-      correctCount,
-      correctAttempts,
-      totalAttempts,
-      accuracy,
-      avgTimeSeconds,
-      lastActivityAt,
-      easyCorrect,
-      mediumCorrect,
-      hardCorrect,
-      veryHardCorrect,
-      topStreak: getLongestCorrectStreak(userAttempts),
-      division: getDivision(score),
-    });
-  }
-
-  return rows
-    .filter((row) => row.correctCount > 0)
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-
-      if (b.correctCount !== a.correctCount) {
-        return b.correctCount - a.correctCount;
-      }
-
-      if (b.accuracy !== a.accuracy) {
-        return b.accuracy - a.accuracy;
-      }
-
-      const aTime = a.avgTimeSeconds || Number.MAX_SAFE_INTEGER;
-      const bTime = b.avgTimeSeconds || Number.MAX_SAFE_INTEGER;
-
-      if (aTime !== bTime) return aTime - bTime;
-
-      const aLast = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
-      const bLast = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
-
-      return bLast - aLast;
-    });
-}
-
 function HighlightCard({
   title,
   entry,
@@ -657,8 +307,7 @@ export default function RankingPage() {
   const { user, loading: authLoading } = useSupabaseAuth();
   const trpcUtils = trpc.useUtils();
 
-  const [attempts, setAttempts] = useState<AttemptRow[]>([]);
-  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [data, setData] = useState<PublicRankingDto>({ ranking: [], seasonRanking: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState<RankingPeriod>("season");
@@ -669,108 +318,24 @@ export default function RankingPage() {
   }
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const data = await trpcUtils.publicStats.getRankingData.fetch();
-
-        setAttempts((data.attempts as unknown as AttemptRow[]) ?? []);
-        setProfiles((data.profiles as unknown as ProfileRow[]) ?? []);
-      } catch (err) {
-        console.error("Erro inesperado ao carregar ranking:", err);
-        setError("Ocorreu um erro inesperado ao carregar o ranking.");
-      } finally {
-        setLoading(false);
-      }
-    }
-
+    let cancelled = false;
+    setLoading(true);
+    setError("");
     if (!authLoading) {
-      loadData();
+      void trpcUtils.publicStats.getRankingData.fetch({ period, subject, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+        .then(result => { if (!cancelled) setData(result); })
+        .catch(() => { if (!cancelled) setError("Ocorreu um erro inesperado ao carregar o ranking."); })
+        .finally(() => { if (!cancelled) setLoading(false); });
     }
-  }, [authLoading, trpcUtils]);
+    return () => { cancelled = true; };
+  }, [authLoading, trpcUtils, period, subject]);
 
-  const currentRange = useMemo(() => getPeriodRange(period), [period]);
-  const seasonRange = useMemo(() => getPeriodRange("season"), []);
-
-  const ranking = useMemo(() => {
-    const currentAttempts = filterAttempts(
-      attempts,
-      subject,
-      currentRange.start,
-      currentRange.end
-    );
-
-    const previousAttempts =
-      currentRange.previousStart && currentRange.previousEnd
-        ? filterAttempts(
-            attempts,
-            subject,
-            currentRange.previousStart,
-            currentRange.previousEnd
-          )
-        : [];
-
-    const currentRows = buildRankingRows(currentAttempts, profiles);
-    const previousRows = buildRankingRows(previousAttempts, profiles);
-
-    const previousPositionMap = new Map<string, number>();
-
-    previousRows.forEach((entry, index) => {
-      previousPositionMap.set(entry.userId, index + 1);
-    });
-
-    return currentRows.map((entry, index) => {
-      const currentPosition = index + 1;
-      const previousPosition = previousPositionMap.get(entry.userId);
-      const positionDelta =
-        previousPosition === undefined
-          ? null
-          : previousPosition - currentPosition;
-
-      const baseEntry = {
-        ...entry,
-        positionDelta,
-        badges: [],
-      };
-
-      return {
-        ...baseEntry,
-        badges: getBadges(baseEntry),
-      };
-    });
-  }, [
-    attempts,
-    profiles,
-    subject,
-    currentRange.start,
-    currentRange.end,
-    currentRange.previousStart,
-    currentRange.previousEnd,
-  ]);
-
-  const seasonRanking = useMemo(() => {
-    const seasonAttempts = filterAttempts(
-      attempts,
-      subject,
-      seasonRange.start,
-      seasonRange.end
-    );
-
-    return buildRankingRows(seasonAttempts, profiles).map((entry) => {
-      const baseEntry = {
-        ...entry,
-        positionDelta: null,
-        badges: [],
-      };
-
-      return {
-        ...baseEntry,
-        badges: getBadges(baseEntry),
-      };
-    });
-  }, [attempts, profiles, subject, seasonRange.start, seasonRange.end]);
+  const decorate = (row: PublicRankingRow): RankingEntry => {
+    const entry = { ...row, division: getDivision(row.score) };
+    return { ...entry, badges: getBadges(entry) };
+  };
+  const ranking = useMemo(() => data.ranking.map(decorate), [data]);
+  const seasonRanking = useMemo(() => data.seasonRanking.map(decorate), [data]);
 
   const myIndex = useMemo(() => {
     if (!user?.id) return -1;
@@ -1100,7 +665,7 @@ export default function RankingPage() {
                       </p>
 
                       <p className="text-base font-bold text-slate-900">
-                        {formatDateTime(myEntry.lastActivityAt)}
+                        {formatDateTime(myEntry.lastActivityDay)}
                       </p>
                     </div>
 

@@ -1,4 +1,5 @@
 import { StatementImagesEditor, StatementImagesPreview } from "@/components/admin/StatementImagesEditor";
+import { questionEditorialSchema } from "@shared/questionEditorial";
 import { useImageUploadReview } from "@/components/admin/useImageUploadReview";
 import { checkImageAbort, type PreparedImageMime } from "@/lib/questionImagePreparation";
 import { getStatementImages, getEditableStatementImages, replaceStatementImages } from "@shared/questionImages";
@@ -1595,7 +1596,7 @@ url_imagem: valorLimpo(form.url_imagem),
         alternativa_correta: valorLimpo(form.alternativa_correta),
       };
 
-      const data = await createQuestionMutation.mutateAsync({ payload });
+      const data = await createQuestionMutation.mutateAsync({ payload: questionEditorialSchema.parse(payload) });
 
       if (!data?.id) {
         setError("A questão foi criada, mas o ID não retornou como esperado.");

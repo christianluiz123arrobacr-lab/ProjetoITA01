@@ -167,6 +167,6 @@ describe("páginas públicas de questões", () => {
     const router = readFileSync("server/routers.ts", "utf8");
     for (const route of ["/login", "/cadastro", "/admin", "/plataforma"]) expect(app).toContain(route);
     expect(router).toContain("setPublicQuestionPublication: adminProcedure");
-    expect(router).toContain("recordAttempt: protectedProcedure");
+    expect(router).toContain("recordAttempt: platformAccessProcedure");
   });
 });

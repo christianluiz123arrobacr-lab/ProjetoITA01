@@ -1,3 +1,4 @@
+import type { PublicRankingInput } from "../../shared/publicRanking";
 export const useSupabaseAuth = () => ({
   user: { id: "visual-1" },
   loading: false,
@@ -27,11 +28,13 @@ const data = {
 const utils = {
   publicStats: {
     getRankingData: {
-      fetch: async () => {
+      fetch: async (input?: PublicRankingInput) => {
         const state = new URLSearchParams(location.search).get("state");
         if (state === "loading") return new Promise(() => {});
         if (state === "error") throw new Error("Falha sintética");
-        return state === "empty" ? { profiles: [], attempts: [] } : data;
+        if (state === "empty") return { ranking: [], seasonRanking: [] };
+        const { buildPublicRanking } = await import("../../server/publicRanking");
+        return buildPublicRanking(data.attempts, data.profiles, input ?? { period: "season", subject: "all", timeZone: "America/Sao_Paulo" });
       },
     },
   },

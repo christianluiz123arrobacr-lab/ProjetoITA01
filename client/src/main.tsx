@@ -9,6 +9,7 @@ import {
   MutationCache,
 } from "@tanstack/react-query";
 import { invalidateQuestionCaches } from "@/lib/questionCache";
+import { invalidateRoleCaches } from "@/lib/roleCache";
 import { TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import App from "./App";
@@ -17,8 +18,10 @@ import "katex/dist/katex.min.css";
 
 const queryClient: QueryClient = new QueryClient({
   mutationCache: new MutationCache({
-    onSuccess: (_data, _variables, _context, mutation): void =>
-      invalidateQuestionCaches(queryClient, mutation.options.mutationKey),
+    onSuccess: (data, _variables, _context, mutation): void => {
+      invalidateQuestionCaches(queryClient, mutation.options.mutationKey);
+      invalidateRoleCaches(queryClient, mutation.options.mutationKey, data);
+    },
   }),
   defaultOptions: {
     queries: {

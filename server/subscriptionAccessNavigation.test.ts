@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getPlatformAccessDecision } from "./_core/platformAccess";
 
 const mocks = vi.hoisted(() => ({
   getAccessStatus: vi.fn(),
@@ -151,21 +152,15 @@ describe("integração da tela pendente e do guard", () => {
     expect(pendingPage).toContain("PAYMENT_CONFIRMATION_MESSAGE");
   });
 
-  it("distingue pagamento pendente de indisponibilidade real da RPC", () => {
-    const pendingBranch = platformAccess.indexOf("if (hasPendingPayment)");
-    const pendingBranchEnd = platformAccess.indexOf(
-      'logAccess({ correlationId, stage: "canonical_rpc", outcome: "error"',
-      pendingBranch,
-    );
-    const technicalFailure = platformAccess.indexOf("throw new TRPCError", pendingBranchEnd);
-    const pendingCode = platformAccess.slice(pendingBranch, pendingBranchEnd);
-
-    expect(pendingBranch).toBeGreaterThan(-1);
-    expect(pendingBranchEnd).toBeGreaterThan(pendingBranch);
-    expect(technicalFailure).toBeGreaterThan(pendingBranch);
-    expect(pendingCode).toContain('allowed: false');
-    expect(pendingCode).toContain("hasPendingPayment");
-    expect(pendingCode).not.toContain("throw new TRPCError");
+  it("distingue pagamento pendente de indisponibilidade real da RPC", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: false, error: { code: "08006" } });
+    const client = { rpc, from: (table: string) => {
+      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: table === "profiles" ? { role: "student", ativo: true } : { id: "pending" }, error: null }) };
+      return q;
+    } } as any;
+    await expect(getPlatformAccessDecision({ id: "synthetic", role: "student" }, client)).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+    rpc.mockResolvedValue({ data: false, error: null });
+    expect(await getPlatformAccessDecision({ id: "synthetic", role: "student" }, client)).toMatchObject({ allowed: false, hasPendingPayment: true });
   });
 
   it("mantém erro temporário no guard e oferece nova tentativa sem redirecionar", () => {

@@ -36,7 +36,7 @@ describe("integridade do editor de criação de questões", () => {
 
   it("salva a questão, depois os blocos, conclui a mensagem e só então navega", () => {
     const createQuestion = source.indexOf(
-      "createQuestionMutation.mutateAsync({ payload })"
+      "createQuestionMutation.mutateAsync({ payload: questionEditorialSchema.parse(payload) })"
     );
     const saveBlocks = source.indexOf(
       "saveResolutionBlocksMutation.mutateAsync({",

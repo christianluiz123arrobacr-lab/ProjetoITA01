@@ -37,8 +37,8 @@ describe("paginação da listagem pública de questões", () => {
 
   it("questions.list usa lotes no backend com ordem determinística e preserva filtros", () => {
     const router = readFileSync(new URL("../routers.ts", import.meta.url), "utf8");
-    const listStart = router.indexOf("list: publicProcedure");
-    const getByIdStart = router.indexOf("getById: publicProcedure", listStart);
+    const listStart = router.indexOf("list: platformAccessProcedure");
+    const getByIdStart = router.indexOf("getById: platformAccessProcedure", listStart);
     const procedure = router.slice(listStart, getByIdStart);
 
     expect(procedure).toContain("fetchAllQuestionPages");

@@ -60,7 +60,7 @@ describe("estado e derivações do InteractiveQuiz", () => {
   it("preserva o contrato canônico do backend para tentativas", () => {
     const procedure = sliceBetween(
       router,
-      "recordAttempt: protectedProcedure",
+      "recordAttempt: platformAccessProcedure",
       "getMyAttempts: protectedProcedure"
     );
 

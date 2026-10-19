@@ -48,6 +48,7 @@ type ProfileRow = {
 
 type AdminUserWithProfile = AdminUserRow & {
   profile?: ProfileRow | null;
+  legacy?: boolean;
 };
 
 type BillingPlanRow = {
@@ -706,7 +707,7 @@ export default function AdminUsersPage() {
       setError("");
       setSuccessMessage("");
 
-      await removeAdminAccessMutation.mutateAsync({ id: user.id });
+      await removeAdminAccessMutation.mutateAsync({ id: user.id, userId: user.user_id });
 
       setAdminUsers((previous) => previous.filter((item) => item.id !== user.id));
       setSuccessMessage("Acesso administrativo removido.");
@@ -1281,7 +1282,8 @@ export default function AdminUsersPage() {
                       <Button
                         variant="outline"
                         className="rounded-2xl"
-                        disabled={busyId === adminUser.id}
+                        disabled={busyId === adminUser.id || adminUser.legacy}
+                        title={adminUser.legacy ? "Acesso legado: remova o acesso ou conceda um papel explícito pelo e-mail acima." : undefined}
                         onClick={() => handleChangeAdminRole(adminUser)}
                       >
                         Trocar para {adminUser.role === "admin" ? "editor" : "admin"}

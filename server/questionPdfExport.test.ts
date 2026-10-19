@@ -202,10 +202,10 @@ describe("seleção PDF no banco, sem paginação HTTP", () => {
     const text = readFileSync("server/routers.ts", "utf8");
     const procedure = text.slice(
       text.indexOf("exportPdfData:"),
-      text.indexOf("    list: publicProcedure", text.indexOf("exportPdfData:"))
+      text.indexOf("    list: platformAccessProcedure", text.indexOf("exportPdfData:"))
     );
     expect(procedure).toContain("assertRateLimit");
-    expect(procedure).toContain("assertQuestionPdfAccess");
+    expect(procedure).toContain("exportPdfData: platformAccessProcedure");
     expect(procedure).not.toMatch(/resolucoes|\.range\(|scanLimit/);
   });
   it("nega execução direta por alunos e anônimos", async () => {
