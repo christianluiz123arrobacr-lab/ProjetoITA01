@@ -37,8 +37,8 @@ describe("paginação da listagem pública de questões", () => {
 
   it("questions.list usa lotes no backend com ordem determinística e preserva filtros", () => {
     const router = readFileSync(new URL("../routers.ts", import.meta.url), "utf8");
-    const listStart = router.indexOf("list: publicProcedure");
-    const getByIdStart = router.indexOf("getById: publicProcedure", listStart);
+    const listStart = router.indexOf("list: platformAccessProcedure");
+    const getByIdStart = router.indexOf("getById: platformAccessProcedure", listStart);
     const procedure = router.slice(listStart, getByIdStart);
 
     expect(procedure).toContain("fetchAllQuestionPages");
@@ -50,5 +50,19 @@ describe("paginação da listagem pública de questões", () => {
     expect(procedure).toContain('query.eq("disciplina", input.subject)');
     expect(procedure).toContain('query.eq("banca", input.exam)');
     expect(procedure).toContain('query.eq("instituição", input.institution)');
+  });
+
+  it("admin.listQuestions também pagina todas as questões com ordem determinística", () => {
+    const router = readFileSync(new URL("../routers.ts", import.meta.url), "utf8");
+    const listStart = router.indexOf("listQuestions: adminOrEditorProcedure");
+    const createStart = router.indexOf("createQuestion: adminOrEditorProcedure", listStart);
+    const procedure = router.slice(listStart, createStart);
+
+    expect(procedure).toContain("fetchAllQuestionPages");
+    expect(procedure).toContain('.from("questoes")');
+    expect(procedure).toContain('.order("created_at", { ascending: false })');
+    expect(procedure).toContain('.order("id", { ascending: true })');
+    expect(procedure).toContain(".range(from, to)");
+    expect(procedure).toContain("questions,");
   });
 });

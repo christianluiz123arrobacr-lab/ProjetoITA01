@@ -1,0 +1,30 @@
+drop policy if exists "lesson_images_admin_delete" on storage.objects;
+drop policy if exists "lesson_images_admin_update" on storage.objects;
+drop policy if exists "lesson_images_admin_insert" on storage.objects;
+drop policy if exists "lesson_images_public_read" on storage.objects;
+do $$ begin
+  if not exists(select 1 from storage.objects where bucket_id = 'lesson-images') then
+    delete from storage.buckets where id = 'lesson-images';
+  end if;
+end $$;
+drop policy if exists "lesson_drafts_admin_all" on public.lesson_drafts;
+drop policy if exists "lesson_versions_admin_history" on public.lesson_versions;
+drop policy if exists "lesson_versions_admin_insert" on public.lesson_versions;
+drop policy if exists "lesson_versions_read_current_published" on public.lesson_versions;
+drop policy if exists "lessons_admin_all" on public.lessons;
+drop policy if exists "lessons_read_current_published" on public.lessons;
+revoke all on public.lesson_versions from authenticated;
+revoke all on public.lesson_drafts from authenticated;
+revoke all on public.lessons from authenticated;
+drop function if exists public.lesson_restore_draft(uuid, uuid, uuid);
+drop function if exists public.lesson_publish(uuid, uuid, timestamptz, text);
+drop trigger if exists lesson_versions_immutable on public.lesson_versions;
+drop function if exists public.lesson_versions_are_immutable();
+drop trigger if exists lessons_touch_updated_at on public.lessons;
+drop function if exists public.lesson_touch_updated_at();
+drop trigger if exists lessons_current_version_matches on public.lessons;
+drop function if exists public.lesson_current_version_matches();
+drop table if exists public.lesson_drafts;
+alter table if exists public.lessons drop constraint if exists lessons_current_published_version_fk;
+drop table if exists public.lesson_versions;
+drop table if exists public.lessons;
