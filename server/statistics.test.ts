@@ -42,10 +42,9 @@ describe("estatísticas canônicas", () => {
     expect(access).toContain("last_seen_at.lt.");
   });
 
-  it("mantém o fluxo novo de importação com salvamento de blocos e compensação em falha", () => {
-    const source = readFileSync("server/routers.ts", "utf8");
-    const importer = source.split("async function executePreparedQuestionImport")[1]?.split("const createdCount")[0] ?? "";
-    expect(importer).toContain("saveImportedResolutionBlocks(data.id, question.resolucao_blocos)");
-    expect(importer).toContain('.from("questoes").delete().eq("id", data.id)');
+  it("usa transação por questão sem apagar questões como compensação", () => {
+    const importer = readFileSync("server/questions/questionImportBatchService.ts", "utf8");
+    expect(importer).toMatch(/rpc\(\s*"vet_import_commit_item"/);
+    expect(importer).not.toContain('.from("questoes").delete()');
   });
 });

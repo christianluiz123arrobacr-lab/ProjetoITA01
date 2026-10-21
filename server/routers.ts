@@ -29,11 +29,7 @@ import {
 import { buildBillingConsistencyReport, resolveEffectiveBillingAccess } from "./billing/accessConsistency.js";
 import { isWhatsAppRemindersEnabled, retryBillingReminder, runBillingReminderJob } from "./billing/whatsappReminders.js";
 import {
-  buildQuestionInsertPayload,
-  getQuestionImportSourceId,
   questionImportPayloadSchema,
-  validateQuestionImportItem,
-  type ImportResultStatus,
 } from "../shared/questionImportSchema.js";
 import {
   questionPdfFiltersSchema,
@@ -59,20 +55,21 @@ import { accessQuery, getPlatformAccessDecision } from "./_core/platformAccess.j
 import { assertAuthenticationAvailable, ensureAuthentication } from "./_core/context.js";
 import {
   cancelQuestionImportDraft,
-  cleanupSkippedQuestionImportImages,
   cleanupExpiredQuestionImportDrafts,
-  completeQuestionImportDraft,
+  cleanupQuestionImportDraft,
   confirmQuestionImportSlotUpload,
   discardQuestionImportReplacement,
   createQuestionImportDraft,
   getQuestionImportDraft,
   listQuestionImportDrafts,
-  prepareQuestionImportFinalization,
+  finalizeQuestionImportDraft,
+  importLegacyQuestionBatch,
   prepareQuestionImportSlotUpload,
   removeInvalidQuestionFromImportDraft,
   removeQuestionImportSlotUpload,
   updateQuestionImportSlotMetadata,
 } from "./questions/questionImportBatchService.js";
+import { normalizeResolutionBlockPayload } from "./questions/resolutionPayload.js";
 import { MAX_QUESTION_IMPORT_IMAGE_BYTES } from "../shared/questionImportSchema.js";
 import { buildQuestionEditorialPayload, questionEditorialSchema } from "../shared/questionEditorial.js";
 import { publicRankingInputSchema } from "../shared/publicRanking.js";
@@ -139,127 +136,6 @@ const questionNoteInputSchema = z.object({
   backgroundType: z.enum(["grid", "dots", "lined", "blank", "cartesian"]).default("grid"),
   title: z.string().max(160).nullable().optional(),
 });
-
-function normalizeResolutionBlockPayload(questaoId: string, block: z.infer<typeof resolutionBlockInputSchema>): {
-  questao_id: string; tipo: string; texto: string | null; url_imagem: string | null; ordem: number;
-} {
-  if (block.tipo === "equacao_quimica") {
-    const parsed = chemistryResolutionBlockSchema.options[2].parse({ tipo: "equacao_quimica", latex: block.texto });
-    return { questao_id: questaoId, tipo: block.tipo, texto: parsed.latex, url_imagem: null, ordem: block.ordem };
-  }
-  if (block.tipo === "molecula") {
-    let source: unknown = { smiles: block.smiles, legenda: block.legenda };
-    if (!block.smiles && block.texto) { try { source = JSON.parse(block.texto); } catch { source = {}; } }
-    const parsed = chemistryResolutionBlockSchema.options[3].parse({ tipo: "molecula", ...(source as object) });
-    return { questao_id: questaoId, tipo: block.tipo, texto: JSON.stringify({ smiles: parsed.smiles, ...(parsed.legenda ? { legenda: parsed.legenda } : {}) }), url_imagem: null, ordem: block.ordem };
-  }
-  return {
-    questao_id: questaoId,
-    tipo: block.tipo,
-    texto: block.texto?.trim() || null,
-    url_imagem: block.tipo === "imagem" ? (block.url_imagem?.trim() || null) : null,
-    ordem: block.ordem,
-  };
-}
-
-async function saveImportedResolutionBlocks(questionId: string, blocks: z.infer<typeof resolutionBlockInputSchema>[]) {
-  if (blocks.length === 0) return 0;
-
-  const resolutionPayload = blocks.map((block) =>
-    normalizeResolutionBlockPayload(questionId, block)
-  );
-
-  const { data, error } = await supabaseAdmin
-    .from("resolucoes")
-    .insert(resolutionPayload)
-    .select("id");
-
-  if (error || !data) {
-    throw new Error("Não foi possível salvar os blocos de resolução da questão.");
-  }
-
-  const { count, error: countError } = await supabaseAdmin
-    .from("resolucoes")
-    .select("id", { count: "exact", head: true })
-    .eq("questao_id", questionId);
-
-  if (countError) {
-    throw new Error("Não foi possível confirmar o salvamento da resolução.");
-  }
-
-  if ((count ?? 0) < blocks.length) {
-    throw new Error("A resolução foi enviada, mas nem todos os blocos ficaram disponíveis para a questão.");
-  }
-
-  return data.length;
-}
-
-async function getResolutionBlocksCount(questionId: string) {
-  const { count, error } = await supabaseAdmin
-    .from("resolucoes")
-    .select("id", { count: "exact", head: true })
-    .eq("questao_id", questionId);
-
-  if (error) {
-    throw new Error("Não foi possível verificar os blocos de resolução existentes.");
-  }
-
-  return count ?? 0;
-}
-
-async function executePreparedQuestionImport(questions: z.infer<typeof questionImportPayloadSchema>["questions"], batchId: string, userId: string) {
-  const startedAt = Date.now();
-  const results: Array<{ index: number; importSourceId: string; status: ImportResultStatus; questionId: string | null; codigo: string | null; resolutionBlocksSaved: number; message: string }> = [];
-  for (const question of questions) {
-    const preview = validateQuestionImportItem(question);
-    const importSourceId = getQuestionImportSourceId(question);
-    if (preview.status === "invalida") {
-      results.push({ index: question.raw_index, importSourceId, status: "falhou", questionId: null, codigo: question.codigo, resolutionBlocksSaved: 0, message: preview.errors.join(" ") || "Questão inválida." });
-      continue;
-    }
-    try {
-      const duplicate = await supabaseAdmin.from("questoes").select("id,codigo").eq("import_source_id", importSourceId).maybeSingle();
-      if (duplicate.error) throw new Error("Não foi possível verificar duplicidade da questão.");
-      if (duplicate.data?.id) {
-        const existing = await getResolutionBlocksCount(duplicate.data.id);
-        const repaired = existing === 0 && question.resolucao_blocos.length ? await saveImportedResolutionBlocks(duplicate.data.id, question.resolucao_blocos) : 0;
-        results.push({ index: question.raw_index, importSourceId, status: "duplicada", questionId: duplicate.data.id, codigo: (duplicate.data as any).codigo ?? question.codigo, resolutionBlocksSaved: repaired, message: repaired ? "Questão já existia; blocos ausentes foram recuperados." : "Questão já importada anteriormente." });
-        continue;
-      }
-      const payload = buildQuestionInsertPayload(question, batchId, userId);
-      const { data, error } = await supabaseAdmin.from("questoes").insert([payload]).select("id,codigo").single();
-      if (error?.code === "23505") {
-        const concurrentDuplicate = await supabaseAdmin.from("questoes").select("id,codigo").eq("import_source_id", importSourceId).maybeSingle();
-        if (concurrentDuplicate.data?.id) {
-          const existing = await getResolutionBlocksCount(concurrentDuplicate.data.id);
-          const repaired = existing === 0 && question.resolucao_blocos.length ? await saveImportedResolutionBlocks(concurrentDuplicate.data.id, question.resolucao_blocos) : 0;
-          results.push({ index: question.raw_index, importSourceId, status: "duplicada", questionId: concurrentDuplicate.data.id, codigo: (concurrentDuplicate.data as any).codigo ?? question.codigo, resolutionBlocksSaved: repaired, message: "Questão já criada por outra tentativa do mesmo lote." });
-          continue;
-        }
-      }
-      if (error || !data?.id) throw new Error("Não foi possível criar a questão.");
-      let resolutionBlocksSaved = 0;
-      try {
-        resolutionBlocksSaved = await saveImportedResolutionBlocks(data.id, question.resolucao_blocos);
-      } catch (resolutionError) {
-        await supabaseAdmin.from("resolucoes_meta").delete().eq("questao_id", data.id);
-        await supabaseAdmin.from("resolucoes").delete().eq("questao_id", data.id);
-        await supabaseAdmin.from("questoes").delete().eq("id", data.id);
-        throw resolutionError;
-      }
-      results.push({ index: question.raw_index, importSourceId, status: "criada", questionId: data.id, codigo: (data as any).codigo ?? question.codigo, resolutionBlocksSaved, message: "Questão e resolução importadas com sucesso." });
-    } catch (error) {
-      results.push({ index: question.raw_index, importSourceId, status: "falhou", questionId: null, codigo: question.codigo, resolutionBlocksSaved: 0, message: error instanceof Error ? error.message : "Falha inesperada ao importar a questão." });
-    }
-  }
-  const createdCount = results.filter((result) => result.status === "criada").length;
-  const duplicatedCount = results.filter((result) => result.status === "duplicada").length;
-  const failedCount = results.filter((result) => result.status === "falhou").length;
-  const resolutionBlocksSaved = results.reduce((sum, result) => sum + result.resolutionBlocksSaved, 0);
-  const response = { batchId, createdCount, duplicatedCount, failedCount, resolutionBlocksSaved, durationMs: Date.now() - startedAt, results };
-  await supabaseAdmin.from("admin_logs").insert({ actor_user_id: userId, action: "question_batch_imported", entity_type: "question_import_batch", entity_id: batchId, description: `Importação em lote: ${createdCount} criada(s), ${duplicatedCount} duplicada(s), ${failedCount} falha(s)`, level: failedCount ? "warning" : "info", metadata: { ...response, results: undefined } });
-  return response;
-}
 
 type ResolutionSummaryRow = {
   questao_id: string;
@@ -2266,177 +2142,23 @@ export const appRouter = router({
     cleanupExpiredQuestionImportDrafts: adminOrEditorProcedure
       .mutation(({ ctx }) => cleanupExpiredQuestionImportDrafts(ctx.user.id)),
 
-    finalizeQuestionImportDraft: adminOrEditorProcedure
+    cleanupQuestionImportDraft: adminOrEditorProcedure
       .input(z.object({ batchId: z.string().uuid() }))
-      .mutation(async ({ ctx, input }) => {
-        const prepared = await prepareQuestionImportFinalization(input.batchId, ctx.user.id);
-        if (prepared.batch.status === "completed" && prepared.batch.result) return prepared.batch.result;
-        await cleanupSkippedQuestionImportImages(input.batchId, prepared.skippedImportKeys, ctx.user.id);
-        const result = {
-          ...await executePreparedQuestionImport(questionImportPayloadSchema.shape.questions.parse(prepared.questions), input.batchId, ctx.user.id),
-          skippedInvalidCount: prepared.skippedInvalidCount,
-        };
-        await completeQuestionImportDraft(input.batchId, ctx.user.id, result);
-        return result;
+      .mutation(({ctx,input}) => cleanupQuestionImportDraft(input.batchId,ctx.user.id)),
+
+    finalizeQuestionImportDraft: adminOrEditorProcedure
+      .input(z.object({ batchId: z.string().uuid(), protocolVersion: z.literal(2).optional() }))
+      .mutation(({ ctx, input }) => {
+        if (input.protocolVersion !== 2) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "O importador foi atualizado. Recarregue a página antes de finalizar; seu rascunho está salvo." });
+        return finalizeQuestionImportDraft(input.batchId, ctx.user.id);
       }),
 
     importQuestionBatch: adminOrEditorProcedure
       .input(questionImportPayloadSchema)
-      .mutation(async ({ ctx, input }) => {
-        const startedAt = Date.now();
-        const results: Array<{
-          index: number;
-          importSourceId: string;
-          status: ImportResultStatus;
-          questionId: string | null;
-          codigo: string | null;
-          resolutionBlocksSaved: number;
-          message: string;
-        }> = [];
-
-        for (const question of input.questions) {
-          const preview = validateQuestionImportItem(question);
-          const importSourceId = getQuestionImportSourceId(question);
-
-          if (preview.status === "invalida") {
-            results.push({
-              index: question.raw_index,
-              importSourceId,
-              status: "falhou",
-              questionId: null,
-              codigo: question.codigo,
-              resolutionBlocksSaved: 0,
-              message: preview.errors.join(" ") || "Questão inválida.",
-            });
-            continue;
-          }
-
-          try {
-            const duplicateResult = await supabaseAdmin
-              .from("questoes")
-              .select("id, codigo")
-              .eq("import_source_id", importSourceId)
-              .maybeSingle();
-
-            if (duplicateResult.error) {
-              throw new Error(
-                duplicateResult.error.message.includes("import_source_id")
-                  ? "A migration de importação em lote ainda não foi aplicada no Supabase. Rode o SQL criado neste PR antes de importar."
-                  : "Não foi possível verificar duplicidade da questão."
-              );
-            }
-
-            if (duplicateResult.data?.id) {
-              const existingResolutionBlocks = await getResolutionBlocksCount(duplicateResult.data.id);
-              let repairedResolutionBlocks = 0;
-              let duplicateMessage = "Questão já importada anteriormente.";
-
-              if (existingResolutionBlocks === 0 && question.resolucao_blocos.length > 0) {
-                repairedResolutionBlocks = await saveImportedResolutionBlocks(
-                  duplicateResult.data.id,
-                  question.resolucao_blocos
-                );
-                duplicateMessage =
-                  "Questão já importada anteriormente; blocos de resolução ausentes foram salvos agora.";
-              }
-
-              results.push({
-                index: question.raw_index,
-                importSourceId,
-                status: "duplicada",
-                questionId: duplicateResult.data.id,
-                codigo: (duplicateResult.data as any).codigo ?? question.codigo,
-                resolutionBlocksSaved: repairedResolutionBlocks,
-                message: duplicateMessage,
-              });
-              continue;
-            }
-
-            const payload = buildQuestionInsertPayload(question, input.batchId, ctx.user.id);
-            const { data, error } = await supabaseAdmin
-              .from("questoes")
-              .insert([payload])
-              .select("id, codigo")
-              .single();
-
-            if (error || !data?.id) {
-              throw new Error(error?.message.includes("import_source_id")
-                ? "A migration de importação em lote ainda não foi aplicada no Supabase. Rode o SQL criado neste PR antes de importar."
-                : "Não foi possível criar a questão.");
-            }
-
-            let resolutionBlocksSaved = 0;
-
-            try {
-              resolutionBlocksSaved = await saveImportedResolutionBlocks(data.id, question.resolucao_blocos);
-            } catch (resolutionError) {
-              await supabaseAdmin.from("resolucoes_meta").delete().eq("questao_id", data.id);
-              await supabaseAdmin.from("resolucoes").delete().eq("questao_id", data.id);
-              await supabaseAdmin.from("questoes").delete().eq("id", data.id);
-              throw new Error(
-                resolutionError instanceof Error
-                  ? `${resolutionError.message} A questão foi revertida para não ficar sem resolução.`
-                  : "Questão criada, mas a resolução falhou; a questão foi revertida."
-              );
-            }
-
-            results.push({
-              index: question.raw_index,
-              importSourceId,
-              status: "criada",
-              questionId: data.id,
-              codigo: (data as any).codigo ?? question.codigo,
-              resolutionBlocksSaved,
-              message: "Questão e resolução importadas com sucesso.",
-            });
-          } catch (error) {
-            results.push({
-              index: question.raw_index,
-              importSourceId,
-              status: "falhou",
-              questionId: null,
-              codigo: question.codigo,
-              resolutionBlocksSaved: 0,
-              message: error instanceof Error ? error.message : "Falha inesperada ao importar a questão.",
-            });
-          }
-        }
-
-        const createdCount = results.filter((result) => result.status === "criada").length;
-        const duplicatedCount = results.filter((result) => result.status === "duplicada").length;
-        const failedCount = results.filter((result) => result.status === "falhou").length;
-        const resolutionBlocksSaved = results.reduce((sum, result) => sum + result.resolutionBlocksSaved, 0);
-        const durationMs = Date.now() - startedAt;
-
-        await supabaseAdmin.from("admin_logs").insert({
-          actor_user_id: ctx.user.id,
-          action: "question_batch_imported",
-          entity_type: "question_import_batch",
-          entity_id: input.batchId,
-          description: `Importação em lote: ${createdCount} criada(s), ${duplicatedCount} duplicada(s), ${failedCount} falha(s)`,
-          level: failedCount > 0 ? "warning" : "info",
-          metadata: {
-            batchId: input.batchId,
-            receivedCount: input.questions.length,
-            createdCount,
-            duplicatedCount,
-            failedCount,
-            resolutionBlocksSaved,
-            durationMs,
-          },
-        });
-
-        return {
-          batchId: input.batchId,
-          createdCount,
-          duplicatedCount,
-          failedCount,
-          resolutionBlocksSaved,
-          durationMs,
-          results,
-        } as const;
+      .mutation(({ ctx, input }) => {
+        if (input.protocolVersion !== 2) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "O importador foi atualizado. Recarregue a página e use o processamento em etapas; nenhum item desta chamada foi importado." });
+        return importLegacyQuestionBatch(input, ctx.user.id);
       }),
-
     discardAdminPreparedImage: adminOrEditorProcedure
       .input(z.object({path:z.string().max(300)}))
       .mutation(async({ctx,input})=>{

@@ -174,6 +174,7 @@ export const normalizedQuestionImportItemSchema = z.object({
 });
 
 export const questionImportPayloadSchema = z.object({
+  protocolVersion: z.literal(2).optional(),
   batchId: z.string().trim().min(1).max(120),
   questions: z.array(normalizedQuestionImportItemSchema).min(1).max(MAX_QUESTION_IMPORT_ITEMS),
 });
@@ -519,7 +520,18 @@ export function parseQuestionImportJsonText(rawJson: string) {
   if (new Blob([rawJson]).size > MAX_QUESTION_IMPORT_JSON_BYTES) {
     throw new Error("O arquivo JSON excede o limite de 2 MB.");
   }
-  return parseQuestionImportPayload(JSON.parse(rawJson) as unknown);
+  let payload:unknown;
+  try {payload=JSON.parse(rawJson);}
+  catch {
+    const lines=rawJson.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    if(lines.length<2)throw new Error("JSON inválido. Confira a sintaxe do arquivo.");
+    if(lines.length>MAX_QUESTION_IMPORT_ITEMS)throw new Error(`O lote pode ter no máximo ${MAX_QUESTION_IMPORT_ITEMS} questões.`);
+    payload=lines.map((line,index)=>{
+      try{return JSON.parse(line) as unknown;}
+      catch{throw new Error(`JSONL inválido na linha ${index+1}.`);}
+    });
+  }
+  return parseQuestionImportPayload(payload);
 }
 
 export function parseQuestionImportPayload(payload: unknown): QuestionImportBatch {

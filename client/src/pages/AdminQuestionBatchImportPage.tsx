@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { AlertTriangle, ArrowLeft, CheckCircle2, FileImage, FileJson, ImagePlus, Loader2, Save, Trash2, Upload, XCircle } from "lucide-react";
 import AdminGuard from "@/components/admin/AdminGuard";
@@ -24,6 +24,8 @@ type SlotRow = {
 
 type Draft = {
   id: string; status: string; format: string; source_name: string | null; validation_summary: any; result?: any;
+  progress?: Array<{import_key:string;result:any}>; lease_until?:string|null; operation_kind?:string|null; last_error?:string|null; cleanup_pending?:boolean;
+  revision?:number;
   payload: { questions: QuestionImportPreviewItem["item"][]; previews: QuestionImportPreviewItem[] }; slots: SlotRow[];
 };
 
@@ -77,9 +79,17 @@ export default function AdminQuestionBatchImportPage() {
   const removeUpload = trpc.admin.removeQuestionImportImageUpload.useMutation();
   const updateMetadata = trpc.admin.updateQuestionImportImageMetadata.useMutation();
   const cancelDraft = trpc.admin.cancelQuestionImportDraft.useMutation();
+  const cleanupDraft = trpc.admin.cleanupQuestionImportDraft.useMutation({retry:false});
   const removeInvalidQuestion = trpc.admin.removeInvalidQuestionFromImportDraft.useMutation();
   const finalizeDraft = trpc.admin.finalizeQuestionImportDraft.useMutation({ retry: false });
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [uncertain,setUncertain] = useState(false);
+  const [finalizeRunning,setFinalizeRunning] = useState(false);
+  const runningRef = useRef(false);
+  const currentId = useRef<string|null>(null);
+  const currentRevision = useRef(-1);
+  const [clock,setClock] = useState(Date.now());
+  useEffect(()=>()=>{currentId.current=null;},[]);
   const [rawJson, setRawJson] = useState("");
   const [sourceName, setSourceName] = useState<string | undefined>();
   const [error, setError] = useState("");
@@ -98,7 +108,22 @@ export default function AdminQuestionBatchImportPage() {
   const existingTaxonomy = useMemo(() => getExistingQuestionTaxonomy(suggestionsQuery.data), [suggestionsQuery.data]);
   const newContents = useMemo(() => new Set(previews.flatMap((preview) => preview.item.conteudos.filter((value) => !existingTaxonomy.contents.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
   const newSubjects = useMemo(() => new Set(previews.flatMap((preview) => preview.item.assuntos.filter((value) => !existingTaxonomy.subjects.has(normalizeQuestionTaxonomyKey(value))).map(normalizeQuestionTaxonomyKey))).size, [previews, existingTaxonomy]);
-  const busy = Boolean(workingSlot) || createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending || removeInvalidQuestion.isPending;
+  const serverBusy = Boolean(draft?.operation_kind && draft.lease_until && Date.parse(draft.lease_until)>clock);
+  const busy = Boolean(workingSlot) || createDraft.isPending || prepareUpload.isPending || confirmUpload.isPending || finalizeDraft.isPending || finalizeRunning || removeInvalidQuestion.isPending || cancelDraft.isPending || removeUpload.isPending || updateMetadata.isPending || cleanupDraft.isPending || serverBusy;
+  const editable = draft?.status === "draft" && !uncertain && !busy;
+  useEffect(() => {
+    if (!draft || !(uncertain || draft.status === "finalizing" || draft.operation_kind)) return;
+    const id = draft.id;
+    let reading=false,disposed=false;
+    const timer = window.setInterval(() => {
+      setClock(Date.now());
+      if(reading)return;reading=true;
+      void utils.client.admin.getQuestionImportDraft.query({batchId:id}).then(value => {
+        if (!disposed && currentId.current === id) applyDraft(value);
+      }).catch(() => { if(!disposed && currentId.current===id)setUncertain(true); }).finally(()=>{reading=false;});
+    },3000);
+    return () => {disposed=true;window.clearInterval(timer);};
+  },[draft?.id,draft?.status,draft?.operation_kind,uncertain,utils.client]);
   const slotsByQuestion = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
     for (const preview of previews) {
@@ -111,7 +136,12 @@ export default function AdminQuestionBatchImportPage() {
 
   function applyDraft(value: unknown) {
     const next = value as Draft;
+    if(currentId.current===next.id && (next.revision??0)<currentRevision.current)return;
+    currentRevision.current=next.revision??0;
+    currentId.current = next.id;
     setDraft(next);
+    setUncertain(false);
+    setClock(Date.now());
     setMetadata(Object.fromEntries((next.slots ?? []).map((slot) => [slot.id, { alt: slot.alt_text ?? "", caption: slot.caption ?? "" }])));
   }
 
@@ -124,13 +154,15 @@ export default function AdminQuestionBatchImportPage() {
   }
 
   async function readJsonFile(file: File) {
-    if ((!file.name.toLowerCase().endsWith(".json") && file.type !== "application/json") || file.size > MAX_QUESTION_IMPORT_JSON_BYTES) { setError("Selecione um JSON válido de até 2 MB."); return; }
+    if ((!/\.jsonl?$/i.test(file.name) && file.type !== "application/json") || file.size > MAX_QUESTION_IMPORT_JSON_BYTES) { setError("Selecione um JSON ou JSONL válido de até 2 MB."); return; }
     setSourceName(file.name); setRawJson(await file.text()); setError("");
   }
 
   async function refreshDraft() {
     if (!draft) return;
-    applyDraft(await utils.client.admin.getQuestionImportDraft.query({ batchId: draft.id }));
+    const next=await utils.client.admin.getQuestionImportDraft.query({ batchId: draft.id });
+    if(currentId.current===draft.id)applyDraft(next);
+    return next as Draft;
   }
 
   async function resumeDraft(batchId: string) {
@@ -140,14 +172,18 @@ export default function AdminQuestionBatchImportPage() {
   }
 
   async function cancelCurrentDraft() {
-    if (!draft) return;
+    if (!draft || busy || uncertain || draft.status!=="draft") return;
     setError("");
-    try { await cancelDraft.mutateAsync({batchId:draft.id}); setDraft(null); await draftsQuery.refetch(); }
-    catch { setError("Não foi possível confirmar o cancelamento. Atualize os lotes salvos antes de tentar novamente."); }
+    try { applyDraft(await cancelDraft.mutateAsync({batchId:draft.id})); setNotice("Cancelamento confirmado no servidor. Arquivos com referência permanecem protegidos."); await draftsQuery.refetch(); }
+    catch {
+      setUncertain(true); setError("Não foi possível confirmar o cancelamento. Consultando o estado salvo antes de permitir outra ação.");
+      const saved=await refreshDraft().catch(()=>{setUncertain(true);return null;});
+      if(saved?.status==="cancelled"){setError("");setNotice("Cancelamento confirmado pela consulta ao servidor.");}
+    }
   }
 
   async function uploadFile(slot:SlotRow,file:File) {
-    if(!draft)return false;
+    if(!draft || !editable)return false;
     const identity={batchId:draft.id,importKey:slot.import_key,slotId:slot.slot_id};
     let ticket:Awaited<ReturnType<typeof prepareUpload.mutateAsync>>|null=null;
     let chosen:File|null=null,uploaded=false;
@@ -173,7 +209,7 @@ export default function AdminQuestionBatchImportPage() {
       });
       applyDraft(result);setNotice(`${file.name} validado no slot ${slot.slot_id}.`);return true;
     } catch(cause) {
-      setError(cause instanceof Error?cause.message:"Falha ao enviar a imagem.");return false;
+      setError(cause instanceof Error?cause.message:"Falha ao enviar a imagem.");setUncertain(true);await refreshDraft().catch(()=>setUncertain(true));return false;
     } finally {
       // The endpoint refuses to remove any file currently referenced by the slot.
       if(ticket)await discardReplacement.mutateAsync({...identity,uploadPath:(ticket as {path:string}).path}).catch(()=>setNotice("A limpeza temporária ficou pendente; a imagem anterior permanece protegida."));
@@ -181,7 +217,7 @@ export default function AdminQuestionBatchImportPage() {
     }
   }
   async function uploadMany(files:File[]) {
-    if(!draft)return;
+    if(!draft || !editable)return;
     // Match ORIGINAL filenames before any conversion or generated extension.
     const {matches,warnings}=autoMatch(files,slots.filter(slot=>slot.status!=="ready"));
     if(warnings.length)setNotice(warnings.join(" "));
@@ -194,31 +230,53 @@ export default function AdminQuestionBatchImportPage() {
   }
 
   async function removeSlot(slot: SlotRow) {
-    if (!draft) return;
+    if (!draft || !editable) return;
     setWorkingSlot(slot.id);
     try { applyDraft(await removeUpload.mutateAsync({ batchId: draft.id, importKey: slot.import_key, slotId: slot.slot_id })); }
-    catch (err) { setError(err instanceof Error ? err.message : "Não foi possível remover a imagem."); }
+    catch (err) { setError(err instanceof Error ? err.message : "Não foi possível remover a imagem.");setUncertain(true);await refreshDraft().catch(()=>setUncertain(true)); }
     finally { setWorkingSlot(null); }
   }
 
   async function finish() {
-    if (!draft) return;
+    if (!draft || runningRef.current || uncertain || busy || !["draft","finalizing"].includes(draft.status)) return;
     setError("");
+    if (invalidCount > 0 && draft.status === "draft" && !window.confirm(`Este lote contém ${invalidCount} questão(ões) inválida(s). Importar somente as ${validCount} válida(s)?`)) return;
+    runningRef.current=true;setFinalizeRunning(true);
     try {
-      if (invalidCount > 0 && !window.confirm(`Este lote contém ${invalidCount} questão(ões) inválida(s). Importar somente as ${validCount} válida(s) e deixar as inválidas de fora?`)) return;
-      const result = await finalizeDraft.mutateAsync({ batchId: draft.id }); await refreshDraft();
-      setNotice(`Importação concluída: ${result.createdCount} criada(s), ${result.duplicatedCount} já existente(s), ${result.skippedInvalidCount} inválida(s) ignorada(s), ${result.failedCount} falha(s).`); await draftsQuery.refetch();
-    } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível concluir a importação."); }
+      let result;
+      do {
+        result = await finalizeDraft.mutateAsync({ batchId: draft.id, protocolVersion: 2 });
+        await refreshDraft();
+      } while (result.status === "finalizing" && currentId.current === draft.id);
+      if(result.status!=="finalizing")setNotice(`Importação concluída: ${result.createdCount} criada(s), ${result.duplicatedCount} já existente(s), ${result.skippedInvalidCount} inválida(s) ignorada(s), ${result.failedCount} falha(s).`);
+      await draftsQuery.refetch();
+    } catch (err) {
+      setUncertain(true);setError(err instanceof Error ? err.message : "Não foi possível confirmar a importação.");
+      const saved=await refreshDraft().catch(()=>{setUncertain(true);return null;});
+      if(saved?.status==="completed"){setError("");setNotice("Conclusão confirmada no servidor após a resposta interrompida.");}
+    } finally {runningRef.current=false;setFinalizeRunning(false);}
   }
 
   async function removeInvalid(index: number) {
-    if (!draft || !window.confirm("Remover esta questão inválida do rascunho?")) return;
+    if (!draft || !editable || !window.confirm("Remover esta questão inválida do rascunho?")) return;
     setError("");
     try {
       applyDraft(await removeInvalidQuestion.mutateAsync({ batchId: draft.id, questionIndex: index }));
       setNotice("Questão inválida removida do rascunho.");
       await draftsQuery.refetch();
-    } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível remover a questão."); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível remover a questão.");setUncertain(true);await refreshDraft().catch(()=>setUncertain(true)); }
+  }
+
+  async function saveSlotMetadata(slot:SlotRow) {
+    if(!draft || !editable)return;
+    const values=metadata[slot.id]??{alt:slot.alt_text,caption:slot.caption??""};
+    try {applyDraft(await updateMetadata.mutateAsync({batchId:draft.id,importKey:slot.import_key,slotId:slot.slot_id,altText:values.alt,caption:values.caption||null}));}
+    catch {setUncertain(true);setError("Não foi possível confirmar os textos. Consultando o estado salvo.");await refreshDraft().catch(()=>setUncertain(true));}
+  }
+  async function cleanupCurrentDraft() {
+    if(!draft || busy || uncertain || draft.status==="finalizing")return;
+    try {applyDraft(await cleanupDraft.mutateAsync({batchId:draft.id}));setNotice("Limpeza consultada no servidor. Arquivos utilizados permanecem protegidos; pendências podem ser retomadas por este botão.");}
+    catch {setUncertain(true);setError("A limpeza ficou pendente. Consulte o estado salvo.");await refreshDraft().catch(()=>setUncertain(true));}
   }
 
   return <AdminGuard><AdminLayout title="Importar lote JSON" subtitle="Valide o lote, vincule imagens e finalize de forma segura e idempotente.">
@@ -233,7 +291,7 @@ export default function AdminQuestionBatchImportPage() {
       <Card className="space-y-4 border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
         <div onDragOver={(event) => event.preventDefault()} onDrop={(event: DragEvent<HTMLDivElement>) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void readJsonFile(file); }} className="rounded-3xl border-2 border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
           <FileJson className="mx-auto h-9 w-9 text-slate-500"/><h2 className="mt-2 text-lg font-bold">Carregue ou cole o JSON</h2>
-          <input ref={jsonInput} type="file" accept=".json,application/json" className="hidden" onChange={(event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) void readJsonFile(file); event.target.value = ""; }}/>
+          <input ref={jsonInput} type="file" accept=".json,.jsonl,application/json" className="hidden" onChange={(event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) void readJsonFile(file); event.target.value = ""; }}/>
           <Button variant="outline" className="mt-4 rounded-2xl" onClick={() => jsonInput.current?.click()}><Upload className="mr-2 h-4 w-4"/>Escolher JSON</Button>
         </div>
         <textarea value={rawJson} onChange={(event) => setRawJson(event.target.value)} rows={12} placeholder='{"formato":"questoes-v2","questoes":[...]}' className="w-full rounded-2xl border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"/>
@@ -241,18 +299,31 @@ export default function AdminQuestionBatchImportPage() {
       </Card>
 {(draftsQuery.data?.length ?? 0) > 0 && <Card className="border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900"><h2 className="font-bold">Lotes salvos</h2><div className="mt-3 space-y-2">{draftsQuery.data?.map((item: any) => <button key={item.id} className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={() => void resumeDraft(item.id)}><span>{item.source_name || item.format} · {item.validation_summary?.total ?? 0} questão(ões)</span><span className="text-xs font-bold uppercase">{item.status}</span></button>)}</div></Card>}
     </> : <>
+      <Card className="space-y-2 p-5" role="status" aria-live="polite">
+        <p className="font-bold">{draft.status==="completed"?"Importação concluída":draft.status==="cancelled"?"Cancelamento confirmado":draft.status==="finalizing"?"Importação em andamento":"Rascunho salvo"}</p>
+        <p>{draft.progress?.length ?? draft.result?.results?.length ?? 0} de {validKeys.size} questão(ões) confirmada(s) no servidor.</p>
+        {serverBusy && <p>Há uma operação em andamento. O estado é consultado automaticamente.</p>}
+        {draft.status==="finalizing" && !serverBusy && !finalizeRunning && <p>Você pode retomar os itens pendentes. As questões confirmadas serão preservadas.</p>}
+        {draft.last_error && <p>A última operação foi interrompida. O progresso confirmado continua salvo.</p>}
+        {draft.cleanup_pending && <p>Há verificação ou limpeza de arquivos temporários pendente.</p>}
+        {!!draft.result?.reviewRequiredCount && <p>{draft.result.reviewRequiredCount} questão(ões) legada(s) sem resolução exigem revisão manual. Consulte os avisos na lista.</p>}
+        {uncertain && <p>Consultando o estado salvo. Aguarde a confirmação antes de repetir uma ação.</p>}
+        <Button variant="outline" disabled={finalizeRunning} onClick={()=>void refreshDraft().catch(()=>setUncertain(true))}>Consultar estado salvo</Button>
+      </Card>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Questões", previews.length], ["Válidas", previews.length - invalidCount], ["Inválidas", invalidCount], ["Com imagens", questionsWithImages], ["Imagens vinculadas", readyCount], ["Obrigatórias pendentes", pendingRequired], ["Conteúdos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newContents], ["Assuntos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newSubjects]].map(([label, value]) => <Card key={String(label)} className="border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></Card>)}</div>
       {suggestionsQuery.isError && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">Não foi possível comparar conteúdos e assuntos com as questões cadastradas. <Button variant="outline" onClick={()=>void suggestionsQuery.refetch()}>Tentar novamente</Button></p>}
       <Card className="flex flex-wrap items-center gap-3 border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
         <input ref={bulkImagesInput} multiple type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { void uploadMany(Array.from(event.target.files ?? [])); event.target.value = ""; }}/>
-        <Button variant="outline" className="rounded-2xl" onClick={() => bulkImagesInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4"/>Associar vários arquivos</Button>
-        <Button className="rounded-2xl" disabled={busy || validCount === 0 || pendingRequired > 0 || draft.status === "completed"} onClick={() => void finish()}><CheckCircle2 className="mr-2 h-4 w-4"/>{draft.status === "completed" ? "Lote concluído" : invalidCount > 0 ? `Importar ${validCount} válida(s)` : "Concluir importação"}</Button>
-        <Button variant="outline" className="rounded-2xl" onClick={() => { setDraft(null); setRawJson(""); setNotice("Rascunho salvo para continuar depois."); }}><Save className="mr-2 h-4 w-4"/>Salvar e sair</Button>
-        {draft.status === "draft" && <Button variant="outline" className="rounded-2xl text-red-700" onClick={() => void cancelCurrentDraft()}><Trash2 className="mr-2 h-4 w-4"/>Cancelar lote</Button>}
+        <Button disabled={!editable} variant="outline" className="rounded-2xl" onClick={() => bulkImagesInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4"/>Associar vários arquivos</Button>
+        <Button className="rounded-2xl" disabled={busy || uncertain || validCount === 0 || pendingRequired > 0 || !["draft","finalizing"].includes(draft.status)} onClick={() => void finish()}><CheckCircle2 className="mr-2 h-4 w-4"/>{draft.status === "completed" ? "Lote concluído" : draft.status==="finalizing" ? "Retomar itens pendentes" : invalidCount > 0 ? `Importar ${validCount} válida(s)` : "Concluir importação"}</Button>
+        <Button disabled={busy} variant="outline" className="rounded-2xl" onClick={() => { currentId.current=null;setDraft(null); setRawJson(""); setNotice("Lote preservado no servidor."); }}><Save className="mr-2 h-4 w-4"/>Salvar e sair</Button>
+        {draft.status === "draft" && <Button disabled={!editable} variant="outline" className="rounded-2xl text-red-700" onClick={() => void cancelCurrentDraft()}><Trash2 className="mr-2 h-4 w-4"/>Cancelar lote</Button>}
+        {draft.cleanup_pending && draft.status!=="finalizing" && <Button variant="outline" disabled={busy||uncertain} onClick={()=>void cleanupCurrentDraft()}>Limpar arquivos temporários</Button>}
       </Card>
       <div className="space-y-4">{previews.map((preview) => {
-        const question = preview.item; const key = question.chave_importacao || question.id_importacao || question.import_hash; const questionSlots = slotsByQuestion.get(key) ?? []; const state = statusLabel(preview, questionSlots);
+        const question = preview.item; const key = question.chave_importacao || question.id_importacao || question.import_hash; const questionSlots = slotsByQuestion.get(key) ?? []; const committed=draft.progress?.find(row=>row.import_key===key); const state = committed ? committed.result.status==="duplicada" ? "Já existente" : "Importada" : statusLabel(preview, questionSlots);
         return <Card key={`${preview.index}-${key}`} className="border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+          {committed?.result.requiresReview && <p role="alert" className="text-amber-700 dark:text-amber-300">{committed.result.message}</p>}
           <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold dark:bg-slate-800">{state}</span><code className="text-xs">{key}</code><span className="text-sm text-slate-500 dark:text-slate-400">{question.disciplina || "Sem disciplina"}</span></div>
           <div className="mt-3 grid gap-2 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
             <p><strong>Dificuldade:</strong> {getDifficultyLabel(question.dificuldade) || "—"}</p>
@@ -269,13 +340,13 @@ export default function AdminQuestionBatchImportPage() {
           </div>
           <div className="mt-4"><h3 className="text-sm font-semibold">Alternativas <span className="font-normal text-slate-500 dark:text-slate-400">({preview.alternativas_preenchidas} preenchidas · correta: {question.alternativa_correta?.toUpperCase() || "—"})</span></h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{(["A", "B", "C", "D", "E"] as const).map((letter) => <div key={letter} className={`rounded-xl border p-3 text-sm ${question.alternativa_correta === letter.toLowerCase() ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950"}`}><strong>{letter}.</strong> <span className="whitespace-pre-wrap break-words">{question[letter] || "—"}</span>{(question[`${letter.toLowerCase()}_url_imagem` as "a_url_imagem" | "b_url_imagem" | "c_url_imagem" | "d_url_imagem" | "e_url_imagem"] || questionSlots.some((slot) => slot.location === "alternativa" && slot.alternative_key === letter.toLowerCase())) && <span className="ml-2 text-xs text-blue-700 dark:text-blue-300">Imagem da alternativa</span>}</div>)}</div></div>
           {preview.errors?.length > 0 && <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">{preview.errors.join(" ")}</div>}
-          {preview.status === "invalida" && draft.status === "draft" && <Button variant="outline" size="sm" className="mt-3 text-red-700 dark:text-red-300" disabled={removeInvalidQuestion.isPending} onClick={() => void removeInvalid(preview.index)}><Trash2 className="mr-1 h-3 w-3"/>Remover questão inválida</Button>}
-          {questionSlots.length > 0 && <div className="mt-4 grid gap-3 lg:grid-cols-2">{questionSlots.map((slot) => { const values = metadata[slot.id] ?? { alt: slot.alt_text ?? "", caption: slot.caption ?? "" }; return <div key={slot.id} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void uploadFile(slot, file); }} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
+          {preview.status === "invalida" && draft.status === "draft" && <Button variant="outline" size="sm" className="mt-3 text-red-700 dark:text-red-300" disabled={!editable} onClick={() => void removeInvalid(preview.index)}><Trash2 className="mr-1 h-3 w-3"/>Remover questão inválida</Button>}
+          {questionSlots.length > 0 && <fieldset disabled={!editable} className="mt-4 grid gap-3 lg:grid-cols-2">{questionSlots.map((slot) => { const values = metadata[slot.id] ?? { alt: slot.alt_text ?? "", caption: slot.caption ?? "" }; return <div key={slot.id} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void uploadFile(slot, file); }} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
             <div className="flex items-start gap-3">{slot.public_url ? <img src={slot.public_url} alt={slot.alt_text} className="h-24 w-24 rounded-xl bg-white object-contain"/> : <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300"><FileImage className="h-7 w-7 text-slate-400"/></div>}<div className="min-w-0 flex-1"><p className="font-bold">{slotLabel(slot)} {slot.required && <span className="text-red-600">*</span>}</p><p className="text-xs text-slate-500">slot: {slot.slot_id}</p><p className="truncate text-xs text-slate-500">esperado: {slot.expected_filename || "associação manual"}</p><p className="mt-1 text-xs">{slot.original_name || "Nenhum arquivo"} · {formatBytes(slot.byte_size)} · {slot.mime_type || "—"}{slot.width ? ` · ${slot.width}×${slot.height}` : ""}</p><p className={`mt-1 text-xs font-bold ${slot.status === "ready" ? "text-emerald-600" : "text-amber-600"}`}>{slot.status === "ready" ? "Concluído" : "Pendente"}</p></div></div>
             <label className="mt-3 block text-xs font-bold">Texto alternativo<input value={values.alt} onChange={(event) => setMetadata((prev) => ({ ...prev, [slot.id]: { ...values, alt: event.target.value } }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900" maxLength={500}/></label>
             <label className="mt-2 block text-xs font-bold">Legenda (opcional)<input value={values.caption} onChange={(event) => setMetadata((prev) => ({ ...prev, [slot.id]: { ...values, caption: event.target.value } }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900" maxLength={500}/></label>
-            <div className="mt-3 flex flex-wrap gap-2"><label className="cursor-pointer rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"><input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={workingSlot === slot.id} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(slot, file); event.target.value = ""; }}/>{workingSlot === slot.id ? "Validando..." : slot.status === "ready" ? "Substituir" : "Selecionar arquivo"}</label>{slot.status === "ready" && <><Button size="sm" variant="outline" onClick={async () => applyDraft(await updateMetadata.mutateAsync({ batchId: draft.id, importKey: slot.import_key, slotId: slot.slot_id, altText: values.alt, caption: values.caption || null }))}><Save className="mr-1 h-3 w-3"/>Salvar textos</Button><Button size="sm" variant="outline" onClick={() => void removeSlot(slot)}><XCircle className="mr-1 h-3 w-3"/>Remover</Button></>}</div>
-          </div>})}</div>}
+            <div className="mt-3 flex flex-wrap gap-2"><label className="cursor-pointer rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"><input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={workingSlot === slot.id} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(slot, file); event.target.value = ""; }}/>{workingSlot === slot.id ? "Validando..." : slot.status === "ready" ? "Substituir" : "Selecionar arquivo"}</label>{slot.status === "ready" && <><Button size="sm" variant="outline" onClick={()=>void saveSlotMetadata(slot)}><Save className="mr-1 h-3 w-3"/>Salvar textos</Button><Button size="sm" variant="outline" onClick={() => void removeSlot(slot)}><XCircle className="mr-1 h-3 w-3"/>Remover</Button></>}</div>
+          </div>})}</fieldset>}
         </Card>})}</div>
     </>}
   </AdminLayout></AdminGuard>;
