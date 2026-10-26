@@ -174,9 +174,7 @@ describe("VET canônico", () => {
     expect(isMissingVetSchemaError({ code: "42703" })).toBe(true);
     expect(isMissingVetSchemaError({ code: "42501" })).toBe(false);
 
-    const service = readFileSync(new URL("./vetService.ts", import.meta.url), "utf8");
-    expect(service).toContain("Compatibility with the historical attempts table");
-    expect(service).toContain("weightsResult.error ? []");
-    expect(service).toContain("collectiveResult.error ? []");
+    // Executable fallback/pagination/provider-error regressions are covered by
+    // stageThreeReads.test.ts; formatting/source variable names are not a contract.
   });
 });

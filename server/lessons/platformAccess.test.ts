@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { assertPlatformAccess, getPlatformAccessDecision } from "../_core/platformAccess.js";
 
 function accessClient(profile: { role: string; ativo: boolean } | null, subscription: boolean, rpcError = false) {
-  const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: profile, error: null }) };
+  const query = { select: () => query, eq: () => query, limit: () => query, maybeSingle: async () => ({ data: profile, error: null }) };
   return { from: () => query, rpc: async () => ({ data: subscription, error: rpcError ? new Error("indisponível") : null }) } as never;
 }
 

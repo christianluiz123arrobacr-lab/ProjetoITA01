@@ -155,7 +155,7 @@ describe("integração da tela pendente e do guard", () => {
   it("distingue pagamento pendente de indisponibilidade real da RPC", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: false, error: { code: "08006" } });
     const client = { rpc, from: (table: string) => {
-      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: table === "profiles" ? { role: "student", ativo: true } : { id: "pending" }, error: null }) };
+      const q = { select: () => q, eq: () => q, limit: () => q, maybeSingle: async () => ({ data: table === "profiles" ? { role: "student", ativo: true } : { id: "pending" }, error: null }) };
       return q;
     } } as any;
     await expect(getPlatformAccessDecision({ id: "synthetic", role: "student" }, client)).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });

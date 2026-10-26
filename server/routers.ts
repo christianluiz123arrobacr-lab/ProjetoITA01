@@ -47,6 +47,7 @@ import { examAnalysisFiltersSchema } from "../shared/vet/examAnalysis.js";
 import { normalizeVetText } from "../shared/vet/vetEngine.js";
 import { filterVetQuestionPool, getExamAliases, getSubjectAliases, matchesVetContent, postgrestAliasFilter, prioritizeVetCandidates } from "./vet/vetQuestionSelection.js";
 import { fetchAllQuestionPages } from "./questions/questionPagination.js";
+import { readAllDatabaseRows, readDatabaseRowsByIds } from "./_core/databaseRead.js";
 import { getQuestionsWithoutResolution, summarizeAttempts } from "../shared/statistics.js";
 import { setPublicQuestionPublication } from "./publicQuestions.js";
 import { legalRouter, recordLegalAcceptance, recordWhatsAppConsent } from "./legal/legalService.js";
@@ -2584,39 +2585,27 @@ export const appRouter = router({
 
 
     listQuestionReports: adminOrEditorProcedure.query(async () => {
-      const { data: reports, error: reportsError } = await supabaseAdmin
-        .from("question_reports")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (reportsError) throw new TRPCError({ code: "BAD_REQUEST", message: reportsError.message });
-
-      const loadedReports = reports ?? [];
+      const loadedReports = await readAllDatabaseRows<any>((from, to) => supabaseAdmin
+        .from("question_reports").select("*")
+        .order("created_at", { ascending: false }).order("id").range(from, to), "question_reports");
       const questionIds = Array.from(new Set(loadedReports.map((report: any) => report.question_id).filter(Boolean)));
       const userIds = Array.from(new Set(loadedReports.map((report: any) => report.user_id).filter(Boolean)));
 
-      const [questionsResult, profilesResult] = await Promise.all([
-        questionIds.length > 0
-          ? supabaseAdmin
+      const [questions, profiles] = await Promise.all([
+        readDatabaseRowsByIds<any>(questionIds, (ids, from, to) => supabaseAdmin
               .from("questoes")
               .select("id, codigo, disciplina, conteudo, conteudos, assunto, assuntos, banca, ano, dificuldade, instituição, enunciado")
-              .in("id", questionIds)
-          : Promise.resolve({ data: [], error: null }),
-        userIds.length > 0
-          ? supabaseAdmin
+              .in("id", ids).order("id").range(from, to), "report_questions"),
+        readDatabaseRowsByIds<any>(userIds, (ids, from, to) => supabaseAdmin
               .from("profiles")
               .select("id, nome, email")
-              .in("id", userIds)
-          : Promise.resolve({ data: [], error: null }),
+              .in("id", ids).order("id").range(from, to), "report_profiles"),
       ]);
-
-      if (questionsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: questionsResult.error.message });
-      if (profilesResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: profilesResult.error.message });
 
       return {
         reports: loadedReports,
-        questions: questionsResult.data ?? [],
-        profiles: profilesResult.data ?? [],
+        questions,
+        profiles,
       };
     }),
 
@@ -2849,8 +2838,10 @@ export const appRouter = router({
           .select("id,codigo,disciplina,assunto,conteudo,conteudos,assuntos,assuntos_por_conteudo,banca,ano,dificuldade,enunciado,enunciado_pos_imagem,url_imagem,formula,A,B,C,D,E,a_url_imagem,b_url_imagem,c_url_imagem,d_url_imagem,e_url_imagem,instituição,fonte,tag,publicada,created_at")
           .eq("publicada", true).overlaps("conteudos", topics).limit(input.limit * 3);
         if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-        const { data: attempted } = await supabaseAdmin.from("user_question_attempts").select("question_id,answered_at").eq("user_id", ctx.user.id).in("question_id", (data ?? []).map((row: any) => row.id));
-        const attemptedIds = new Set((attempted ?? []).map((row: any) => row.question_id));
+        const attempted = data?.length ? await readAllDatabaseRows<any>((from, to) => supabaseAdmin.from("user_question_attempts")
+          .select("question_id,answered_at").eq("user_id", ctx.user.id).in("question_id", data.map((row: any) => row.id))
+          .order("id").range(from, to), "vet_recommended_attempts") : [];
+        const attemptedIds = new Set(attempted.map((row: any) => row.question_id));
         return (data ?? []).sort((a: any, b: any) => Number(attemptedIds.has(a.id)) - Number(attemptedIds.has(b.id))).slice(0, input.limit).map(safeQuestionDto);
       }),
 
@@ -2874,6 +2865,10 @@ export const appRouter = router({
         const desired = input.mode === "misto"
           ? [{ block: "ataque", count: 5 }, { block: "consolidacao", count: 4 }, { block: "manutencao", count: 3 }] as const
           : [{ block: input.mode, count: 10 }] as const;
+        // Finish the read before creating a draft: a failed history query must
+        // not create a session based on an empty, unconfirmed attempt history.
+        const previousAttempts = await readAllDatabaseRows<any>((from, to) => supabaseAdmin.from("user_question_attempts")
+          .select("question_id").eq("user_id", ctx.user.id).order("id").range(from, to), "vet_mock_attempts");
         const { data: session, error: sessionError } = await supabaseAdmin.from("vet_mock_sessions").insert({
           user_id: ctx.user.id, target_exam: analysis.profile.target_exam, focus_subject: analysis.profile.focus_subject,
           mode: input.mode, status: "draft", engine_version: VET_ENGINE_VERSION,
@@ -2882,8 +2877,7 @@ export const appRouter = router({
         if (sessionError || !session) throw new TRPCError({ code: "BAD_REQUEST", message: sessionError?.message ?? "Não foi possível criar o simulado." });
         const selected: Array<{ row: any; block: string; content: any }> = [];
         const used = new Set<string>();
-        const { data: previousAttempts } = await supabaseAdmin.from("user_question_attempts").select("question_id").eq("user_id", ctx.user.id);
-        const attemptedIds = new Set((previousAttempts ?? []).map((row: any) => row.question_id));
+        const attemptedIds = new Set(previousAttempts.map((row: any) => row.question_id));
         const examFilter = postgrestAliasFilter(["banca", "instituição"], getExamAliases(analysis.profile.target_exam));
         const subjectFilter = postgrestAliasFilter(["disciplina"], getSubjectAliases(analysis.profile.focus_subject));
         const questionPool: any[] = [];
@@ -2984,8 +2978,9 @@ export const appRouter = router({
 
     getEvolution: platformAccessProcedure.input(z.object({ months: z.number().int().min(1).max(24).default(6) }).optional()).query(async ({ ctx, input }) => {
       const since = new Date(); since.setUTCMonth(since.getUTCMonth() - (input?.months ?? 6));
-      const { data, error } = await supabaseAdmin.from("user_question_attempts").select("is_correct,time_spent_seconds,answered_at,subject,conteudo,banca").eq("user_id", ctx.user.id).gte("answered_at", since.toISOString()).order("answered_at");
-      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+      const data = await readAllDatabaseRows<any>((from, to) => supabaseAdmin.from("user_question_attempts")
+        .select("is_correct,time_spent_seconds,answered_at,subject,conteudo,banca").eq("user_id", ctx.user.id)
+        .gte("answered_at", since.toISOString()).order("answered_at").order("id").range(from, to), "vet_evolution");
       const groups = new Map<string, any>();
       for (const row of data ?? []) {
         const month = String(row.answered_at).slice(0, 7);
@@ -3082,12 +3077,10 @@ export const appRouter = router({
     getQuestionOptionStats: platformAccessProcedure
       .input(z.object({ questionId: z.string().uuid() }))
       .query(async ({ input }) => {
-        const { data, error } = await supabaseAdmin
+        const data = await readAllDatabaseRows<any>((from, to) => supabaseAdmin
           .from("user_question_attempts")
           .select("selected_option")
-          .eq("question_id", input.questionId);
-
-        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+          .eq("question_id", input.questionId).order("id").range(from, to), "question_option_stats");
 
         const counts = new Map<string, number>();
         for (const row of data ?? []) {
@@ -3149,37 +3142,33 @@ export const appRouter = router({
         }).optional()
       )
       .query(async ({ ctx, input }) => {
-        let query = supabaseAdmin
-          .from("user_question_attempts")
-          .select(input?.summary ? "question_id,is_correct,answered_at" : "*")
-          .eq("user_id", ctx.user.id)
-          .order("answered_at", { ascending: false });
+        return readAllDatabaseRows<any>((from, to) => {
+          let query = supabaseAdmin
+            .from("user_question_attempts")
+            .select(input?.summary ? "question_id,is_correct,answered_at" : "*")
+            .eq("user_id", ctx.user.id)
+            .order("answered_at", { ascending: false }).order("id");
 
-        if (input?.onlyWrong) query = query.eq("is_correct", false);
+          if (input?.onlyWrong) query = query.eq("is_correct", false);
 
-        const { data, error } = await query;
-        if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-        return data ?? [];
+          return query.range(from, to);
+        }, "my_attempts");
       }),
 
     getErrorNotebook: protectedProcedure.query(async ({ ctx }) => {
-      const [attemptsResult, reviewResult] = await Promise.all([
-        supabaseAdmin
+      const [attempts, reviewStatuses] = await Promise.all([
+        readAllDatabaseRows<any>((from, to) => supabaseAdmin
           .from("user_question_attempts")
           .select("*")
           .eq("user_id", ctx.user.id)
           .eq("is_correct", false)
-          .order("answered_at", { ascending: false }),
-        supabaseAdmin
+          .order("answered_at", { ascending: false }).order("id").range(from, to), "error_notebook_attempts"),
+        readAllDatabaseRows<any>((from, to) => supabaseAdmin
           .from("user_error_review_status")
           .select("*")
-          .eq("user_id", ctx.user.id),
+          .eq("user_id", ctx.user.id).order("question_id").range(from, to), "error_notebook_reviews"),
       ]);
-
-      if (attemptsResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: attemptsResult.error.message });
-      if (reviewResult.error) throw new TRPCError({ code: "BAD_REQUEST", message: reviewResult.error.message });
-
-      return { attempts: attemptsResult.data ?? [], reviewStatuses: reviewResult.data ?? [] };
+      return { attempts, reviewStatuses };
     }),
 
     upsertErrorReviewStatus: protectedProcedure

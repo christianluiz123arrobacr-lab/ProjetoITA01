@@ -18,7 +18,7 @@ const routes = router({
 });
 const options = (token?: string) => ({ req: { headers: token ? { authorization: `Bearer ${token}` } : {} } as IncomingMessage, res: {} as ServerResponse });
 const query = (result: unknown) => {
-  const q = { select: () => q, eq: () => q, maybeSingle: async () => result };
+  const q = { select: () => q, eq: () => q, limit: () => q, maybeSingle: async () => result };
   return q;
 };
 

@@ -83,6 +83,7 @@ export async function getPlatformAccessDecision(
     .eq("user_id", user.id)
     .eq("gateway", "mercadopago")
     .eq("status", "pending")
+    .limit(1)
     .maybeSingle(), correlationId, "pending_payment");
   if (pendingPaymentError) {
     logAccess({ correlationId, stage: "pending_payment", outcome: "error", code: pendingPaymentError.code });

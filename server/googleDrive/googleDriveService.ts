@@ -9,6 +9,8 @@ import {
 import type { ServerResponse } from "node:http";
 import { TRPCError } from "@trpc/server";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
+import { bounded, safeErrorCode } from "../../shared/authRecovery.js";
+import { DatabaseReadFailure, readDatabase } from "../_core/databaseRead.js";
 
 export const DRIVE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
@@ -173,18 +175,38 @@ export function createGoogleDriveConnectUrl(
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
+class GoogleTokenFailure extends Error {
+  readonly code: string;
+  constructor(readonly revoked: boolean, readonly httpStatus?: number) {
+    super("google_token_unavailable");
+    this.code = revoked ? "google_grant_revoked" : "google_token_rejected";
+  }
+}
+
 async function tokenRequest(params: URLSearchParams) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: params,
-  });
-  if (!response.ok) throw new Error(`google token ${response.status}`);
-  return (await response.json()) as {
-    access_token: string;
-    refresh_token?: string;
-    expires_in?: number;
-  };
+  const controller = new AbortController();
+  try {
+    return await bounded((async () => {
+      const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: params,
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        // Only a definite revoked grant warrants reconnecting. A server error,
+        // rate limit, malformed response or invalid client is not that evidence.
+        throw new GoogleTokenFailure([400, 401].includes(response.status) && data?.error === "invalid_grant", response.status);
+      }
+      if (typeof data?.access_token !== "string" || !data.access_token.trim()) throw new GoogleTokenFailure(false, response.status);
+      return data as {
+        access_token: string;
+        refresh_token?: string;
+        expires_in?: number;
+      };
+    })(), 6000);
+  } finally { controller.abort(); }
 }
 export async function handleGoogleDriveCallback(
   query: { code?: string; state?: string },
@@ -230,12 +252,12 @@ export async function handleGoogleDriveCallback(
   if (error) throw new Error("connection persistence failed");
 }
 async function connection(userId: string): Promise<ConnectionRow> {
-  const { data, error } = await supabaseAdmin
+  const data = await readDatabase(supabaseAdmin
     .from("google_drive_connections")
     .select("user_id, encrypted_refresh_token, google_account_email, folder_id, appdata_enabled_at")
     .eq("user_id", userId)
-    .maybeSingle();
-  if (error || !data)
+    .maybeSingle(), "drive_connection");
+  if (!data)
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "Conecte novamente seu Google Drive.",
@@ -244,6 +266,7 @@ async function connection(userId: string): Promise<ConnectionRow> {
 }
 async function accessToken(userId: string) {
   const row = await connection(userId);
+  const started = Date.now();
   try {
     const token = await tokenRequest(
       new URLSearchParams({
@@ -254,10 +277,14 @@ async function accessToken(userId: string) {
       })
     );
     return { token: token.access_token, row };
-  } catch {
+  } catch (error) {
+    const revoked = error instanceof GoogleTokenFailure && error.revoked;
+    console.warn({ event: "google_drive_token", stage: "refresh", outcome: revoked ? "revoked" : "unavailable",
+      code: safeErrorCode(error), http_status: error instanceof GoogleTokenFailure ? error.httpStatus : undefined,
+      duration_ms: Date.now() - started });
     throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Sua conexão com o Google Drive expirou. Reconecte sua conta.",
+      code: revoked ? "PRECONDITION_FAILED" : "SERVICE_UNAVAILABLE",
+      message: revoked ? "Sua conexão com o Google Drive expirou. Reconecte sua conta." : "Não foi possível acessar o Google Drive agora. Tente novamente em instantes.",
     });
   }
 }
@@ -476,17 +503,19 @@ export function notebookPdfUploadTarget(pdfFileId?: string | null) {
 }
 
 export async function googleDriveStatus(userId: string) {
-  const { data, error } = await supabaseAdmin
+  let data: any;
+  try {
+    data = await readDatabase(supabaseAdmin
     .from("google_drive_connections")
     .select("google_account_email, updated_at, appdata_enabled_at")
     .eq("user_id", userId)
-    .maybeSingle();
-  if (error && ["42703", "PGRST204"].includes(error.code ?? "")) {
-    const legacy = await supabaseAdmin.from("google_drive_connections")
-      .select("google_account_email, updated_at").eq("user_id", userId).maybeSingle();
-    return { connected: Boolean(legacy.data), accountEmail: legacy.data?.google_account_email ?? null, requiresReconnect: Boolean(legacy.data) };
+    .maybeSingle(), "drive_status");
+  } catch (error) {
+    if (!(error instanceof DatabaseReadFailure) || !["42703", "PGRST204"].includes(error.databaseCode)) throw error;
+    const legacy = await readDatabase<{ google_account_email?: string | null }>(supabaseAdmin.from("google_drive_connections")
+      .select("google_account_email, updated_at").eq("user_id", userId).maybeSingle(), "drive_legacy_status");
+    return { connected: Boolean(legacy), accountEmail: legacy?.google_account_email ?? null, requiresReconnect: Boolean(legacy) };
   }
-  if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível verificar sua conexão com o Google Drive." });
   return {
     connected: Boolean(data),
     accountEmail: data?.google_account_email ?? null,

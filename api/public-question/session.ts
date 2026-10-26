@@ -11,6 +11,11 @@ export default async function publicQuestionSession(req: IncomingMessage, res: S
     return;
   }
   const context = await createContext({ req, res });
+  if (context.authentication?.status === "unavailable") {
+    res.statusCode = 503;
+    res.end(JSON.stringify({ authenticated: false, error: "Não foi possível confirmar sua autenticação agora." }));
+    return;
+  }
   res.statusCode = context.user ? 200 : 401;
   res.end(JSON.stringify({ authenticated: Boolean(context.user) }));
 }
