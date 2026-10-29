@@ -37,7 +37,7 @@ export default function ReferralPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <Link href="/">← Voltar ao início</Link>
         <h1 className="text-3xl font-black">{c?.title ?? "Indique e Ganhe"}</h1>
-        <a className="inline-block rounded border p-2" href="/afiliados">Área de afiliados</a>
+        <a className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-5 text-foreground shadow-sm hover:border-primary focus-visible:outline-2 focus-visible:outline-primary" href="/afiliados"><span><span className="block font-bold">Painel do afiliado</span><span className="mt-1 block text-sm text-muted-foreground">Consulte cupons e resultados do seu vínculo de afiliado.</span></span><span aria-hidden="true">→</span></a>
         {query.isLoading ? (
           <p role="status">Carregando indicações...</p>
         ) : query.error ? (
