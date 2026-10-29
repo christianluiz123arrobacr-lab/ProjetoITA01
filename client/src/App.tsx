@@ -1,4 +1,6 @@
 import ReferralPage from "./pages/ReferralPage";
+import AffiliatePage from "./pages/AffiliatePage";
+const AdminAffiliatesPage=lazyWithRetry("AdminAffiliatesPage",()=>import("./pages/AdminAffiliatesPage"));
 import { Suspense, useEffect, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { Redirect, Route, Switch, useLocation } from "wouter";
@@ -445,6 +447,7 @@ function PrivateRouter() {
             <Route path="/admin/usuarios" component={AdminUsersPage} />
             <Route path="/admin/profiles" component={AdminProfilesPage} />
             <Route path="/admin/assinaturas" component={AdminBillingPage} />
+            <Route path="/admin/afiliados" component={AdminAffiliatesPage} />
             <Route path="/admin/aulas/:id" component={AdminLessonEditorPage} />
             <Route path="/admin/aulas" component={AdminLessonsPage} />
 
@@ -853,6 +856,7 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/minha-assinatura" component={MySubscriptionRoute} />
       <Route path="/indique-e-ganhe" component={ReferralPage} />
+      <Route path="/afiliados" component={AffiliatePage} />
       <Route path="/cadastro" component={RegisterPage} />
       <Route path="/planos" component={PricingPage} />
       <Route path="/assinatura-pendente" component={SubscriptionPendingPage} />

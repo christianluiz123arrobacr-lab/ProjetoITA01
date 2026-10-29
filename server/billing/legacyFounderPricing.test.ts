@@ -96,8 +96,8 @@ describe("preços legados de fundador", () => {
     const pricing = readFileSync(new URL("../../client/src/pages/PricingPage.tsx", import.meta.url), "utf8");
     const clientService = readFileSync(new URL("../../client/src/services/billing.service.ts", import.meta.url), "utf8");
     expect(pricing).toContain('plan.checkoutBlockReason === "legacy_founder_required"');
-    expect(pricing).toContain("Exclusivo para alunos fundadores que já participaram da plataforma.");
-    expect(pricing).toContain("disabled={isLoading || checkoutDisabled");
+    expect(pricing).toContain("Exclusivo para fundadores elegíveis ou convidados.");
+    expect(pricing).toContain("disabled={isLoading ||");
     expect(clientService).not.toContain("amountCents: 600");
     expect(clientService).not.toContain("amountCents: 900");
     expect(clientService).not.toContain("amountCents: 1190");

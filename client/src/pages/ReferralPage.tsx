@@ -37,6 +37,7 @@ export default function ReferralPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <Link href="/">← Voltar ao início</Link>
         <h1 className="text-3xl font-black">{c?.title ?? "Indique e Ganhe"}</h1>
+        <a className="inline-block rounded border p-2" href="/afiliados">Área de afiliados</a>
         {query.isLoading ? (
           <p role="status">Carregando indicações...</p>
         ) : query.error ? (

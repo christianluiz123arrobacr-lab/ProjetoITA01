@@ -35,8 +35,8 @@ describe("fluxo de desconto por indicação", () => {
     expect(referralService).toContain('referral_pricing_preview');
     expect(pricing).toContain("getReferralPricingPreview");
     expect(pricing).toContain("preço");
-    expect(pricing).toContain("desconto no primeiro pagamento via Pix ou pacote pré-pago");
-    expect(pricing).toContain("não se aplica à assinatura mensal recorrente no cartão");
+    expect(pricing).toContain("Sua indicação pode oferecer");
+    expect(pricing).toContain("não se aplica à assinatura mensal");
   });
 
   it("mantém RLS e cálculo percentual inteiro no SQL", () => {

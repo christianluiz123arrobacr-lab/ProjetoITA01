@@ -49,7 +49,7 @@ export function addDaysPreservingFuturePeriod(currentPeriodEnd: string | null | 
 
 /** Calendar-month extension used by prepaid packages. It deliberately starts
  * from an unexpired access end rather than from checkout/approval time. */
-export function addMonthsPreservingFuturePeriod(currentPeriodEnd: string | null | undefined, months: 1 | 2 | 3, now = new Date()) {
+export function addMonthsPreservingFuturePeriod(currentPeriodEnd: string | null | undefined, months: 1 | 2 | 3 | 6 | 12, now = new Date()) {
   const currentEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
   const base = currentEnd && Number.isFinite(currentEnd.getTime()) && currentEnd > now ? currentEnd : now;
   const next = new Date(base);

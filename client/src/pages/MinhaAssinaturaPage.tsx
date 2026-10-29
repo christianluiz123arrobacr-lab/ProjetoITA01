@@ -1,3 +1,4 @@
+import PrepaidOptions from "@/components/billing/PrepaidOptions";
 import PaymentHistory from "@/components/billing/PaymentHistory";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
@@ -127,7 +128,6 @@ export default function MinhaAssinaturaPage() {
   const [copyMessage, setCopyMessage] = useState("");
   const [manualPixEnabled, setManualPixEnabled] = useState(false);
   const [canceling, setCanceling] = useState(false);
-  const [prepaidMonths, setPrepaidMonths] = useState<1 | 2 | 3>(1);
   const [prepaidLoading, setPrepaidLoading] = useState(false);
 
   const shouldShowManualPayment =
@@ -200,11 +200,11 @@ export default function MinhaAssinaturaPage() {
     }
   }
 
-  async function handlePrepaidPackage(paymentMethod: "card" | "pix") {
+  async function handlePrepaidPackage(paymentMethod: "card" | "pix", months:1|2|3|6|12=1, fresh=false,couponCode?:string) {
     if (!subscription) return;
     try {
       setPrepaidLoading(true);
-      const checkout = await createPrepaidCheckout(subscription.plan_slug, prepaidMonths, paymentMethod);
+      const checkout = await createPrepaidCheckout(subscription.plan_slug, months, paymentMethod, fresh,couponCode);
       if (!checkout.checkoutUrl) throw new Error("Checkout indisponível.");
       window.location.assign(checkout.checkoutUrl);
     } catch (error) { setErrorMessage(error instanceof Error ? error.message : "Não foi possível criar o pacote."); }
@@ -456,13 +456,7 @@ export default function MinhaAssinaturaPage() {
                 )}
               </Button>
 
-              {subscription.plan_slug === "referral-promotional-access" ? <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4"><p className="text-sm text-cyan-100">Seu benefício não gera cobrança. Escolha um plano para contratar mais tempo de acesso.</p><Link href="/planos"><Button className="mt-3">Ver planos</Button></Link></div> : <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
-                <p className="text-sm font-black text-cyan-100">Adicionar meses ao acesso</p>
-                <p className="mt-1 text-xs text-slate-300">Pagamento único. Se houver renovação automática, ela será cancelada somente após a aprovação do pacote.</p>
-                <div className="mt-3 grid grid-cols-3 gap-2">{([1, 2, 3] as const).map(months => <button key={months} type="button" onClick={() => setPrepaidMonths(months)} className={`rounded-xl px-2 py-2 text-xs font-bold ${prepaidMonths === months ? "bg-cyan-300 text-slate-950" : "bg-white/10 text-white"}`}>{months} {months === 1 ? "mês" : "meses"}</button>)}</div>
-                <p className="mt-3 text-sm text-white">{formatPriceFromCents(subscription.plan_price_cents * prepaidMonths)} · vencimento previsto após {prepaidMonths} {prepaidMonths === 1 ? "mês" : "meses"} de calendário.</p>
-                <div className="mt-3 grid grid-cols-2 gap-2"><Button onClick={() => handlePrepaidPackage("card")} disabled={prepaidLoading} className="rounded-xl bg-white text-slate-950 hover:bg-slate-100">{prepaidLoading ? "Abrindo..." : "Pagar com cartão"}</Button><Button variant="outline" onClick={() => handlePrepaidPackage("pix")} disabled={prepaidLoading} className="rounded-xl border-cyan-300/30 text-cyan-100">Pix</Button></div>
-              </div>}
+              {subscription.plan_slug === "referral-promotional-access" ? <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4"><p className="text-sm text-cyan-100">Seu benefício não gera cobrança. Escolha um plano para contratar mais tempo de acesso.</p><Link href="/planos"><Button className="mt-3">Ver planos</Button></Link></div> : <PrepaidOptions planSlug={subscription.plan_slug} disabled={prepaidLoading} onBuy={handlePrepaidPackage} />}
             </div>
           </Card>
         </div>

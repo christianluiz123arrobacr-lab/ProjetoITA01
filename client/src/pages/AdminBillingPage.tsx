@@ -1,4 +1,5 @@
 import AdminReferralProgram from "@/components/admin/AdminReferralProgram";
+import AdminPlanDurations from "@/components/admin/AdminPlanDurations";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -1019,6 +1020,7 @@ export default function AdminBillingPage() {
         )}
 
         {activeTab === "referrals" && <AdminReferralProgram />}
+        {activeTab === "referrals" && <a className="inline-block rounded border p-3" href="/admin/afiliados">Administrar afiliados, cupons e repasses</a>}
 
         {activeTab === "payments" && (
           <Card className="overflow-hidden border-slate-200 dark:border-slate-700">
@@ -1080,6 +1082,7 @@ export default function AdminBillingPage() {
           </Card>
         )}
 
+        {activeTab === "plans" && <AdminPlanDurations />}
         {activeTab === "plans" && (
           <>
             <div className="grid gap-4 md:grid-cols-3">

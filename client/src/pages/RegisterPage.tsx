@@ -1,3 +1,4 @@
+import { checkoutReturn } from "@/lib/checkoutReturn";
 import { clearReferralHint, getReferralHint } from "@/lib/referralHint";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -21,7 +22,9 @@ function getRegistrationErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message.trim() : "";
   if (
     !message ||
-    /unexpected token|json|server error|fetch failed|failed to fetch|internal server error/i.test(message)
+    /unexpected token|json|server error|fetch failed|failed to fetch|internal server error/i.test(
+      message
+    )
   ) {
     return "O servidor não conseguiu concluir seu cadastro. Tente novamente em instantes.";
   }
@@ -30,6 +33,7 @@ function getRegistrationErrorMessage(error: unknown) {
 
 export default function RegisterPage() {
   const [, navigate] = useLocation();
+  const returnTo = checkoutReturn(window.location.search, "/planos");
   const { isAuthenticated, loading: authLoading } = useSupabaseAuth();
   const [referralCode] = useState(getReferralHint);
   const registerMutation = trpc.auth.registerStudent.useMutation();
@@ -48,7 +52,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigate("/planos");
+      navigate(returnTo);
     }
   }, [authLoading, isAuthenticated, navigate]);
 
@@ -90,7 +94,9 @@ export default function RegisterPage() {
     }
 
     if (!legalAccepted) {
-      setErro("É necessário aceitar os Termos de Uso e a Política de Privacidade.");
+      setErro(
+        "É necessário aceitar os Termos de Uso e a Política de Privacidade."
+      );
       return;
     }
 
@@ -104,11 +110,14 @@ export default function RegisterPage() {
         email: emailTrimmed,
         senha: senhaTrimmed,
         legalAccepted: true,
-        billingWhatsappOptIn: legalConfig.data?.whatsappConsentAvailable ? billingWhatsappOptIn : false,
+        billingWhatsappOptIn: legalConfig.data?.whatsappConsentAvailable
+          ? billingWhatsappOptIn
+          : false,
       });
       if (registration.referralStatus !== "unavailable") clearReferralHint();
 
-      if (registration.referralWarning) setSuccess(registration.referralWarning);
+      if (registration.referralWarning)
+        setSuccess(registration.referralWarning);
 
       const { error } = await supabase.auth.signInWithPassword({
         email: emailTrimmed,
@@ -117,11 +126,11 @@ export default function RegisterPage() {
 
       if (error) {
         setSuccess("Conta criada. Agora faça login para escolher seu plano.");
-        navigate("/login");
+        navigate("/login?returnTo=" + encodeURIComponent(returnTo));
         return;
       }
 
-      navigate("/planos");
+      navigate(returnTo);
     } catch (error) {
       console.error("Erro ao criar conta:", error);
 
@@ -134,12 +143,12 @@ export default function RegisterPage() {
   const isSubmitting = loading || registerMutation.isPending;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <PublicHeader />
 
       <section className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-[1fr_0.92fr] md:px-6">
         <div>
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-800 dark:text-cyan-100">
             <CheckCircle2 className="h-4 w-4" />
             Cadastro de acesso
           </div>
@@ -148,21 +157,21 @@ export default function RegisterPage() {
             Crie sua conta para acessar os planos.
           </h1>
 
-          <p className="mt-5 max-w-xl text-base leading-8 text-slate-300 md:text-lg">
+          <p className="mt-5 max-w-xl text-base leading-8 text-muted-foreground md:text-lg">
             Cadastre seus dados para criar o usuário da plataforma. Em seguida,
             você poderá escolher o plano e solicitar a liberação do acesso.
           </p>
 
-          <div className="mt-8 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+          <div className="mt-8 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
             {[
               "Banco de questões",
               "Explicações didáticas",
               "Simuladores",
               "Recursos em desenvolvimento",
-            ].map((item) => (
+            ].map(item => (
               <div
                 key={item}
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                className="rounded-2xl border border-border bg-white/5 px-4 py-3"
               >
                 {item}
               </div>
@@ -170,10 +179,10 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur md:p-8">
+        <div className="rounded-[2rem] border border-border bg-card p-6 shadow-2xl backdrop-blur md:p-8">
           <h2 className="text-2xl font-black">Criar conta</h2>
 
-          <p className="mt-2 text-sm leading-6 text-slate-300">
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Use um e-mail válido. Ele será utilizado para login, recuperação de
             senha e informações sobre sua assinatura.
           </p>
@@ -184,14 +193,14 @@ export default function RegisterPage() {
                 Nome completo
               </label>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                <User className="h-4 w-4 text-slate-400" />
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+                <User className="h-4 w-4 text-muted-foreground" />
 
                 <input
                   value={nome}
-                  onChange={(event) => setNome(event.target.value)}
+                  onChange={event => setNome(event.target.value)}
                   placeholder="Seu nome completo"
-                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
                   required
                 />
               </div>
@@ -202,14 +211,14 @@ export default function RegisterPage() {
                 Telefone / WhatsApp
               </label>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                <Phone className="h-4 w-4 text-slate-400" />
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+                <Phone className="h-4 w-4 text-muted-foreground" />
 
                 <input
                   value={telefone}
-                  onChange={(event) => setTelefone(event.target.value)}
+                  onChange={event => setTelefone(event.target.value)}
                   placeholder="(66) 99999-9999"
-                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
                   required
                 />
               </div>
@@ -220,15 +229,15 @@ export default function RegisterPage() {
                 E-mail
               </label>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                <Mail className="h-4 w-4 text-slate-400" />
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+                <Mail className="h-4 w-4 text-muted-foreground" />
 
                 <input
                   type="email"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={event => setEmail(event.target.value)}
                   placeholder="voce@email.com"
-                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
                   required
                 />
               </div>
@@ -240,15 +249,15 @@ export default function RegisterPage() {
                   Senha
                 </label>
 
-                <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                  <Lock className="h-4 w-4 text-slate-400" />
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+                  <Lock className="h-4 w-4 text-muted-foreground" />
 
                   <input
                     type="password"
                     value={senha}
-                    onChange={(event) => setSenha(event.target.value)}
+                    onChange={event => setSenha(event.target.value)}
                     placeholder="Mínimo 6 caracteres"
-                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
                     required
                   />
                 </div>
@@ -259,34 +268,76 @@ export default function RegisterPage() {
                   Confirmar senha
                 </label>
 
-                <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                  <Lock className="h-4 w-4 text-slate-400" />
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+                  <Lock className="h-4 w-4 text-muted-foreground" />
 
                   <input
                     type="password"
                     value={confirmarSenha}
-                    onChange={(event) => setConfirmarSenha(event.target.value)}
+                    onChange={event => setConfirmarSenha(event.target.value)}
                     placeholder="Repita a senha"
-                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
                     required
                   />
                 </div>
               </div>
             </div>
 
-            <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={legalAccepted} onChange={event => setLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4" required /><span>Li e concordo com os <Link href="/termos-de-uso"><a target="_blank" className="font-bold text-cyan-200 underline">Termos de Uso</a></Link> e a <Link href="/politica-de-privacidade"><a target="_blank" className="font-bold text-cyan-200 underline">Política de Privacidade</a></Link>.</span></label>
+            <label className="flex items-start gap-3 rounded-2xl border border-border bg-white/5 p-4 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={legalAccepted}
+                onChange={event => setLegalAccepted(event.target.checked)}
+                className="mt-1 h-4 w-4"
+                required
+              />
+              <span>
+                Li e concordo com os{" "}
+                <Link href="/termos-de-uso">
+                  <a
+                    target="_blank"
+                    className="font-bold text-cyan-200 underline"
+                  >
+                    Termos de Uso
+                  </a>
+                </Link>{" "}
+                e a{" "}
+                <Link href="/politica-de-privacidade">
+                  <a
+                    target="_blank"
+                    className="font-bold text-cyan-200 underline"
+                  >
+                    Política de Privacidade
+                  </a>
+                </Link>
+                .
+              </span>
+            </label>
 
-            {legalConfig.data?.whatsappConsentAvailable && <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"><input type="checkbox" checked={billingWhatsappOptIn} onChange={event => setBillingWhatsappOptIn(event.target.checked)} className="mt-1 h-4 w-4" />Quero receber lembretes de cobrança e vencimento pelo WhatsApp (opcional).</label>}
+            {legalConfig.data?.whatsappConsentAvailable && (
+              <label className="flex items-start gap-3 rounded-2xl border border-border bg-white/5 p-4 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={billingWhatsappOptIn}
+                  onChange={event =>
+                    setBillingWhatsappOptIn(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4"
+                />
+                Quero receber lembretes de cobrança e vencimento pelo WhatsApp
+                (opcional).
+              </label>
+            )}
 
             {erro && (
-              <div className="flex gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
+              <div className="flex gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-800 dark:text-red-100">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{erro}</span>
               </div>
             )}
 
             {success && (
-              <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-100">
+              <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-800 dark:text-emerald-100">
                 {success}
               </div>
             )}
@@ -310,10 +361,10 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <p className="mt-5 text-center text-sm text-slate-400">
+          <p className="mt-5 text-center text-sm text-muted-foreground">
             Já tem conta?{" "}
-            <Link href="/login">
-              <a className="font-bold text-cyan-200 hover:text-cyan-100">
+            <Link href={"/login?returnTo=" + encodeURIComponent(returnTo)}>
+              <a className="font-bold text-cyan-200 hover:text-cyan-800 dark:text-cyan-100">
                 Fazer login
               </a>
             </Link>

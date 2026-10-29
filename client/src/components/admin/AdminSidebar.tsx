@@ -18,6 +18,7 @@ const adminItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/usuarios", label: "Alunos e acessos", icon: Users },
   { href: "/admin/assinaturas", label: "Assinaturas", icon: CreditCard },
+  { href: "/admin/afiliados", label: "Afiliados", icon: CreditCard },
   { href: "/admin/aulas", label: "Aulas", icon: BookOpen },
   { href: "/admin/questoes", label: "Questões", icon: FileText },
   { href: "/admin/resolucoes", label: "Resoluções", icon: Blocks },

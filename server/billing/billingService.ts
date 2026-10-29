@@ -1,4 +1,8 @@
 import { finalizePendingReferral, referralRpc } from "./referralService.js";
+import { affiliateRpc } from "./affiliates.js";
+import { runPrepaidCheckout, type PrepaidInput } from "./prepaidCheckout.js";
+import { recoverPrepaidResource } from "./mercadoPagoClient.js";
+import { PLAN_MONTHS, calculateDurationPrice, prepaidCheckoutSchema } from "../../shared/planDurations.js";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
@@ -1000,93 +1004,47 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
   }
 }
 
-export async function createPrepaidCheckout(input: {
-  userId: string;
-  userEmail: string | null;
-  planSlug: string;
-  durationMonths: 1 | 2 | 3;
-  paymentMethod: "card" | "pix";
-}) {
-  const capabilities = getBillingCapabilities();
-  if (!capabilities.mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
-  await expireStaleReservations();
-  const plan = await getPlanForCheckout(input.planSlug, input.userId);
+export async function createPrepaidCheckout(input: PrepaidInput) {
+  if (!getBillingCapabilities().mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
   await finalizePendingReferral(input.userId);
   const profile = await getUserProfile(input.userId);
-  const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
-  const { data: recurring, error: recurringError } = await supabaseAdmin
-    .from("billing_subscriptions")
-    .select("*")
-    .eq("user_id", input.userId)
-    .eq("gateway", GATEWAY)
-    .eq("metadata->>payment_method", "card")
-    .in("status", ["active", "trialing", "overdue"])
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (recurringError) fail(recurringError.message);
-
-  const reservation = await reserveCheckout({ userId: input.userId, userEmail: payerEmail, plan, paymentMethod: "pix" });
-  let amountCents = Number(plan.price_cents) * input.durationMonths;
-  const switchFromRecurringId = recurring?.id ? String(recurring.id) : null;
-  await updateSubscriptionOrThrow(reservation.subscriptionId, {
-    metadata: {
-      payment_method: "prepaid",
-      prepaid_duration_months: input.durationMonths,
-      switch_from_recurring_subscription_id: switchFromRecurringId,
-      contracted_price_cents: plan.price_cents,
-      contracted_currency: normalizeCurrency(plan.currency),
+  const email = getValidatedBuyerEmail(profile?.email, input.userEmail);
+  return runPrepaidCheckout({...input, userEmail:email}, {
+    rpc: async (name,args) => {
+      const {data,error} = await supabaseAdmin.rpc(name,args);
+      if(error) throw new TRPCError({code:"BAD_REQUEST",message:"Não foi possível preparar ou recuperar o pacote. Verifique pagamentos pendentes e a disponibilidade da duração."});
+      return data;
     },
+    recover:recoverPrepaidResource, createPix:createMercadoPagoPixPayment,
+    affiliateCheckoutEnabled:process.env.AFFILIATE_CHECKOUT_ENABLED==="true",
+    syncPayment:async resource=>(await processApprovedPayment(await getPayment(String(resource.id)))).paymentStatus,
+    createCard:createPrepaidPreference, notificationUrl:getMercadoPagoWebhookUrl(), backUrl:getSubscriptionReturnUrl(),
   });
-  const { data: payment, error: paymentError } = await supabaseAdmin.from("billing_payments").insert({
-    subscription_id: reservation.subscriptionId,
-    original_subscription_id: reservation.subscriptionId,
-    user_id: input.userId,
-    plan_id: plan.id,
-    gateway: GATEWAY,
-    payment_method: input.paymentMethod === "card" ? "mercadopago_card" : "mercadopago_pix",
-    status: "pending",
-    amount_cents: amountCents,
-    currency: normalizeCurrency(plan.currency),
-    expires_at: input.paymentMethod === "pix" ? addMinutes(new Date(), PIX_EXPIRATION_MINUTES).toISOString() : null,
-    access_duration_value: input.durationMonths,
-    access_duration_unit: "months",
-    metadata: { prepaid_package: true, duration_months: input.durationMonths, switch_from_recurring_subscription_id: switchFromRecurringId },
-  }).select("id, expires_at").single();
-  if (paymentError || !payment?.id) fail(paymentError?.message ?? "Não foi possível criar o pagamento do pacote.");
+}
 
-  const externalReference = buildPaymentReference(String(payment.id), reservation.subscriptionId);
-  try {
-    amountCents = Number(await referralRpc("referral_price_payment", { p_payment: String(payment.id) }));
-    if (input.paymentMethod === "card") {
-      const preference = await createPrepaidPreference({
-        externalReference, payerEmail, amount: centsToMercadoPagoAmount(amountCents),
-        title: `${plan.name} — pacote de ${input.durationMonths} ${input.durationMonths === 1 ? "mês" : "meses"}`,
-        notificationUrl: getMercadoPagoWebhookUrl(), backUrl: getSubscriptionReturnUrl(), idempotencyKey: `mp-prepaid-${payment.id}`,
-      });
-      const checkoutUrl = preference.init_point ?? preference.sandbox_init_point ?? null;
-      await updatePaymentOrThrow(String(payment.id), { payment_url: checkoutUrl, metadata: { prepaid_package: true, duration_months: input.durationMonths, external_reference: externalReference, switch_from_recurring_subscription_id: switchFromRecurringId } });
-      await updateSubscriptionOrThrow(reservation.subscriptionId, { payment_url: checkoutUrl });
-      return { subscriptionId: reservation.subscriptionId, paymentId: String(payment.id), checkoutUrl, amountCents, currency: normalizeCurrency(plan.currency), expiresAt: null };
-    }
-    const mpPayment = await createMercadoPagoPixPayment({
-      externalReference, payerEmail, amount: centsToMercadoPagoAmount(amountCents),
-      description: `${plan.name} — pacote de ${input.durationMonths} meses`, notificationUrl: getMercadoPagoWebhookUrl(),
-      expiresAt: String(payment.expires_at), idempotencyKey: `mp-prepaid-pix-${payment.id}`,
-    });
-    const transaction = mpPayment.point_of_interaction?.transaction_data;
-    await updatePaymentOrThrow(String(payment.id), {
-      gateway_payment_id: mpPayment.id ? String(mpPayment.id) : null,
-      status: mapMercadoPagoPaymentStatus(mpPayment.status, mpPayment.status_detail), payment_url: transaction?.ticket_url ?? null,
-      pix_qr_code: transaction?.qr_code ?? null, pix_qr_code_base64: transaction?.qr_code_base64 ?? null,
-      metadata: { prepaid_package: true, duration_months: input.durationMonths, external_reference: externalReference, switch_from_recurring_subscription_id: switchFromRecurringId },
-    });
-    return { subscriptionId: reservation.subscriptionId, paymentId: String(payment.id), checkoutUrl: transaction?.ticket_url ?? null, amountCents, currency: normalizeCurrency(plan.currency), expiresAt: payment.expires_at ?? null };
-  } catch (error) {
-    await markPaymentFailed(String(payment.id), sanitizeBillingError(error));
-    await markSubscriptionFailed(reservation.subscriptionId, sanitizeBillingError(error));
-    throw error;
+export async function getPrepaidOffers(userId:string,planSlug:string) {
+  const plan=await getPlanForCheckout(planSlug,userId);
+  await finalizePendingReferral(userId);
+  const {data,error}=await supabaseAdmin.from("billing_plan_durations").select("months,enabled,discount_bps,revision").eq("plan_id",plan.id);
+  if(error) fail("Não foi possível consultar os períodos.");
+  const offers=[];
+  for(const months of PLAN_MONTHS) {
+    const config=data?.find(row=>row.months===months);
+    if(config ? !config.enabled : months>3) continue;
+    const price=calculateDurationPrice(plan.price_cents,months,config?.discount_bps??0);
+    const referralDiscountCents=Number(await referralRpc("referral_calculate_discount",{p_user:userId,p_amount_cents:price.totalCents,p_payment_method:"mercadopago_card",p_prepaid:true,p_exclude_payment:null}));
+    offers.push({...price,months,referralDiscountCents,finalCents:price.totalCents-referralDiscountCents});
   }
+  return offers;
+}
+
+export async function recoverPrepaidCheckout(userId:string,userEmail:string|null,planSlug:string) {
+  const {data,error}=await supabaseAdmin.from("billing_prepaid_attempts")
+    .select("attempt_key,months,method,snapshot,billing_plans!inner(slug)").eq("user_id",userId)
+    .eq("billing_plans.slug",planSlug).order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if(error) throw new TRPCError({code:"SERVICE_UNAVAILABLE",message:"Não foi possível consultar a tentativa."});
+  if(!data) throw new TRPCError({code:"NOT_FOUND",message:"Nenhuma compra pré-paga anterior neste plano."});
+  return createPrepaidCheckout({userId,userEmail,...prepaidCheckoutSchema.parse({planSlug,attemptKey:data.attempt_key,durationMonths:data.months,paymentMethod:data.method,couponCode:(data.snapshot as any)?.affiliate?.code})});
 }
 
 export async function getMyPayments(userId: string) {
@@ -1577,6 +1535,8 @@ export async function processApprovedPayment(payment: MercadoPagoPayment) {
     });
   }
 
+  const refunded=payment.transaction_amount_refunded;
+  await affiliateRpc("affiliate_reconcile_payment",{p_payment:context.localPayment.id,p_refunded_cents:refunded==null?(payment.status_detail==="partially_refunded"?null:0):mercadoPagoAmountToCents(refunded)});
   return { paymentStatus: context.paymentStatus, kind: context.kind } as const;
 }
 

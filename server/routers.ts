@@ -1,4 +1,7 @@
 import { referralRouter, registerReferralAttribution, referralCodeSchema } from "./billing/referralService.js";
+import { planDurationsRouter } from "./billing/planDurations.js";
+import { affiliatesRouter } from "./billing/affiliates.js";
+import { prepaidCheckoutSchema } from "../shared/planDurations.js";
 import { loadPlanCapacity } from "./billing/planCapacity.js";
 import { getPaymentHistory } from "./billing/paymentHistory.js";
 import { randomUUID } from "node:crypto";
@@ -20,6 +23,8 @@ import {
   createCardSubscriptionCheckout,
   createPixPayment,
   createPrepaidCheckout,
+  getPrepaidOffers,
+  recoverPrepaidCheckout,
   getBillingCapabilities,
   getMyPayments,
   reconcileDuplicateMercadoPagoSubscriptions,
@@ -340,6 +345,7 @@ export const appRouter = router({
   }),
   system: systemRouter,
   referrals: referralRouter,
+  affiliates: affiliatesRouter,
   legal: legalRouter,
   lessons: lessonRouter,
 
@@ -591,6 +597,7 @@ export const appRouter = router({
   }),
 
   billing: router({
+    durations: planDurationsRouter,
     getCapabilities: publicProcedure.query(() => getBillingCapabilities()),
 
     createCardSubscriptionCheckout: protectedProcedure
@@ -614,21 +621,21 @@ export const appRouter = router({
       ),
 
     createPrepaidCheckout: protectedProcedure
-      .input(z.object({
-        planSlug: z.string().min(1).max(120),
-        durationMonths: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-        paymentMethod: z.enum(["card", "pix"]),
-      }))
+      .input(prepaidCheckoutSchema)
       .mutation(async ({ ctx, input }) =>
         createPrepaidCheckout({
           userId: ctx.user.id,
           userEmail: ctx.user.email ?? null,
           planSlug: input.planSlug,
           durationMonths: input.durationMonths,
+          attemptKey: input.attemptKey,
+          couponCode: input.couponCode,
           paymentMethod: input.paymentMethod,
         })
       ),
 
+    prepaidOffers: protectedProcedure.input(z.object({planSlug:z.string().min(1).max(120)})).query(({ctx,input})=>getPrepaidOffers(ctx.user.id,input.planSlug)),
+    recoverPrepaidCheckout: protectedProcedure.input(z.object({planSlug:z.string().min(1).max(120)}).strict()).mutation(({ctx,input})=>recoverPrepaidCheckout(ctx.user.id,ctx.user.email??null,input.planSlug)),
     getMySubscription: protectedProcedure.query(async ({ ctx }) => {
       const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
       return flattenBillingSubscription(latestSubscription);

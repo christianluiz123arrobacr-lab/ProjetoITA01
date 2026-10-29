@@ -1,4 +1,5 @@
 import { trpcClient } from "@/lib/trpcClient";
+import { authSession } from "@/lib/authSession";
 
 export type BillingPlanSlug = string;
 
@@ -190,8 +191,17 @@ export async function createMercadoPagoPixPayment(
   return trpcClient.billing.createPixPayment.mutate({ planSlug });
 }
 
-export async function createPrepaidCheckout(planSlug: string, durationMonths: 1 | 2 | 3, paymentMethod: "card" | "pix") {
-  return trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod });
+export async function createPrepaidCheckout(planSlug: string, durationMonths: 1 | 2 | 3 | 6 | 12, paymentMethod: "card" | "pix", newAttempt=false,couponCode?:string) {
+  const session=await authSession.getSession();
+  if(!session?.user.id) throw new Error("Não foi possível confirmar sua sessão.");
+  const key=`prepaid-attempt:${session.user.id}:${planSlug}:${durationMonths}:${paymentMethod}${couponCode?`:${couponCode}`:""}`;
+  let attemptKey=newAttempt?null:localStorage.getItem(key);
+  if(!attemptKey){attemptKey=crypto.randomUUID();localStorage.setItem(key,attemptKey);}
+  const result=await trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod, attemptKey, couponCode });
+  if(result.paymentStatus && result.paymentStatus!=="pending") throw new Error(result.paymentStatus==="approved"
+    ? "Esta compra já foi aprovada. Consulte Minha assinatura. Para outra compra, marque a opção de iniciar outra compra."
+    : "Esta tentativa foi encerrada. Consulte seu histórico; para outra compra, marque a opção de iniciar outra compra.");
+  return result;
 }
 
 export async function getReferralPricingPreview(): Promise<ReferralPricingPreview> {
