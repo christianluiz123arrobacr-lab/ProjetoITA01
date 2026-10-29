@@ -1,3 +1,4 @@
+import { selectCurrentOffer } from "@/lib/checkoutPresentation";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
@@ -19,13 +20,21 @@ export default function PrepaidOptions({
   const { isAuthenticated, loading, user } = useSupabaseAuth();
   const id = useId();
   const version = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      version.current++;
+    };
+  }, []);
   const identity = useRef(user?.id);
   identity.current = user?.id;
   const offers = trpc.billing.prepaidOffers.useQuery(
     { planSlug },
     { retry: false, enabled: isAuthenticated && !loading }
   );
-  const [selected, setSelected] = useState(1);
+  const [selected, setSelected] = useState<number | null>(null);
   const [fresh, setFresh] = useState(false);
   const [coupon, setCoupon] = useState(
     () => new URLSearchParams(window.location.search).get("cupom") ?? ""
@@ -43,7 +52,7 @@ export default function PrepaidOptions({
   const recovery = trpc.billing.recoverPrepaidCheckout.useMutation({
     onMutate: () => ({ owner: user?.id }),
     onSuccess: (result, _variables, context) => {
-      if (identity.current !== context?.owner) return;
+      if (!mounted.current || identity.current !== context?.owner) return;
       if (result.paymentStatus && result.paymentStatus !== "pending")
         setMessage(
           result.paymentStatus === "approved"
@@ -57,7 +66,8 @@ export default function PrepaidOptions({
         );
     },
     onError: (error, _variables, context) => {
-      if (identity.current === context?.owner) setMessage(error.message);
+      if (mounted.current && identity.current === context?.owner)
+        setMessage(error.message);
     },
   });
   useEffect(() => {
@@ -65,8 +75,11 @@ export default function PrepaidOptions({
     setValidated(null);
     preview.reset();
   }, [user?.id, planSlug]);
-  const offer =
-    offers.data?.find(row => row.months === selected) ?? offers.data?.[0];
+  const offer = selectCurrentOffer(
+    offers.data,
+    selected,
+    !!offers.error || offers.isLoading || offers.isFetchedAfterMount === false
+  );
   const code = coupon.trim().toUpperCase();
   const valid =
     !!code &&
@@ -136,7 +149,10 @@ export default function PrepaidOptions({
         Tentativa sem resposta? Recupere a compra anterior antes de iniciar
         outra.
       </p>
-      {offers.isLoading && <p role="status">Consultando períodos e preços…</p>}
+      {(offers.isLoading ||
+        (offers.isFetchedAfterMount === false && !offers.error)) && (
+        <p role="status">Consultando períodos e preços…</p>
+      )}
       {offers.error && (
         <p role="alert">
           Não foi possível consultar os pacotes.{" "}
@@ -150,7 +166,12 @@ export default function PrepaidOptions({
         aria-label="Duração do acesso"
         className="grid grid-cols-3 gap-2"
       >
-        {offers.data?.map(row => (
+        {(!offers.error &&
+        !offers.isLoading &&
+        offers.isFetchedAfterMount !== false
+          ? offers.data
+          : []
+        )?.map(row => (
           <button
             key={row.months}
             type="button"
@@ -166,6 +187,15 @@ export default function PrepaidOptions({
           </button>
         ))}
       </div>
+      {!offer &&
+        selected !== null &&
+        !offers.error &&
+        !offers.isLoading &&
+        offers.isFetchedAfterMount !== false && (
+          <p role="status">
+            O período selecionado não está disponível. Escolha outra duração.
+          </p>
+        )}
       {offer && (
         <>
           <div className="space-y-2">
@@ -196,6 +226,7 @@ export default function PrepaidOptions({
                     {
                       onSuccess: data => {
                         if (
+                          mounted.current &&
                           version.current === request &&
                           identity.current === owner
                         )
@@ -239,7 +270,10 @@ export default function PrepaidOptions({
           </div>
           <dl className="space-y-2 rounded-xl bg-muted/60 p-4 text-sm">
             {[
-              ["Duração", offer.months + " mês(es)"],
+              [
+                "Duração",
+                offer.months + (offer.months === 1 ? " mês" : " meses"),
+              ],
               ["Preço original do período", money(offer.subtotalCents)],
               ["Desconto pela duração", money(offer.discountCents)],
               [
@@ -262,9 +296,9 @@ export default function PrepaidOptions({
             </div>
           </dl>
           <p className="text-xs text-muted-foreground">
-            Acesso por {offer.months} mês(es) de calendário após confirmação,
-            respeitando o acesso acumulado. Ao término, será necessária uma nova
-            compra para manter o acesso pago.
+            Acesso por {offer.months} {offer.months === 1 ? "mês" : "meses"} de
+            calendário após confirmação, respeitando o acesso acumulado. Ao
+            término, será necessária uma nova compra para manter o acesso pago.
           </p>
           <label className="flex items-start gap-2 text-xs">
             <input
@@ -298,16 +332,15 @@ export default function PrepaidOptions({
           </div>
         </>
       )}
-      {offers.data?.length === 0 && (
-        <p>
-          Nenhum período disponível. Você ainda pode recuperar uma compra
-          anterior.
-        </p>
-      )}
-      <p className="text-xs text-muted-foreground">
-        Na troca de recorrência por pacote, as próximas cobranças são canceladas
-        após aprovação. O acesso já pago é preservado.
-      </p>
+      {!offers.error &&
+        !offers.isLoading &&
+        offers.isFetchedAfterMount !== false &&
+        offers.data?.length === 0 && (
+          <p>
+            Nenhum período disponível. Você ainda pode recuperar uma compra
+            anterior.
+          </p>
+        )}
     </div>
   );
 }

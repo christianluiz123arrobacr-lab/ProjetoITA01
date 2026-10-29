@@ -1,5 +1,6 @@
+import { showPlanForCheckout } from "@/lib/checkoutPresentation";
 import PrepaidOptions from "@/components/billing/PrepaidOptions";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -18,7 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import PublicHeader from "@/components/layout/PublicHeader";
+import PublicHeader from "@/components/billing/CommerceHeader";
 import {
   createCardSubscriptionCheckout,
   createPrepaidCheckout,
@@ -260,9 +261,16 @@ export default function PricingPage() {
     loading: authLoading,
     error: authError,
     recovering,
+    user,
   } = useSupabaseAuth();
 
+  const authIdentity = useRef(user?.id);
+  authIdentity.current = user?.id;
   const [plans, setPlans] = useState<BillingPlan[]>([]);
+  const [catalogOwner, setCatalogOwner] = useState<string | undefined | null>(
+    null
+  );
+  const [chosen, setChosen] = useState<string | null>(null);
   const [plansLoading, setPlansLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<
@@ -281,8 +289,8 @@ export default function PricingPage() {
   const [success, setSuccess] = useState("");
 
   const isLoading = useMemo(
-    () => authLoading || selectedPlan !== null,
-    [authLoading, selectedPlan]
+    () => authLoading || selectedPlan !== null || catalogOwner !== user?.id,
+    [authLoading, selectedPlan, catalogOwner, user?.id]
   );
 
   useEffect(() => {
@@ -291,6 +299,10 @@ export default function PricingPage() {
     async function loadPlans() {
       try {
         setPlansLoading(true);
+        setPlans([]);
+        setChosen(null);
+        setCapabilities(null);
+        setReferralPreview(null);
         const [loadedPlans, loadedCapabilities, loadedReferralPreview] =
           await Promise.all([
             loadPublicBillingPlans(),
@@ -301,12 +313,16 @@ export default function PricingPage() {
           ]);
 
         if (mounted) {
+          setCatalogOwner(user?.id);
           setPlans(loadedPlans);
           setCapabilities(loadedCapabilities);
           setReferralPreview(loadedReferralPreview);
         }
       } catch (error) {
-        if (mounted) setErro("Não foi possível consultar os planos agora. Atualize a página para tentar novamente.");
+        if (mounted)
+          setErro(
+            "Não foi possível consultar os planos agora. Atualize a página para tentar novamente."
+          );
       } finally {
         if (mounted) setPlansLoading(false);
       }
@@ -317,7 +333,7 @@ export default function PricingPage() {
     return () => {
       mounted = false;
     };
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, isAuthenticated, user?.id]);
 
   async function handleSubscribe(
     plan: BillingPlan,
@@ -327,6 +343,7 @@ export default function PricingPage() {
     fresh = false,
     couponCode?: string
   ) {
+    const buyer = user?.id;
     setErro("");
     setSuccess("");
     if (authLoading || authError || recovering) return;
@@ -359,6 +376,7 @@ export default function PricingPage() {
           fresh,
           couponCode
         );
+        if (authIdentity.current !== buyer) return;
         if (!checkout.checkoutUrl) {
           setSuccess(
             "Consulte o resultado da compra em Minha assinatura ou recupere a compra anterior."
@@ -370,13 +388,16 @@ export default function PricingPage() {
       }
       if (method === "card") {
         const checkout = await createCardSubscriptionCheckout(plan.slug);
+        if (authIdentity.current !== buyer) return;
         if (!checkout.checkoutUrl)
           throw new Error("Checkout indisponível. Tente novamente.");
         window.location.assign(checkout.checkoutUrl);
         return;
       }
       if (method === "pix") {
-        setPixPayment(await createMercadoPagoPixPayment(plan.slug));
+        const pix = await createMercadoPagoPixPayment(plan.slug);
+        if (authIdentity.current !== buyer) return;
+        setPixPayment(pix);
         return;
       }
       await requestManualSubscription(plan.slug);
@@ -394,7 +415,7 @@ export default function PricingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="commerce-surface min-h-screen bg-background text-foreground">
       <PublicHeader />
       {pixPayment && (
         <MercadoPagoPixModal
@@ -410,12 +431,12 @@ export default function PricingPage() {
           onGoPending={() => navigate("/assinatura-pendente")}
         />
       )}
-      <section className="mx-auto max-w-6xl px-4 py-10 md:py-16">
+      <section className="mx-auto max-w-6xl px-4 py-6 md:py-8">
         <header className="mx-auto max-w-3xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-cyan-700 dark:text-cyan-300">
             Projeto Vetor
           </span>
-          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
+          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
             Seu próximo passo começa aqui
           </h1>
           <p className="mt-4 text-muted-foreground">
@@ -425,7 +446,7 @@ export default function PricingPage() {
         </header>
         <ol
           aria-label="Etapas da contratação"
-          className="my-8 grid grid-cols-2 gap-3 sm:grid-cols-4"
+          className="my-5 grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
           {["Conta", "Plano e prazo", "Pagamento", "Confirmação"].map(
             (step, index) => (
@@ -447,7 +468,7 @@ export default function PricingPage() {
             )
           )}
         </ol>
-        <div className="mb-8 rounded-2xl border border-border bg-muted/40 p-5">
+        <div className="mb-5 rounded-2xl border border-border bg-muted/40 p-5">
           {authLoading ? (
             <p role="status">Verificando sua conta…</p>
           ) : authError || recovering ? (
@@ -511,115 +532,167 @@ export default function PricingPage() {
           </p>
         ) : (
           <div className="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {plans.map(plan => {
-              const locked =
-                plan.checkoutBlockReason === "legacy_founder_required";
-              const unavailable = locked || plan.hasAvailableSlots === false;
-              return (
-                <article
-                  key={plan.slug}
-                  className="flex min-w-0 flex-col rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6"
-                >
-                  <div className="min-h-36">
-                    <h2 className="text-2xl font-bold">{plan.name}</h2>
-                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                      {plan.description}
+            {plans
+              .filter(plan =>
+                showPlanForCheckout(
+                  plan,
+                  isAuthenticated,
+                  authLoading ||
+                    !!authError ||
+                    recovering ||
+                    catalogOwner !== user?.id
+                )
+              )
+              .map(plan => {
+                const locked =
+                  plan.checkoutBlockReason === "legacy_founder_required";
+                const unavailable = locked || plan.hasAvailableSlots === false;
+                return (
+                  <article
+                    key={plan.slug + ":" + (user?.id ?? "anonymous")}
+                    className="flex min-w-0 flex-col rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6"
+                  >
+                    <div className="min-h-24">
+                      <h2 className="text-2xl font-bold">{plan.name}</h2>
+                      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                        {plan.description}
+                      </p>
+                    </div>
+                    <p className="mb-5 text-sm text-muted-foreground">
+                      Referência de preço mensal:{" "}
+                      <strong className="text-foreground">
+                        {formatPlanPrice(plan.amountCents)}
+                      </strong>
+                      . O total do pacote aparece abaixo.
                     </p>
-                  </div>
-                  <p className="mb-5 text-sm text-muted-foreground">
-                    Referência de preço mensal:{" "}
-                    <strong className="text-foreground">
-                      {formatPlanPrice(plan.amountCents)}
-                    </strong>
-                    . O total do pacote aparece abaixo.
-                  </p>
-                  {locked && (
-                    <p className="mb-4 text-sm" role="status">
-                      Exclusivo para fundadores elegíveis ou convidados. A
-                      elegibilidade é verificada pelo servidor.
-                    </p>
-                  )}
-                  {plan.hasAvailableSlots === false && (
-                    <p className="mb-4 text-sm">
-                      Sem vagas disponíveis para nova compra.
-                    </p>
-                  )}
-                  {referralPreview?.eligible && (
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      Sua indicação pode oferecer desconto no primeiro pagamento
-                      via Pix ou pacote pré-pago, conforme a prévia do servidor.
-                      O benefício não se aplica à assinatura mensal recorrente
-                      no cartão.
-                    </p>
-                  )}
-                  <div className="mt-auto">
-                    <PrepaidOptions
-                      key={plan.slug}
-                      planSlug={plan.slug}
-                      disabled={
-                        isLoading ||
-                        !!authError ||
-                        recovering ||
-                        unavailable ||
-                        capabilities?.mercadoPagoEnabled !== true
-                      }
-                      onBuy={(method, months, fresh, code) =>
-                        handleSubscribe(plan, method, true, months, fresh, code)
-                      }
-                    />
-                  </div>
-                  <details className="mt-5 rounded-xl border border-border p-4">
-                    <summary className="cursor-pointer text-sm font-semibold">
-                      Outras formas de contratação
-                    </summary>
-                    <p className="my-3 text-xs text-muted-foreground">
-                      Assinatura mensal recorrente no cartão:{" "}
-                      {formatPlanPrice(plan.amountCents)} por mês, com cobranças
-                      recorrentes conforme o contrato. Não utiliza o cupom do
-                      pacote.
-                    </p>
-                    <button
-                      type="button"
-                      className="w-full rounded-xl border border-border p-3 text-sm disabled:opacity-50"
-                      disabled={
-                        isLoading ||
-                        !plan.canCheckout ||
-                        unavailable ||
-                        capabilities?.mercadoPagoEnabled !== true
-                      }
-                      onClick={() => handleSubscribe(plan, "card")}
-                    >
-                      Contratar assinatura recorrente
-                    </button>
-                    <button
-                      type="button"
-                      className="mt-2 w-full rounded-xl border border-border p-3 text-sm disabled:opacity-50"
-                      disabled={
-                        isLoading ||
-                        !plan.canCheckout ||
-                        unavailable ||
-                        capabilities?.mercadoPagoEnabled !== true
-                      }
-                      onClick={() => handleSubscribe(plan, "pix")}
-                    >
-                      Pix mensal avulso
-                    </button>
-                    {capabilities?.manualPixFallbackEnabled && (
+                    {locked && (
+                      <p className="mb-4 text-sm" role="status">
+                        Exclusivo para fundadores elegíveis ou convidados. A
+                        elegibilidade é verificada pelo servidor.
+                      </p>
+                    )}
+                    {plan.hasAvailableSlots === false && (
+                      <p className="mb-4 text-sm">
+                        Sem vagas disponíveis para nova compra.
+                      </p>
+                    )}
+                    {referralPreview?.eligible && (
+                      <p className="mb-4 text-sm text-muted-foreground">
+                        Sua indicação pode oferecer desconto no primeiro
+                        pagamento via Pix ou pacote pré-pago, conforme a prévia
+                        do servidor. O benefício não se aplica à assinatura
+                        mensal recorrente no cartão.
+                      </p>
+                    )}
+                    <div className="mt-auto">
                       <button
                         type="button"
-                        className="mt-2 w-full rounded-xl border border-border p-3 text-sm"
-                        disabled={isLoading || !plan.canCheckout || unavailable}
-                        onClick={() => handleSubscribe(plan, "manual")}
+                        disabled={isLoading || !!authError || recovering}
+                        aria-pressed={chosen === plan.slug}
+                        className="mb-4 w-full rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground"
+                        onClick={() => setChosen(plan.slug)}
                       >
-                        Solicitar Pix manual emergencial
+                        {" "}
+                        {chosen === plan.slug
+                          ? "Plano selecionado"
+                          : "Escolher plano"}
                       </button>
-                    )}
-                  </details>
-                </article>
-              );
-            })}
+                    </div>
+                  </article>
+                );
+              })}
           </div>
         )}
+        {plans
+          .filter(
+            plan =>
+              plan.slug === chosen &&
+              showPlanForCheckout(
+                plan,
+                isAuthenticated,
+                authLoading ||
+                  !!authError ||
+                  recovering ||
+                  catalogOwner !== user?.id
+              )
+          )
+          .map(plan => {
+            const unavailable =
+              plan.checkoutBlockReason === "legacy_founder_required" ||
+              plan.hasAvailableSlots === false;
+            return (
+              <section
+                key={plan.slug + ":" + (user?.id ?? "anonymous")}
+                className="mt-6 rounded-2xl border border-border bg-card p-4 sm:p-6"
+                aria-label="Configurar contratação"
+              >
+                <h2 className="mb-4 text-xl font-bold">
+                  {plan.name} · escolha seu prazo
+                </h2>
+                <PrepaidOptions
+                  key={plan.slug + ":" + (user?.id ?? "anonymous")}
+                  planSlug={plan.slug}
+                  disabled={
+                    isLoading ||
+                    !!authError ||
+                    recovering ||
+                    unavailable ||
+                    capabilities?.mercadoPagoEnabled !== true
+                  }
+                  onBuy={(method, months, fresh, code) =>
+                    handleSubscribe(plan, method, true, months, fresh, code)
+                  }
+                />{" "}
+                <details className="mt-5 rounded-xl border border-border p-4">
+                  <summary className="cursor-pointer text-sm font-semibold">
+                    Outras formas de contratação
+                  </summary>
+                  <p className="my-3 text-xs text-muted-foreground">
+                    Assinatura mensal recorrente no cartão:{" "}
+                    {formatPlanPrice(plan.amountCents)} por mês, com cobranças
+                    recorrentes conforme o contrato. Não utiliza o cupom do
+                    pacote.
+                  </p>
+                  <button
+                    type="button"
+                    className="w-full rounded-xl border border-border p-3 text-sm disabled:opacity-50"
+                    disabled={
+                      isLoading ||
+                      !plan.canCheckout ||
+                      unavailable ||
+                      capabilities?.mercadoPagoEnabled !== true
+                    }
+                    onClick={() => handleSubscribe(plan, "card")}
+                  >
+                    Contratar assinatura recorrente
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-2 w-full rounded-xl border border-border p-3 text-sm disabled:opacity-50"
+                    disabled={
+                      isLoading ||
+                      !plan.canCheckout ||
+                      unavailable ||
+                      capabilities?.mercadoPagoEnabled !== true
+                    }
+                    onClick={() => handleSubscribe(plan, "pix")}
+                  >
+                    Pix mensal avulso
+                  </button>
+                  {capabilities?.manualPixFallbackEnabled && (
+                    <button
+                      type="button"
+                      className="mt-2 w-full rounded-xl border border-border p-3 text-sm"
+                      disabled={isLoading || !plan.canCheckout || unavailable}
+                      onClick={() => handleSubscribe(plan, "manual")}
+                    >
+                      Solicitar Pix manual emergencial
+                    </button>
+                  )}
+                </details>
+              </section>
+            );
+          })}
         <footer className="mt-8 rounded-2xl border border-border bg-muted/40 p-5 text-sm leading-6 text-muted-foreground">
           <h2 className="font-bold text-foreground">Depois do pagamento</h2>
           <p>

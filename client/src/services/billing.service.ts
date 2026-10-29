@@ -148,17 +148,8 @@ function mapPublicRowToPlan(row: PublicBillingPlanRow): BillingPlan {
 }
 
 export async function loadPublicBillingPlans(): Promise<BillingPlan[]> {
-  try {
-    const rows = await trpcClient.billing.listPublicPlans.query();
-
-    if (Array.isArray(rows) && rows.length > 0) {
-      return (rows as PublicBillingPlanRow[]).map(mapPublicRowToPlan);
-    }
-  } catch (error) {
-    console.warn("Não foi possível carregar planos públicos via backend. Usando fallback local:", error);
-  }
-
-  return [];
+  const rows = await trpcClient.billing.listPublicPlans.query();
+  return Array.isArray(rows) ? (rows as PublicBillingPlanRow[]).map(mapPublicRowToPlan) : [];
 }
 
 export async function requestManualSubscription(

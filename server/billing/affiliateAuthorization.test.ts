@@ -18,6 +18,8 @@ describe("affiliate API authorization", () => {
     async role => {
       const api = caller(role);
       const tasks = [
+        () => api.searchAccounts({search:"teste"}),
+        () => api.planOptions(),
         () => api.saveProfile({ userId: id, label: "Test", active: true }),
         () =>
           api.saveCoupon({
@@ -100,4 +102,8 @@ describe("affiliate API authorization", () => {
       })
     ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
   });
+});
+
+it("rejects search filter injection before querying accounts",async()=>{
+ await expect(caller("admin").searchAccounts({search:"a),role.eq.admin"})).rejects.toMatchObject({code:"BAD_REQUEST"});
 });

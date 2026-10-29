@@ -17,3 +17,10 @@ it("keeps recovery available when offers disappear",()=>{state.rows=[];const htm
 it("renders session loading instead of registration",()=>{state.loading=true;expect(render()).toContain("Verificando sua sessão");expect(render()).not.toContain("Criar conta");});
 it("renders offer failure and recovery together",()=>{state.error=new Error("offline");const html=render();expect(html).toContain('role="alert"');expect(html).toContain("Recuperar compra anterior");});
 it("does not treat a coupon from URL as validated",()=>{const html=render();expect(html).not.toContain("Cupom aplicado à prévia");expect(html).toMatch(/disabled=""[^>]*>Pagar via Pix/);});
+
+it("never shows cached total or purchase buttons alongside an offer query error",()=>{
+ state.error=new Error("timeout");const html=render();
+ expect(html).not.toContain("Total a pagar agora");
+ expect(html).not.toContain("Pagar via Pix");
+ expect(html).toContain("Recuperar compra anterior");
+});

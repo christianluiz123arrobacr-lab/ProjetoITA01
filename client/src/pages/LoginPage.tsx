@@ -13,7 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import PublicHeader from "@/components/layout/PublicHeader";
+import PublicHeader from "@/components/billing/CommerceHeader";
 import { supabase } from "@/lib/supabase";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { bounded } from "@shared/authRecovery";
@@ -97,10 +97,10 @@ export default function LoginPage() {
 
   if (authLoading) {
     return (
-      <main className="min-h-screen bg-background text-foreground">
+      <main className="commerce-surface min-h-screen bg-background text-foreground">
         <PublicHeader />
 
-        <section className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+        <section className="flex  items-center justify-center px-4">
           <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-2xl backdrop-blur">
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950">
               <Loader2 className="h-7 w-7 animate-spin" />
@@ -133,80 +133,19 @@ export default function LoginPage() {
     );
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="commerce-surface min-h-screen bg-background text-foreground">
       <PublicHeader />
 
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-950 to-cyan-950" />
-        <div className="absolute left-0 top-0 h-80 w-80 rounded-full bg-cyan-400/20 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-indigo-500/20 blur-3xl" />
-
-        <div className="relative mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-[0.95fr_1.05fr] md:px-6 md:py-16">
-          <div className="hidden md:block">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-black text-cyan-800 dark:text-cyan-100">
-              <Rocket className="h-4 w-4" />
-              Projeto Vetor
-            </div>
-
-            <h1 className="max-w-xl text-5xl font-black tracking-tight">
-              Acesse sua conta e continue seus estudos.
-            </h1>
-
-            <p className="mt-5 max-w-xl text-base leading-8 text-muted-foreground">
-              Ao entrar, você será direcionado à página inicial da plataforma,
-              onde poderá acessar as disciplinas, o banco de questões, os
-              simuladores, seu progresso, ranking e demais ferramentas de estudo
-              disponíveis no projeto.
-            </p>
-
-            <div className="mt-8 grid max-w-xl gap-4">
-              <div className="rounded-3xl border border-border bg-card p-5">
-                <div className="flex items-start gap-3">
-                  <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-cyan-200" />
-
-                  <div>
-                    <p className="font-black text-foreground">
-                      Acesso vinculado à assinatura
-                    </p>
-
-                    <p className="mt-2 text-sm leading-7 text-muted-foreground">
-                      Contas com assinatura ativa acessam normalmente a
-                      plataforma. Caso a assinatura esteja pendente, vencida ou
-                      ainda não tenha sido aprovada, o acesso será direcionado à
-                      tela de regularização.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-border bg-card p-5">
-                <div className="flex items-start gap-3">
-                  <LockKeyhole className="mt-1 h-5 w-5 shrink-0 text-amber-200" />
-
-                  <div>
-                    <p className="font-black text-foreground">
-                      Segurança e organização do acesso
-                    </p>
-
-                    <p className="mt-2 text-sm leading-7 text-muted-foreground">
-                      Cada assinatura fica associada ao usuário cadastrado,
-                      permitindo uma gestão mais segura, organizada e
-                      transparente do acesso à plataforma durante a fase beta.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
+        <div className="relative mx-auto grid  max-w-6xl items-center gap-10 px-4 py-8  md:px-6 md:py-16">
           <div className="mx-auto w-full max-w-md">
-            <div className="rounded-[2rem] border border-border bg-white/[0.08] p-6 shadow-2xl backdrop-blur md:p-8">
+            <div className="rounded-[2rem] border border-border bg-card p-6 shadow-2xl backdrop-blur md:p-8">
               <div className="mb-7 text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950 shadow-lg shadow-cyan-950/30">
                   <LogIn className="h-7 w-7" />
                 </div>
 
-                <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-200">
+                <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-700 dark:text-cyan-300">
                   Login
                 </p>
 
@@ -227,7 +166,7 @@ export default function LoginPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-bold text-slate-200">
+                  <span className="mb-2 block text-sm font-bold text-foreground">
                     E-mail
                   </span>
 
@@ -240,13 +179,13 @@ export default function LoginPage() {
                       onChange={event => setEmail(event.target.value)}
                       placeholder="seuemail@exemplo.com"
                       autoComplete="email"
-                      className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                      className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                     />
                   </div>
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-bold text-slate-200">
+                  <span className="mb-2 block text-sm font-bold text-foreground">
                     Senha
                   </span>
 
@@ -259,13 +198,13 @@ export default function LoginPage() {
                       onChange={event => setPassword(event.target.value)}
                       placeholder="Digite sua senha"
                       autoComplete="current-password"
-                      className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                      className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                     />
 
                     <button
                       type="button"
                       onClick={() => setShowPassword(current => !current)}
-                      className="rounded-xl p-1 text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
+                      className="rounded-xl p-1 text-muted-foreground transition hover:bg-card hover:text-foreground"
                       aria-label={
                         showPassword ? "Ocultar senha" : "Mostrar senha"
                       }
@@ -311,7 +250,7 @@ export default function LoginPage() {
                     )
                   }
                 >
-                  <a className="mt-2 inline-flex items-center justify-center gap-2 text-sm font-black text-cyan-200 transition hover:text-cyan-800 dark:text-cyan-100">
+                  <a className="mt-2 inline-flex items-center justify-center gap-2 text-sm font-black text-cyan-700 dark:text-cyan-300 transition hover:text-cyan-800 dark:text-cyan-100">
                     Criar conta
                     <ArrowRight className="h-4 w-4" />
                   </a>
@@ -320,7 +259,7 @@ export default function LoginPage() {
 
               <div className="mt-4 text-center">
                 <Link href="/planos">
-                  <a className="text-xs font-bold text-muted-foreground transition hover:text-slate-200">
+                  <a className="text-xs font-bold text-muted-foreground transition hover:text-foreground">
                     Ver planos disponíveis
                   </a>
                 </Link>

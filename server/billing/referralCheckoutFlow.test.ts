@@ -36,7 +36,7 @@ describe("fluxo de desconto por indicação", () => {
     expect(pricing).toContain("getReferralPricingPreview");
     expect(pricing).toContain("preço");
     expect(pricing).toContain("Sua indicação pode oferecer");
-    expect(pricing).toContain("não se aplica à assinatura mensal");
+    expect(pricing.replace(/\s+/g, " ")).toContain("não se aplica à assinatura mensal");
   });
 
   it("mantém RLS e cálculo percentual inteiro no SQL", () => {

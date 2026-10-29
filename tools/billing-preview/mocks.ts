@@ -165,7 +165,7 @@ export const trpc = {
                 : offers(planSlug),
           isLoading: s.mode === "loading",
           isFetching: s.mode === "loading",
-          error: s.mode === "error" ? new Error("Simulado") : null,
+          error: s.mode === "error" || s.mode === "cached-error" ? new Error("Simulado") : null,
           refetch: () => change({ mode: "ready" }),
         };
       },
@@ -221,3 +221,162 @@ export const trpc = {
     },
   },
 };
+
+// Explicit UI-only sample DTOs. Never call a service or write to a database.
+const sampleAffiliate = {
+  id: "11111111-1111-4111-8111-111111111111",
+  label: "Parceiro demonstrativo",
+  active: true,
+};
+const sampleCoupon = {
+  id: "22222222-2222-4222-8222-222222222222",
+  affiliate_id: sampleAffiliate.id,
+  code: "VETOR",
+  active: true,
+  discount_bps: 500,
+  commission_bps: 1000,
+  plan_ids: null,
+  starts_at: null,
+  expires_at: null,
+  max_uses: null,
+};
+Object.assign(trpc.affiliates, {
+  dashboard: {
+    useQuery: () => {
+      const s = usePreview();
+      const affiliate =
+        s.mode === "affiliate-none"
+          ? null
+          : { ...sampleAffiliate, active: s.mode !== "affiliate-inactive" };
+      const empty = s.mode === "affiliate-empty";
+      return {
+        data:
+          s.mode === "error"
+            ? undefined
+            : {
+                affiliate,
+                commercialEnabled: false,
+                nextReferenceDate: "2026-11-10",
+                payoutDay: 10,
+                pendingCents: 1800,
+                releasedCents: 6000,
+                paidCents: 2500,
+                reversedCents: 300,
+                periodConfirmedSales: empty ? 0 : 3,
+                periodNetCents: empty ? 0 : 18300,
+                affiliates: [
+                  {
+                    ...sampleAffiliate,
+                    user_id: "33333333-3333-4333-8333-333333333333",
+                  },
+                ],
+                coupons: [sampleCoupon],
+                salesByDay: empty
+                  ? []
+                  : [
+                      { day: "2026-10-25", sales: 1, sold_cents: 6000 },
+                      { day: "2026-10-26", sales: 1, sold_cents: 5000 },
+                      { day: "2026-10-28", sales: 1, sold_cents: 7300 },
+                    ],
+                sales: empty
+                  ? []
+                  : [
+                      {
+                        payment_id: "44444444-4444-4444-8444-444444444444",
+                        created_at: "2026-10-28T12:00:00Z",
+                        paid_cents: 7300,
+                        refunded_cents: 0,
+                        commission_cents: 730,
+                        approved: true,
+                        released: false,
+                        chargeback: false,
+                      },
+                    ],
+                saleCount: empty ? 0 : 1,
+                payouts: [
+                  {
+                    id: "paid",
+                    paid_on: "2026-10-10",
+                    amount_cents: 2500,
+                    reference: "DEMO-TRANSFERENCIA",
+                  },
+                ],
+                payoutCount: 1,
+                adjustments: [
+                  {
+                    id: "entry",
+                    created_at: "2026-10-26",
+                    delta_cents: -300,
+                    reason: "partial_refund",
+                  },
+                ],
+                adjustmentCount: 1,
+              },
+        isLoading: s.mode === "loading",
+        isFetching: s.mode === "loading",
+        error:
+          s.mode === "error"
+            ? {
+                message: "Falha demonstrativa",
+                data: { code: "SERVICE_UNAVAILABLE" },
+              }
+            : null,
+        refetch: async () => change({ mode: "ready" }),
+      };
+    },
+  },
+  searchAccounts: {
+    useQuery: () => {
+      const [data, setData] = useState<any>();
+      return {
+        data,
+        error: null,
+        isFetching: false,
+        refetch: async () =>
+          setData([
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              nome: "Conta de demonstração",
+              email: "teste@example.invalid",
+              ativo: true,
+            },
+          ]),
+      };
+    },
+  },
+  planOptions: {
+    useQuery: () => ({
+      data: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          name: "Plano normal",
+          is_active: true,
+        },
+        {
+          id: "66666666-6666-4666-8666-666666666666",
+          name: "Plano arquivado",
+          is_active: false,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    }),
+  },
+  ...Object.fromEntries(
+    ["saveProfile", "saveCoupon", "saveSettings", "payout", "release"].map(
+      name => [
+        name,
+        {
+          useMutation: () =>
+            useMutation(async () => {
+              change({
+                notice:
+                  "Registro somente simulado. Nenhum dado financeiro foi alterado.",
+              });
+              return { confirmed: true };
+            }),
+        },
+      ]
+    )
+  ),
+});

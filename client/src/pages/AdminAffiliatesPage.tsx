@@ -1,6 +1,6 @@
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { AffiliateDashboard } from "./AffiliatePage";
+import AdminAffiliateDashboard from "@/components/affiliates/AdminAffiliateDashboard";
 export default function AdminAffiliatesPage() {
   return (
     <AdminGuard allowedRoles={["admin"]}>
@@ -8,7 +8,7 @@ export default function AdminAffiliatesPage() {
         title="Afiliados e cupons"
         subtitle="Comissões e registro de repasses externos"
       >
-        <AffiliateDashboard admin />
+        <AdminAffiliateDashboard />
       </AdminLayout>
     </AdminGuard>
   );

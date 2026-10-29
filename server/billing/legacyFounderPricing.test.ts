@@ -92,12 +92,13 @@ describe("preços legados de fundador", () => {
     expect(service).not.toContain("input.amountCents");
   });
 
-  it("frontend mantém o card fundador visível e desabilita seus checkouts quando bloqueado", () => {
+  it("frontend exige elegibilidade do servidor para apresentar o fundador", () => {
     const pricing = readFileSync(new URL("../../client/src/pages/PricingPage.tsx", import.meta.url), "utf8");
     const clientService = readFileSync(new URL("../../client/src/services/billing.service.ts", import.meta.url), "utf8");
     expect(pricing).toContain('plan.checkoutBlockReason === "legacy_founder_required"');
     expect(pricing).toContain("Exclusivo para fundadores elegíveis ou convidados.");
-    expect(pricing).toContain("disabled={isLoading ||");
+    expect(pricing).toContain("showPlanForCheckout");
+
     expect(clientService).not.toContain("amountCents: 600");
     expect(clientService).not.toContain("amountCents: 900");
     expect(clientService).not.toContain("amountCents: 1190");

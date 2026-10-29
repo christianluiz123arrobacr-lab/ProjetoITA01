@@ -1,3 +1,7 @@
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
+import AffiliatePage from "@/pages/AffiliatePage";
+import AdminAffiliateDashboard from "@/components/affiliates/AdminAffiliateDashboard";
+import CommerceHeader from "@/components/billing/CommerceHeader";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Route, Switch, Link } from "wouter";
@@ -6,15 +10,18 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import { change, usePreview } from "./mocks";
 import "./preview.css";
-function scenario(patch: Record<string,string>) {
- const params=new URLSearchParams(location.search);
- for(const [key,value] of Object.entries(patch))params.set(key,value);
- location.search=params.toString();
+function scenario(patch: Record<string, string>) {
+  const params = new URLSearchParams(location.search);
+  for (const [key, value] of Object.entries(patch)) params.set(key, value);
+  location.search = params.toString();
 }
 function Preview() {
   const s = usePreview();
-  const [mobile, setMobile] = React.useState(new URLSearchParams(location.search).get("mobile")==="1");
-  const [dark, setDark] = React.useState(new URLSearchParams(location.search).get("theme")==="dark");
+  const [mobile, setMobile] = React.useState(
+    new URLSearchParams(location.search).get("mobile") === "1"
+  );
+  const { theme, toggleTheme } = useTheme();
+  const dark = theme === "dark";
   return (
     <>
       <aside className="border-b bg-amber-100 p-4 text-slate-950">
@@ -58,9 +65,12 @@ function Preview() {
                 ["ready", "Disponível"],
                 ["session", "Carregando sessão"],
                 ["loading", "Carregando preços"],
-                ["error", "Erro nos preços"],
+                ["error", "Erro nos preços"],["cached-error","Erro com preço antigo no cache"],
                 ["empty", "Oferta desativada"],
                 ["catalog-error", "Erro no catálogo"],
+                ["affiliate-none", "Afiliado sem vínculo"],
+                ["affiliate-empty", "Afiliado sem vendas"],
+                ["affiliate-inactive", "Afiliado desativado"],
               ].map(([v, l]) => (
                 <option key={v} value={v}>
                   {l}
@@ -101,20 +111,23 @@ function Preview() {
           <button
             className="rounded border border-slate-500 px-3 py-1"
             onClick={() => {
-              document.documentElement.classList.toggle("dark");
-              setDark(!dark);
-              const url=new URL(location.href);url.searchParams.set("theme",dark?"light":"dark");history.replaceState(null,"",url);
+              toggleTheme();
+              const url = new URL(location.href);
+              url.searchParams.set("theme", dark ? "light" : "dark");
+              history.replaceState(null, "", url);
             }}
           >
             Alternar claro/escuro
           </button>
           <button
             className="rounded border border-slate-500 px-3 py-1"
-            onClick={() => scenario({mobile:mobile?"0":"1"})}
+            onClick={() => scenario({ mobile: mobile ? "0" : "1" })}
           >
             {mobile ? "Abrir desktop" : "Abrir celular (390px)"}
           </button>
           <Link href="/planos">Planos</Link>
+          <Link href="/afiliados">Afiliado</Link>
+          <Link href="/admin/afiliados">Admin afiliados</Link>
           <Link href="/login?returnTo=%2Fplanos">Login</Link>
           <Link href="/cadastro?returnTo=%2Fplanos">Cadastro</Link>
         </div>
@@ -127,7 +140,7 @@ function Preview() {
           key={String(dark)}
           title="Prévia celular 390px"
           src={
-            "/planos?embedded=1&profile=" +
+            location.pathname+"?embedded=1&profile=" +
             s.profile +
             "&mode=" +
             s.mode +
@@ -151,6 +164,18 @@ function Scene() {
         SIMULAÇÃO LOCAL · valores e ações fictícios · não informe dados reais
       </p>
       <Switch>
+        <Route path="/afiliados" component={AffiliatePage} />
+        <Route path="/admin/afiliados">
+          <div className="commerce-surface min-h-screen bg-background text-foreground">
+            <CommerceHeader />
+            <main className="mx-auto max-w-6xl px-4 py-8">
+              <h1 className="mb-6 text-3xl font-bold">
+                Afiliados e cupons · admin simulado
+              </h1>
+              <AdminAffiliateDashboard />
+            </main>
+          </div>
+        </Route>
         <Route path="/login" component={LoginPage} />
         <Route path="/cadastro" component={RegisterPage} />
         <Route>
@@ -161,7 +186,8 @@ function Scene() {
   );
 }
 const params = new URLSearchParams(location.search);
-if(params.get("theme")==="dark")document.documentElement.classList.add("dark");
+if (params.get("theme") === "dark")
+  document.documentElement.classList.add("dark");
 {
   change({
     profile: params.get("profile") ?? "student",
@@ -173,5 +199,7 @@ if(params.get("theme")==="dark")document.documentElement.classList.add("dark");
     document.documentElement.classList.add("dark");
 }
 createRoot(document.getElementById("root")!).render(
-  params.has("embedded") ? <Scene /> : <Preview />
+  <ThemeProvider>
+    {params.has("embedded") ? <Scene /> : <Preview />}
+  </ThemeProvider>
 );

@@ -277,3 +277,18 @@
     }
   }
 }
+
+
+/* Account and checkout controls inherit the actual resolved surface. */
+.commerce-surface input:autofill {
+  color: var(--foreground);
+  background: var(--background);
+}
+.commerce-surface input:-webkit-autofill {
+  -webkit-text-fill-color: var(--foreground);
+  -webkit-box-shadow: 0 0 0 1000px var(--background) inset;
+}
+.commerce-surface :is(a,button,input,select):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}

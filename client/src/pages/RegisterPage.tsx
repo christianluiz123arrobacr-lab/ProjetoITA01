@@ -13,7 +13,7 @@ import {
   User,
 } from "lucide-react";
 
-import PublicHeader from "@/components/layout/PublicHeader";
+import PublicHeader from "@/components/billing/CommerceHeader";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
@@ -143,42 +143,10 @@ export default function RegisterPage() {
   const isSubmitting = loading || registerMutation.isPending;
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="commerce-surface min-h-screen bg-background text-foreground">
       <PublicHeader />
 
-      <section className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-[1fr_0.92fr] md:px-6">
-        <div>
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-800 dark:text-cyan-100">
-            <CheckCircle2 className="h-4 w-4" />
-            Cadastro de acesso
-          </div>
-
-          <h1 className="text-4xl font-black tracking-tight md:text-6xl">
-            Crie sua conta para acessar os planos.
-          </h1>
-
-          <p className="mt-5 max-w-xl text-base leading-8 text-muted-foreground md:text-lg">
-            Cadastre seus dados para criar o usuário da plataforma. Em seguida,
-            você poderá escolher o plano e solicitar a liberação do acesso.
-          </p>
-
-          <div className="mt-8 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-            {[
-              "Banco de questões",
-              "Explicações didáticas",
-              "Simuladores",
-              "Recursos em desenvolvimento",
-            ].map(item => (
-              <div
-                key={item}
-                className="rounded-2xl border border-border bg-white/5 px-4 py-3"
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-
+      <section className="mx-auto grid  max-w-xl items-center gap-10 px-4 py-8  md:px-6">
         <div className="rounded-[2rem] border border-border bg-card p-6 shadow-2xl backdrop-blur md:p-8">
           <h2 className="text-2xl font-black">Criar conta</h2>
 
@@ -189,47 +157,47 @@ export default function RegisterPage() {
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-200">
+              <label className="mb-2 block text-sm font-bold text-foreground">
                 Nome completo
               </label>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3">
                 <User className="h-4 w-4 text-muted-foreground" />
 
                 <input
                   value={nome}
                   onChange={event => setNome(event.target.value)}
                   placeholder="Seu nome completo"
-                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-200">
+              <label className="mb-2 block text-sm font-bold text-foreground">
                 Telefone / WhatsApp
               </label>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3">
                 <Phone className="h-4 w-4 text-muted-foreground" />
 
                 <input
                   value={telefone}
                   onChange={event => setTelefone(event.target.value)}
                   placeholder="(66) 99999-9999"
-                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-200">
+              <label className="mb-2 block text-sm font-bold text-foreground">
                 E-mail
               </label>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3">
                 <Mail className="h-4 w-4 text-muted-foreground" />
 
                 <input
@@ -237,7 +205,7 @@ export default function RegisterPage() {
                   value={email}
                   onChange={event => setEmail(event.target.value)}
                   placeholder="voce@email.com"
-                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                   required
                 />
               </div>
@@ -245,11 +213,11 @@ export default function RegisterPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-200">
+                <label className="mb-2 block text-sm font-bold text-foreground">
                   Senha
                 </label>
 
-                <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3">
                   <Lock className="h-4 w-4 text-muted-foreground" />
 
                   <input
@@ -257,18 +225,18 @@ export default function RegisterPage() {
                     value={senha}
                     onChange={event => setSenha(event.target.value)}
                     placeholder="Mínimo 6 caracteres"
-                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-200">
+                <label className="mb-2 block text-sm font-bold text-foreground">
                   Confirmar senha
                 </label>
 
-                <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-950/50 px-4 py-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3">
                   <Lock className="h-4 w-4 text-muted-foreground" />
 
                   <input
@@ -276,14 +244,14 @@ export default function RegisterPage() {
                     value={confirmarSenha}
                     onChange={event => setConfirmarSenha(event.target.value)}
                     placeholder="Repita a senha"
-                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                     required
                   />
                 </div>
               </div>
             </div>
 
-            <label className="flex items-start gap-3 rounded-2xl border border-border bg-white/5 p-4 text-sm text-slate-200">
+            <label className="flex items-start gap-3 rounded-2xl border border-border bg-white/5 p-4 text-sm text-foreground">
               <input
                 type="checkbox"
                 checked={legalAccepted}
@@ -296,7 +264,7 @@ export default function RegisterPage() {
                 <Link href="/termos-de-uso">
                   <a
                     target="_blank"
-                    className="font-bold text-cyan-200 underline"
+                    className="font-bold text-cyan-700 dark:text-cyan-300 underline"
                   >
                     Termos de Uso
                   </a>
@@ -305,7 +273,7 @@ export default function RegisterPage() {
                 <Link href="/politica-de-privacidade">
                   <a
                     target="_blank"
-                    className="font-bold text-cyan-200 underline"
+                    className="font-bold text-cyan-700 dark:text-cyan-300 underline"
                   >
                     Política de Privacidade
                   </a>
@@ -315,7 +283,7 @@ export default function RegisterPage() {
             </label>
 
             {legalConfig.data?.whatsappConsentAvailable && (
-              <label className="flex items-start gap-3 rounded-2xl border border-border bg-white/5 p-4 text-sm text-slate-200">
+              <label className="flex items-start gap-3 rounded-2xl border border-border bg-white/5 p-4 text-sm text-foreground">
                 <input
                   type="checkbox"
                   checked={billingWhatsappOptIn}
@@ -364,7 +332,7 @@ export default function RegisterPage() {
           <p className="mt-5 text-center text-sm text-muted-foreground">
             Já tem conta?{" "}
             <Link href={"/login?returnTo=" + encodeURIComponent(returnTo)}>
-              <a className="font-bold text-cyan-200 hover:text-cyan-800 dark:text-cyan-100">
+              <a className="font-bold text-cyan-700 dark:text-cyan-300 hover:text-cyan-800 dark:text-cyan-100">
                 Fazer login
               </a>
             </Link>

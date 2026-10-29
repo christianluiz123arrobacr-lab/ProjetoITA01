@@ -38,3 +38,11 @@ O console identificou aviso preexistente de links aninhados em PublicHeader (Lin
 ## Pendências reais
 
 Não homologa autenticação, catálogo ou elegibilidade do Supabase, snapshot/idempotência, refresh real da tentativa, Mercado Pago, webhooks, pagamentos, devoluções ou MVCC nativo. A revisão por teclado foi pontual; não equivale a auditoria completa de acessibilidade. Dados simulados não demonstram que o backend aceita os mesmos valores. Não foi executado SQL remoto, commit, push ou deploy.
+
+## Revisão das interfaces reais
+
+A prévia agora também abre /afiliados e /admin/afiliados usando AffiliatePage e AdminAffiliateDashboard reais, com DTOs e mutações explicitamente simulados. O layout administrativo externo/guard de produção não é reproduzido na fixture; a autorização é verificada pelos testes do backend e permanece no aplicativo. Nunca usar essa fixture como prova de sessão real.
+
+Cenários extras: affiliate-none (sem vínculo), affiliate-empty (sem vendas no período), affiliate-inactive (desativado) e cached-error (falha de preço com dados antigos no cache). Nesse último cenário, selecione um plano: não deve aparecer total do pacote nem botão de nova compra. O header usa o ThemeProvider real.
+
+Capturas da revisão: tmp/affiliate-redesign. O redesign foi aplicado aos componentes de produção; esta fixture serve apenas para inspeção sem credenciais. Não houve migration nem publicação nesta revisão.

@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc.js";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
+import { readAllDatabaseRows } from "../_core/databaseRead.js";
 import {
   affiliateCouponSchema,
   affiliatePayoutSchema,
@@ -48,6 +49,47 @@ const rangeSchema = z
   })
   .strict();
 export const affiliatesRouter = router({
+  searchAccounts: adminProcedure
+    .input(
+      z
+        .object({
+          search: z
+            .string()
+            .trim()
+            .min(2)
+            .max(80)
+            .regex(/^[A-Za-z0-9À-ÿ@. +_-]+$/),
+        })
+        .strict()
+    )
+    .query(async ({ input }) => {
+      const pattern = `%${input.search.replace(/[%_\\]/g, "\\$&")}%`;
+      const { data, error } = await supabaseAdmin
+        .from("profiles")
+        .select("id,nome,email,ativo")
+        .or(`nome.ilike.${pattern},email.ilike.${pattern}`)
+        .order("nome")
+        .order("id")
+        .limit(20);
+      if (error)
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: "Não foi possível buscar contas.",
+        });
+      return data ?? [];
+    }),
+  planOptions: adminProcedure.query(() =>
+    readAllDatabaseRows<{ id: string; name: string; is_active: boolean }>(
+      (from, to) =>
+        supabaseAdmin
+          .from("billing_plans")
+          .select("id,name,is_active")
+          .order("name")
+          .order("id")
+          .range(from, to),
+      "affiliate_plan_options"
+    )
+  ),
   preview: protectedProcedure
     .input(
       z
@@ -67,17 +109,15 @@ export const affiliatesRouter = router({
         p_backend_enabled: process.env.AFFILIATE_CHECKOUT_ENABLED === "true",
       })
     ),
-  dashboard: protectedProcedure
-    .input(rangeSchema)
-    .query(({ ctx, input }) =>
-      affiliateRpc("affiliate_dashboard", {
-        p_actor: ctx.user.id,
-        p_subject: input.subjectUserId ?? null,
-        p_from: input.from,
-        p_until: input.until,
-        p_page: input.page,
-      })
-    ),
+  dashboard: protectedProcedure.input(rangeSchema).query(({ ctx, input }) =>
+    affiliateRpc("affiliate_dashboard", {
+      p_actor: ctx.user.id,
+      p_subject: input.subjectUserId ?? null,
+      p_from: input.from,
+      p_until: input.until,
+      p_page: input.page,
+    })
+  ),
   saveProfile: adminProcedure
     .input(affiliateProfileSchema)
     .mutation(({ ctx, input }) =>
