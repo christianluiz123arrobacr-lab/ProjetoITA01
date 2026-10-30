@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Calculator,
@@ -26,6 +27,11 @@ export default function LandingPage() {
   const { isAuthenticated, loading } = useSupabaseAuth();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const affiliatePanelAccess = trpc.affiliates.panelAccess.useQuery(undefined, {
+    enabled: isAuthenticated && profileMenuOpen,
+    retry: false,
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -119,10 +125,12 @@ export default function LandingPage() {
                       </button>
                     </Link>
 
-                    <a href="/afiliados" onClick={() => setProfileMenuOpen(false)} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-primary dark:text-slate-200 dark:hover:bg-slate-800">
-                      <Gift className="h-4 w-4 text-primary" aria-hidden="true" />
-                      Painel do afiliado
-                    </a>
+                    {affiliatePanelAccess.data === true && (
+                      <a href="/afiliados" onClick={() => setProfileMenuOpen(false)} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-primary dark:text-slate-200 dark:hover:bg-slate-800">
+                        <Gift className="h-4 w-4 text-primary" aria-hidden="true" />
+                        Painel do afiliado
+                      </a>
+                    )}
 
                     <Link href="/planos">
                       <button

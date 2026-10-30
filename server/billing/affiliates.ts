@@ -132,6 +132,20 @@ export const affiliatesRouter = router({
       p_page: input.page,
     })
   ),
+  panelAccess: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role === "admin") return true;
+    const { data, error } = await supabaseAdmin
+      .from("affiliate_profiles")
+      .select("id")
+      .eq("user_id", ctx.user.id)
+      .maybeSingle();
+    if (error)
+      throw new TRPCError({
+        code: "SERVICE_UNAVAILABLE",
+        message: "Não foi possível confirmar o acesso ao painel do afiliado.",
+      });
+    return Boolean(data);
+  }),
   saveProfile: adminProcedure
     .input(affiliateProfileSchema)
     .mutation(({ ctx, input }) =>
