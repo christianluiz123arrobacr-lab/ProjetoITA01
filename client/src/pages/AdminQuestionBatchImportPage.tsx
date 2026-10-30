@@ -114,13 +114,13 @@ export default function AdminQuestionBatchImportPage() {
   useEffect(() => {
     if (!draft || !(uncertain || draft.status === "finalizing" || draft.operation_kind)) return;
     const id = draft.id;
-    let reading=false,disposed=false;
+    let reading=false,disposed=false,failures=0;
     const timer = window.setInterval(() => {
       setClock(Date.now());
       if(reading)return;reading=true;
       void utils.client.admin.getQuestionImportDraft.query({batchId:id}).then(value => {
-        if (!disposed && currentId.current === id) applyDraft(value);
-      }).catch(() => { if(!disposed && currentId.current===id)setUncertain(true); }).finally(()=>{reading=false;});
+        if (!disposed && currentId.current === id) { failures=0; applyDraft(value); }
+      }).catch(() => { if(!disposed && currentId.current===id){setUncertain(true);if(++failures>=3){window.clearInterval(timer);setNotice("A consulta automática foi pausada após falhas consecutivas. O lote permanece salvo. Use Consultar estado salvo para recuperar o progresso antes de retomar.");}} }).finally(()=>{reading=false;});
     },3000);
     return () => {disposed=true;window.clearInterval(timer);};
   },[draft?.id,draft?.status,draft?.operation_kind,uncertain,utils.client]);
@@ -291,10 +291,10 @@ export default function AdminQuestionBatchImportPage() {
       <Card className="space-y-4 border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
         <div onDragOver={(event) => event.preventDefault()} onDrop={(event: DragEvent<HTMLDivElement>) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void readJsonFile(file); }} className="rounded-3xl border-2 border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
           <FileJson className="mx-auto h-9 w-9 text-slate-500"/><h2 className="mt-2 text-lg font-bold">Carregue ou cole o JSON</h2>
-          <input ref={jsonInput} type="file" accept=".json,.jsonl,application/json" className="hidden" onChange={(event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) void readJsonFile(file); event.target.value = ""; }}/>
+          <input aria-label="Selecionar arquivo JSON" ref={jsonInput} type="file" accept=".json,.jsonl,application/json" className="hidden" onChange={(event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) void readJsonFile(file); event.target.value = ""; }}/>
           <Button variant="outline" className="mt-4 rounded-2xl" onClick={() => jsonInput.current?.click()}><Upload className="mr-2 h-4 w-4"/>Escolher JSON</Button>
         </div>
-        <textarea value={rawJson} onChange={(event) => setRawJson(event.target.value)} rows={12} placeholder='{"formato":"questoes-v2","questoes":[...]}' className="w-full rounded-2xl border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"/>
+        <label htmlFor="batch-json" className="block text-sm font-bold">JSON do lote</label><textarea id="batch-json" value={rawJson} onChange={(event) => setRawJson(event.target.value)} rows={12} placeholder='{"formato":"questoes-v2","questoes":[...]}' className="w-full rounded-2xl border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"/>
         <div className="flex justify-end"><Button disabled={!rawJson.trim() || createDraft.isPending} className="rounded-2xl" onClick={() => void createFromJson()}>{createDraft.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}Validar e salvar rascunho</Button></div>
       </Card>
 {(draftsQuery.data?.length ?? 0) > 0 && <Card className="border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900"><h2 className="font-bold">Lotes salvos</h2><div className="mt-3 space-y-2">{draftsQuery.data?.map((item: any) => <button key={item.id} className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={() => void resumeDraft(item.id)}><span>{item.source_name || item.format} · {item.validation_summary?.total ?? 0} questão(ões)</span><span className="text-xs font-bold uppercase">{item.status}</span></button>)}</div></Card>}
@@ -313,7 +313,7 @@ export default function AdminQuestionBatchImportPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Questões", previews.length], ["Válidas", previews.length - invalidCount], ["Inválidas", invalidCount], ["Com imagens", questionsWithImages], ["Imagens vinculadas", readyCount], ["Obrigatórias pendentes", pendingRequired], ["Conteúdos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newContents], ["Assuntos novos", suggestionsQuery.isLoading ? "…" : suggestionsQuery.isError ? "Indisponível" : newSubjects]].map(([label, value]) => <Card key={String(label)} className="border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></Card>)}</div>
       {suggestionsQuery.isError && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">Não foi possível comparar conteúdos e assuntos com as questões cadastradas. <Button variant="outline" onClick={()=>void suggestionsQuery.refetch()}>Tentar novamente</Button></p>}
       <Card className="flex flex-wrap items-center gap-3 border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-        <input ref={bulkImagesInput} multiple type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { void uploadMany(Array.from(event.target.files ?? [])); event.target.value = ""; }}/>
+        <input ref={bulkImagesInput} multiple type="file" accept="image/png,image/jpeg,image/webp" aria-label="Selecionar imagens para o lote" className="hidden" onChange={(event) => { void uploadMany(Array.from(event.target.files ?? [])); event.target.value = ""; }}/>
         <Button disabled={!editable} variant="outline" className="rounded-2xl" onClick={() => bulkImagesInput.current?.click()}><ImagePlus className="mr-2 h-4 w-4"/>Associar vários arquivos</Button>
         <Button className="rounded-2xl" disabled={busy || uncertain || validCount === 0 || pendingRequired > 0 || !["draft","finalizing"].includes(draft.status)} onClick={() => void finish()}><CheckCircle2 className="mr-2 h-4 w-4"/>{draft.status === "completed" ? "Lote concluído" : draft.status==="finalizing" ? "Retomar itens pendentes" : invalidCount > 0 ? `Importar ${validCount} válida(s)` : "Concluir importação"}</Button>
         <Button disabled={busy} variant="outline" className="rounded-2xl" onClick={() => { currentId.current=null;setDraft(null); setRawJson(""); setNotice("Lote preservado no servidor."); }}><Save className="mr-2 h-4 w-4"/>Salvar e sair</Button>

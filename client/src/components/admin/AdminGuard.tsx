@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -32,12 +33,15 @@ export default function AdminGuard({
 }: AdminGuardProps) {
   const { user, loading, error: authError, recovering: sessionRecovering, retry: retrySession } = useSupabaseAuth();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const wasPaused = useRef(false);
   const meQuery = trpc.auth.me.useQuery(undefined, {
     enabled: !loading && !authError && Boolean(user?.id),
-    retry: false,
+    retry: (count, error) => count < 2 && error.data?.code === "SERVICE_UNAVAILABLE",
+    retryDelay: attempt => attempt === 0 ? 2000 : 6000,
     staleTime: ADMIN_ACCESS_RECHECK_MS,
     gcTime: ADMIN_ACCESS_CACHE_MS,
-    refetchOnMount: false,
+    refetchOnMount: "always",
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     refetchInterval: adminAccessRecheck,
@@ -71,6 +75,14 @@ export default function AdminGuard({
     suspendAdminRequests(requestOwner.current, user?.id && decision.status !== "allowed" ? user.id : null);
     return () => suspendAdminRequests(requestOwner.current, null);
   }, [user?.id, decision.status, decision.confirmation?.failedAt, decision.confirmation?.role]);
+  useEffect(() => {
+    const allowed = decision.status === "allowed";
+    if (allowed && wasPaused.current) {
+      // Retry only reads rejected locally during suspension; never replay mutations.
+      void queryClient.refetchQueries({type:"active", predicate: query => query.state.status === "error" && String(query.state.error?.message).includes("As operações estão pausadas até confirmar seu acesso novamente.")});
+    }
+    wasPaused.current = !allowed;
+  }, [decision.status, user?.id, queryClient]);
   const recover = async () => {
     if (recoveryBusy.current || meQuery.isFetching || sessionRecovering) return;
     recoveryBusy.current = true;

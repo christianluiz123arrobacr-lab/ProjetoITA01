@@ -262,9 +262,7 @@ export default function PrepaidOptions({
             )}
             {preview.error && (
               <p role="alert" className="text-sm">
-                Cupom inválido, indisponível ou incompatível com sua conta.
-                Cupom e indicação não podem ser combinados. Remova o cupom para
-                continuar sem ele.
+                {preview.error.message || "Não foi possível validar o cupom agora."} Remova o cupom para continuar sem ele.
               </p>
             )}
           </div>

@@ -11,6 +11,19 @@ import {
 } from "../../shared/affiliates.js";
 import { planMonthsSchema } from "../../shared/planDurations.js";
 
+export function couponQuoteMessage(message: string) {
+  const messages: Record<string,string> = {
+    "Affiliate checkout disabled": "Programa de cupons indisponível no momento.",
+    "Affiliate coupon cannot combine with referral attribution": "Esta conta possui indicação vinculada. Cupom e indicação não podem ser combinados.",
+    "Invalid or unavailable coupon": "Cupom inexistente, inativo ou fora da validade, ou vínculo de afiliado indisponível.",
+    "Coupon not eligible for plan": "Este cupom não se aplica ao plano selecionado.",
+    "Coupon limit reached": "Este cupom atingiu o limite de usos ou reservas.",
+    "Duration disabled": "O período selecionado está indisponível.",
+    "Invalid plan or duration": "Plano ou período indisponível.",
+    "Founder eligibility required": "Esta conta não é elegível para o plano fundador.",
+  };
+  return messages[message] ?? "Não foi possível validar o cupom. Tente novamente em instantes.";
+}
 export async function affiliateRpc(
   name: string,
   args: Record<string, unknown>
@@ -25,6 +38,7 @@ export async function affiliateRpc(
             ? "BAD_REQUEST"
             : "SERVICE_UNAVAILABLE",
       message:
+        name === "affiliate_coupon_quote" && error.code === "P0001" ? couponQuoteMessage(error.message) :
         error.code === "42501"
           ? "Acesso não autorizado."
           : "Não foi possível confirmar a operação de afiliados. Confira os dados, saldo e permissões; em caso de resposta perdida, repita com a mesma chave.",

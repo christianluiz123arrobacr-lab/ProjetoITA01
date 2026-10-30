@@ -7,7 +7,7 @@ vi.mock("../_core/context.js", () => ({
 vi.mock("../_core/supabaseAdmin.js", () => ({
   supabaseAdmin: { rpc: mocks.rpc },
 }));
-import { affiliatesRouter } from "./affiliates";
+import { affiliatesRouter, couponQuoteMessage } from "./affiliates";
 const id = "11111111-1111-4111-8111-111111111111";
 const caller = (role: string | null) =>
   affiliatesRouter.createCaller({ user: role ? { id, role } : null } as any);
@@ -106,4 +106,13 @@ describe("affiliate API authorization", () => {
 
 it("rejects search filter injection before querying accounts",async()=>{
  await expect(caller("admin").searchAccounts({search:"a),role.eq.admin"})).rejects.toMatchObject({code:"BAD_REQUEST"});
+});
+
+it("keeps coupon failures specific and never exposes unknown provider details", async () => {
+ for (const [reason, expected] of [["Affiliate checkout disabled","Programa de cupons"],["Affiliate coupon cannot combine with referral attribution","indicação"],["Coupon limit reached","limite"],["Coupon not eligible for plan","plano"]]) {
+  mocks.rpc.mockResolvedValue({data:null,error:{code:"P0001",message:reason}});
+  await expect(caller("student").preview({planSlug:"basic",months:1,code:"projetovetor"})).rejects.toThrow(expected);
+ }
+ expect(couponQuoteMessage("private arbitrary details")).not.toContain("private");
+ expect(mocks.rpc).toHaveBeenLastCalledWith("affiliate_coupon_quote",expect.objectContaining({p_code:"PROJETOVETOR"}));
 });
