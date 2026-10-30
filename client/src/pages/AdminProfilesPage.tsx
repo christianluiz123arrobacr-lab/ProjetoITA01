@@ -126,13 +126,13 @@ export default function AdminProfilesPage() {
         title="Perfis ADM"
         subtitle="Gerencie dados básicos dos perfis dos usuários do sistema."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">
                 Perfis dos usuários
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Total de perfis carregados: {filteredProfiles.length} de {profiles.length}
               </p>
             </div>
@@ -149,7 +149,7 @@ export default function AdminProfilesPage() {
           </div>
         </Card>
 
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="relative w-full">
             <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
@@ -157,37 +157,37 @@ export default function AdminProfilesPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome, email, role ou id..."
-              className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-11 pr-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
             />
           </div>
         </Card>
 
         {loading ? (
           <Card className="p-10 flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando perfis...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando perfis...</p>
           </Card>
         ) : null}
 
         {!loading && error ? (
-          <Card className="p-6 border-red-200 bg-red-50">
+          <Card className="p-6 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
               <div>
-                <h2 className="text-lg font-bold text-red-700 mb-1">
+                <h2 className="text-lg font-bold text-red-700 dark:text-red-300 mb-1">
                   Erro no módulo de perfis
                 </h2>
-                <p className="text-red-600">{error}</p>
+                <p className="text-red-600 dark:text-red-300">{error}</p>
               </div>
             </div>
           </Card>
         ) : null}
 
         {!loading && successMessage ? (
-          <Card className="p-5 border-emerald-200 bg-emerald-50">
+          <Card className="p-5 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <p className="text-emerald-700 font-medium">{successMessage}</p>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+              <p className="text-emerald-700 dark:text-emerald-300 font-medium">{successMessage}</p>
             </div>
           </Card>
         ) : null}
@@ -195,10 +195,10 @@ export default function AdminProfilesPage() {
         {!loading && filteredProfiles.length === 0 ? (
           <Card className="p-10 text-center">
             <UserCircle2 className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-            <h2 className="text-lg font-bold text-slate-900 mb-2">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Nenhum perfil encontrado
             </h2>
-            <p className="text-slate-500">
+            <p className="text-slate-500 dark:text-slate-400">
               Tente outro termo de busca.
             </p>
           </Card>
@@ -212,7 +212,7 @@ export default function AdminProfilesPage() {
               return (
                 <Card
                   key={profile.id}
-                  className="p-6 bg-white border-slate-200 shadow-sm"
+                  className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm"
                 >
                   <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
                     <div className="flex-1 min-w-0">
@@ -222,11 +222,11 @@ export default function AdminProfilesPage() {
                         </span>
 
                         {profile.ativo ? (
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-100 text-emerald-700 border-emerald-200">
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800">
                             Ativo
                           </span>
                         ) : (
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-red-100 text-red-700 border-red-200">
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800">
                             Inativo
                           </span>
                         )}
@@ -234,7 +234,7 @@ export default function AdminProfilesPage() {
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                             Nome
                           </label>
                           <input
@@ -245,24 +245,24 @@ export default function AdminProfilesPage() {
                                 nome: e.target.value,
                               })
                             }
-                            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                            className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                             Email
                           </label>
                           <input
                             type="text"
                             value={profile.email || ""}
                             disabled
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 shadow-sm"
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-sm text-slate-500 dark:text-slate-400 shadow-sm"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                             Role do perfil
                           </label>
                           <select
@@ -272,7 +272,7 @@ export default function AdminProfilesPage() {
                                 role: e.target.value,
                               })
                             }
-                            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                            className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                           >
                             <option value="student">student</option>
                             <option value="admin">admin</option>
@@ -281,7 +281,7 @@ export default function AdminProfilesPage() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                             Status
                           </label>
                           <select
@@ -291,7 +291,7 @@ export default function AdminProfilesPage() {
                                 ativo: e.target.value === "ativo",
                               })
                             }
-                            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                            className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                           >
                             <option value="ativo">Ativo</option>
                             <option value="inativo">Inativo</option>
@@ -299,13 +299,13 @@ export default function AdminProfilesPage() {
                         </div>
                       </div>
 
-                      <div className="mt-4 space-y-2 text-sm text-slate-600">
+                      <div className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                         <p>
-                          <span className="font-semibold text-slate-800">ID:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">ID:</span>{" "}
                           <span className="font-mono break-all">{profile.id}</span>
                         </p>
                         <p>
-                          <span className="font-semibold text-slate-800">Criado em:</span>{" "}
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Criado em:</span>{" "}
                           {formatDate(profile.created_at)}
                         </p>
                       </div>

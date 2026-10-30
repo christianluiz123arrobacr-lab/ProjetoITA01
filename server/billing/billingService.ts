@@ -1,3 +1,8 @@
+import { finalizePendingReferral, referralRpc } from "./referralService.js";
+import { affiliateRpc } from "./affiliates.js";
+import { runPrepaidCheckout, type PrepaidInput } from "./prepaidCheckout.js";
+import { recoverPrepaidResource } from "./mercadoPagoClient.js";
+import { PLAN_MONTHS, calculateDurationPrice, prepaidCheckoutSchema } from "../../shared/planDurations.js";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { supabaseAdmin } from "../_core/supabaseAdmin.js";
@@ -11,6 +16,7 @@ import {
 import {
   cancelPreapproval,
   createPixPayment as createMercadoPagoPixPayment,
+  createPrepaidPreference,
   createPreapprovalCheckout,
   extractAuthorizedPaymentId,
   extractChargebackPaymentIds,
@@ -849,6 +855,7 @@ export async function createCardSubscriptionCheckout(input: { userId: string; us
   const { error: slotExpiryError } = await supabaseAdmin.rpc("release_expired_mercadopago_recurring_slots", { p_now: isoNow() });
   if (slotExpiryError) fail(slotExpiryError.message);
   const plan = await getPlanForCheckout(input.planSlug, input.userId);
+  await finalizePendingReferral(input.userId);
   const profile = await getUserProfile(input.userId);
   const payerEmail = getValidatedBuyerEmail(profile?.email, input.userEmail);
 
@@ -888,6 +895,7 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
 
   await expireStaleReservations();
   const plan = await getPlanForCheckout(input.planSlug, input.userId);
+  await finalizePendingReferral(input.userId);
 
   const existing = await reusePendingSubscription(input.userId, plan.id, "pix");
   if (existing?.id) {
@@ -947,10 +955,11 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
 
   const externalReference = buildPaymentReference(String(payment.id), reservation.subscriptionId);
   try {
+    const amountCents = Number(await referralRpc("referral_price_payment", { p_payment: String(payment.id) }));
     const mpPayment = await createMercadoPagoPixPayment({
       externalReference,
       payerEmail,
-      amount: centsToMercadoPagoAmount(Number(plan.price_cents)),
+      amount: centsToMercadoPagoAmount(amountCents),
       description: `Projeto Vetor - ${plan.name}`,
       notificationUrl: getMercadoPagoWebhookUrl(),
       expiresAt,
@@ -980,7 +989,7 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
       subscriptionId: reservation.subscriptionId,
       paymentId: String(payment.id),
       status: mapMercadoPagoPaymentStatus(mpPayment.status, mpPayment.status_detail),
-      amountCents: Number(plan.price_cents),
+      amountCents,
       currency: normalizeCurrency(plan.currency),
       qrCode: transactionData?.qr_code ?? null,
       qrCodeBase64: transactionData?.qr_code_base64 ?? null,
@@ -993,6 +1002,49 @@ export async function createPixPayment(input: { userId: string; userEmail: strin
     await markSubscriptionFailed(reservation.subscriptionId, message);
     throw error;
   }
+}
+
+export async function createPrepaidCheckout(input: PrepaidInput) {
+  if (!getBillingCapabilities().mercadoPagoEnabled) fail("Mercado Pago não configurado.", "PRECONDITION_FAILED");
+  await finalizePendingReferral(input.userId);
+  const profile = await getUserProfile(input.userId);
+  const email = getValidatedBuyerEmail(profile?.email, input.userEmail);
+  return runPrepaidCheckout({...input, userEmail:email}, {
+    rpc: async (name,args) => {
+      const {data,error} = await supabaseAdmin.rpc(name,args);
+      if(error) throw new TRPCError({code:"BAD_REQUEST",message:"Não foi possível preparar ou recuperar o pacote. Verifique pagamentos pendentes e a disponibilidade da duração."});
+      return data;
+    },
+    recover:recoverPrepaidResource, createPix:createMercadoPagoPixPayment,
+    affiliateCheckoutEnabled:process.env.AFFILIATE_CHECKOUT_ENABLED==="true",
+    syncPayment:async resource=>(await processApprovedPayment(await getPayment(String(resource.id)))).paymentStatus,
+    createCard:createPrepaidPreference, notificationUrl:getMercadoPagoWebhookUrl(), backUrl:getSubscriptionReturnUrl(),
+  });
+}
+
+export async function getPrepaidOffers(userId:string,planSlug:string) {
+  const plan=await getPlanForCheckout(planSlug,userId);
+  await finalizePendingReferral(userId);
+  const {data,error}=await supabaseAdmin.from("billing_plan_durations").select("months,enabled,discount_bps,revision").eq("plan_id",plan.id);
+  if(error) fail("Não foi possível consultar os períodos.");
+  const offers=[];
+  for(const months of PLAN_MONTHS) {
+    const config=data?.find(row=>row.months===months);
+    if(config ? !config.enabled : months>3) continue;
+    const price=calculateDurationPrice(plan.price_cents,months,config?.discount_bps??0);
+    const referralDiscountCents=Number(await referralRpc("referral_calculate_discount",{p_user:userId,p_amount_cents:price.totalCents,p_payment_method:"mercadopago_card",p_prepaid:true,p_exclude_payment:null}));
+    offers.push({...price,months,referralDiscountCents,finalCents:price.totalCents-referralDiscountCents});
+  }
+  return offers;
+}
+
+export async function recoverPrepaidCheckout(userId:string,userEmail:string|null,planSlug:string) {
+  const {data,error}=await supabaseAdmin.from("billing_prepaid_attempts")
+    .select("attempt_key,months,method,snapshot,billing_plans!inner(slug)").eq("user_id",userId)
+    .eq("billing_plans.slug",planSlug).order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if(error) throw new TRPCError({code:"SERVICE_UNAVAILABLE",message:"Não foi possível consultar a tentativa."});
+  if(!data) throw new TRPCError({code:"NOT_FOUND",message:"Nenhuma compra pré-paga anterior neste plano."});
+  return createPrepaidCheckout({userId,userEmail,...prepaidCheckoutSchema.parse({planSlug,attemptKey:data.attempt_key,durationMonths:data.months,paymentMethod:data.method,couponCode:(data.snapshot as any)?.affiliate?.code})});
 }
 
 export async function getMyPayments(userId: string) {
@@ -1125,7 +1177,7 @@ export async function reconcileDuplicateMercadoPagoSubscriptions(input: { subscr
     input.subscriptionId ? "A assinatura informada não possui reconciliação pendente." : "Nenhuma reconciliação pendente foi encontrada.",
   );
   const { error: logError } = await supabaseAdmin.from("admin_logs").insert({
-    admin_user_id: input.adminUserId,
+    actor_user_id: input.adminUserId,
     action: "billing_mercadopago_duplicates_reconciled",
     entity_type: "billing_subscription",
     entity_id: input.subscriptionId ?? null,
@@ -1165,10 +1217,17 @@ async function resolvePaymentContext(payment: MercadoPagoPayment) {
     if (originalSubscriptionId && originalSubscriptionId !== pixReference.subscriptionId) {
       throw new Error("Referência Pix não corresponde à reserva original.");
     }
+    const originSubscription = (localPayment as any).origin_subscription as LocalSubscription | null;
+    if (!originSubscription?.id || String(originSubscription.id) !== pixReference.subscriptionId) {
+      throw new Error("Assinatura original do pagamento não corresponde à referência Pix.");
+    }
+    if (String(localPayment.user_id) !== String(originSubscription.user_id)) {
+      throw new Error("Titular do pagamento não corresponde ao titular da assinatura.");
+    }
     return {
       kind: "pix" as const,
       localPayment: localPayment as LocalPayment,
-      subscription: (localPayment as any).origin_subscription as LocalSubscription,
+      subscription: originSubscription,
       paymentStatus,
     };
   }
@@ -1176,6 +1235,12 @@ async function resolvePaymentContext(payment: MercadoPagoPayment) {
   const subscription = await findSubscriptionForRecurringPayment(payment);
   if (!subscription?.id) throw new Error("Assinatura local não encontrada para pagamento recorrente.");
   const localPayment = await upsertRecurringPaymentRecord({ payment, subscription, paymentStatus });
+  if (
+    String(localPayment.user_id) !== String(subscription.user_id)
+    || String(localPayment.original_subscription_id ?? localPayment.subscription_id ?? "") !== String(subscription.id)
+  ) {
+    throw new Error("Pagamento recorrente não corresponde ao titular e à assinatura locais.");
+  }
   return { kind: "card" as const, localPayment, subscription, paymentStatus };
 }
 
@@ -1187,17 +1252,18 @@ export const PAYMENT_WITH_ORIGIN_SUBSCRIPTION_SELECT = `
 `;
 
 type PaymentStatusSyncDependencies = {
-  listPendingPayments: (userId: string) => Promise<Array<{ id: string; gateway_payment_id: string; payment_method: string }>>;
+  listPendingPayments: (userId: string) => Promise<Array<{ id: string; gateway_payment_id: string; payment_method: string; gateway_sync_attempts?: number }>>;
   getGatewayPayment: typeof getPayment;
   processGatewayPayment: typeof processApprovedPayment;
   logError: (entry: Record<string, unknown>) => void;
+  recordSync?: (paymentId: string, patch: Record<string, unknown>) => Promise<void>;
 };
 
 const defaultPaymentStatusSyncDependencies: PaymentStatusSyncDependencies = {
   listPendingPayments: async userId => {
     const { data, error } = await supabaseAdmin
       .from("billing_payments")
-      .select("id, gateway_payment_id, payment_method")
+      .select("id, gateway_payment_id, payment_method, gateway_sync_attempts")
       .eq("user_id", userId)
       .eq("gateway", GATEWAY)
       .eq("status", "pending")
@@ -1206,12 +1272,16 @@ const defaultPaymentStatusSyncDependencies: PaymentStatusSyncDependencies = {
       .limit(5);
     if (error) throw new Error(error.message);
     return (data ?? []).flatMap(row => row.gateway_payment_id
-      ? [{ id: String(row.id), gateway_payment_id: String(row.gateway_payment_id), payment_method: String(row.payment_method) }]
+      ? [{ id: String(row.id), gateway_payment_id: String(row.gateway_payment_id), payment_method: String(row.payment_method), gateway_sync_attempts: Number(row.gateway_sync_attempts ?? 0) }]
       : []);
   },
   getGatewayPayment: getPayment,
   processGatewayPayment: processApprovedPayment,
   logError: entry => console.error(entry),
+  recordSync: async (paymentId, patch) => {
+    const { error } = await supabaseAdmin.from("billing_payments").update(patch).eq("id", paymentId);
+    if (error) throw new Error(error.message);
+  },
 };
 
 /**
@@ -1227,7 +1297,15 @@ export async function syncMyMercadoPagoPaymentStatus(
 
   for (const localPayment of pendingPayments) {
     try {
+      await dependencies.recordSync?.(localPayment.id, {
+        gateway_last_checked_at: isoNow(),
+        gateway_sync_attempts: Number(localPayment.gateway_sync_attempts ?? 0) + 1,
+      });
       const gatewayPayment = await dependencies.getGatewayPayment(localPayment.gateway_payment_id);
+      const officialGatewayId = gatewayPayment.id ? String(gatewayPayment.id) : null;
+      if (!officialGatewayId || officialGatewayId !== localPayment.gateway_payment_id) {
+        throw new Error("O pagamento retornado pelo Mercado Pago não corresponde ao registro local.");
+      }
       if (localPayment.payment_method === "mercadopago_pix") {
         const reference = extractPixPaymentReference(gatewayPayment.external_reference);
         if (!reference || reference.paymentId !== localPayment.id) {
@@ -1235,9 +1313,24 @@ export async function syncMyMercadoPagoPaymentStatus(
         }
       }
       const processed = await dependencies.processGatewayPayment(gatewayPayment);
+      await dependencies.recordSync?.(localPayment.id, {
+        gateway_last_status: gatewayPayment.status ?? null,
+        gateway_reconciliation_status: null,
+        gateway_reconciliation_error: null,
+      });
       results.push({ paymentId: localPayment.id, ok: true, status: processed.paymentStatus });
     } catch (error) {
       const message = sanitizeBillingError(error);
+      if (dependencies.recordSync) {
+        await dependencies.recordSync(localPayment.id, {
+          gateway_reconciliation_status: "authenticated_sync_failed",
+          gateway_reconciliation_error: message,
+        }).catch(recordError => dependencies.logError({
+          event: "mercadopago_payment_status_sync_audit_failed",
+          local_payment_id: localPayment.id,
+          message: sanitizeBillingError(recordError),
+        }));
+      }
       dependencies.logError({
         event: "mercadopago_payment_status_sync_failed",
         local_payment_id: localPayment.id,
@@ -1294,7 +1387,7 @@ export async function reconcileMercadoPagoPaymentByAdmin(
 
   const audit = async (success: boolean, error?: string) => {
     await dependencies.writeAuditLog({
-      admin_user_id: input.adminUserId,
+      actor_user_id: input.adminUserId,
       action: "billing_mercadopago_payment_reconciled",
       entity_type: "billing_payment",
       entity_id: input.billingPaymentId,
@@ -1335,7 +1428,9 @@ export async function reconcileMercadoPagoPaymentByAdmin(
       ?? localPayment.subscription_id
       ?? null;
 
-    await audit(true);
+    await audit(true).catch(auditError => {
+      console.error({ event: "billing_admin_reconciliation_audit_failed", billing_payment_id: input.billingPaymentId, message: sanitizeBillingError(auditError) });
+    });
 
     if (processed.paymentStatus === "approved" && accessApplied) {
       return { success: true, paymentStatus: processed.paymentStatus, subscriptionId, accessApplied, message: "Pagamento confirmado e acesso liberado." };
@@ -1358,7 +1453,8 @@ async function applyApprovedAccess(input: {
   localPayment: LocalPayment;
   payment: MercadoPagoPayment;
 }) {
-  const { data, error } = await supabaseAdmin.rpc("apply_approved_mercadopago_payment", {
+  const rpcName = input.localPayment.access_duration_unit === "months" ? "apply_approved_prepaid_payment" : "apply_approved_mercadopago_payment";
+  const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_payment_id: input.localPayment.id,
     p_gateway_payment_id: input.payment.id ? String(input.payment.id) : input.localPayment.gateway_payment_id ?? null,
     p_gateway_status: input.payment.status ?? null,
@@ -1369,9 +1465,21 @@ async function applyApprovedAccess(input: {
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.payment_id) throw new Error("Falha ao aplicar acesso aprovado.");
+  await referralRpc("referral_reconcile_payment", { p_payment: input.localPayment.id });
   await updatePaymentOrThrow(input.localPayment.id, {
     gateway_reconciliation_status: null,
     gateway_reconciliation_error: null,
+  });
+}
+
+async function cancelRecurringAfterApprovedPrepaidPayment(localPayment: LocalPayment) {
+  const recurringId = localPayment.metadata?.switch_from_recurring_subscription_id;
+  if (!recurringId) return;
+  const recurring = await getSubscriptionById(String(recurringId));
+  if (!recurring?.gateway_subscription_id) return;
+  const result = await cancelRelatedPreapprovals([recurring], "reconciliation");
+  await updatePaymentOrThrow(localPayment.id, {
+    metadata: { ...(localPayment.metadata ?? {}), recurring_cancellation_outcome: result.outcome, recurring_cancellation_checked_at: isoNow() },
   });
 }
 
@@ -1385,6 +1493,7 @@ async function applyPaymentReversal(input: { localPayment: LocalPayment; payment
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.payment_id) throw new Error("Falha ao recalcular acesso após estorno.");
+  await referralRpc("referral_reconcile_payment", { p_payment: input.localPayment.id });
 }
 
 export async function processApprovedPayment(payment: MercadoPagoPayment) {
@@ -1407,6 +1516,7 @@ export async function processApprovedPayment(payment: MercadoPagoPayment) {
 
   if (context.paymentStatus === "approved") {
     await applyApprovedAccess({ localPayment: context.localPayment, payment });
+    await cancelRecurringAfterApprovedPrepaidPayment(context.localPayment);
   } else {
     if (["refunded", "chargeback"].includes(context.paymentStatus)) paymentPatch.refunded_at = now.toISOString();
     await updatePaymentOrThrow(context.localPayment.id, paymentPatch);
@@ -1425,6 +1535,8 @@ export async function processApprovedPayment(payment: MercadoPagoPayment) {
     });
   }
 
+  const refunded=payment.transaction_amount_refunded;
+  await affiliateRpc("affiliate_reconcile_payment",{p_payment:context.localPayment.id,p_refunded_cents:refunded==null?(payment.status_detail==="partially_refunded"?null:0):mercadoPagoAmountToCents(refunded)});
   return { paymentStatus: context.paymentStatus, kind: context.kind } as const;
 }
 
@@ -1491,17 +1603,6 @@ function normalizeWebhookType(input: string) {
   return input.toLowerCase().replace(/^topic:/, "").replace(/\s+/g, "_");
 }
 
-function isSubscriptionWebhookType(type: string) {
-  return ["subscription_preapproval", "subscription_authorized_payment", "subscription_preapproval_plan"].includes(type);
-}
-
-function hasValidWebhookFallback(input: { type: string; query: Record<string, unknown> }) {
-  const urlSecret = process.env.MERCADO_PAGO_WEBHOOK_URL_SECRET;
-  if (!urlSecret || !isSubscriptionWebhookType(input.type)) return false;
-  const provided = String(input.query.webhook_secret ?? input.query.secret ?? "");
-  return provided.length > 0 && provided === urlSecret;
-}
-
 async function processAuthorizedPaymentUpdate(resourceId: string) {
   const authorized = await getAuthorizedPayment(resourceId);
   const paymentId = extractAuthorizedPaymentId(authorized);
@@ -1561,11 +1662,70 @@ async function dispatchMercadoPagoWebhook(type: string, resourceId: string) {
   return { ignored: true, reason: "unknown_webhook_type" } as const;
 }
 
+type MercadoPagoWebhookDependencies = {
+  claimEvent: typeof claimWebhookEvent;
+  dispatch: typeof dispatchMercadoPagoWebhook;
+  markProcessed: (input: { claimId: string; resourceId: string }) => Promise<void>;
+  markFailed: (input: { claimId: string; resourceId: string; type: string; message: string }) => Promise<void>;
+};
+
+const defaultMercadoPagoWebhookDependencies: MercadoPagoWebhookDependencies = {
+  claimEvent: claimWebhookEvent,
+  dispatch: dispatchMercadoPagoWebhook,
+  markProcessed: async ({ claimId, resourceId }) => {
+    if (resourceId) {
+      await supabaseAdmin.from("billing_payments").update({
+        last_webhook_received_at: isoNow(),
+        gateway_reconciliation_status: null,
+        gateway_reconciliation_error: null,
+      }).eq("gateway", GATEWAY).eq("gateway_payment_id", resourceId);
+    }
+    const { error } = await supabaseAdmin
+      .from("billing_webhook_events")
+      .update({ status: "processed", processed_at: isoNow(), error_message: null })
+      .eq("id", claimId);
+    if (error) throw new Error(error.message);
+  },
+  markFailed: async ({ claimId, resourceId, type, message }) => {
+    const { data: localPayment } = await supabaseAdmin
+      .from("billing_payments")
+      .select("id")
+      .eq("gateway", GATEWAY)
+      .eq("gateway_payment_id", resourceId)
+      .maybeSingle();
+    if (localPayment?.id) {
+      await supabaseAdmin
+        .from("billing_payments")
+        .update({
+          last_webhook_received_at: isoNow(),
+          gateway_reconciliation_status: "webhook_payment_processing_failed",
+          gateway_reconciliation_error: message,
+        })
+        .eq("id", localPayment.id);
+    }
+    const { error } = await supabaseAdmin
+      .from("billing_webhook_events")
+      .update({
+        status: "failed",
+        error_message: message,
+        payload: {
+          type,
+          resourceId,
+          billing_payment_id: localPayment?.id ?? null,
+          gateway_payment_id: resourceId || null,
+          attempted_at: isoNow(),
+        },
+      })
+      .eq("id", claimId);
+    if (error) throw new Error(error.message);
+  },
+};
+
 export async function processMercadoPagoWebhook(input: {
   headers: Record<string, string | string[] | undefined>;
   query: Record<string, unknown>;
   body: MercadoPagoWebhookPayload;
-}) {
+}, dependencies: MercadoPagoWebhookDependencies = defaultMercadoPagoWebhookDependencies) {
   const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
   if (!secret) throw new Error("MERCADO_PAGO_WEBHOOK_SECRET não configurado.");
 
@@ -1579,56 +1739,25 @@ export async function processMercadoPagoWebhook(input: {
     secret,
   });
 
-  if (!signatureValid && !hasValidWebhookFallback({ type, query: input.query })) {
+  if (!signatureValid) {
+    console.warn({
+      event: "mercadopago_webhook_rejected",
+      request_id: requestId ?? null,
+      resource_id: resourceId || null,
+      reason: "invalid_signature",
+    });
     return { ok: false, status: 401 as const, message: "invalid_signature" };
   }
 
   const eventId = String(input.body?.id ?? `${type}:${resourceId}:${requestId ?? "no-request-id"}`);
-  const claim = await claimWebhookEvent({ eventId, type, resourceId, requestId: requestId ?? null });
+  const claim = await dependencies.claimEvent({ eventId, type, resourceId, requestId: requestId ?? null });
   if (claim.claimStatus === "already_processed") return { ok: true, status: 200 as const, duplicate: true };
   if (claim.claimStatus === "already_processing") return { ok: false, status: 409 as const, message: "already_processing" };
 
   return runClaimedBillingWebhook({
-    dispatch: () => dispatchMercadoPagoWebhook(type, resourceId),
-    markProcessed: async () => {
-      const { error } = await supabaseAdmin
-        .from("billing_webhook_events")
-        .update({ status: "processed", processed_at: isoNow(), error_message: null })
-        .eq("id", claim.row.id);
-      if (error) throw new Error(error.message);
-    },
-    markFailed: async message => {
-      const { data: localPayment } = await supabaseAdmin
-        .from("billing_payments")
-        .select("id")
-        .eq("gateway", GATEWAY)
-        .eq("gateway_payment_id", resourceId)
-        .maybeSingle();
-      if (localPayment?.id) {
-        await supabaseAdmin
-          .from("billing_payments")
-          .update({
-            gateway_reconciliation_status: "webhook_payment_processing_failed",
-            gateway_reconciliation_error: message,
-          })
-          .eq("id", localPayment.id);
-      }
-      const { error } = await supabaseAdmin
-        .from("billing_webhook_events")
-        .update({
-          status: "failed",
-          error_message: message,
-          payload: {
-            type,
-            resourceId,
-            billing_payment_id: localPayment?.id ?? null,
-            gateway_payment_id: resourceId || null,
-            attempted_at: isoNow(),
-          },
-        })
-        .eq("id", claim.row.id);
-      if (error) throw new Error(error.message);
-    },
+    dispatch: () => dependencies.dispatch(type, resourceId),
+    markProcessed: () => dependencies.markProcessed({ claimId: String(claim.row.id), resourceId }),
+    markFailed: message => dependencies.markFailed({ claimId: String(claim.row.id), resourceId, type, message }),
   });
 }
 

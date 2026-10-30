@@ -9,7 +9,7 @@ import { DopplerSimulator } from "@/components/waves/DopplerSimulator";
 
 export default function OndulatoriaSimulator() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50">
       <header className="sticky top-0 z-50 border-b border-slate-200/50 bg-white/80 backdrop-blur-md">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <Link href="/ondulatoria">

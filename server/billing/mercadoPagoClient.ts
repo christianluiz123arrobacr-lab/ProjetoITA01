@@ -20,6 +20,7 @@ export const mercadoPagoPaymentSchema = z.object({
   status_detail: z.string().nullable().optional(),
   external_reference: z.string().nullable().optional(),
   transaction_amount: z.number().nullable().optional(),
+  transaction_amount_refunded: z.number().nonnegative().nullable().optional(),
   currency_id: z.string().nullable().optional(),
   date_approved: z.string().nullable().optional(),
   date_of_expiration: z.string().nullable().optional(),
@@ -40,6 +41,12 @@ export const mercadoPagoPreapprovalSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   status: z.string().nullable().optional(),
   external_reference: z.string().nullable().optional(),
+  init_point: z.string().nullable().optional(),
+  sandbox_init_point: z.string().nullable().optional(),
+}).passthrough();
+
+export const mercadoPagoPreferenceSchema = z.object({
+  id: z.string().optional(),
   init_point: z.string().nullable().optional(),
   sandbox_init_point: z.string().nullable().optional(),
 }).passthrough();
@@ -183,9 +190,50 @@ export async function createPixPayment(input: {
   return mercadoPagoPaymentSchema.parse(json);
 }
 
+/** Hosted, one-time checkout. Card details never reach Projeto Vetor. */
+export async function createPrepaidPreference(input: {
+  externalReference: string;
+  payerEmail: string;
+  amount: number;
+  title: string;
+  notificationUrl: string;
+  backUrl: string;
+  idempotencyKey: string;
+}) {
+  const json = await mercadoPagoFetch("/checkout/preferences", {
+    method: "POST",
+    body: JSON.stringify({
+      items: [{ title: input.title, quantity: 1, unit_price: input.amount, currency_id: "BRL" }],
+      payer: { email: input.payerEmail },
+      external_reference: input.externalReference,
+      notification_url: input.notificationUrl,
+      back_urls: { success: input.backUrl, pending: input.backUrl, failure: input.backUrl },
+      auto_return: "approved",
+    }),
+    idempotencyKey: input.idempotencyKey,
+  });
+  return mercadoPagoPreferenceSchema.parse(json);
+}
+
 export async function getPayment(id: string) {
   const json = await mercadoPagoFetch(`/v1/payments/${encodeURIComponent(id)}`);
   return mercadoPagoPaymentSchema.parse(json);
+}
+
+/** A search miss is NOT evidence that a timed-out POST did not succeed. */
+export async function recoverPrepaidResource(method: "card" | "pix", reference: string) {
+  const path = method === "card" ? "/checkout/preferences/search" : "/v1/payments/search";
+  const json = await mercadoPagoFetch(`${path}?external_reference=${encodeURIComponent(reference)}&limit=2`);
+  const rows = method === "card" ? json?.elements : json?.results;
+  if (!Array.isArray(rows)) throw new Error("Resposta de recuperação inválida.");
+  if (rows.length === 0) return null;
+  if (rows.length !== 1 || Number(json?.total ?? json?.paging?.total ?? rows.length) > 1) throw new Error("Recuperação exige revisão administrativa.");
+  const id = rows[0]?.id;
+  if (!id) throw new Error("Identificador de recuperação ausente.");
+  if (method === "pix") return getPayment(String(id));
+  const preference = await mercadoPagoFetch(`/checkout/preferences/${encodeURIComponent(String(id))}`);
+  if (preference?.external_reference !== reference) throw new Error("Referência divergente.");
+  return preference;
 }
 
 

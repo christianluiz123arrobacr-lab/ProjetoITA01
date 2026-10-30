@@ -1601,20 +1601,20 @@ export function MolecularGeometrySimulator() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-      <Card className="overflow-hidden border-slate-200 bg-white">
-        <div className="border-b border-slate-100 p-5">
+      <Card className="overflow-hidden border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-white dark:[.admin-theme_&]:bg-slate-900">
+        <div className="border-b border-slate-100 dark:[.admin-theme_&]:border-slate-700 p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700">
+              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:[.admin-theme_&]:text-purple-300">
                 <Atom className="h-4 w-4" />
                 Visualização 3D didática
               </div>
 
-              <h2 className="mt-1 text-2xl font-black text-slate-900">
+              <h2 className="mt-1 text-2xl font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                 {molecule.formula} · {molecule.name}
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                 Modelo {molecule.vsepr}, geometria molecular{" "}
                 {molecule.molecularGeometry.toLowerCase()}.
               </p>
@@ -1624,7 +1624,7 @@ export function MolecularGeometrySimulator() {
               <select
                 value={selectedFormula}
                 onChange={event => setSelectedFormula(event.target.value)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                className="rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-white dark:[.admin-theme_&]:bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-700 dark:[.admin-theme_&]:text-slate-300 outline-none focus:border-slate-900"
               >
                 {MOLECULES.map(item => (
                   <option key={item.formula} value={item.formula}>
@@ -1891,15 +1891,15 @@ export function MolecularGeometrySimulator() {
             </svg>
           </div>
 
-          <div className="border-l border-slate-100 bg-slate-50 p-5">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+          <div className="border-l border-slate-100 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-5">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:[.admin-theme_&]:text-slate-100">
               <Rotate3D className="h-4 w-4" />
               Controle de rotação
             </div>
 
             <div className="mt-5 space-y-5">
               <div>
-                <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                   <span>Rotação vertical</span>
                   <span>{rotationX}°</span>
                 </div>
@@ -1915,7 +1915,7 @@ export function MolecularGeometrySimulator() {
               </div>
 
               <div>
-                <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                   <span>Rotação horizontal</span>
                   <span>{Math.round(rotationY)}°</span>
                 </div>
@@ -1956,62 +1956,62 @@ export function MolecularGeometrySimulator() {
                 </Button>
               </div>
 
-              <div className="rounded-2xl border border-purple-100 bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-purple-700">
+              <div className="rounded-2xl border border-purple-100 dark:[.admin-theme_&]:border-purple-800 bg-white dark:[.admin-theme_&]:bg-slate-900 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:[.admin-theme_&]:text-purple-300">
                   Leitura rápida
                 </p>
 
                 <div className="mt-3 space-y-3 text-sm">
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Pares ligantes</span>
-                    <strong className="text-slate-900">
+                    <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Pares ligantes</span>
+                    <strong className="text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                       {molecule.bondingPairs}
                     </strong>
                   </div>
 
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Pares livres</span>
-                    <strong className="text-slate-900">
+                    <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Pares livres</span>
+                    <strong className="text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                       {molecule.lonePairs}
                     </strong>
                   </div>
 
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Geometria eletrônica</span>
-                    <strong className="text-right text-slate-900">
+                    <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Geometria eletrônica</span>
+                    <strong className="text-right text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                       {molecule.electronGeometry}
                     </strong>
                   </div>
 
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Geometria molecular</span>
-                    <strong className="text-right text-slate-900">
+                    <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Geometria molecular</span>
+                    <strong className="text-right text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                       {molecule.molecularGeometry}
                     </strong>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div className="rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-white dark:[.admin-theme_&]:bg-slate-900 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                   Legenda visual
                 </p>
 
-                <div className="mt-3 space-y-3 text-xs text-slate-700">
+                <div className="mt-3 space-y-3 text-xs text-slate-700 dark:[.admin-theme_&]:text-slate-300">
                   <div className="flex items-center gap-3">
-                    <span className="h-4 w-4 rounded-full bg-cyan-500 ring-2 ring-cyan-200" />
+                    <span className="h-4 w-4 rounded-full bg-cyan-500 ring-2 ring-cyan-200 dark:[.admin-theme_&]:ring-cyan-800" />
                     <span>Átomo central</span>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span className="h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-emerald-200" />
+                    <span className="h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-emerald-200 dark:[.admin-theme_&]:ring-emerald-800" />
                     <span>Átomo ligado</span>
                   </div>
 
                   <div className="flex items-center gap-3">
                     <span className="flex gap-1">
-                      <span className="h-3 w-3 rounded-full bg-purple-300 ring-1 ring-purple-100" />
-                      <span className="h-3 w-3 rounded-full bg-purple-300 ring-1 ring-purple-100" />
+                      <span className="h-3 w-3 rounded-full bg-purple-300 ring-1 ring-purple-100 dark:[.admin-theme_&]:ring-purple-800" />
+                      <span className="h-3 w-3 rounded-full bg-purple-300 ring-1 ring-purple-100 dark:[.admin-theme_&]:ring-purple-800" />
                     </span>
                     <span>Par livre de elétrons</span>
                   </div>
@@ -2028,12 +2028,12 @@ export function MolecularGeometrySimulator() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">
+              <div className="rounded-2xl border border-cyan-100 dark:[.admin-theme_&]:border-cyan-800 bg-cyan-50 dark:[.admin-theme_&]:bg-cyan-950 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700 dark:[.admin-theme_&]:text-cyan-300">
                   Protótipo interno
                 </p>
 
-                <p className="mt-2 text-xs leading-5 text-cyan-900">
+                <p className="mt-2 text-xs leading-5 text-cyan-900 dark:[.admin-theme_&]:text-cyan-200">
                   Esta visualização é didática. Átomos, ligações, pares livres e
                   ângulos ficam no mesmo SVG, então o alinhamento não quebra
                   quando a tela muda de tamanho.
@@ -2043,19 +2043,19 @@ export function MolecularGeometrySimulator() {
           </div>
         </div>
 
-        <div className="border-t border-slate-100 bg-slate-50/80 p-5">
+        <div className="border-t border-slate-100 dark:[.admin-theme_&]:border-slate-700 bg-slate-50/80 dark:[.admin-theme_&]:bg-slate-900/80 p-5">
           <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
             <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:[.admin-theme_&]:text-slate-100">
                 <Beaker className="h-4 w-4" />
                 Montar geometria por VSEPR
               </div>
 
-              <h3 className="mt-2 text-xl font-black text-slate-900">
+              <h3 className="mt-2 text-xl font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                 Escolha X e E
               </h3>
 
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:[.admin-theme_&]:text-slate-300">
                 Monte o modelo geral da molécula usando a notação AXE. Aqui, X
                 representa átomos ligados ao átomo central e E representa pares
                 livres. Finalmente uma forma de estudar sem decorar molécula por
@@ -2064,7 +2064,7 @@ export function MolecularGeometrySimulator() {
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                     Átomos ligados ao central
                   </label>
 
@@ -2073,7 +2073,7 @@ export function MolecularGeometrySimulator() {
                     onChange={event =>
                       setBuilderBondingPairs(Number(event.target.value))
                     }
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                    className="w-full rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-white dark:[.admin-theme_&]:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:[.admin-theme_&]:text-slate-300 outline-none focus:border-slate-900"
                   >
                     {[2, 3, 4, 5, 6].map(value => (
                       <option key={value} value={value}>
@@ -2084,7 +2084,7 @@ export function MolecularGeometrySimulator() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                     Pares livres no central
                   </label>
 
@@ -2093,7 +2093,7 @@ export function MolecularGeometrySimulator() {
                     onChange={event =>
                       setBuilderLonePairs(Number(event.target.value))
                     }
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                    className="w-full rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-white dark:[.admin-theme_&]:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:[.admin-theme_&]:text-slate-300 outline-none focus:border-slate-900"
                   >
                     {[0, 1, 2, 3].map(value => (
                       <option key={value} value={value}>
@@ -2105,35 +2105,35 @@ export function MolecularGeometrySimulator() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-white dark:[.admin-theme_&]:bg-slate-900 p-5 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-purple-700">
+                  <p className="text-xs font-bold uppercase tracking-wide text-purple-700 dark:[.admin-theme_&]:text-purple-300">
                     Modelo montado
                   </p>
 
-                  <p className="mt-1 text-4xl font-black text-slate-900">
+                  <p className="mt-1 text-4xl font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                     {builderVsepr}
                   </p>
                 </div>
 
                 {builderModel ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-right">
-                    <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                  <div className="rounded-2xl border border-emerald-200 dark:[.admin-theme_&]:border-emerald-800 bg-emerald-50 dark:[.admin-theme_&]:bg-emerald-950 px-4 py-3 text-right">
+                    <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:[.admin-theme_&]:text-emerald-300">
                       Ângulo típico
                     </p>
 
-                    <p className="mt-1 text-xl font-black text-emerald-900">
+                    <p className="mt-1 text-xl font-black text-emerald-900 dark:[.admin-theme_&]:text-emerald-200">
                       {builderModel.typicalAngle}
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-right">
-                    <p className="text-xs font-bold uppercase tracking-wide text-orange-700">
+                  <div className="rounded-2xl border border-orange-200 dark:[.admin-theme_&]:border-orange-800 bg-orange-50 dark:[.admin-theme_&]:bg-orange-950 px-4 py-3 text-right">
+                    <p className="text-xs font-bold uppercase tracking-wide text-orange-700 dark:[.admin-theme_&]:text-orange-300">
                       Atenção
                     </p>
 
-                    <p className="mt-1 text-sm font-black text-orange-900">
+                    <p className="mt-1 text-sm font-black text-orange-900 dark:[.admin-theme_&]:text-orange-200">
                       Modelo não cadastrado
                     </p>
                   </div>
@@ -2142,22 +2142,22 @@ export function MolecularGeometrySimulator() {
 
               {builderModel ? (
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <div className="rounded-2xl bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                       Geometria eletrônica
                     </p>
 
-                    <p className="mt-1 text-lg font-black text-slate-900">
+                    <p className="mt-1 text-lg font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                       {builderModel.electronGeometry}
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <div className="rounded-2xl bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                       Geometria molecular
                     </p>
 
-                    <p className="mt-1 text-lg font-black text-slate-900">
+                    <p className="mt-1 text-lg font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                       {builderModel.molecularGeometry}
                     </p>
                   </div>
@@ -2165,11 +2165,11 @@ export function MolecularGeometrySimulator() {
               ) : null}
 
               {builderModel ? (
-                <p className="mt-4 text-sm leading-7 text-slate-700">
+                <p className="mt-4 text-sm leading-7 text-slate-700 dark:[.admin-theme_&]:text-slate-300">
                   {builderModel.explanation}
                 </p>
               ) : (
-                <p className="mt-4 text-sm leading-7 text-slate-700">
+                <p className="mt-4 text-sm leading-7 text-slate-700 dark:[.admin-theme_&]:text-slate-300">
                   Essa combinação ainda não está cadastrada no protótipo. Isso
                   não significa que seja impossível, só significa que ainda não
                   vale a pena botar o simulador para fingir certeza onde ele não
@@ -2178,7 +2178,7 @@ export function MolecularGeometrySimulator() {
               )}
 
               <div className="mt-5">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                   Exemplos cadastrados
                 </p>
 
@@ -2189,14 +2189,14 @@ export function MolecularGeometrySimulator() {
                         key={example.formula}
                         type="button"
                         onClick={() => setSelectedFormula(example.formula)}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-purple-300 hover:bg-purple-50 hover:text-purple-900"
+                        className="rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 px-4 py-2 text-sm font-bold text-slate-700 dark:[.admin-theme_&]:text-slate-300 transition hover:border-purple-300 dark:[.admin-theme_&]:hover:border-purple-800 hover:bg-purple-50 dark:[.admin-theme_&]:hover:bg-purple-950 hover:text-purple-900 dark:[.admin-theme_&]:hover:text-purple-200"
                       >
                         {example.formula} · {example.name}
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className="mt-2 text-sm text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                     Nenhuma molécula cadastrada com esse modelo ainda.
                   </p>
                 )}
@@ -2207,17 +2207,17 @@ export function MolecularGeometrySimulator() {
       </Card>
 
       <div className="space-y-6">
-        <Card className="border-slate-200 p-6">
-          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+        <Card className="border-slate-200 dark:[.admin-theme_&]:border-slate-700 p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:[.admin-theme_&]:text-emerald-300">
             <Atom className="h-4 w-4" />
             Comparação clássica
           </div>
 
-          <h2 className="mt-2 text-2xl font-black text-slate-900">
+          <h2 className="mt-2 text-2xl font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
             CH₄ × NH₃ × H₂O
           </h2>
 
-          <p className="mt-3 text-sm leading-7 text-slate-600">
+          <p className="mt-3 text-sm leading-7 text-slate-600 dark:[.admin-theme_&]:text-slate-300">
             Essas três moléculas ajudam a enxergar uma regra essencial: quando
             aumenta o número de pares livres no átomo central, a repulsão
             eletrônica aumenta e o ângulo entre as ligações diminui.
@@ -2235,55 +2235,55 @@ export function MolecularGeometrySimulator() {
                   className={[
                     "rounded-2xl border p-4 text-left transition-all",
                     active
-                      ? "border-emerald-400 bg-emerald-50 shadow-sm"
-                      : "border-slate-200 bg-slate-50 hover:border-emerald-200 hover:bg-emerald-50/50",
+                      ? "border-emerald-400 dark:[.admin-theme_&]:border-emerald-800 bg-emerald-50 dark:[.admin-theme_&]:bg-emerald-950 shadow-sm"
+                      : "border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 hover:border-emerald-200 dark:[.admin-theme_&]:hover:border-emerald-800 hover:bg-emerald-50/50 dark:[.admin-theme_&]:hover:bg-emerald-950/50",
                   ].join(" ")}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-lg font-black text-slate-900">
+                      <p className="text-lg font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                         {item.formula}
                       </p>
 
-                      <p className="text-sm font-semibold text-slate-600">
+                      <p className="text-sm font-semibold text-slate-600 dark:[.admin-theme_&]:text-slate-300">
                         {item.molecularGeometry}
                       </p>
                     </div>
 
                     <div className="text-right">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                         Ângulo
                       </p>
 
-                      <p className="text-lg font-black text-emerald-700">
+                      <p className="text-lg font-black text-emerald-700 dark:[.admin-theme_&]:text-emerald-300">
                         {item.realAngle}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="rounded-xl bg-white px-2 py-2">
-                      <p className="font-semibold text-slate-500">
+                    <div className="rounded-xl bg-white dark:[.admin-theme_&]:bg-slate-900 px-2 py-2">
+                      <p className="font-semibold text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                         Pares livres
                       </p>
 
-                      <p className="mt-1 text-lg font-black text-slate-900">
+                      <p className="mt-1 text-lg font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                         {item.lonePairs}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white px-2 py-2">
-                      <p className="font-semibold text-slate-500">Modelo</p>
+                    <div className="rounded-xl bg-white dark:[.admin-theme_&]:bg-slate-900 px-2 py-2">
+                      <p className="font-semibold text-slate-500 dark:[.admin-theme_&]:text-slate-400">Modelo</p>
 
-                      <p className="mt-1 text-sm font-black text-slate-900">
+                      <p className="mt-1 text-sm font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                         {item.vsepr}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white px-2 py-2">
-                      <p className="font-semibold text-slate-500">Ordem</p>
+                    <div className="rounded-xl bg-white dark:[.admin-theme_&]:bg-slate-900 px-2 py-2">
+                      <p className="font-semibold text-slate-500 dark:[.admin-theme_&]:text-slate-400">Ordem</p>
 
-                      <p className="mt-1 text-lg font-black text-slate-900">
+                      <p className="mt-1 text-lg font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                         {index + 1}
                       </p>
                     </div>
@@ -2293,12 +2293,12 @@ export function MolecularGeometrySimulator() {
             })}
           </div>
 
-          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="text-sm font-black text-emerald-950">
+          <div className="mt-5 rounded-2xl border border-emerald-200 dark:[.admin-theme_&]:border-emerald-800 bg-emerald-50 dark:[.admin-theme_&]:bg-emerald-950 p-4">
+            <p className="text-sm font-black text-emerald-950 dark:[.admin-theme_&]:text-emerald-200">
               Ideia principal
             </p>
 
-            <p className="mt-2 text-sm leading-7 text-emerald-900">
+            <p className="mt-2 text-sm leading-7 text-emerald-900 dark:[.admin-theme_&]:text-emerald-200">
               CH₄ não possui pares livres no carbono e mantém o ângulo
               tetraédrico de 109,5°. NH₃ tem um par livre no nitrogênio, então o
               ângulo cai para cerca de 107°. H₂O tem dois pares livres no
@@ -2308,8 +2308,8 @@ export function MolecularGeometrySimulator() {
           </div>
 
           {!isInMainComparison && (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-700">
+            <div className="mt-4 rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-4">
+              <p className="text-sm font-semibold text-slate-700 dark:[.admin-theme_&]:text-slate-300">
                 A molécula atual não faz parte dessa comparação clássica, mas a
                 lógica dos pares livres continua valendo para entender
                 distorções de ângulo.
@@ -2318,13 +2318,13 @@ export function MolecularGeometrySimulator() {
           )}
         </Card>
 
-        <Card className="border-slate-200 p-6">
-          <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700">
+        <Card className="border-slate-200 dark:[.admin-theme_&]:border-slate-700 p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700 dark:[.admin-theme_&]:text-cyan-300">
             <Brain className="h-4 w-4" />
             Como descobrir essa geometria?
           </div>
 
-          <h2 className="mt-2 text-2xl font-black text-slate-900">
+          <h2 className="mt-2 text-2xl font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
             Raciocínio passo a passo
           </h2>
 
@@ -2332,13 +2332,13 @@ export function MolecularGeometrySimulator() {
             {discoverySteps.map(step => (
               <div
                 key={step.title}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                className="rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-4"
               >
-                <p className="text-sm font-black text-slate-900">
+                <p className="text-sm font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                   {step.title}
                 </p>
 
-                <p className="mt-2 text-sm leading-6 text-slate-700">
+                <p className="mt-2 text-sm leading-6 text-slate-700 dark:[.admin-theme_&]:text-slate-300">
                   {step.description}
                 </p>
               </div>
@@ -2346,20 +2346,20 @@ export function MolecularGeometrySimulator() {
           </div>
         </Card>
 
-        <Card className="border-slate-200 p-6">
+        <Card className="border-slate-200 dark:[.admin-theme_&]:border-slate-700 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700">
+              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:[.admin-theme_&]:text-purple-300">
                 <BadgeInfo className="h-4 w-4" />
                 Explicação da geometria
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                 Por que {molecule.formula} tem esse formato?
               </h2>
             </div>
 
-            <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            <div className="flex rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-1">
               <button
                 type="button"
                 onClick={() => setExplanationMode("resumo")}
@@ -2367,7 +2367,7 @@ export function MolecularGeometrySimulator() {
                   "rounded-xl px-3 py-2 text-xs font-black transition",
                   explanationMode === "resumo"
                     ? "bg-slate-900 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-900",
+                    : "text-slate-500 dark:[.admin-theme_&]:text-slate-400 hover:text-slate-900 dark:[.admin-theme_&]:hover:text-slate-100",
                 ].join(" ")}
               >
                 Resumo
@@ -2380,7 +2380,7 @@ export function MolecularGeometrySimulator() {
                   "rounded-xl px-3 py-2 text-xs font-black transition",
                   explanationMode === "completa"
                     ? "bg-slate-900 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-900",
+                    : "text-slate-500 dark:[.admin-theme_&]:text-slate-400 hover:text-slate-900 dark:[.admin-theme_&]:hover:text-slate-100",
                 ].join(" ")}
               >
                 Completa
@@ -2389,27 +2389,27 @@ export function MolecularGeometrySimulator() {
           </div>
 
           {explanationMode === "resumo" ? (
-            <div className="mt-5 rounded-2xl border border-purple-200 bg-purple-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-purple-700">
+            <div className="mt-5 rounded-2xl border border-purple-200 dark:[.admin-theme_&]:border-purple-800 bg-purple-50 dark:[.admin-theme_&]:bg-purple-950 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:[.admin-theme_&]:text-purple-300">
                 Resumo de prova
               </p>
 
-              <p className="mt-2 text-sm leading-7 text-purple-950">
+              <p className="mt-2 text-sm leading-7 text-purple-950 dark:[.admin-theme_&]:text-purple-200">
                 {shortGeometrySummary}
               </p>
             </div>
           ) : (
             <>
-              <p className="mt-4 text-sm leading-7 text-slate-700">
+              <p className="mt-4 text-sm leading-7 text-slate-700 dark:[.admin-theme_&]:text-slate-300">
                 {molecule.shortExplanation}
               </p>
 
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div className="mt-5 rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                   Relação entre pares eletrônicos e ângulo
                 </p>
 
-                <p className="mt-2 text-sm leading-7 text-slate-700">
+                <p className="mt-2 text-sm leading-7 text-slate-700 dark:[.admin-theme_&]:text-slate-300">
                   {molecule.angleExplanation}
                 </p>
               </div>
@@ -2417,53 +2417,53 @@ export function MolecularGeometrySimulator() {
           )}
         </Card>
 
-        <Card className="border-slate-200 p-6">
+        <Card className="border-slate-200 dark:[.admin-theme_&]:border-slate-700 p-6">
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-2xl border border-slate-200 dark:[.admin-theme_&]:border-slate-700 bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:[.admin-theme_&]:text-slate-400">
                 Ângulo ideal
               </p>
 
-              <p className="mt-2 text-2xl font-black text-slate-900">
+              <p className="mt-2 text-2xl font-black text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                 {molecule.idealAngle}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">
+            <div className="rounded-2xl border border-cyan-200 dark:[.admin-theme_&]:border-cyan-800 bg-cyan-50 dark:[.admin-theme_&]:bg-cyan-950 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700 dark:[.admin-theme_&]:text-cyan-300">
                 Ângulo real/aproximado
               </p>
 
-              <p className="mt-2 text-2xl font-black text-cyan-900">
+              <p className="mt-2 text-2xl font-black text-cyan-900 dark:[.admin-theme_&]:text-cyan-200">
                 {molecule.realAngle}
               </p>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+          <div className="mt-5 rounded-2xl border border-purple-200 dark:[.admin-theme_&]:border-purple-800 bg-purple-50 dark:[.admin-theme_&]:bg-purple-950 p-4">
             <div className="flex items-start gap-3">
-              <Brain className="mt-0.5 h-5 w-5 text-purple-700" />
+              <Brain className="mt-0.5 h-5 w-5 text-purple-700 dark:[.admin-theme_&]:text-purple-300" />
 
               <div>
-                <p className="font-bold text-purple-950">
+                <p className="font-bold text-purple-950 dark:[.admin-theme_&]:text-purple-200">
                   Como pensar em vestibular
                 </p>
 
-                <p className="mt-2 text-sm leading-7 text-purple-900">
+                <p className="mt-2 text-sm leading-7 text-purple-900 dark:[.admin-theme_&]:text-purple-200">
                   {molecule.vestibularNote}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+          <div className="mt-5 rounded-2xl border border-orange-200 dark:[.admin-theme_&]:border-orange-800 bg-orange-50 dark:[.admin-theme_&]:bg-orange-950 p-4">
             <div className="flex items-start gap-3">
-              <Sparkles className="mt-0.5 h-5 w-5 text-orange-600" />
+              <Sparkles className="mt-0.5 h-5 w-5 text-orange-600 dark:[.admin-theme_&]:text-orange-300" />
 
               <div>
-                <p className="font-bold text-orange-950">Erro comum</p>
+                <p className="font-bold text-orange-950 dark:[.admin-theme_&]:text-orange-200">Erro comum</p>
 
-                <p className="mt-2 text-sm leading-7 text-orange-900">
+                <p className="mt-2 text-sm leading-7 text-orange-900 dark:[.admin-theme_&]:text-orange-200">
                   {molecule.commonMistake}
                 </p>
               </div>
@@ -2471,38 +2471,38 @@ export function MolecularGeometrySimulator() {
           </div>
         </Card>
 
-        <Card className="border-slate-200 p-6">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <Card className="border-slate-200 dark:[.admin-theme_&]:border-slate-700 p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:[.admin-theme_&]:text-slate-300">
             <Beaker className="h-4 w-4" />
             Padrão usado
           </div>
 
           <div className="mt-4 grid gap-3 text-sm">
-            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span className="text-slate-500">Fórmula</span>
-              <strong className="text-slate-900">{molecule.formula}</strong>
+            <div className="flex justify-between rounded-2xl bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 px-4 py-3">
+              <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Fórmula</span>
+              <strong className="text-slate-900 dark:[.admin-theme_&]:text-slate-100">{molecule.formula}</strong>
             </div>
 
-            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span className="text-slate-500">Átomo central</span>
-              <strong className="text-slate-900">{molecule.centralAtom}</strong>
+            <div className="flex justify-between rounded-2xl bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 px-4 py-3">
+              <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Átomo central</span>
+              <strong className="text-slate-900 dark:[.admin-theme_&]:text-slate-100">{molecule.centralAtom}</strong>
             </div>
 
-            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span className="text-slate-500">Modelo VSEPR</span>
-              <strong className="text-slate-900">{molecule.vsepr}</strong>
+            <div className="flex justify-between rounded-2xl bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 px-4 py-3">
+              <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Modelo VSEPR</span>
+              <strong className="text-slate-900 dark:[.admin-theme_&]:text-slate-100">{molecule.vsepr}</strong>
             </div>
 
-            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span className="text-slate-500">Geometria eletrônica</span>
-              <strong className="text-right text-slate-900">
+            <div className="flex justify-between rounded-2xl bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 px-4 py-3">
+              <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Geometria eletrônica</span>
+              <strong className="text-right text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                 {molecule.electronGeometry}
               </strong>
             </div>
 
-            <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span className="text-slate-500">Geometria molecular</span>
-              <strong className="text-right text-slate-900">
+            <div className="flex justify-between rounded-2xl bg-slate-50 dark:[.admin-theme_&]:bg-slate-900 px-4 py-3">
+              <span className="text-slate-500 dark:[.admin-theme_&]:text-slate-400">Geometria molecular</span>
+              <strong className="text-right text-slate-900 dark:[.admin-theme_&]:text-slate-100">
                 {molecule.molecularGeometry}
               </strong>
             </div>
