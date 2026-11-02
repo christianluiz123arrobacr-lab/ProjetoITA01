@@ -2,9 +2,17 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "../../shared/const.js";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context.js";
+import { assertAuthenticationAvailable, ensureAuthentication } from "./context.js";
+import { assertPlatformAccess } from "./platformAccess.js";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter({ shape, ctx }) {
+    return { ...shape, data: { ...shape.data,
+      authStatus: ctx?.authentication?.status,
+      correlationId: ctx?.authentication?.correlationId,
+    } };
+  },
 });
 
 export const router = t.router;
@@ -12,6 +20,8 @@ export const publicProcedure = t.procedure;
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
+  await ensureAuthentication(ctx);
+  assertAuthenticationAvailable(ctx);
 
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
@@ -27,9 +37,19 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+export const platformAccessProcedure = protectedProcedure.use(
+  t.middleware(async ({ ctx, next }) => {
+    if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    await assertPlatformAccess(ctx.user, undefined, { correlationId: ctx.authentication?.correlationId, validatedProfile: ctx.validatedProfile });
+    return next({ ctx: { ...ctx, user: ctx.user } });
+  }),
+);
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
+    await ensureAuthentication(ctx);
+    assertAuthenticationAvailable(ctx);
 
     if (!ctx.user || ctx.user.role !== 'admin') {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
@@ -47,16 +67,27 @@ export const adminProcedure = t.procedure.use(
 export const adminOrEditorProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
+    await ensureAuthentication(ctx);
+    assertAuthenticationAvailable(ctx);
 
     if (!ctx.user || !["admin", "editor"].includes(ctx.user.role)) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 
-    return next({
+    const start = performance.now();
+    const result = await next({
       ctx: {
         ...ctx,
         user: ctx.user,
       },
     });
+    if (/QuestionImport|AdminImage|AdminStatementImage/.test(opts.path)) {
+      console.info({ event: "question_import_operation", operation: opts.path,
+        correlation_id: ctx.authentication?.correlationId,
+        stage: "authorized_operation", outcome: result.ok ? "success" : "error",
+        code: result.ok ? undefined : result.error.code,
+        duration_ms: Math.round(performance.now() - start) });
+    }
+    return result;
   }),
 );

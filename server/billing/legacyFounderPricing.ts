@@ -6,11 +6,29 @@ export const LEGACY_FOUNDER_SLUG = "legacy-founder";
 export const NORMAL_PLAN_SLUG = "normal";
 
 export type CheckoutPlanPolicy = {
+  id?: string;
   slug: string;
   is_active?: boolean | null;
   is_public?: boolean | null;
   requires_legacy_founder_eligibility?: boolean | null;
 };
+
+export async function hasValidPlanInvite(userId: string, planId: string | null | undefined) {
+  if (!planId) return false;
+  const { data: profile, error: profileError } = await supabaseAdmin.from("profiles").select("email").eq("id", userId).maybeSingle();
+  if (profileError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível verificar o convite do plano." });
+  const email = profile?.email?.trim().toLowerCase();
+  if (!email) return false;
+
+  const { data: invites, error: inviteError } = await supabaseAdmin.from("billing_plan_invites").select("user_id, email, expires_at").eq("plan_id", planId).is("used_at", null);
+  if (inviteError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível verificar o convite do plano." });
+  const now = Date.now();
+  return (invites ?? []).some(invite =>
+    (!invite.user_id || invite.user_id === userId)
+    && (!invite.email || invite.email.trim().toLowerCase() === email)
+    && (!invite.expires_at || new Date(invite.expires_at).getTime() > now)
+  );
+}
 
 export function isRetiredBetaFounderSlug(slug: string) {
   return [
@@ -57,17 +75,18 @@ export async function hasLegacyFounderEligibility(userId: string | null | undefi
 
 export async function assertUserCanCheckoutPlan(userId: string, plan: CheckoutPlanPolicy) {
   const eligible = plan.requires_legacy_founder_eligibility
-    ? await hasLegacyFounderEligibility(userId)
+    ? await hasLegacyFounderEligibility(userId) || await hasValidPlanInvite(userId, plan.id)
     : false;
   assertLegacyPlanCheckoutAllowed(plan, eligible);
   return { legacyFounderEligible: eligible };
 }
 
-export function publicPlanAvailability(plan: CheckoutPlanPolicy, eligible: boolean, isCurrentPlan: boolean, hasActiveSubscription = isCurrentPlan) {
-  const founderBlocked = Boolean(plan.requires_legacy_founder_eligibility) && !eligible;
+export function publicPlanAvailability(plan: CheckoutPlanPolicy, eligible: boolean, isCurrentPlan: boolean, hasActiveSubscription = isCurrentPlan, hasValidInvite = false) {
+  const founderBlocked = Boolean(plan.requires_legacy_founder_eligibility) && !eligible && !hasValidInvite;
   return {
     requires_legacy_founder_eligibility: Boolean(plan.requires_legacy_founder_eligibility),
     legacy_founder_eligible: Boolean(plan.requires_legacy_founder_eligibility && eligible),
+    has_valid_invite: Boolean(plan.requires_legacy_founder_eligibility && hasValidInvite),
     is_current_plan: isCurrentPlan,
     can_checkout: Boolean(plan.is_active !== false && plan.is_public !== false && !founderBlocked && !hasActiveSubscription),
     checkout_block_reason: hasActiveSubscription ? "active_subscription" : founderBlocked ? "legacy_founder_required" : null,

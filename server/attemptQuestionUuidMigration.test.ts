@@ -50,8 +50,8 @@ describe("UUID canônico das tentativas", () => {
   });
 
   it("consulta estatísticas pela questão UUID e agrega as alternativas registradas", () => {
-    const start = router.indexOf("getQuestionOptionStats: protectedProcedure");
-    const end = router.indexOf("recordAttempt: protectedProcedure", start);
+    const start = router.indexOf("getQuestionOptionStats: platformAccessProcedure");
+    const end = router.indexOf("recordAttempt: platformAccessProcedure", start);
     const statsProcedure = router.slice(start, end);
 
     expect(statsProcedure).toContain('.eq("question_id", input.questionId)');

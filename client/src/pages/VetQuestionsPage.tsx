@@ -26,6 +26,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { mapQuestao } from "@/services/questions.service";
 import type { Question } from "@/types/question";
+import { getVetSelectionDifficultyScore } from "@shared/difficulty";
 import {
   buildVetEngineResult,
   formatVetPercent,
@@ -125,27 +126,7 @@ function getBlockMeta(block: VetTrainingBlock) {
 }
 
 function getDifficultyScore(question: Question, block: VetTrainingBlock) {
-  const difficulty = normalizeText(question.difficulty);
-
-  if (block === "ataque") {
-    if (difficulty === "medio") return 10;
-    if (difficulty === "dificil") return 8;
-    if (difficulty === "facil") return 4;
-    return 5;
-  }
-
-  if (block === "consolidacao") {
-    if (difficulty === "medio") return 10;
-    if (difficulty === "facil") return 7;
-    if (difficulty === "dificil") return 4;
-    return 5;
-  }
-
-  if (difficulty === "facil") return 10;
-  if (difficulty === "medio") return 7;
-  if (difficulty === "dificil") return 3;
-
-  return 5;
+  return getVetSelectionDifficultyScore(question.difficulty, block);
 }
 
 function getQuestionRecencyScore(question: Question) {
@@ -488,7 +469,7 @@ export default function VetQuestionsPage() {
   const SelectedIcon = selectedMeta.icon;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50">
+    <div className="vet-theme theme-page min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/vet">

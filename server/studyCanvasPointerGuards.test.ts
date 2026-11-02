@@ -3,9 +3,17 @@ import {
   isMultitouchGesture,
   shouldCancelInkForPointerDown,
   shouldNavigateInsteadOfDraw,
+  shouldHandleCanvasShortcut,
 } from "../client/src/components/study-canvas/studyCanvasPointerGuards";
 
 describe("proteção multitoque do editor compartilhado", () => {
+  it("atalhos locais não interceptam o quiz ou o rascunho recolhido",()=>{
+    expect(shouldHandleCanvasShortcut(true,false,true,true)).toBe(false);
+    expect(shouldHandleCanvasShortcut(true,true,false,true)).toBe(false);
+    expect(shouldHandleCanvasShortcut(true,true,true,false)).toBe(false);
+    expect(shouldHandleCanvasShortcut(true,true,true,true)).toBe(true);
+    expect(shouldHandleCanvasShortcut(false,true,true,false)).toBe(true);
+  });
   it("não trata um dedo, mouse ou caneta como gesto", () => {
     expect(isMultitouchGesture([{ pointerId: 1, pointerType: "touch" }])).toBe(false);
     expect(isMultitouchGesture([{ pointerId: 1, pointerType: "pen" }])).toBe(false);

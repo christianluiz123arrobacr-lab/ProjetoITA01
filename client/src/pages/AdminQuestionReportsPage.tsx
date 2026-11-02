@@ -148,7 +148,7 @@ function getStatusMeta(status?: string | null) {
   if (value === "resolvido") {
     return {
       label: "Resolvido",
-      className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      className: "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
       icon: CheckCircle2,
     };
   }
@@ -156,7 +156,7 @@ function getStatusMeta(status?: string | null) {
   if (value === "em_analise") {
     return {
       label: "Em análise",
-      className: "bg-blue-100 text-blue-700 border-blue-200",
+      className: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800",
       icon: Wrench,
     };
   }
@@ -164,14 +164,14 @@ function getStatusMeta(status?: string | null) {
   if (value === "ignorado") {
     return {
       label: "Ignorado",
-      className: "bg-slate-100 text-slate-700 border-slate-200",
+      className: "bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700",
       icon: ShieldAlert,
     };
   }
 
   return {
     label: "Pendente",
-    className: "bg-amber-100 text-amber-700 border-amber-200",
+    className: "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800",
     icon: Clock3,
   };
 }
@@ -179,11 +179,11 @@ function getStatusMeta(status?: string | null) {
 function getDifficultyClass(difficulty?: string | null) {
   const value = normalizeText(difficulty);
 
-  if (value === "facil") return "bg-emerald-100 text-emerald-700 border-emerald-200";
-  if (value === "medio") return "bg-amber-100 text-amber-700 border-amber-200";
-  if (value === "dificil") return "bg-rose-100 text-rose-700 border-rose-200";
+  if (value === "facil") return "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800";
+  if (value === "medio") return "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800";
+  if (value === "dificil") return "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800";
 
-  return "bg-slate-100 text-slate-700 border-slate-200";
+  return "bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700";
 }
 
 function getReporterName(profile?: ProfileRow) {
@@ -343,19 +343,19 @@ export default function AdminQuestionReportsPage() {
         title="Erros reportados"
         subtitle="Acompanhe problemas enviados pelos alunos nas questões do banco."
       >
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-11 h-11 rounded-2xl bg-amber-100 flex items-center justify-center">
-                  <MessageSquareWarning className="w-5 h-5 text-amber-700" />
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
+                  <MessageSquareWarning className="w-5 h-5 text-amber-700 dark:text-amber-300" />
                 </div>
 
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
                     Central de reports
                   </h2>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     Exibindo {filteredReports.length} de {reports.length} reports carregados.
                   </p>
                 </div>
@@ -370,7 +370,7 @@ export default function AdminQuestionReportsPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar por código, usuário, comentário..."
-                className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-11 pr-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               />
             </div>
           </div>
@@ -382,17 +382,17 @@ export default function AdminQuestionReportsPage() {
             const Icon = meta.icon;
 
             return (
-              <Card key={status.value} className="p-5 bg-white border-slate-200">
+              <Card key={status.value} className="p-5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-3">
                   <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border ${meta.className}`}>
                     <Icon className="w-5 h-5" />
                   </div>
 
                   <div>
-                    <p className="text-2xl font-bold text-slate-900">
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                       {statusCounts[status.value] || 0}
                     </p>
-                    <p className="text-sm font-semibold text-slate-700">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                       {status.label}
                     </p>
                   </div>
@@ -402,17 +402,17 @@ export default function AdminQuestionReportsPage() {
           })}
         </section>
 
-        <Card className="p-6 bg-white border-slate-200">
+        <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
           <div className="grid md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Status
               </label>
 
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todos</option>
                 {STATUS_OPTIONS.map((status) => (
@@ -424,14 +424,14 @@ export default function AdminQuestionReportsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Tipo do problema
               </label>
 
               <select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 <option value="">Todos</option>
                 {reportTypeOptions.map((type) => (
@@ -455,35 +455,35 @@ export default function AdminQuestionReportsPage() {
         </Card>
 
         {error ? (
-          <Card className="p-5 border-red-200 bg-red-50">
+          <Card className="p-5 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
-              <p className="text-red-700 font-medium">{error}</p>
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300 mt-0.5" />
+              <p className="text-red-700 dark:text-red-300 font-medium">{error}</p>
             </div>
           </Card>
         ) : null}
 
         {successMessage ? (
-          <Card className="p-5 border-emerald-200 bg-emerald-50">
+          <Card className="p-5 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <p className="text-emerald-700 font-medium">{successMessage}</p>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+              <p className="text-emerald-700 dark:text-emerald-300 font-medium">{successMessage}</p>
             </div>
           </Card>
         ) : null}
 
         {loading ? (
-          <Card className="p-10 flex items-center justify-center gap-3 bg-white">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-            <p className="text-slate-600">Carregando erros reportados...</p>
+          <Card className="p-10 flex items-center justify-center gap-3 bg-white dark:bg-slate-900">
+            <Loader2 className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
+            <p className="text-slate-600 dark:text-slate-300">Carregando erros reportados...</p>
           </Card>
         ) : filteredReports.length === 0 ? (
-          <Card className="p-10 text-center bg-white border-slate-200">
+          <Card className="p-10 text-center bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
             <MessageSquareWarning className="w-10 h-10 text-slate-400 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-slate-900 mb-2">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
               Nenhum report encontrado
             </h3>
-            <p className="text-slate-500">
+            <p className="text-slate-500 dark:text-slate-400">
               Ainda não há erro reportado para os filtros selecionados.
             </p>
           </Card>
@@ -500,7 +500,7 @@ export default function AdminQuestionReportsPage() {
               return (
                 <Card
                   key={report.id}
-                  className="p-6 bg-white border-slate-200 shadow-sm"
+                  className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm"
                 >
                   <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
                     <div className="flex-1 min-w-0">
@@ -510,7 +510,7 @@ export default function AdminQuestionReportsPage() {
                           {statusMeta.label}
                         </span>
 
-                        <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                        <span className="inline-flex rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
                           {getReportTypeLabel(report.report_type)}
                         </span>
 
@@ -520,92 +520,92 @@ export default function AdminQuestionReportsPage() {
                           </span>
                         ) : null}
 
-                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600">
+                        <span className="inline-flex rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">
                           {formatDate(report.created_at)}
                         </span>
                       </div>
 
                       <div className="mb-5">
-                        <h3 className="text-lg font-bold text-slate-900 mb-2">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
                           {question?.codigo
                             ? `Questão ${question.codigo}`
                             : `Questão ${report.question_id}`}
                         </h3>
 
-                        <p className="text-sm text-slate-600 leading-relaxed">
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                           {textoCurto(question?.enunciado)}
                         </p>
                       </div>
 
                       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs text-slate-500 mb-1">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                             Instituição
                           </p>
-                          <p className="text-sm font-bold text-slate-900">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                             {question?.instituição || question?.banca || "—"}
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs text-slate-500 mb-1">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                             Ano
                           </p>
-                          <p className="text-sm font-bold text-slate-900">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                             {question?.ano || "—"}
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs text-slate-500 mb-1">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                             Disciplina
                           </p>
-                          <p className="text-sm font-bold text-slate-900">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                             {normalizarDisciplina(question)}
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs text-slate-500 mb-1">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                             Usuário
                           </p>
-                          <p className="text-sm font-bold text-slate-900 truncate">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                             {getReporterName(profile)}
                           </p>
                         </div>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-3 mb-5">
-                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
                           <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">
                             Conteúdos
                           </p>
-                          <p className="text-sm text-slate-700">
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
                             {textoLista(listarConteudos(question))}
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
                           <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">
                             Assuntos
                           </p>
-                          <p className="text-sm text-slate-700">
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
                             {textoLista(listarAssuntos(question))}
                           </p>
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-5">
-                        <p className="text-xs font-bold uppercase tracking-wide text-amber-600 mb-2">
+                      <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4 mb-5">
+                        <p className="text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-300 mb-2">
                           Comentário do aluno
                         </p>
-                        <p className="text-sm text-amber-900 whitespace-pre-wrap">
+                        <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap">
                           {report.comment?.trim() || "Sem comentário."}
                         </p>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           Nota interna do ADM
                         </label>
 
@@ -623,14 +623,14 @@ export default function AdminQuestionReportsPage() {
                           }}
                           placeholder="Ex.: Corrigir gabarito, revisar resolução, imagem quebrada..."
                           rows={3}
-                          className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                         />
                       </div>
                     </div>
 
                     <div className="xl:w-64 shrink-0 space-y-3">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           Status
                         </label>
 
@@ -642,7 +642,7 @@ export default function AdminQuestionReportsPage() {
                             })
                           }
                           disabled={savingId === report.id}
-                          className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:opacity-60"
+                          className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 disabled:opacity-60"
                         >
                           {STATUS_OPTIONS.map((status) => (
                             <option key={status.value} value={status.value}>
@@ -691,25 +691,25 @@ export default function AdminQuestionReportsPage() {
                           </Link>
                         </>
                       ) : (
-                        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                        <div className="rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-4 text-sm text-red-700 dark:text-red-300">
                           Questão não encontrada no banco.
                         </div>
                       )}
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs text-slate-500 mb-1">
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                           ID do report
                         </p>
-                        <p className="text-xs font-mono text-slate-700 break-all">
+                        <p className="text-xs font-mono text-slate-700 dark:text-slate-300 break-all">
                           {report.id}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs text-slate-500 mb-1">
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                           ID da questão
                         </p>
-                        <p className="text-xs font-mono text-slate-700 break-all">
+                        <p className="text-xs font-mono text-slate-700 dark:text-slate-300 break-all">
                           {report.question_id}
                         </p>
                       </div>

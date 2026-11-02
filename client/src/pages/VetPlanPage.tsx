@@ -26,6 +26,7 @@ import { trpc } from "@/lib/trpc";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { mapQuestao } from "@/services/questions.service";
 import type { Question } from "@/types/question";
+import { getVetPlanDifficultyBonus } from "@shared/difficulty";
 import {
   buildVetEngineResult,
   formatVetPercent,
@@ -452,12 +453,7 @@ export default function VetPlanPage() {
 
       const recencyBonus = question.year ? Math.min(10, Math.max(0, question.year - 2015)) : 0;
 
-      const difficultyBonus =
-        normalizeText(question.difficulty) === "dificil"
-          ? 8
-          : normalizeText(question.difficulty) === "medio"
-            ? 5
-            : 2;
+      const difficultyBonus = getVetPlanDifficultyBonus(question.difficulty);
 
       result.push({
         question,
@@ -472,7 +468,7 @@ export default function VetPlanPage() {
   }, [engine, profile, questions]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50">
+    <div className="vet-theme theme-page min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100">
       <header className="sticky top-0 z-50 bg-white/85 backdrop-blur-md border-b border-slate-200/50">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/vet">

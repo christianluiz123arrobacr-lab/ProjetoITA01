@@ -10,7 +10,7 @@ export default function AdminUploadsPage() {
         subtitle="Área de gerenciamento de imagens e arquivos."
       >
         <Card className="p-8">
-          <p className="text-slate-600">
+          <p className="text-slate-600 dark:text-slate-300">
             Aqui vamos construir o módulo de uploads.
           </p>
         </Card>

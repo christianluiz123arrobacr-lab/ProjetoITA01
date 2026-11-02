@@ -26,6 +26,8 @@ export function buildPdfFilterSummary(filters: QuestionPdfFilters) {
   if (filters.topics.length) parts.push(`Conteúdo: ${filters.topics.join(", ")}`);
   if (filters.subtopics.length) parts.push(`Assunto: ${filters.subtopics.join(", ")}`);
   if (filters.institutions.length) parts.push(`Instituição: ${filters.institutions.join(", ")}`);
+  if (filters.exams?.length) parts.push(`Banca/prova: ${filters.exams.join(", ")}`);
+  if (filters.yearFrom || filters.yearTo) parts.push(`Período: ${filters.yearFrom ?? "…"}–${filters.yearTo ?? "…"}`);
   if (filters.years.length) parts.push(`Anos: ${[...filters.years].sort().join(", ")}`);
   if (filters.difficulties.length) parts.push(`Dificuldade: ${filters.difficulties.map(item => difficultyLabels[item] ?? item).join(", ")}`);
   if (filters.practiceStatus !== "all") parts.push(`Status de prática: ${filters.practiceStatus}`);

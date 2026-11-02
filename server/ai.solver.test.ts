@@ -23,7 +23,7 @@ function createAuthedCaller() {
     user: {
       id: "00000000-0000-0000-0000-000000000001",
       email: "student@example.com",
-      role: "student",
+      role: "editor", // Canonical staff exception; student access matrix is tested separately.
     },
   } as any);
 }

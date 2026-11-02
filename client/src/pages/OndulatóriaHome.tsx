@@ -131,7 +131,7 @@ function TopicCardItem({ topic }: { topic: TopicCard }) {
 
   const card = (
     <Card
-      className={`h-full p-8 transition-all border-l-4 bg-white ${
+      className={`h-full p-8 transition-all border-l-4 bg-white dark:border-slate-700 dark:bg-slate-900 ${
         isSoon
           ? "border-slate-300 opacity-80 cursor-not-allowed"
           : "border-cyan-500 cursor-pointer hover:shadow-lg hover:border-cyan-700"
@@ -141,17 +141,17 @@ function TopicCardItem({ topic }: { topic: TopicCard }) {
         <div className="text-4xl leading-none">{topic.icon}</div>
         <div className="flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h4 className="text-xl font-bold text-slate-900">{topic.title}</h4>
+            <h4 className="text-xl font-bold text-slate-900 dark:text-slate-100">{topic.title}</h4>
             {isSoon ? (
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-600">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 em breve
               </span>
             ) : null}
           </div>
 
-          <p className="mb-4 text-slate-600">{topic.subtitle}</p>
+          <p className="mb-4 text-slate-600 dark:text-slate-300">{topic.subtitle}</p>
 
-          <ul className="space-y-2 text-sm text-slate-700">
+          <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
             {topic.bullets.map((bullet) => (
               <li key={bullet} className="flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-cyan-600" />
@@ -173,12 +173,12 @@ function TopicCardItem({ topic }: { topic: TopicCard }) {
 
 export default function OndulatóriaHome() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50 to-slate-50">
-      <header className="sticky top-0 z-50 border-b border-slate-200/50 bg-white/80 backdrop-blur-md">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50 to-slate-50 dark:from-slate-950 dark:via-cyan-950/30 dark:to-slate-950">
+      <header className="sticky top-0 z-50 border-b border-slate-200/50 bg-white/80 backdrop-blur-md dark:border-slate-700 dark:bg-slate-950/85">
         <div className="container flex items-center justify-between py-4">
           <Link
             href="/fisica-ii"
-            className="flex items-center gap-2 text-slate-600 transition-colors hover:text-slate-900"
+            className="flex items-center gap-2 text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
           >
             <ArrowLeft className="h-5 w-5" />
             Voltar
@@ -189,8 +189,8 @@ export default function OndulatóriaHome() {
               <Waves className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Oscilações e Ondas</h1>
-              <p className="text-xs text-slate-500">Projeto Vetor</p>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Oscilações e Ondas</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Projeto Vetor</p>
             </div>
           </div>
 
@@ -217,7 +217,7 @@ export default function OndulatóriaHome() {
               <Button
                 variant="outline"
                 size="sm"
-                className="border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+                className="border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-950"
               >
                 <MessageCircle className="mr-2 h-4 w-4" />
                 WhatsApp
@@ -228,15 +228,15 @@ export default function OndulatóriaHome() {
       </header>
 
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/10 via-blue-600/5 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/10 via-blue-600/5 to-transparent dark:from-cyan-400/10 dark:via-blue-500/10" />
         <div className="container relative py-16 md:py-24">
           <div className="grid items-center gap-12 md:grid-cols-2">
             <div className="space-y-6">
               <div className="space-y-4">
-                <h2 className="text-5xl font-bold leading-tight text-slate-900 md:text-6xl">
+                <h2 className="text-5xl font-bold leading-tight text-slate-900 dark:text-slate-100 md:text-6xl">
                   Oscilações que viram <span className="bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">ondas</span>
                 </h2>
-                <p className="text-xl leading-9 text-slate-600">
+                <p className="text-xl leading-9 text-slate-600 dark:text-slate-300">
                   Comece pelo Movimento Harmônico Simples e avance para ondas, cordas, acústica,
                   tubos sonoros e fenômenos ondulatórios com foco em ITA/IME.
                 </p>
@@ -252,7 +252,7 @@ export default function OndulatóriaHome() {
                   </Button>
                 </Link>
                 <Link href="/ondulatoria/simulator">
-                  <Button size="lg" variant="outline" className="border-cyan-300 text-cyan-700 hover:bg-cyan-50">
+                  <Button size="lg" variant="outline" className="border-cyan-300 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-700 dark:bg-slate-900 dark:text-cyan-300 dark:hover:bg-cyan-950/60">
                     <Play className="mr-2 h-4 w-4" />
                     Simulador Visual
                   </Button>
@@ -260,10 +260,10 @@ export default function OndulatóriaHome() {
               </div>
             </div>
 
-            <div className="relative h-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
+            <div className="relative h-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800">
                 <Waves className="h-32 w-32 text-cyan-200" />
-                <p className="absolute mt-40 font-medium text-slate-400">Oscilações, ondas e som</p>
+                <p className="absolute mt-40 font-medium text-slate-400 dark:text-slate-300">Oscilações, ondas e som</p>
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/10 to-transparent" />
             </div>
@@ -273,59 +273,59 @@ export default function OndulatóriaHome() {
 
       <main className="container py-12">
         <div className="mb-16">
-          <h3 className="mb-8 text-3xl font-bold text-slate-900">Ferramentas de Aprendizado</h3>
+          <h3 className="mb-8 text-3xl font-bold text-slate-900 dark:text-slate-100">Ferramentas de Aprendizado</h3>
           <div className="grid gap-4 md:grid-cols-6">
             <div className="group">
               <Link href="/ondulatoria/topic/mhs">
-                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg">
+                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg dark:bg-slate-900">
                   <BookOpen className="mx-auto mb-3 h-8 w-8 text-cyan-600 transition-transform group-hover:scale-110" />
-                  <h3 className="font-bold text-slate-900">Guia Completo</h3>
-                  <p className="mt-1 text-xs text-slate-600">Comece pelo MHS</p>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">Guia Completo</h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Comece pelo MHS</p>
                 </Card>
               </Link>
             </div>
             <div className="group">
               <Link href="/ondulatoria/simulator">
-                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg">
+                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg dark:bg-slate-900">
                   <Calculator className="mx-auto mb-3 h-8 w-8 text-cyan-600 transition-transform group-hover:scale-110" />
-                  <h3 className="font-bold text-slate-900">Calculadora</h3>
-                  <p className="mt-1 text-xs text-slate-600">Calcule variáveis</p>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">Calculadora</h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Calcule variáveis</p>
                 </Card>
               </Link>
             </div>
             <div className="group">
               <Link href="/ondulatoria/topic/conceitos">
-                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg">
+                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg dark:bg-slate-900">
                   <BarChart3 className="mx-auto mb-3 h-8 w-8 text-cyan-600 transition-transform group-hover:scale-110" />
-                  <h3 className="font-bold text-slate-900">Fórmulas</h3>
-                  <p className="mt-1 text-xs text-slate-600">Relações principais</p>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">Fórmulas</h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Relações principais</p>
                 </Card>
               </Link>
             </div>
             <div className="group">
               <Link href="/ondulatoria/quiz">
-                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg">
+                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg dark:bg-slate-900">
                   <HelpCircle className="mx-auto mb-3 h-8 w-8 text-cyan-600 transition-transform group-hover:scale-110" />
-                  <h3 className="font-bold text-slate-900">Quiz</h3>
-                  <p className="mt-1 text-xs text-slate-600">Teste seu conhecimento</p>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">Quiz</h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Teste seu conhecimento</p>
                 </Card>
               </Link>
             </div>
             <div className="group">
               <Link href="/ondulatoria/graphs">
-                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg">
+                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg dark:bg-slate-900">
                   <TrendingUp className="mx-auto mb-3 h-8 w-8 text-cyan-600 transition-transform group-hover:scale-110" />
-                  <h3 className="font-bold text-slate-900">Gráficos</h3>
-                  <p className="mt-1 text-xs text-slate-600">Visualizações dinâmicas</p>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">Gráficos</h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Visualizações dinâmicas</p>
                 </Card>
               </Link>
             </div>
             <div className="group">
               <Link href="/ondulatoria/simulator">
-                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg">
+                <Card className="cursor-pointer border-2 border-transparent bg-white p-6 text-center transition-all hover:border-cyan-400 hover:shadow-lg dark:bg-slate-900">
                   <Play className="mx-auto mb-3 h-8 w-8 text-cyan-600 transition-transform group-hover:scale-110" />
-                  <h3 className="font-bold text-slate-900">Simulador</h3>
-                  <p className="mt-1 text-xs text-slate-600">Animações interativas</p>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">Simulador</h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Animações interativas</p>
                 </Card>
               </Link>
             </div>
@@ -335,8 +335,8 @@ export default function OndulatóriaHome() {
         <div className="mb-16">
           <div className="mb-8 flex flex-col justify-between gap-3 md:flex-row md:items-end">
             <div>
-              <h3 className="text-3xl font-bold text-slate-900">Tópicos Principais</h3>
-              <p className="mt-2 max-w-3xl text-slate-600">
+              <h3 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Tópicos Principais</h3>
+              <p className="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">
                 A ordem abaixo separa o que é oscilação local, o que é propagação de onda e o que é aplicação em som. Sim, agora a tela parou de fingir que quatro cards resolvem tudo.
               </p>
             </div>

@@ -1,4 +1,5 @@
 import { trpcClient } from "@/lib/trpcClient";
+import { authSession } from "@/lib/authSession";
 
 export type BillingPlanSlug = string;
 
@@ -17,6 +18,7 @@ export type BillingPlan = {
   hasAvailableSlots?: boolean;
   requiresLegacyFounderEligibility: boolean;
   legacyFounderEligible: boolean;
+  hasValidInvite: boolean;
   canCheckout: boolean;
   checkoutBlockReason: "legacy_founder_required" | "active_subscription" | null;
   isCurrentPlan: boolean;
@@ -40,6 +42,7 @@ export type PublicBillingPlanRow = {
   has_available_slots: boolean;
   requires_legacy_founder_eligibility: boolean;
   legacy_founder_eligible: boolean;
+  has_valid_invite: boolean;
   can_checkout: boolean;
   checkout_block_reason: "legacy_founder_required" | "active_subscription" | null;
   is_current_plan: boolean;
@@ -51,6 +54,21 @@ export type BillingCapabilities = {
   mode: "mercadopago" | "manual";
   mercadoPagoEnabled: boolean;
   manualPixFallbackEnabled: boolean;
+};
+
+export type ReferralPricingPreview = {
+  linked: boolean;
+  eligible: boolean;
+  discountPercent: number | null;
+  eligibleMethods: Array<"pix" | "prepaid_card" | "prepaid_pix">;
+  plans: Array<{
+    planId: string;
+    slug: string;
+    originalCents: number;
+    pixCents: number;
+    recurringCardCents: number;
+    prepaid: Array<{ months: 1 | 2 | 3; originalCents: number; discountedCents: number }>;
+  }>;
 };
 
 export type MercadoPagoPixResult = {
@@ -121,6 +139,7 @@ function mapPublicRowToPlan(row: PublicBillingPlanRow): BillingPlan {
     hasAvailableSlots: row.has_available_slots,
     requiresLegacyFounderEligibility: row.requires_legacy_founder_eligibility,
     legacyFounderEligible: row.legacy_founder_eligible,
+    hasValidInvite: row.has_valid_invite,
     canCheckout: row.can_checkout,
     checkoutBlockReason: row.checkout_block_reason,
     isCurrentPlan: row.is_current_plan,
@@ -129,17 +148,8 @@ function mapPublicRowToPlan(row: PublicBillingPlanRow): BillingPlan {
 }
 
 export async function loadPublicBillingPlans(): Promise<BillingPlan[]> {
-  try {
-    const rows = await trpcClient.billing.listPublicPlans.query();
-
-    if (Array.isArray(rows) && rows.length > 0) {
-      return (rows as PublicBillingPlanRow[]).map(mapPublicRowToPlan);
-    }
-  } catch (error) {
-    console.warn("Não foi possível carregar planos públicos via backend. Usando fallback local:", error);
-  }
-
-  return [];
+  const rows = await trpcClient.billing.listPublicPlans.query();
+  return Array.isArray(rows) ? (rows as PublicBillingPlanRow[]).map(mapPublicRowToPlan) : [];
 }
 
 export async function requestManualSubscription(
@@ -170,6 +180,23 @@ export async function createMercadoPagoPixPayment(
   planSlug: string
 ): Promise<MercadoPagoPixResult> {
   return trpcClient.billing.createPixPayment.mutate({ planSlug });
+}
+
+export async function createPrepaidCheckout(planSlug: string, durationMonths: 1 | 2 | 3 | 6 | 12, paymentMethod: "card" | "pix", newAttempt=false,couponCode?:string) {
+  const session=await authSession.getSession();
+  if(!session?.user.id) throw new Error("Não foi possível confirmar sua sessão.");
+  const key=`prepaid-attempt:${session.user.id}:${planSlug}:${durationMonths}:${paymentMethod}${couponCode?`:${couponCode}`:""}`;
+  let attemptKey=newAttempt?null:localStorage.getItem(key);
+  if(!attemptKey){attemptKey=crypto.randomUUID();localStorage.setItem(key,attemptKey);}
+  const result=await trpcClient.billing.createPrepaidCheckout.mutate({ planSlug, durationMonths, paymentMethod, attemptKey, couponCode });
+  if(result.paymentStatus && result.paymentStatus!=="pending") throw new Error(result.paymentStatus==="approved"
+    ? "Esta compra já foi aprovada. Consulte Minha assinatura. Para outra compra, marque a opção de iniciar outra compra."
+    : "Esta tentativa foi encerrada. Consulte seu histórico; para outra compra, marque a opção de iniciar outra compra.");
+  return result;
+}
+
+export async function getReferralPricingPreview(): Promise<ReferralPricingPreview> {
+  return trpcClient.referrals.pricingPreview.query() as Promise<ReferralPricingPreview>;
 }
 
 export async function getMySubscription() {
