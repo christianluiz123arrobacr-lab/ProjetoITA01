@@ -49,10 +49,12 @@ export default function PrepaidOptions({
     owner: string | undefined;
   } | null>(null);
   const [message, setMessage] = useState("");
+  const recoveryBusy = useRef(false);
+  const [recoveryCount, setRecoveryCount] = useState(0);
   const recovery = trpc.billing.recoverPrepaidCheckout.useMutation({
-    onMutate: () => ({ owner: user?.id }),
+    onMutate: () => ({ owner: user?.id, version: version.current }),
     onSuccess: (result, _variables, context) => {
-      if (!mounted.current || identity.current !== context?.owner) return;
+      if (!mounted.current || identity.current !== context?.owner || version.current !== context?.version) return;
       if (result.paymentStatus && result.paymentStatus !== "pending")
         setMessage(
           result.paymentStatus === "approved"
@@ -66,14 +68,17 @@ export default function PrepaidOptions({
         );
     },
     onError: (error, _variables, context) => {
-      if (mounted.current && identity.current === context?.owner)
+      if (mounted.current && identity.current === context?.owner && version.current === context?.version)
         setMessage(error.message);
     },
+    onSettled: () => { recoveryBusy.current = false; },
   });
   useEffect(() => {
     version.current++;
     setValidated(null);
     preview.reset();
+    setMessage("");
+    setRecoveryCount(0);
   }, [user?.id, planSlug]);
   const offer = selectCurrentOffer(
     offers.data,
@@ -132,14 +137,18 @@ export default function PrepaidOptions({
       <button
         type="button"
         className="text-sm underline underline-offset-4"
-        disabled={recovery.isPending}
+        disabled={recovery.isPending || disabled || recoveryCount >= 3}
         onClick={() => {
+          if (recoveryBusy.current || recoveryCount >= 3) return;
+          recoveryBusy.current = true;
+          setRecoveryCount(count => count + 1);
           setMessage("");
           recovery.mutate({ planSlug });
         }}
       >
         {recovery.isPending ? "Consultando…" : "Recuperar compra anterior"}
       </button>
+      {recoveryCount >= 3 && <p role="status" className="text-sm">As consultas foram pausadas nesta tela. Se a tentativa continuar sem confirmação, contate o suporte antes de iniciar outra compra.</p>}
       {message && (
         <p role="status" className="rounded-xl bg-muted p-3 text-sm">
           {message}

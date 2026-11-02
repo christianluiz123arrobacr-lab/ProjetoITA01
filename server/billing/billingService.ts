@@ -1012,7 +1012,7 @@ export async function createPrepaidCheckout(input: PrepaidInput) {
   return runPrepaidCheckout({...input, userEmail:email}, {
     rpc: async (name,args) => {
       const {data,error} = await supabaseAdmin.rpc(name,args);
-      if(error) throw new TRPCError({code:"BAD_REQUEST",message:"Não foi possível preparar ou recuperar o pacote. Verifique pagamentos pendentes e a disponibilidade da duração."});
+      if(error) throw new TRPCError({code:error.code === "P0001" ? "BAD_REQUEST" : "SERVICE_UNAVAILABLE",cause:error,message:"Não foi possível preparar ou recuperar o pacote. Verifique pagamentos pendentes e a disponibilidade da duração."});
       return data;
     },
     recover:recoverPrepaidResource, createPix:createMercadoPagoPixPayment,
@@ -1038,13 +1038,13 @@ export async function getPrepaidOffers(userId:string,planSlug:string) {
   return offers;
 }
 
-export async function recoverPrepaidCheckout(userId:string,userEmail:string|null,planSlug:string) {
+export async function recoverPrepaidCheckout(userId:string,userEmail:string|null,planSlug:string,correlationId?:string) {
   const {data,error}=await supabaseAdmin.from("billing_prepaid_attempts")
     .select("attempt_key,months,method,snapshot,billing_plans!inner(slug)").eq("user_id",userId)
     .eq("billing_plans.slug",planSlug).order("created_at",{ascending:false}).limit(1).maybeSingle();
   if(error) throw new TRPCError({code:"SERVICE_UNAVAILABLE",message:"Não foi possível consultar a tentativa."});
   if(!data) throw new TRPCError({code:"NOT_FOUND",message:"Nenhuma compra pré-paga anterior neste plano."});
-  return createPrepaidCheckout({userId,userEmail,...prepaidCheckoutSchema.parse({planSlug,attemptKey:data.attempt_key,durationMonths:data.months,paymentMethod:data.method,couponCode:(data.snapshot as any)?.affiliate?.code})});
+  return createPrepaidCheckout({userId,userEmail,correlationId,...prepaidCheckoutSchema.parse({planSlug,attemptKey:data.attempt_key,durationMonths:data.months,paymentMethod:data.method,couponCode:(data.snapshot as any)?.affiliate?.code})});
 }
 
 export async function getMyPayments(userId: string) {

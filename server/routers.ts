@@ -629,13 +629,14 @@ export const appRouter = router({
           planSlug: input.planSlug,
           durationMonths: input.durationMonths,
           attemptKey: input.attemptKey,
+          correlationId: ctx.authentication?.correlationId,
           couponCode: input.couponCode,
           paymentMethod: input.paymentMethod,
         })
       ),
 
     prepaidOffers: protectedProcedure.input(z.object({planSlug:z.string().min(1).max(120)})).query(({ctx,input})=>getPrepaidOffers(ctx.user.id,input.planSlug)),
-    recoverPrepaidCheckout: protectedProcedure.input(z.object({planSlug:z.string().min(1).max(120)}).strict()).mutation(({ctx,input})=>recoverPrepaidCheckout(ctx.user.id,ctx.user.email??null,input.planSlug)),
+    recoverPrepaidCheckout: protectedProcedure.input(z.object({planSlug:z.string().min(1).max(120)}).strict()).mutation(({ctx,input})=>recoverPrepaidCheckout(ctx.user.id,ctx.user.email??null,input.planSlug,ctx.authentication?.correlationId)),
     getMySubscription: protectedProcedure.query(async ({ ctx }) => {
       const latestSubscription = await getLatestUserBillingSubscription(ctx.user.id);
       return flattenBillingSubscription(latestSubscription);

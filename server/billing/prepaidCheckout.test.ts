@@ -78,3 +78,43 @@ describe("prepaid cross-boundary recovery (simulated concurrency, not native MVC
  expect((await runPrepaidCheckout(cardInput,s.deps)).amountCents).toBe(6783);expect(s.deps.createCard).toHaveBeenCalledOnce();
  });
 });
+
+it.each(["pix", "card"] as const)("validates first %s resource and logs no private provider messages", async method => {
+ const s=scenario();const log=vi.spyOn(console,"warn").mockImplementation(()=>{});
+ const create=method==="pix"?s.deps.createPix:s.deps.createCard;
+ create.mockRejectedValue(new Error("private email token QR secret"));
+ try {
+  await expect(runPrepaidCheckout({...input,paymentMethod:method,correlationId:"safe-correlation"},s.deps)).rejects.toMatchObject({code:"SERVICE_UNAVAILABLE",cause:{message:"private email token QR secret"}});
+  expect(JSON.stringify(log.mock.calls)).not.toMatch(/private email|synthetic@example|QR secret/);
+  expect(log).toHaveBeenCalledWith(expect.objectContaining({stage:"submit",correlation_id:"safe-correlation",duration_ms:expect.any(Number)}));
+ } finally {log.mockRestore();}
+});
+it("creates a card preference once and rejects a mismatched first response",async()=>{
+ const s=scenario();const card={id:"pref",external_reference:"payment:p:subscription:s",items:[{quantity:1,unit_price:67.83,currency_id:"BRL"}],init_point:"https://www.mercadopago.com.br/checkout"};
+ s.deps.createCard.mockResolvedValue({...card,external_reference:"other"});
+ await expect(runPrepaidCheckout({...input,paymentMethod:"card"},s.deps)).rejects.toMatchObject({cause:{category:"reference_mismatch"}});
+ s.setExternal(card);
+ expect((await runPrepaidCheckout({...input,paymentMethod:"card"},s.deps)).paymentId).toBe("p");
+ expect(s.deps.createCard).toHaveBeenCalledOnce();
+});
+it.each(["external_reference","currency_id","transaction_amount"])("rejects recovered Pix with wrong %s",async field=>{
+ const s=scenario();s.a.state="submitted";s.setExternal({...s.resource,[field]:field==="transaction_amount"?1:"wrong"});
+ await expect(runPrepaidCheckout(input,s.deps)).rejects.toThrow();
+ expect(s.deps.rpc.mock.calls.some(([name])=>name==="complete_prepaid_submission")).toBe(false);
+ expect(s.deps.createPix).not.toHaveBeenCalled();
+});
+it("does not authorize submission from a malformed claim response",async()=>{
+ const s=scenario();const original=s.deps.rpc.getMockImplementation()!;
+ s.deps.rpc.mockImplementation(async(name,args)=>name==="claim_prepaid_submission"?{}:original(name,args));
+ await expect(runPrepaidCheckout(input,s.deps)).rejects.toMatchObject({cause:{category:"invalid_claim"}});
+ expect(s.deps.createPix).not.toHaveBeenCalled();
+});
+it.each([undefined,"TEST"])("creates card with coupon %s and reuses ready result",async couponCode=>{
+ const s=scenario();if(couponCode)(s.a.snapshot as any).affiliate={code:couponCode};
+ const original=s.deps.rpc.getMockImplementation()!;
+ s.deps.rpc.mockImplementation((name,args)=>original(name==="prepare_affiliate_prepaid_checkout"?"prepare_prepaid_checkout":name,args));
+ s.deps.createCard.mockResolvedValue({id:"pref",external_reference:"payment:p:subscription:s",items:[{quantity:1,unit_price:67.83,currency_id:"BRL"}],init_point:"https://www.mercadopago.com.br/checkout"});
+ const call={...input,paymentMethod:"card" as const,couponCode};
+ expect((await runPrepaidCheckout(call,s.deps)).amountCents).toBe(6783);
+ await runPrepaidCheckout(call,s.deps);expect(s.deps.createCard).toHaveBeenCalledOnce();
+});

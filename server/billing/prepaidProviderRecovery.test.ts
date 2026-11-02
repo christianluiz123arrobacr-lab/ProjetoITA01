@@ -13,7 +13,7 @@ describe("official prepaid provider lookup (mock HTTP)",()=>{
  });
  it("does not choose silently when preference total exceeds returned page",async()=>{
  vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN","synthetic-test-only");vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({elements:[{id:"a"}],total:2}))));
- await expect(recoverPrepaidResource("card","ref")).rejects.toThrow("revisão");
+ await expect(recoverPrepaidResource("card","ref")).rejects.toMatchObject({category:"multiple_results",operation:"search"});
  });
  it("returns null for an empty search without issuing POST",async()=>{
  vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN","synthetic-test-only");const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({results:[],paging:{total:0}})));vi.stubGlobal("fetch",fetcher);
@@ -23,4 +23,15 @@ describe("official prepaid provider lookup (mock HTTP)",()=>{
  vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN","synthetic-test-only");const fetcher=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({results:[{id:12}],paging:{total:1}}))).mockResolvedValueOnce(new Response(JSON.stringify({id:12,status:"pending",external_reference:"ref"})));vi.stubGlobal("fetch",fetcher);
  expect((await recoverPrepaidResource("pix","ref"))?.status).toBe("pending");expect(fetcher.mock.calls[1][0]).toContain("/v1/payments/12");
  });
+});
+
+it("preserves HTTP status and safe provider trace on non-JSON failures",async()=>{
+ vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN","synthetic-test-only");
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response("private upstream body",{status:503,headers:{"x-request-id":"safe-trace"}})));
+ await expect(recoverPrepaidResource("pix","ref")).rejects.toMatchObject({operation:"search",cause:{status:503,requestId:"safe-trace"}});
+});
+it("marks a failure in resource lookup separately from search",async()=>{
+ vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN","synthetic-test-only");
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({results:[{id:12}],paging:{total:1}}))).mockResolvedValueOnce(new Response("{}",{status:401})));
+ await expect(recoverPrepaidResource("pix","ref")).rejects.toMatchObject({operation:"get_resource",cause:{status:401}});
 });

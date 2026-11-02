@@ -4,9 +4,15 @@ const MP_API_BASE_URL = "https://api.mercadopago.com";
 const DEFAULT_TIMEOUT_MS = 12_000;
 
 export class MercadoPagoHttpError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(public readonly status: number, message: string, public readonly requestId?: string) {
     super(message);
     this.name = "MercadoPagoHttpError";
+  }
+}
+
+export class PrepaidResourceError extends Error {
+  constructor(public readonly category: string, public readonly operation: string, options?: ErrorOptions) {
+    super("Não foi possível confirmar o recurso pré-pago.", options);
   }
 }
 
@@ -80,7 +86,7 @@ export type MercadoPagoClaim = z.infer<typeof mercadoPagoClaimSchema>;
 
 function getAccessToken() {
   const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-  if (!token) throw new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado.");
+  if (!token) throw new PrepaidResourceError("provider_configuration", "configuration");
   return token;
 }
 
@@ -101,11 +107,16 @@ async function mercadoPagoFetch(path: string, options: RequestInit & { idempoten
     });
 
     const text = await response.text();
-    const json = text ? JSON.parse(text) : null;
+    let json;
+    try { json = text ? JSON.parse(text) : null; }
+    catch (cause) {
+      if (!response.ok) throw new MercadoPagoHttpError(response.status, "Resposta HTTP inválida", response.headers.get("x-request-id") ?? undefined);
+      throw new PrepaidResourceError("invalid_response", "decode", { cause });
+    }
 
     if (!response.ok) {
       const message = typeof json?.message === "string" ? json.message : `Mercado Pago HTTP ${response.status}`;
-      throw new MercadoPagoHttpError(response.status, message);
+      throw new MercadoPagoHttpError(response.status, message, response.headers.get("x-request-id") ?? undefined);
     }
 
     return json;
@@ -222,18 +233,25 @@ export async function getPayment(id: string) {
 
 /** A search miss is NOT evidence that a timed-out POST did not succeed. */
 export async function recoverPrepaidResource(method: "card" | "pix", reference: string) {
+  let operation = "search";
+  try {
   const path = method === "card" ? "/checkout/preferences/search" : "/v1/payments/search";
   const json = await mercadoPagoFetch(`${path}?external_reference=${encodeURIComponent(reference)}&limit=2`);
   const rows = method === "card" ? json?.elements : json?.results;
-  if (!Array.isArray(rows)) throw new Error("Resposta de recuperação inválida.");
+  if (!Array.isArray(rows)) throw new PrepaidResourceError("invalid_response", operation);
   if (rows.length === 0) return null;
-  if (rows.length !== 1 || Number(json?.total ?? json?.paging?.total ?? rows.length) > 1) throw new Error("Recuperação exige revisão administrativa.");
+  if (rows.length !== 1 || Number(json?.total ?? json?.paging?.total ?? rows.length) > 1) throw new PrepaidResourceError("multiple_results", operation);
   const id = rows[0]?.id;
-  if (!id) throw new Error("Identificador de recuperação ausente.");
-  if (method === "pix") return getPayment(String(id));
+  if (!id) throw new PrepaidResourceError("missing_id", operation);
+  operation = "get_resource";
+  if (method === "pix") return await getPayment(String(id));
   const preference = await mercadoPagoFetch(`/checkout/preferences/${encodeURIComponent(String(id))}`);
-  if (preference?.external_reference !== reference) throw new Error("Referência divergente.");
+  if (preference?.external_reference !== reference) throw new PrepaidResourceError("reference_mismatch", operation);
   return preference;
+  } catch (cause) {
+    if (cause instanceof PrepaidResourceError) throw cause;
+    throw new PrepaidResourceError("provider_lookup_failed", operation, { cause });
+  }
 }
 
 
