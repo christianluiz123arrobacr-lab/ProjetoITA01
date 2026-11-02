@@ -57,3 +57,15 @@ O cliente HTTP passa a conservar códigos numéricos de `cause.code` (limitados)
 Após deployment Ready, uma consulta manual de recuperação pode produzir `provider_error_codes`, `provider_error_fields` e `provider_reason`; usar esses dados para determinar a correção. O identificador da requisição do provedor pode também ser usado em atendimento privado ao Mercado Pago. Não fazer retries rápidos nem apagar tentativa. A origem do 400 e a recuperação real continuam pendentes.
 
 Validação local: 34 testes direcionados aprovados, incluindo HTTP 400 com texto privado e com motivo conhecido; a saída de diagnóstico é comparada integralmente para evitar vazamento de campos extras. Build aprovado; TypeScript mantém os 11 erros preexistentes, sem erros novos após revisão. git diff --check aprovado. Nenhuma chamada real a Mercado Pago ou Supabase foi executada e não há SQL novo.
+
+## Normalização da validade do Pix — 2026-11-02
+
+O operador confirmou código `23`, campo `date_of_expiration` e snapshot com validade `2026-11-02T23:01:21.188477+00:00`. A cadeia SQL → snapshot → createPixPayment enviava os seis dígitos fracionários sem normalização. A recusa do campo está comprovada; a aceitação do formato corrigido depende de teste no provedor real.
+
+createPixPayment passa a validar presença de fuso e data interpretável antes de HTTP, e serializar em UTC com milissegundos e offset explícito (`2026-11-02T23:01:21.188+00:00`). A precisão inferior a milissegundos é truncada, sem estender a validade. Tanto o envio inicial quanto o replay usam a mesma normalização determinística. Snapshot, preço, referência e chave de idempotência permanecem os originais. Data inválida exige revisão; não se usa a data atual como fallback.
+
+Não há migration nem SQL de reparo. Para uma tentativa anterior, após publicar, usar Recuperar compra anterior: buscar primeiro o recurso oficial, reutilizá-lo se encontrado e apenas reenviar com a chave original se a busca terminar vazia e a validade continuar futura. O corpo antigo com seis casas difere da representação normalizada; o comportamento do provedor ao reutilizar essa chave após a recusa 400 não foi homologado. Se houver conflito ou a validade já venceu, manter a tentativa para revisão, usando o request ID com o suporte do Mercado Pago; não trocar chave, estender validade ou apagar pagamentos para contornar o problema.
+
+Testes HTTP simulados cobrem a data observada, offset -03:00, entradas antigas ISO, data sem fuso/inválida e resposta perdida seguida de recuperação com corpos e chaves idênticos. Esses testes não comprovam concorrência MVCC nem homologação de pagamento real.
+
+Validação local desta correção: 42 testes aprovados em prepaidProviderRecovery, prepaidCheckout e prepaidRecoverySql; os 25 de prepaidCheckout também foram repetidos após a classificação de validade inválida como revisão. Build cliente/servidor aprovado. TypeScript comparado com tmp/prepaid-400-types.txt: mesmos 11 erros, sem diferenças. git diff --check aprovado. Nenhum SQL remoto, chamada real de cobrança, commit, push ou deploy executado nesta correção.

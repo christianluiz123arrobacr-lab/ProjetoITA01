@@ -198,6 +198,14 @@ export async function createPixPayment(input: {
   expiresAt: string;
   idempotencyKey: string;
 }) {
+  // PostgreSQL JSON timestamps can contain six fractional digits. Payments
+  // expects a provider-compatible ISO timestamp, not the raw SQL serialization.
+  // Always derive it from the frozen deadline; never renew an uncertain Pix.
+  const expiry = Date.parse(input.expiresAt);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(input.expiresAt) || !Number.isFinite(expiry)) {
+    throw new PrepaidResourceError("invalid_expiration", "serialize_pix");
+  }
+  const providerExpiry = new Date(expiry).toISOString().replace("Z", "+00:00");
   const payload = {
     transaction_amount: input.amount,
     description: input.description,
@@ -205,7 +213,7 @@ export async function createPixPayment(input: {
     payer: { email: input.payerEmail },
     external_reference: input.externalReference,
     notification_url: input.notificationUrl,
-    date_of_expiration: input.expiresAt,
+    date_of_expiration: providerExpiry,
   };
 
   const json = await mercadoPagoFetch("/v1/payments", {

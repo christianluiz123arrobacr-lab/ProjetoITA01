@@ -89,7 +89,7 @@ export async function runPrepaidCheckout(input:PrepaidInput, deps:Dependencies) 
       database_code:databaseCode && /^[A-Z0-9]{5}$/.test(databaseCode) ? databaseCode : undefined,
       correlation_id:input.correlationId, duration_ms:Date.now()-started});
     if (cause instanceof TRPCError && ["CONFLICT", "BAD_REQUEST", "FORBIDDEN"].includes(cause.code) && stage === "prepare") throw cause;
-    const review = ["multiple_results","reference_mismatch","currency_mismatch","amount_mismatch","invalid_items","invalid_response","missing_id","invalid_claim","invalid_completion","expired_unconfirmed_attempt"].includes(category);
+    const review = ["multiple_results","reference_mismatch","currency_mismatch","amount_mismatch","invalid_items","invalid_response","invalid_expiration","missing_id","invalid_claim","invalid_completion","expired_unconfirmed_attempt"].includes(category);
     const message = review || category === "provider_rejected" || category === "provider_configuration"
       ? "Esta tentativa precisa de revisão pelo suporte. Preserve a compra anterior e não inicie outra."
       : category === "search_empty"
