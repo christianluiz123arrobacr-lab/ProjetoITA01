@@ -1,6 +1,18 @@
 import { afterEach,describe,expect,it,vi } from "vitest";
-import { recoverPrepaidResource } from "./mercadoPagoClient";
+import { recoverPrepaidResource, createPixPayment } from "./mercadoPagoClient";
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it.each([
+ [{message:"Invalid date_of_expiration: private@example.test",cause:[{code:23,description:"private token",data:"private secret"},{code:"private-token"}]},{codes:["23"],fields:["date_of_expiration"],reason:"unclassified"}],
+ [{message:"Collector user without key enabled for QR render",cause:[]},{codes:[],fields:[],reason:"collector_pix_not_enabled"}],
+])("retains safe diagnostics from a rejected Pix without raw provider text",async(body,diagnostics)=>{
+ vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN","synthetic-test-only");
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify(body),{status:400})));
+ const error = await createPixPayment({externalReference:"ref",payerEmail:"synthetic@example.test",amount:8.1,
+  description:"Synthetic",notificationUrl:"https://example.test/hook",expiresAt:"2026-12-01T00:00:00Z",idempotencyKey:"same-key"})
+  .then(()=>null,(error)=>error);
+ expect(error).toMatchObject({status:400});expect(error.diagnostics).toEqual(diagnostics);
+ expect(JSON.stringify(error.diagnostics)).not.toMatch(/private|secret|token|@/);
+});
 describe("official prepaid provider lookup (mock HTTP)",()=>{
  it("gets original preference after exact external-reference search",async()=>{
  vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN","synthetic-test-only");

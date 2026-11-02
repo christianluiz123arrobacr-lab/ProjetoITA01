@@ -84,6 +84,8 @@ export async function runPrepaidCheckout(input:PrepaidInput, deps:Dependencies) 
     const databaseCode = cause instanceof TRPCError ? (cause.cause as {code?:string})?.code : undefined;
     console.warn({event:"prepaid_checkout_recovery_required",stage, operation:cause instanceof PrepaidResourceError ? cause.operation : stage, category, http_status:http?.status,
       provider_request_id: http?.requestId && /^[A-Za-z0-9_-]{1,100}$/.test(http.requestId) ? http.requestId : undefined,
+      provider_error_codes:http?.diagnostics?.codes, provider_error_fields:http?.diagnostics?.fields,
+      provider_reason:http?.diagnostics?.reason,
       database_code:databaseCode && /^[A-Z0-9]{5}$/.test(databaseCode) ? databaseCode : undefined,
       correlation_id:input.correlationId, duration_ms:Date.now()-started});
     if (cause instanceof TRPCError && ["CONFLICT", "BAD_REQUEST", "FORBIDDEN"].includes(cause.code) && stage === "prepare") throw cause;

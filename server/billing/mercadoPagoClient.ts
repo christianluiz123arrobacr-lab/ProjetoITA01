@@ -4,10 +4,26 @@ const MP_API_BASE_URL = "https://api.mercadopago.com";
 const DEFAULT_TIMEOUT_MS = 12_000;
 
 export class MercadoPagoHttpError extends Error {
-  constructor(public readonly status: number, message: string, public readonly requestId?: string) {
+  constructor(public readonly status: number, message: string, public readonly requestId?: string,
+    public readonly diagnostics?: ReturnType<typeof paymentErrorDiagnostics>) {
     super(message);
     this.name = "MercadoPagoHttpError";
   }
+}
+
+// Only numeric API cause codes and static labels may reach diagnostic logs.
+// Provider messages, descriptions and cause.data can contain personal data.
+function paymentErrorDiagnostics(body: any) {
+  const causes: any[] = Array.isArray(body?.cause) ? body.cause.slice(0, 10) : [];
+  const codes = Array.from(new Set(causes.map((c:any)=>String(c?.code ?? "")).filter((code:string)=>/^\d{1,8}$/.test(code))));
+  const text = [body?.message, ...causes.map((c:any)=>c?.description)]
+    .filter((s:unknown)=>typeof s === "string").map((s:string)=>s.slice(0,1000)).join(" ").toLowerCase();
+  const fields = ["date_of_expiration","transaction_amount","payer","notification_url","external_reference","payment_method_id","idempotency"]
+    .filter(field=>text.includes(field));
+  const reason = text.includes("without key enabled for qr render") ? "collector_pix_not_enabled"
+    : text.includes("payer and collector cannot be equal") ? "payer_equals_collector"
+    : "unclassified";
+  return { codes, fields, reason };
 }
 
 export class PrepaidResourceError extends Error {
@@ -116,7 +132,7 @@ async function mercadoPagoFetch(path: string, options: RequestInit & { idempoten
 
     if (!response.ok) {
       const message = typeof json?.message === "string" ? json.message : `Mercado Pago HTTP ${response.status}`;
-      throw new MercadoPagoHttpError(response.status, message, response.headers.get("x-request-id") ?? undefined);
+      throw new MercadoPagoHttpError(response.status, message, response.headers.get("x-request-id") ?? undefined, paymentErrorDiagnostics(json));
     }
 
     return json;

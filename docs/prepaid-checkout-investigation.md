@@ -47,3 +47,13 @@ Falha na busca, divergência nos dados ou expiração inválida/vencida mantém 
 Depois da publicação, usar “Recuperar compra anterior” pode obter o Pix existente ou criar o recurso da mesma tentativa caso a primeira chamada não tenha sido processada. Não zerar o estado, apagar registros, trocar a chave ou renovar a validade por SQL. Nenhuma migration nova é necessária. Os testes usam provedor simulado e PGlite; a tentativa real e a garantia do provedor ainda precisam ser verificadas após a publicação, sem declarar mocks como homologação real.
 
 Validação desta revisão: 32 testes aprovados em prepaidCheckout, prepaidProviderRecovery e prepaidRecoverySql; incluem reenvio com parâmetros idênticos após resposta perdida, concorrência simulada, falha na busca, tentativa vencida/validade inválida e ausência de reenvio para cartão. Build do cliente/servidor e git diff --check aprovados. TypeScript mantém os mesmos 11 erros preexistentes descritos acima. Nenhum serviço de pagamento ou Supabase remoto foi chamado nos testes.
+
+## Diagnóstico de rejeição HTTP 400 — 2026-11-02
+
+O log enviado pelo operador confirma `retry_same_idempotency_key`, `provider_rejected`, HTTP 400 e autenticação verificada. Isso comprova que o reenvio executou e recebeu recusa do provedor, mas não identifica o campo recusado ou a causa original. Não comprova problema de cupom, perfil administrativo, schema ou falta de migration.
+
+O cliente HTTP passa a conservar códigos numéricos de `cause.code` (limitados), nomes de campos conhecidos presentes na descrição e classificações estáticas para Pix não habilitado ou pagador igual ao recebedor. O logger de recuperação publica somente esses diagnósticos, HTTP, trace e correlação. Não publica message, description, cause.data, corpo, email, chave ou QR. Erro desconhecido permanece `unclassified`; não é tratado automaticamente como Pix desabilitado. Não se altera payload ou estado de tentativa para contornar o 400.
+
+Após deployment Ready, uma consulta manual de recuperação pode produzir `provider_error_codes`, `provider_error_fields` e `provider_reason`; usar esses dados para determinar a correção. O identificador da requisição do provedor pode também ser usado em atendimento privado ao Mercado Pago. Não fazer retries rápidos nem apagar tentativa. A origem do 400 e a recuperação real continuam pendentes.
+
+Validação local: 34 testes direcionados aprovados, incluindo HTTP 400 com texto privado e com motivo conhecido; a saída de diagnóstico é comparada integralmente para evitar vazamento de campos extras. Build aprovado; TypeScript mantém os 11 erros preexistentes, sem erros novos após revisão. git diff --check aprovado. Nenhuma chamada real a Mercado Pago ou Supabase foi executada e não há SQL novo.
