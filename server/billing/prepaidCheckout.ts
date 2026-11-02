@@ -27,19 +27,33 @@ export async function runPrepaidCheckout(input:PrepaidInput, deps:Dependencies) 
   if (a.state === "ready") return {...a.result,paymentStatus:a.payment_status??"pending"};
   const s=a.snapshot;
   const reference=`payment:${a.payment_id}:subscription:${s.subscription_id}`;
-  // Only the CAS winner may POST. Every other caller performs official GETs.
+  // Only the CAS winner may submit the first POST. Recoveries search first;
+  // if a Pix is not visible yet, the same frozen request can be replayed with
+  // the same Mercado Pago idempotency key to recover/create one resource.
   stage = "claim";
   const claimed = await deps.rpc("claim_prepaid_submission",{p_user:input.userId,p_attempt:a.id});
   check(typeof claimed === "boolean", "invalid_claim");
   stage = claimed ? "submit" : "recover";
     let resource:any;
+    const idempotencyKey=`mp-prepaid-${a.payment_id}`;
+    const common={externalReference:reference,payerEmail:s.payer_email,amount:centsToMercadoPagoAmount(s.total_cents),
+      notificationUrl:deps.notificationUrl,idempotencyKey};
     if (claimed) {
-      const common={externalReference:reference,payerEmail:s.payer_email,amount:centsToMercadoPagoAmount(s.total_cents),
-        notificationUrl:deps.notificationUrl,idempotencyKey:`mp-prepaid-${a.payment_id}`};
       resource=input.paymentMethod==="card"
         ? await deps.createCard({...common,title:`${s.title} — pacote de ${a.months} meses`,backUrl:deps.backUrl})
         : await deps.createPix({...common,description:`${s.title} — pacote de ${a.months} meses`,expiresAt:s.expires_at});
-    } else resource=await deps.recover(input.paymentMethod,reference);
+    } else {
+      resource=await deps.recover(input.paymentMethod,reference);
+      // Payments API explicitly supports safe retries with the same
+      // X-Idempotency-Key. Keep all values frozen to this attempt; never mint a
+      // new key here. A lookup error still fails closed and does not POST.
+      if (!resource && input.paymentMethod==="pix") {
+        const expiresAt=Date.parse(s.expires_at);
+        check(Number.isFinite(expiresAt) && expiresAt>Date.now(), "expired_unconfirmed_attempt");
+        stage="retry_same_idempotency_key";
+        resource=await deps.createPix({...common,description:`${s.title} — pacote de ${a.months} meses`,expiresAt:s.expires_at});
+      }
+    }
     check(!!resource, "search_empty");
     stage = "validate_resource";
     check(!!resource?.id, "missing_id");
@@ -73,7 +87,7 @@ export async function runPrepaidCheckout(input:PrepaidInput, deps:Dependencies) 
       database_code:databaseCode && /^[A-Z0-9]{5}$/.test(databaseCode) ? databaseCode : undefined,
       correlation_id:input.correlationId, duration_ms:Date.now()-started});
     if (cause instanceof TRPCError && ["CONFLICT", "BAD_REQUEST", "FORBIDDEN"].includes(cause.code) && stage === "prepare") throw cause;
-    const review = ["multiple_results","reference_mismatch","currency_mismatch","amount_mismatch","invalid_items","invalid_response","missing_id","invalid_claim","invalid_completion"].includes(category);
+    const review = ["multiple_results","reference_mismatch","currency_mismatch","amount_mismatch","invalid_items","invalid_response","missing_id","invalid_claim","invalid_completion","expired_unconfirmed_attempt"].includes(category);
     const message = review || category === "provider_rejected" || category === "provider_configuration"
       ? "Esta tentativa precisa de revisão pelo suporte. Preserve a compra anterior e não inicie outra."
       : category === "search_empty"

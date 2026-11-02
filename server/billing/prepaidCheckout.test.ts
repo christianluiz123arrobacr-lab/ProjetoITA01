@@ -49,17 +49,56 @@ describe("prepaid cross-boundary recovery (simulated concurrency, not native MVC
  await expect(runPrepaidCheckout(input,s.deps)).rejects.toThrow();expect(s.a.state).toBe("ready");
  expect((await runPrepaidCheckout(input,s.deps)).paymentId).toBe("p");expect(s.deps.createPix).toHaveBeenCalledOnce();expect(s.deps.recover).not.toHaveBeenCalled();
  });
- it("crash before sending and search miss never authorizes another POST",async()=>{
+ it("replays a missing Pix with the same idempotency key and frozen request",async()=>{
  const s=scenario();s.a.state="submitted";
- for(let i=0;i<3;i++)await expect(runPrepaidCheckout(input,s.deps)).rejects.toThrow();
+ const first=await runPrepaidCheckout(input,s.deps);
+ expect(first.paymentId).toBe("p");
+ expect(s.deps.recover).toHaveBeenCalledWith("pix","payment:p:subscription:s");
+ expect(s.deps.createPix).toHaveBeenCalledOnce();
+ expect(s.deps.createPix).toHaveBeenCalledWith(expect.objectContaining({
+  externalReference:"payment:p:subscription:s",payerEmail:input.userEmail,amount:67.83,
+  notificationUrl:"https://example.test/webhook",idempotencyKey:"mp-prepaid-p",
+  description:"Normal — pacote de 6 meses",expiresAt:"2026-12-01T00:00:00Z",
+ }));
+ await runPrepaidCheckout(input,s.deps);
+ expect(s.deps.createPix).toHaveBeenCalledOnce();
+ });
+ it("does not replay a Pix when the provider search itself fails",async()=>{
+ const s=scenario();s.a.state="submitted";s.deps.recover.mockRejectedValue(new Error("provider unavailable"));
+ await expect(runPrepaidCheckout(input,s.deps)).rejects.toMatchObject({code:"SERVICE_UNAVAILABLE"});
  expect(s.deps.createPix).not.toHaveBeenCalled();
  });
+ it("repeats identical Pix parameters after an accepted response is lost and search is empty",async()=>{
+ const s=scenario();let accepted:any;
+ s.deps.recover.mockResolvedValue(null);
+ s.deps.createPix.mockImplementation(async(...args:any[])=>{
+  if(!accepted){accepted=structuredClone(args[0]);throw Error("response lost");}
+  expect(args[0]).toEqual(accepted);return s.resource;
+ });
+ await expect(runPrepaidCheckout(input,s.deps)).rejects.toMatchObject({code:"SERVICE_UNAVAILABLE"});
+ expect(s.a.state).toBe("submitted");
+ expect((await runPrepaidCheckout(input,s.deps)).providerResourceId).toBe("mp");
+ expect(s.deps.createPix).toHaveBeenCalledTimes(2);
+ await runPrepaidCheckout(input,s.deps);expect(s.deps.createPix).toHaveBeenCalledTimes(2);
+ });
+ it.each(["2020-01-01T00:00:00Z","invalid"])("does not replay an expired or malformed expiry: %s",async expiresAt=>{
+ const s=scenario();s.a.state="submitted";s.a.snapshot.expires_at=expiresAt;
+ await expect(runPrepaidCheckout(input,s.deps)).rejects.toMatchObject({cause:{category:"expired_unconfirmed_attempt"}});
+ expect(s.deps.createPix).not.toHaveBeenCalled();expect(s.a.state).toBe("submitted");
+ });
+ it("keeps a card search miss blocked without replaying a preference",async()=>{
+ const s=scenario();s.a.state="submitted";
+ await expect(runPrepaidCheckout({...input,paymentMethod:"card"},s.deps)).rejects.toMatchObject({cause:{category:"search_empty"}});
+ expect(s.deps.createCard).not.toHaveBeenCalled();
+ });
  it("late provider response can finish while another recovery is pending",async()=>{
- const s=scenario();let finish!:()=>void;
- s.deps.createPix.mockImplementation(async()=>{await new Promise<void>(r=>finish=r);s.setExternal(s.resource);return s.resource;});
+ const s=scenario();let finish!:()=>void;const gate=new Promise<void>(r=>finish=r);
+ s.deps.createPix.mockImplementation(async()=>{await gate;s.setExternal(s.resource);return s.resource;});
  const first=runPrepaidCheckout(input,s.deps);await vi.waitFor(()=>expect(s.deps.createPix).toHaveBeenCalledOnce());
- await expect(runPrepaidCheckout(input,s.deps)).rejects.toThrow();finish();await first;
- expect((await runPrepaidCheckout(input,s.deps)).paymentId).toBe("p");expect(s.deps.createPix).toHaveBeenCalledOnce();
+ const retry=runPrepaidCheckout(input,s.deps);await vi.waitFor(()=>expect(s.deps.createPix).toHaveBeenCalledTimes(2));
+ expect(s.deps.createPix.mock.calls[0][0].idempotencyKey).toBe(s.deps.createPix.mock.calls[1][0].idempotencyKey);
+ finish();await Promise.all([first,retry]);
+ expect((await runPrepaidCheckout(input,s.deps)).paymentId).toBe("p");expect(s.deps.createPix).toHaveBeenCalledTimes(2);
  });
  it("wrong provider amount remains uncertain without completion",async()=>{
  const s=scenario();s.deps.createPix.mockResolvedValue({...s.resource,transaction_amount:1});
