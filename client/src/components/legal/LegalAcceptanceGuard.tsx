@@ -4,6 +4,7 @@ import { Loader2, LogOut, ShieldCheck } from "lucide-react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { trpc } from "@/lib/trpc";
 import { LEGAL_ROUTES } from "@shared/legalDocuments";
+import { HELP_PATH } from "@/config/help";
 
 const documentLinks = [
   ["Termos de Uso", "/termos-de-uso"],
@@ -19,10 +20,10 @@ export default function LegalAcceptanceGuard({ children }: { children: ReactNode
   const [sessionAccepted, setSessionAccepted] = useState(false);
   const utils = trpc.useUtils();
   const publicConfig = trpc.legal.publicConfig.useQuery();
-  const isLegalPage = LEGAL_ROUTES.some(route => location === route);
+  const isPublicReferencePage = location === HELP_PATH || LEGAL_ROUTES.some(route => location === route);
   const acceptanceInput = { sessionKey: user?.id ?? "00000000-0000-0000-0000-000000000000" };
   const accessBootstrap = trpc.auth.getAccessStatus.useQuery(undefined, {
-    enabled: isAuthenticated && !loading && !isLegalPage,
+    enabled: isAuthenticated && !loading && !isPublicReferencePage,
     retry: false,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -32,7 +33,7 @@ export default function LegalAcceptanceGuard({ children }: { children: ReactNode
   });
   const isAdmin = accessBootstrap.data?.role === "admin" || accessBootstrap.data?.role === "editor";
   const status = trpc.legal.acceptanceStatus.useQuery(acceptanceInput, {
-    enabled: isAuthenticated && !loading && !isLegalPage && accessBootstrap.isSuccess && !isAdmin && !sessionAccepted,
+    enabled: isAuthenticated && !loading && !isPublicReferencePage && accessBootstrap.isSuccess && !isAdmin && !sessionAccepted,
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -48,7 +49,7 @@ export default function LegalAcceptanceGuard({ children }: { children: ReactNode
     setSessionAccepted(false);
   }, [user?.id]);
 
-  if (loading || !isAuthenticated || isLegalPage) return <>{children}</>;
+  if (loading || !isAuthenticated || isPublicReferencePage) return <>{children}</>;
   if (accessBootstrap.isLoading || (accessBootstrap.isFetching && !accessBootstrap.data)) return <>{children}</>;
   if (accessBootstrap.isError || isAdmin || sessionAccepted || status.data?.required === false) return <>{children}</>;
 
@@ -71,6 +72,7 @@ export default function LegalAcceptanceGuard({ children }: { children: ReactNode
           <label className="mt-6 flex items-start gap-3 text-sm"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-1 h-4 w-4" />Li e concordo com os Termos de Uso e a Política de Privacidade.</label>
         )}
         <div className="mt-6 flex flex-wrap gap-3">
+          <Link href={HELP_PATH} className="inline-flex items-center rounded-xl px-3 py-3 text-sm font-semibold text-cyan-700 hover:underline dark:text-cyan-300">Central de Ajuda</Link>
           <button type="button" disabled={!accepted || accept.isPending || status.isError || status.isLoading} onClick={() => accept.mutate({ accepted: true })} className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50">{accept.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Continuar</button>
           <button type="button" onClick={() => void signOut()} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold dark:border-slate-700"><LogOut className="h-4 w-4" />Sair</button>
           {publicConfig.data?.contactEmail && <a href={`mailto:${publicConfig.data.contactEmail}`} className="inline-flex items-center rounded-xl px-3 py-3 text-sm font-semibold text-cyan-700 hover:underline dark:text-cyan-300">Falar com o suporte</a>}

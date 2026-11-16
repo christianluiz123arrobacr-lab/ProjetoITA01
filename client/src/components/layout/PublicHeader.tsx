@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import HelpMenu from "./HelpMenu";
 
 export default function PublicHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -104,6 +105,7 @@ export default function PublicHeader() {
           )}
         </div>
 
+        <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={() => setMenuOpen((current) => !current)}
@@ -112,6 +114,8 @@ export default function PublicHeader() {
         >
           {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
+        <HelpMenu />
+        </div>
       </div>
 
       {menuOpen && (

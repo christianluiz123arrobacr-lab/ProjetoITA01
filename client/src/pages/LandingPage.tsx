@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import HelpMenu from "@/components/layout/HelpMenu";
 import {
   Calculator,
   BookOpen,
@@ -54,7 +55,8 @@ export default function LandingPage() {
     <div className="theme-page min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Top Bar */}
       <div className="w-full px-5 pt-5 sm:px-8 sm:pt-6 lg:px-10">
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-2">
+          <HelpMenu className="rounded-full bg-card text-foreground shadow-sm" />
           {loading ? (
             <Button
               disabled

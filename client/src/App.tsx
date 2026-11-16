@@ -13,6 +13,10 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import SubscriptionGuard from "./components/SubscriptionGuard";
 import { isAdminPath, normalizeLegacyAdminPath } from "./lib/privateRouteAccess";
 import StudentSidebar from "./components/layout/StudentSidebar";
+import HelpMenu from "./components/layout/HelpMenu";
+import CommerceHeader from "./components/billing/CommerceHeader";
+import HelpCenterPage from "./pages/HelpCenterPage";
+import { HELP_PATH } from "./config/help";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import LegalAcceptanceGuard from "./components/legal/LegalAcceptanceGuard";
 import LegalFooter from "./components/legal/LegalFooter";
@@ -403,7 +407,12 @@ function MySubscriptionRoute() {
   if (loading) return <p role="status" className="p-8">Carregando...</p>;
   if (error) return <div className="p-8" role="alert">Não foi possível carregar sua sessão. <button onClick={() => void retry()}>Tentar novamente</button></div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
-  return <MinhaAssinaturaPage />;
+  return (
+    <>
+      <CommerceHeader />
+      <MinhaAssinaturaPage />
+    </>
+  );
 }
 
 function PrivateRouter() {
@@ -434,6 +443,11 @@ function PrivateRouter() {
               : "theme-page min-h-screen bg-slate-50 text-slate-900 transition-[padding] duration-200 dark:bg-slate-950 dark:text-slate-100 md:pl-[76px]"
         }
       >
+        {!isAdminRoute && location !== "/plataforma" && (
+          <div className="flex justify-end px-4 pt-3 sm:px-6">
+            <HelpMenu className="bg-card text-foreground" />
+          </div>
+        )}
         <Suspense
           fallback={
             <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
@@ -853,6 +867,7 @@ function Router() {
 
       {/* Rotas públicas */}
       <Route path="/landing" component={Landing} />
+      <Route path={HELP_PATH} component={HelpCenterPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/minha-assinatura" component={MySubscriptionRoute} />
       <Route path="/indique-e-ganhe" component={ReferralPage} />

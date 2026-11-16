@@ -1,5 +1,6 @@
 import { useTheme } from "@/contexts/ThemeContext";
 import { Moon, Sun } from "lucide-react";
+import HelpMenu from "@/components/layout/HelpMenu";
 export default function CommerceHeader() {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -12,7 +13,7 @@ export default function CommerceHeader() {
           <img src="/brand/projeto-vetor-logo.svg" alt="" className="h-8 w-8" />
           Projeto Vetor
         </a>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex shrink-0 items-center gap-2 text-sm sm:gap-4">
           <a className="hover:underline" href="/minha-assinatura">
             Minha conta
           </a>
@@ -26,6 +27,7 @@ export default function CommerceHeader() {
           >
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+          <HelpMenu />
         </div>
       </nav>
     </header>
