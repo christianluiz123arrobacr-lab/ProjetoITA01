@@ -1,0 +1,45 @@
+{
+  "formato": "questoes-v2",
+  "questoes": [
+    {
+      "chave_importacao": "ita-fisica-2025-001",
+      "codigo": "ITA-2025-FIS-001",
+      "enunciado": "Uma partícula realiza um movimento conforme a figura.",
+      "alternativas": [
+        { "letra": "A", "texto": "10 m/s" },
+        { "letra": "B", "texto": "15 m/s" },
+        { "letra": "C", "texto": "20 m/s" },
+        { "letra": "D", "texto": "25 m/s" },
+        { "letra": "E", "texto": "30 m/s" }
+      ],
+      "resposta": "C",
+      "resolucao": "Aplicando as equações da Cinemática, obtemos 20 m/s.",
+      "disciplina": "Física",
+      "dificuldade": "medio",
+      "conteudos": ["Cinemática"],
+      "assuntos": ["Movimento uniforme"],
+      "assuntos_por_conteudo": [{ "conteudo": "Cinemática", "assuntos": ["Movimento uniforme"] }],
+      "banca": "ITA",
+      "instituicao": "ITA",
+      "ano": 2025,
+      "imagens": [
+        {
+          "slot_id": "figura-enunciado-1",
+          "obrigatoria": true,
+          "local": "enunciado",
+          "nome_arquivo_esperado": "ita-fisica-2025-001-figura-1.png",
+          "descricao": "Figura usada no enunciado",
+          "texto_alternativo": "Diagrama representando o movimento da partícula",
+          "legenda": "Trajetória da partícula"
+        },
+        {
+          "slot_id": "figura-resolucao-1",
+          "obrigatoria": false,
+          "local": "resolucao",
+          "nome_arquivo_esperado": "ita-fisica-2025-001-resolucao.webp",
+          "texto_alternativo": "Construção geométrica usada na resolução"
+        }
+      ]
+    }
+  ]
+}

@@ -3,8 +3,12 @@ import { z } from "zod";
 export const QUESTION_PDF_EXPORT_LIMIT = 120;
 
 export const questionPdfFiltersSchema = z.object({
+  correlationId: z.string().uuid().optional(),
   search: z.string().trim().max(160).default(""),
   institutions: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
+  exams: z.array(z.string().trim().min(1).max(120)).max(30).optional(),
+  yearFrom: z.number().int().min(1900).max(2200).optional(),
+  yearTo: z.number().int().min(1900).max(2200).optional(),
   years: z.array(z.number().int().min(1900).max(2200)).max(50).default([]),
   subjects: z.array(z.string().trim().min(1).max(80)).max(10).default([]),
   topics: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
@@ -42,6 +46,9 @@ export function questionRowMatchesPdfFilters(row: Record<string, unknown>, filte
 
   return (!search || searchable.includes(search))
     && matchesOne(row["instituição"], filters.institutions)
+    && matchesOne(row.banca, filters.exams ?? [])
+    && (!filters.yearFrom || Number(row.ano) >= filters.yearFrom)
+    && (!filters.yearTo || Number(row.ano) <= filters.yearTo)
     && (!filters.years.length || filters.years.includes(Number(row.ano)))
     && matchesOne(subject, filters.subjects)
     && matchesList(topics, filters.topics)

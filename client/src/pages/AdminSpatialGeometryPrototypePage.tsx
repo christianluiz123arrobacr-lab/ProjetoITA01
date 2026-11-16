@@ -1,6 +1,9 @@
-import AdminGuard from "@/components/admin/AdminGuard";
+import { useEffect, useMemo, useRef, useState } from "react";import AdminGuard from "@/components/admin/AdminGuard";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { SpatialGeometrySimulator } from "@/components/simulators/SpatialGeometrySimulator";
+import SpatialGestureControls, {
+  type SpatialSolid,
+  type SpatialTarget,
+} from "@/components/admin/SpatialGestureControls";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MathFormula } from "@/components/MathFormula";
@@ -709,7 +712,7 @@ function pointInsideRegularPolygon(
   sides: number,
   radius: number
 ) {
-  const vertices = createRegularPolygon(sides, radius, 0).map((point) => ({
+  const vertices = createRegularPolygon(sides, radius, 0).map(point => ({
     x: point.x,
     z: point.z,
   }));
@@ -767,7 +770,8 @@ function pointInsideSolid(type: SolidType, point: Vec3, sides: number) {
   }
 
   if (type === "cylinder") {
-    return Math.abs(point.y) <= 1.225 && point.x ** 2 + point.z ** 2 <= 1.35 ** 2;
+    return ( Math.abs(point.y) <= 1.225 && point.x ** 2 + point.z ** 2 <= 1.35 ** 2
+    );
   }
 
   if (type === "cone") {
@@ -800,11 +804,11 @@ function getSolidBounds(
       : (() => {
           const mesh = getMeshForSolid(type, sides);
           return mesh.faces
-            .flatMap((face) => face.points)
+            .flatMap(face => face.points)
             .concat(mesh.edges.flat());
         })();
 
-  const transformed = points.map((point) =>
+  const transformed = points.map(point =>
     transformPointWithRotation(point, scale, offset, objectRotation)
   );
 
@@ -853,7 +857,7 @@ function estimateSolidOverlap({
 }): OverlapEstimate {
   const normalizedOuterScale = normalizeScale(outerScale);
   const normalizedInnerScale = normalizeScale(innerScale);
-  const outerBounds = getSolidBounds(outerSolid, sides, normalizedOuterScale, { x: 0, y: 0, z: 0 });
+  const outerBounds = getSolidBounds(outerSolid, sides, normalizedOuterScale, { x: 0, y: 0, z: 0, });
   const innerBounds = getSolidBounds(innerSolid, sides, innerScale, innerOffset, innerRotation);
 
   const bounds = {
@@ -993,7 +997,7 @@ function renderIntersectionCloud({
     outerSolid,
     sides,
     normalizedOuterScale,
-    { x: 0, y: 0, z: 0 }
+    { x: 0, y: 0, z: 0, }
   );
   const innerBounds = getSolidBounds(
     innerSolid,
@@ -1202,11 +1206,11 @@ function renderMesh({
   ) => void;
 }) {
   const transformedFaces = mesh.faces.map((face, index) => {
-    const transformed = face.points.map((point) =>
+    const transformed = face.points.map(point =>
       transformPointWithRotation(point, scale, offset, objectRotation)
     );
 
-    const projected = transformed.map((point) =>
+    const projected = transformed.map(point =>
       projectPoint(point, angleX, angleY)
     );
 
@@ -1228,11 +1232,11 @@ function renderMesh({
   });
 
   const transformedEdges = mesh.edges.map((edge, index) => {
-    const transformed = edge.map((point) =>
+    const transformed = edge.map(point =>
       transformPointWithRotation(point, scale, offset, objectRotation)
     );
 
-    const projected = transformed.map((point) =>
+    const projected = transformed.map(point =>
       projectPoint(point, angleX, angleY)
     );
 
@@ -1260,8 +1264,8 @@ function renderMesh({
     element: Omit<GeometryElement, "target">;
   }>();
 
-  transformedEdges.forEach((edge) => {
-    edge.worldPoints.forEach((worldPoint) => {
+  transformedEdges.forEach(edge => {
+    edge.worldPoints.forEach(worldPoint => {
       const key = `${worldPoint.x.toFixed(4)}:${worldPoint.y.toFixed(4)}:${worldPoint.z.toFixed(4)}`;
 
       if (vertexMap.has(key)) return;
@@ -1314,7 +1318,7 @@ function renderMesh({
     <g>
       {[...transformedFaces]
         .sort((a, b) => a.avgZ - b.avgZ)
-        .map((face) => (
+        .map(face => (
           <path
             key={`face-${theme.label}-${face.index}`}
             d={polygonPath(face.projected)}
@@ -1326,16 +1330,16 @@ function renderMesh({
 
       {[...transformedFaces]
         .sort((a, b) => a.avgZ - b.avgZ)
-        .map((face) => (
+        .map(face => (
           <path
             key={`face-hit-${theme.label}-${face.index}`}
             d={polygonPath(face.projected)}
             fill="transparent"
             pointerEvents="all"
             className="cursor-pointer"
-            onClick={(event) => handleElementClick(face.element, event)}
-            onDoubleClick={(event) => handleElementDoubleClick(face.element, event)}
-            onPointerDown={(event) => {
+            onClick={event => handleElementClick(face.element, event)}
+            onDoubleClick={event => handleElementDoubleClick(face.element, event)}
+            onPointerDown={event => {
               onGeometryPointerDown?.(event);
               onElementPointerDown?.(face.element, event);
             }}
@@ -1344,7 +1348,7 @@ function renderMesh({
 
       {[...transformedEdges]
         .sort((a, b) => a.avgZ - b.avgZ)
-        .map((edge) => (
+        .map(edge => (
           <g key={`edge-group-${theme.label}-${edge.index}`}>
             <line
               x1={edge.projected[0].x}
@@ -1369,13 +1373,13 @@ function renderMesh({
                 strokeLinecap="round"
                 pointerEvents="all"
                 className="cursor-pointer"
-                onClick={(event) => {
+                onClick={event => {
                   handleElementClick(edge.element, event);
                 }}
-                onDoubleClick={(event) => {
+                onDoubleClick={event => {
                   handleElementDoubleClick(edge.element, event);
                 }}
-                onPointerDown={(event) => {
+                onPointerDown={event => {
                   onGeometryPointerDown?.(event);
                   onElementPointerDown?.(edge.element, event);
                 }}
@@ -1386,7 +1390,7 @@ function renderMesh({
 
       {[...transformedVertices]
         .sort((a, b) => a.avgZ - b.avgZ)
-        .map((vertex) => (
+        .map(vertex => (
           <circle
             key={`vertex-hit-${theme.label}-${vertex.index}`}
             cx={vertex.projected.x}
@@ -1395,9 +1399,9 @@ function renderMesh({
             fill="transparent"
             pointerEvents="all"
             className="cursor-crosshair"
-            onClick={(event) => handleElementClick(vertex.element, event)}
-            onDoubleClick={(event) => handleElementDoubleClick(vertex.element, event)}
-            onPointerDown={(event) => {
+            onClick={event => handleElementClick(vertex.element, event)}
+            onDoubleClick={event => handleElementDoubleClick(vertex.element, event)}
+            onPointerDown={event => {
               onGeometryPointerDown?.(event);
               onElementPointerDown?.(vertex.element, event);
             }}
@@ -1434,19 +1438,19 @@ function renderSphere({
 
   return (
     <g
-      onClick={(event) => {
+      onClick={event => {
         if (!onGeometryClick) return;
         event.preventDefault();
         event.stopPropagation();
         onGeometryClick();
       }}
-      onDoubleClick={(event) => {
+      onDoubleClick={event => {
         if (!onGeometryDoubleClick) return;
         event.preventDefault();
         event.stopPropagation();
         onGeometryDoubleClick(event);
       }}
-      onPointerDown={(event) => {
+      onPointerDown={event => {
         onGeometryPointerDown?.(event);
       }}
       className={onGeometryClick ? "cursor-pointer" : undefined}
@@ -2047,9 +2051,7 @@ function getInspectorForAction({
             formula: String.raw`d_b = \sqrt{c^2+l^2}`,
             substitution: String.raw`d_b = \sqrt{${formatNumber(
               width
-            )}^2+${formatNumber(depth)}^2} = ${formatNumber(
-              boxBaseDiagonal
-            )}`,
+            )}^2+${formatNumber(depth)}^2} = ${formatNumber(boxBaseDiagonal)}`,
           },
         ],
       };
@@ -2167,9 +2169,7 @@ function getInspectorForAction({
             formula: String.raw`A_b = \frac{P\cdot a_p}{2} = \frac{nla_p}{2}`,
             substitution: String.raw`A_b = \frac{${sides}\cdot ${formatNumber(
               side
-            )}\cdot ${formatNumber(apothem)}}{2} = ${formatNumber(
-              baseArea
-            )}`,
+            )}\cdot ${formatNumber(apothem)}}{2} = ${formatNumber(baseArea)}`,
           },
         ],
       };
@@ -2420,9 +2420,7 @@ function getInspectorForAction({
             formula: String.raw`A_{\text{seção}} = \frac{2r\cdot h}{2}=rh`,
             substitution: String.raw`A_{\text{seção}} = ${formatNumber(
               radius
-            )}\cdot ${formatNumber(height)} = ${formatNumber(
-              radius * height
-            )}`,
+            )}\cdot ${formatNumber(height)} = ${formatNumber(radius * height)}`,
           },
         ],
       };
@@ -2752,10 +2750,10 @@ function projectOverlayPoint({
 
 function renderAxes({
   angleX,
-  angleY,
+  angleY
 }: {
   angleX: number;
-  angleY: number;
+  angleY: number
 }) {
   const origin = projectPoint({ x: -3.1, y: -2.8, z: -2.5 }, angleX, angleY);
   const xEnd = projectPoint({ x: -2.1, y: -2.8, z: -2.5 }, angleX, angleY);
@@ -2853,7 +2851,7 @@ function renderMeasurementOverlay({
   if (!action) return null;
 
   const p = (point: Vec3) =>
-    projectOverlayPoint({ point, angleX, angleY, scale, offset, objectRotation });
+    projectOverlayPoint({ point, angleX, angleY, scale, offset, objectRotation, });
 
   if (type === "sphere") {
     const center = p({ x: 0, y: 0, z: 0 });
@@ -3031,6 +3029,7 @@ function renderMeasurementOverlay({
 }
 
 export default function AdminSpatialGeometryPrototypePage() {
+  const gestureRootRef = useRef<HTMLDivElement | null>(null);
   const visualRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const menuDragStateRef = useRef<MenuDragState | null>(null);
@@ -3060,6 +3059,12 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [innerRotationX, setInnerRotationX] = useState(0);
   const [innerRotationY, setInnerRotationY] = useState(0);
   const [innerRotationZ, setInnerRotationZ] = useState(0);
+  const [outerOffsetX, setOuterOffsetX] = useState(0);
+  const [outerOffsetY, setOuterOffsetY] = useState(0);
+  const [outerOffsetZ, setOuterOffsetZ] = useState(0);
+  const [outerObjectRotationX, setOuterObjectRotationX] = useState(0);
+  const [outerObjectRotationY, setOuterObjectRotationY] = useState(0);
+  const [outerObjectRotationZ, setOuterObjectRotationZ] = useState(0);
   const [isDraggingScene, setIsDraggingScene] = useState(false);
   const [overlapQuality, setOverlapQuality] = useState<OverlapQuality>("fast");
 
@@ -3071,7 +3076,7 @@ export default function AdminSpatialGeometryPrototypePage() {
   const [showAxes, setShowAxes] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [showCenter, setShowCenter] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [floatingMenu, setFloatingMenu] = useState<FloatingMenu | null>(null);
   const [fullscreenMenuSection, setFullscreenMenuSection] =
     useState<FullscreenMenuSection>(null);
@@ -3080,6 +3085,7 @@ export default function AdminSpatialGeometryPrototypePage() {
   );
   const [activeSmartCut, setActiveSmartCut] = useState<SmartCutId | null>("axial");
   const [showNet, setShowNet] = useState(false);
+  const [measurementPickMode, setMeasurementPickMode] = useState(false);
   const [measurementStart, setMeasurementStart] = useState<GeometryElement | null>(
     null
   );
@@ -3091,7 +3097,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     if (!autoRotate || interactionMode !== "rotate") return;
 
     const intervalId = window.setInterval(() => {
-      setRotationY((current) => {
+      setRotationY(current => {
         const next = current + 1.1;
         return next > 180 ? -180 : next;
       });
@@ -3099,6 +3105,43 @@ export default function AdminSpatialGeometryPrototypePage() {
 
     return () => window.clearInterval(intervalId);
   }, [autoRotate, interactionMode]);
+
+  useEffect(() => {
+    function handleKeyboardShortcuts(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      )
+        return;
+
+      if (event.key === "Escape") {
+        closeFloatingMenu();
+        setMeasurementPickMode(false);
+        setMeasurementStart(null);
+        return;
+      }
+      if (event.key === "r" || event.key === "R") setInteractionMode("rotate");
+      if (event.key === "m" || event.key === "M") {
+        setMode("inscribed");
+        setSelectedTarget("inner");
+        setInteractionMode("moveInner");
+      }
+      if (event.key === "g" || event.key === "G")
+        setShowGrid(current => !current);
+      if (event.key === "a" || event.key === "A")
+        setShowAxes(current => !current);
+      if (event.key === "f" || event.key === "F")
+        setShowFaces(current => !current);
+      if (event.key === "c" || event.key === "C")
+        setShowCenter(current => !current);
+      const preset = VIEW_PRESETS[Number(event.key) - 1];
+      if (preset) applyViewPreset(preset);
+    }
+    window.addEventListener("keydown", handleKeyboardShortcuts);
+    return () => window.removeEventListener("keydown", handleKeyboardShortcuts);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -3124,10 +3167,10 @@ export default function AdminSpatialGeometryPrototypePage() {
     mode === "inscribed" && selectedTarget === "inner" ? innerSolid : activeSolid;
 
   const activeDefinition =
-    SOLIDS.find((solid) => solid.type === activeSolid) ?? SOLIDS[0];
+    SOLIDS.find(solid => solid.type === activeSolid) ?? SOLIDS[0];
 
   const inspectedDefinition =
-    SOLIDS.find((solid) => solid.type === inspectedSolid) ?? SOLIDS[0];
+    SOLIDS.find(solid => solid.type === inspectedSolid) ?? SOLIDS[0];
 
   const outerRenderScale = useMemo((): Vec3 => {
     if (activeSolid === "sphere") {
@@ -3198,6 +3241,19 @@ export default function AdminSpatialGeometryPrototypePage() {
       z: innerRotationZ,
     }),
     [innerRotationX, innerRotationY, innerRotationZ]
+  );
+
+  const outerObjectRotation = useMemo(
+    () => ({
+      x: outerObjectRotationX,
+      y: outerObjectRotationY,
+      z: outerObjectRotationZ,
+    }),
+    [outerObjectRotationX, outerObjectRotationY, outerObjectRotationZ]
+  );
+  const outerObjectOffset = useMemo(
+    () => ({ x: outerOffsetX, y: outerOffsetY, z: outerOffsetZ }),
+    [outerOffsetX, outerOffsetY, outerOffsetZ]
   );
 
   const overlapResolution =
@@ -3298,23 +3354,23 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   const occupiedVolume =
     mode === "inscribed"
-      ? overlapEstimate?.intersectionVolume ?? innerMetrics.volume
+      ? ( overlapEstimate?.intersectionVolume ?? innerMetrics.volume)
       : 0;
 
   const unionVolume =
     mode === "inscribed"
-      ? overlapEstimate?.unionVolume ?? outerMetrics.volume + innerMetrics.volume
+      ? ( overlapEstimate?.unionVolume ?? outerMetrics.volume + innerMetrics.volume)
       : 0;
 
   const innerOutsideVolume =
-    mode === "inscribed" ? overlapEstimate?.innerOnlyVolume ?? 0 : 0;
+    mode === "inscribed" ? ( overlapEstimate?.innerOnlyVolume ?? 0) : 0;
 
   const outerOnlyVolume =
-    mode === "inscribed" ? overlapEstimate?.outerOnlyVolume ?? outerMetrics.volume : 0;
+    mode === "inscribed" ? ( overlapEstimate?.outerOnlyVolume ?? outerMetrics.volume) : 0;
 
   const occupation =
     mode === "inscribed"
-      ? overlapEstimate?.occupiedPercent ?? 0
+      ? ( overlapEstimate?.occupiedPercent ?? 0)
       : outerMetrics.volume > 0
         ? (innerMetrics.volume / outerMetrics.volume) * 100
         : 0;
@@ -3323,8 +3379,7 @@ export default function AdminSpatialGeometryPrototypePage() {
     mode === "inscribed" ? outerOnlyVolume : 0;
 
   const currentClassicFit =
-    CLASSIC_FIT_PRESETS.find(
-      (preset) => preset.outer === outerSolid && preset.inner === innerSolid
+    CLASSIC_FIT_PRESETS.find(preset => preset.outer === outerSolid && preset.inner === innerSolid
     ) ?? null;
 
   const outerMesh = getMeshForSolid(activeSolid, polygonSides);
@@ -3356,7 +3411,7 @@ export default function AdminSpatialGeometryPrototypePage() {
           {
             id: "inner" as SelectedTarget,
             label: `Interno: ${
-              SOLIDS.find((item) => item.type === innerSolid)?.label ?? "Sólido"
+              SOLIDS.find(item => item.type === innerSolid)?.label ?? "Sólido"
             }`,
             solid: innerSolid,
             metrics: innerMetrics,
@@ -3366,6 +3421,9 @@ export default function AdminSpatialGeometryPrototypePage() {
         ]
       : []),
   ];
+  const gestureSelectedLabel =
+    sceneObjects.find(object => object.id === selectedTarget)?.label ??
+    activeDefinition.label;
 
   const inspector = selectedAction
     ? getInspectorForAction({
@@ -3484,16 +3542,16 @@ export default function AdminSpatialGeometryPrototypePage() {
 
   function rotateInnerBy(axis: "x" | "y" | "z", degrees: number) {
     if (axis === "x") {
-      setInnerRotationX((current) => normalizeAngle(current + degrees));
+      setInnerRotationX(current => normalizeAngle(current + degrees));
       return;
     }
 
     if (axis === "y") {
-      setInnerRotationY((current) => normalizeAngle(current + degrees));
+      setInnerRotationY(current => normalizeAngle(current + degrees));
       return;
     }
 
-    setInnerRotationZ((current) => normalizeAngle(current + degrees));
+    setInnerRotationZ(current => normalizeAngle(current + degrees));
   }
 
   function setAllInnerScales(value: number) {
@@ -3780,6 +3838,13 @@ export default function AdminSpatialGeometryPrototypePage() {
     setSelectedTarget(element.target);
     setSelectedAction(null);
 
+    if (measurementPickMode && !measurementStart) {
+      setMeasurementStart(element);
+      setMeasurementPickMode(false);
+      closeFloatingMenu();
+      return;
+    }
+
     if (!measurementStart) return;
 
     const sameElement =
@@ -3794,7 +3859,7 @@ export default function AdminSpatialGeometryPrototypePage() {
       element.worldPoint
     );
 
-    setGeometryMeasurements((current) => [
+    setGeometryMeasurements(current => [
       ...current.slice(-4),
       {
         id: `${Date.now()}-${measurementStart.target}-${measurementStart.kind}-${element.target}-${element.kind}`,
@@ -3944,10 +4009,10 @@ export default function AdminSpatialGeometryPrototypePage() {
 
     if (action === "area") {
       const areaAction =
-        actions.find((item) => item.id === "totalArea") ??
-        actions.find((item) => item.id === "baseArea") ??
-        actions.find((item) => item.id === "faceArea") ??
-        actions.find((item) => item.id === "lateralArea");
+        actions.find(item => item.id === "totalArea") ??
+        actions.find(item => item.id === "baseArea") ??
+        actions.find(item => item.id === "faceArea") ??
+        actions.find(item => item.id === "lateralArea");
 
       setSelectedAction(areaAction?.id ?? "volume");
       setActiveAdjustment(null);
@@ -3977,6 +4042,59 @@ export default function AdminSpatialGeometryPrototypePage() {
   function selectGeometry(target: SelectedTarget) {
     setSelectedTarget(target);
     setSelectedAction(null);
+  }
+
+  function moveTargetByGesture(target: SpatialTarget, delta: Vec3) {
+    if (target === "inner" && mode === "inscribed") {
+      setInnerOffsetX(value => clamp(value + delta.x, -1.2, 1.2));
+      setInnerOffsetY(value => clamp(value + delta.y, -1.2, 1.2));
+      setInnerOffsetZ(value => clamp(value + delta.z, -1.2, 1.2));
+      return;
+    }
+    setOuterOffsetX(value => clamp(value + delta.x, -2, 2));
+    setOuterOffsetY(value => clamp(value + delta.y, -2, 2));
+    setOuterOffsetZ(value => clamp(value + delta.z, -2, 2));
+  }
+
+  function rotateTargetByGesture(target: SpatialTarget, delta: Vec3) {
+    const update = (value: number, amount: number) =>
+      normalizeAngle(value + amount);
+    if (target === "inner" && mode === "inscribed") {
+      setInnerRotationX(value => update(value, delta.x));
+      setInnerRotationY(value => update(value, delta.y));
+      setInnerRotationZ(value => update(value, delta.z));
+      return;
+    }
+    setOuterObjectRotationX(value => update(value, delta.x));
+    setOuterObjectRotationY(value => update(value, delta.y));
+    setOuterObjectRotationZ(value => update(value, delta.z));
+  }
+
+  function scaleTargetByGesture(target: SpatialTarget, factor: number) {
+    if (target === "inner" && mode === "inscribed") {
+      setInnerBaseScale(value => clamp(value * factor, 0.2, 1.15));
+      setInnerHeightScale(value => clamp(value * factor, 0.2, 1.15));
+      setInnerRadiusScale(value => clamp(value * factor, 0.2, 1.15));
+      return;
+    }
+    setSide(value => clamp(value * factor, 1, 20));
+    setWidth(value => clamp(value * factor, 1, 20));
+    setDepth(value => clamp(value * factor, 1, 20));
+    setHeight(value => clamp(value * factor, 1, 20));
+    setRadius(value => clamp(value * factor, 0.5, 10));
+  }
+
+  function createSolidByGesture(solid: SpatialSolid) {
+    addSolidToScene(solid as SolidType);
+  }
+
+  function removeSelectedInner() {
+    if (mode !== "inscribed" || selectedTarget !== "inner") return;
+    setMode("simple");
+    setSelectedTarget("outer");
+    setShowInnerSolid(true);
+    setSelectedAction(null);
+    setGeometryMeasurements([]);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
@@ -4060,8 +4178,8 @@ export default function AdminSpatialGeometryPrototypePage() {
       : {
           type: activeSolid,
           scale: outerRenderScale,
-          offset: { x: 0, y: 0, z: 0 },
-          objectRotation: { x: 0, y: 0, z: 0 },
+          offset: outerObjectOffset,
+          objectRotation: outerObjectRotation,
         };
 
   function renderFullscreenMenuHeader(title: string, subtitle: string) {
@@ -4106,15 +4224,15 @@ export default function AdminSpatialGeometryPrototypePage() {
   }) {
     const toneClass = {
       slate: "border-white/10 bg-white/10 text-white hover:bg-white/15",
-      cyan: "border-cyan-300/25 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25",
+      cyan: "border-cyan-300/25 dark:border-cyan-800/25 bg-cyan-400/15 text-cyan-50 hover:bg-cyan-400/25",
       emerald:
-        "border-emerald-300/25 bg-emerald-400/15 text-emerald-50 hover:bg-emerald-400/25",
+        "border-emerald-300/25 dark:border-emerald-800/25 bg-emerald-400/15 text-emerald-50 hover:bg-emerald-400/25",
       violet:
-        "border-violet-300/25 bg-violet-400/15 text-violet-50 hover:bg-violet-400/25",
+        "border-violet-300/25 dark:border-violet-800/25 bg-violet-400/15 text-violet-50 hover:bg-violet-400/25",
       amber:
-        "border-amber-300/25 bg-amber-400/15 text-amber-50 hover:bg-amber-400/25",
+        "border-amber-300/25 dark:border-amber-800/25 bg-amber-400/15 text-amber-50 hover:bg-amber-400/25",
       orange:
-        "border-orange-300/25 bg-orange-400/15 text-orange-50 hover:bg-orange-400/25",
+        "border-orange-300/25 dark:border-orange-800/25 bg-orange-400/15 text-orange-50 hover:bg-orange-400/25",
     }[tone];
 
     return (
@@ -4192,10 +4310,10 @@ export default function AdminSpatialGeometryPrototypePage() {
           {renderFullscreenMenuHeader("Adicionar sólido", "Escolha a forma que entra como sólido interno.")}
           {renderFullscreenBackButton()}
           <div className="grid grid-cols-2 gap-2">
-            {QUICK_ADD_SOLIDS.map((solidType) =>
+            {QUICK_ADD_SOLIDS.map(solidType =>
               fullscreenMenuButton({
-                label: SOLIDS.find((solid) => solid.type === solidType)?.shortLabel ?? solidType,
-                description: SOLIDS.find((solid) => solid.type === solidType)?.label,
+                label: SOLIDS.find(solid => solid.type === solidType)?.shortLabel ?? solidType,
+                description: SOLIDS.find(solid => solid.type === solidType)?.label,
                 tone: "cyan",
                 onClick: () => addSolidToScene(solidType),
               })
@@ -4211,7 +4329,7 @@ export default function AdminSpatialGeometryPrototypePage() {
           {renderFullscreenMenuHeader("Cenas prontas", "Abra uma situação clássica para explicar em aula.")}
           {renderFullscreenBackButton()}
           <div className="grid gap-2">
-            {CLASSIC_FIT_PRESETS.map((preset) =>
+            {CLASSIC_FIT_PRESETS.map(preset =>
               fullscreenMenuButton({
                 label: preset.label,
                 description: preset.description,
@@ -4233,22 +4351,22 @@ export default function AdminSpatialGeometryPrototypePage() {
             {fullscreenMenuButton({
               label: showFaces ? "Ocultar faces" : "Mostrar faces",
               tone: "violet",
-              onClick: () => setShowFaces((current) => !current),
+              onClick: () => setShowFaces(current => !current),
             })}
             {fullscreenMenuButton({
               label: showAxes ? "Ocultar eixos" : "Mostrar eixos",
               tone: "violet",
-              onClick: () => setShowAxes((current) => !current),
+              onClick: () => setShowAxes(current => !current),
             })}
             {fullscreenMenuButton({
               label: showGrid ? "Ocultar grade" : "Mostrar grade",
               tone: "violet",
-              onClick: () => setShowGrid((current) => !current),
+              onClick: () => setShowGrid(current => !current),
             })}
             {fullscreenMenuButton({
               label: showCenter ? "Ocultar centros" : "Mostrar centros",
               tone: "violet",
-              onClick: () => setShowCenter((current) => !current),
+              onClick: () => setShowCenter(current => !current),
             })}
           </div>
         </>
@@ -4264,14 +4382,14 @@ export default function AdminSpatialGeometryPrototypePage() {
             label: showNet ? "Fechar planificação" : "Planificação",
             description: "Abrir sólido em faces",
             tone: "amber",
-            onClick: () => setShowNet((current) => !current),
+            onClick: () => setShowNet(current => !current),
           })}
           {fullscreenMenuButton({
             label: overlapQuality === "precise" ? "Precisão rápida" : "Precisão alta",
             description: `${overlapEstimate?.sampleResolution ?? overlapResolution}³ pontos`,
             tone: "amber",
             onClick: () =>
-              setOverlapQuality((current) =>
+              setOverlapQuality(current =>
                 current === "precise" ? "fast" : "precise"
               ),
           })}
@@ -4354,7 +4472,7 @@ export default function AdminSpatialGeometryPrototypePage() {
           </div>
 
           {activeAdjustment && adjustmentDetails ? (
-            <div className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3">
+            <div className="mt-3 rounded-2xl border border-cyan-300/20 dark:border-cyan-800/20 bg-cyan-400/10 p-3">
               <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-cyan-100">
                 <span>{adjustmentDetails.label}</span>
                 <span>
@@ -4369,7 +4487,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                 max={adjustmentDetails.max}
                 step={adjustmentDetails.step}
                 value={adjustmentDetails.value}
-                onChange={(event) =>
+                onChange={event =>
                   setAdjustmentValue(activeAdjustment, Number(event.target.value))
                 }
                 className="w-full accent-cyan-300"
@@ -4429,7 +4547,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
           {target === "inner" ? (
             <div className="mt-3 grid grid-cols-3 gap-2">
-              {[90, 180, 360].map((degrees) =>
+              {[90, 180, 360].map(degrees =>
                 fullscreenMenuButton({
                   label: `+${degrees}°`,
                   tone: "violet",
@@ -4481,12 +4599,12 @@ export default function AdminSpatialGeometryPrototypePage() {
           {fullscreenMenuButton({
             label: showFaces ? "Ocultar faces" : "Mostrar faces",
             tone: "emerald",
-            onClick: () => setShowFaces((current) => !current),
+            onClick: () => setShowFaces(current => !current),
           })}
           {fullscreenMenuButton({
             label: showInnerSolid ? "Ocultar interno" : "Mostrar interno",
             tone: "emerald",
-            onClick: () => setShowInnerSolid((current) => !current),
+            onClick: () => setShowInnerSolid(current => !current),
           })}
           {fullscreenMenuButton({
             label: "Encaixar",
@@ -4501,9 +4619,9 @@ export default function AdminSpatialGeometryPrototypePage() {
         </div>
 
         <div className="mt-3 grid grid-cols-4 gap-2">
-          {QUICK_ADD_SOLIDS.map((solidType) =>
+          {QUICK_ADD_SOLIDS.map(solidType =>
             fullscreenMenuButton({
-              label: SOLIDS.find((solid) => solid.type === solidType)?.shortLabel ?? solidType,
+              label: SOLIDS.find(solid => solid.type === solidType)?.shortLabel ?? solidType,
               tone: "slate",
               onClick: () => replaceSelectedSolid(solidType),
             })
@@ -4642,32 +4760,52 @@ export default function AdminSpatialGeometryPrototypePage() {
     );
   }
 
-export default function AdminSpatialGeometryPrototypePage() {
   return (
     <AdminGuard allowedRoles={["admin"]}>
       <AdminLayout
-        title="Simulador de Geometria Espacial"
-        subtitle="Laboratório 3D para sólidos, volumes, áreas, cortes e relações de inscrição."
+        title="Geometria Espacial por Gestos"
+        subtitle="Laboratório 3D administrativo com controle tradicional e interação local pela câmera."
       >
-        <SpatialGeometrySimulator />
         <div
+          ref={gestureRootRef}
+          data-spatial-fullscreen={isFullscreen}
           className={
             isFullscreen
               ? "fixed inset-0 z-[9999] h-screen select-none overflow-hidden bg-slate-950"
               : "select-none"
           }
-          onDoubleClick={(event) => {
+          onDoubleClick={event => {
             event.preventDefault();
           }}
         >
+          <SpatialGestureControls
+            rootRef={gestureRootRef}
+            sceneRef={visualRef}
+            selectedTarget={selectedTarget}
+            selectedLabel={gestureSelectedLabel}
+            rotationX={rotationX}
+            rotationY={rotationY}
+            canDeleteSelected={
+              mode === "inscribed" && selectedTarget === "inner"
+            }
+            onSelectTarget={target => {
+              if (target === "inner" && mode !== "inscribed") return;
+              selectGeometry(target);
+            }}
+            onMove={moveTargetByGesture}
+            onRotate={rotateTargetByGesture}
+            onScale={scaleTargetByGesture}
+            onCreateSolid={createSolidByGesture}
+            onDeleteSelected={removeSelectedInner}
+          /
+        >
           {isFullscreen ? (
-            <div className="absolute left-3 right-3 top-3 z-40 flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/90 px-3 py-3 shadow-2xl backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-5">
+            <div className="absolute left-3 right-3 top-3 z-40 flex flex-col gap-3 rounded-2xl border border-white/15 bg-white/90 dark:bg-slate-900/90 px-3 py-3 shadow-2xl backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">
+                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
                   Modo tela cheia
                 </p>
-                <h2 className="text-lg font-black text-slate-900">
-                  Laboratório de Geometria Espacial
+                <h2 className="text-lg font-black text-slate-900 dark:text-slate-100"> Geometria Espacial por Gestos
                 </h2>
               </div>
 
@@ -4722,7 +4860,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   Adicionar
                 </Button>
 
-                {VIEW_PRESETS.map((view) => (
+                {VIEW_PRESETS.map(view => (
                   <Button
                     key={view.label}
                     type="button"
@@ -4754,35 +4892,35 @@ export default function AdminSpatialGeometryPrototypePage() {
           }
         >
           <Card
-            className={`overflow-hidden border-slate-200 bg-white ${
-              isFullscreen
-                ? "h-full min-h-0 rounded-none border-0 bg-transparent shadow-none"
-                : ""
-            }`}
+            className={`overflow-hidden border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 ${
+                isFullscreen
+                  ? "h-full min-h-0 rounded-none border-0 bg-transparent shadow-none"
+                  : ""
+              }`}
           >
             <div
-              className={`border-b border-slate-100 p-5 ${
-                isFullscreen ? "hidden" : ""
-              }`}
+              className={`border-b border-slate-100 dark:border-slate-700 p-5 ${
+                  isFullscreen ? "hidden" : ""
+                }`}
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
                     <Box className="h-4 w-4" />
                     Visualização 3D didática
                   </div>
 
-                  <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100">
                     {mode === "simple"
                       ? activeDefinition.label
                       : `${
-                          SOLIDS.find((item) => item.type === innerSolid)?.label
-                        } dentro de ${
-                          SOLIDS.find((item) => item.type === outerSolid)?.label
-                        }`}
+                            SOLIDS.find(item => item.type === innerSolid)?.label
+                          } dentro de ${
+                            SOLIDS.find(item => item.type === outerSolid)?.label
+                          }`}
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     {mode === "simple"
                       ? activeDefinition.description
                       : relationship.text}
@@ -4826,18 +4964,18 @@ export default function AdminSpatialGeometryPrototypePage() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              onMouseDown={(event) => {
+              onMouseDown={event => {
                 if (event.detail > 1) event.preventDefault();
               }}
               className={`relative select-none touch-none overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 ${
-                isFullscreen ? "h-screen min-h-screen" : "min-h-[860px]"
-              } ${
-                interactionMode === "moveInner" && mode === "inscribed"
-                  ? "cursor-move"
-                  : interactionMode === "rotateInner" && mode === "inscribed"
-                    ? "cursor-grab active:cursor-grabbing"
-                  : "cursor-grab active:cursor-grabbing"
-              }`}
+                  isFullscreen ? "h-screen min-h-screen" : "min-h-[860px]"
+                } ${
+                  interactionMode === "moveInner" && mode === "inscribed"
+                    ? "cursor-move"
+                    : interactionMode === "rotateInner" && mode === "inscribed"
+                      ? "cursor-grab active:cursor-grabbing"
+                      : "cursor-grab active:cursor-grabbing"
+                }`}
             >
               <div className="absolute left-6 top-6 z-20 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-white backdrop-blur">
                 <p className="text-xs font-semibold uppercase tracking-wide text-indigo-200">
@@ -4854,7 +4992,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   Guia adaptativo · sólido {selectedTargetLabel}
                 </p>
                 <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-200">
-                  {adaptiveInteractionTips.map((tip) => (
+                  {adaptiveInteractionTips.map(tip => (
                     <li key={tip} className="flex gap-2">
                       <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-cyan-300" />
                       <span>{tip}</span>
@@ -4872,20 +5010,21 @@ export default function AdminSpatialGeometryPrototypePage() {
                     {formatNumber(occupiedVolume)} u³
                   </p>
                   <p className="mt-1 text-xs font-semibold text-orange-100">
-                    {overlapEstimate?.state ?? "calculando"} · {formatNumber(occupation)}%
+                    {overlapEstimate?.state ?? "calculando"} ·{" "} · {formatNumber(occupation)}%
                     do externo
                   </p>
                 </div>
               ) : null}
 
-              {measurementStart ? (
-                <div className="absolute left-1/2 top-28 z-30 w-[min(520px,calc(100vw_-_32px))] -translate-x-1/2 rounded-2xl border border-cyan-300/30 bg-cyan-950/90 px-4 py-3 text-center text-white shadow-2xl backdrop-blur">
+              {measurementPickMode || measurementStart ? (
+                <div className="absolute left-1/2 top-28 z-30 w-[min(520px,calc(100vw_-_32px))] -translate-x-1/2 rounded-2xl border border-cyan-300/30 dark:border-cyan-800/30 bg-cyan-950/90 px-4 py-3 text-center text-white shadow-2xl backdrop-blur">
                   <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
                     Medição ativa
                   </p>
                   <p className="mt-1 text-sm font-semibold">
-                    Origem: {measurementStart.label}. Toque em outra face,
-                    aresta ou vértice para criar a linha de distância.
+                    {measurementStart
+                      ? `Origem: ${measurementStart.label}. Toque em outra face, aresta ou vértice para criar a linha de distância.`
+                      : "Toque em uma face, aresta ou vértice para definir a origem."}
                   </p>
                 </div>
               ) : null}
@@ -4914,12 +5053,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                   height={VIEWBOX_HEIGHT}
                   fill="transparent"
                   className="cursor-crosshair"
-                  onDoubleClick={(event) => {
+                  onDoubleClick={event => {
                     event.preventDefault();
                     event.stopPropagation();
                     openBackgroundMenu(event.clientX, event.clientY);
                   }}
-                  onPointerDown={(event) => {
+                  onPointerDown={event => {
                     if (event.pointerType === "mouse") return;
 
                     longPressTimerRef.current = window.setTimeout(() => {
@@ -4933,12 +5072,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                   cy={CENTER_Y}
                   r="330"
                   fill="url(#spatialGlow)"
-                  onDoubleClick={(event) => {
+                  onDoubleClick={event => {
                     event.preventDefault();
                     event.stopPropagation();
                     openBackgroundMenu(event.clientX, event.clientY);
                   }}
-                  onPointerDown={(event) => {
+                  onPointerDown={event => {
                     if (event.pointerType === "mouse") return;
 
                     longPressTimerRef.current = window.setTimeout(() => {
@@ -4951,15 +5090,20 @@ export default function AdminSpatialGeometryPrototypePage() {
                 {showGrid ? renderGrid() : null}
                 {showAxes ? renderAxes({ angleX: rotationX, angleY: rotationY }) : null}
 
+                  <g
+                    data-spatial-object-target="outer"
+                    data-gesture-selected={selectedTarget === "outer"}
+                  >
+
                 {activeSolid === "sphere"
                   ? renderSphere({
                       angleX: rotationX,
                       angleY: rotationY,
                       scale: outerRenderScale,
-                      offset: { x: 0, y: 0, z: 0 },
+                      offset: outerObjectOffset,
                       onGeometryClick: () => selectGeometry("outer"),
-                      onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
-                      onGeometryPointerDown: (event) =>
+                      onGeometryDoubleClick:event => openSolidMenu("outer", event),
+                      onGeometryPointerDown:event =>
                         prepareSolidMenuOnTouch("outer", event),
                       theme: {
                         face: "#38bdf8",
@@ -4973,10 +5117,11 @@ export default function AdminSpatialGeometryPrototypePage() {
                       angleX: rotationX,
                       angleY: rotationY,
                       scale: outerRenderScale,
-                      offset: { x: 0, y: 0, z: 0 },
+                      offset: outerObjectOffset,
+                          objectRotation: outerObjectRotation,
                       onGeometryClick: () => selectGeometry("outer"),
-                      onGeometryDoubleClick: (event) => openSolidMenu("outer", event),
-                      onGeometryPointerDown: (event) =>
+                      onGeometryDoubleClick:event => openSolidMenu("outer", event),
+                      onGeometryPointerDown:event =>
                         prepareSolidMenuOnTouch("outer", event),
                       theme: {
                         face: "#38bdf8",
@@ -4985,9 +5130,15 @@ export default function AdminSpatialGeometryPrototypePage() {
                         label: "outer",
                       },
                     })}
+                  </g>
 
                 {mode === "inscribed" && showInnerSolid
-                  ? innerSolid === "sphere"
+                  ? (
+                    <g
+                      data-spatial-object-target="inner"
+                      data-gesture-selected={selectedTarget === "inner"}
+                    >
+                      { innerSolid === "sphere"
                     ? renderSphere({
                         angleX: rotationX,
                         angleY: rotationY,
@@ -4998,8 +5149,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                           z: innerOffsetZ,
                         },
                         onGeometryClick: () => selectGeometry("inner"),
-                        onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
-                        onGeometryPointerDown: (event) =>
+                        onGeometryDoubleClick:event => openSolidMenu("inner", event),
+                        onGeometryPointerDown:event =>
                           prepareSolidMenuOnTouch("inner", event),
                         theme: {
                           face: "#f97316",
@@ -5021,9 +5172,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                         },
                         objectRotation: innerObjectRotation,
                         onGeometryClick: () => selectGeometry("inner"),
-                        onGeometryDoubleClick: (event) => openSolidMenu("inner", event),
-                        onElementClick: (element) =>
-                          handleElementClick(buildGeometryElement({ ...element, target: "inner" })),
+                        onGeometryDoubleClick:event => openSolidMenu("inner", event),
+                        onElementClick:element =>
+                          handleElementClick(buildGeometryElement({ ...element, target: "inner", })),
                         onElementDoubleClick: (element, event) =>
                           openElementMenu("inner", element, event),
                         onElementPointerDown: (element, event) =>
@@ -5035,7 +5186,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                           dashed: true,
                           label: "inner",
                         },
-                      })
+                      })}
+                    </g>
+                  )
                   : null}
 
                 {showCenter
@@ -5043,7 +5196,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       angleX: rotationX,
                       angleY: rotationY,
                       scale: outerRenderScale,
-                      offset: { x: 0, y: 0, z: 0 },
+                      offset: outerObjectOffset,
+                        objectRotation: outerObjectRotation,
                     })
                   : null}
 
@@ -5089,7 +5243,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   objectRotation: overlayTarget.objectRotation,
                 })}
 
-                {geometryMeasurements.map((measurement) =>
+                {geometryMeasurements.map(measurement =>
                   renderGeometryMeasurement(measurement)
                 )}
                 {renderMeasurementStartMarker()}
@@ -5098,13 +5252,13 @@ export default function AdminSpatialGeometryPrototypePage() {
               {floatingMenu ? (
                 <div
                   className={`absolute z-30 overflow-y-auto border border-white/15 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur ${
-                    isFullscreen
-                      ? "max-h-[min(520px,calc(100vh-120px))] w-[300px] rounded-3xl"
-                      : "max-h-[calc(100vh-132px)] w-[320px] rounded-2xl"
-                  }`}
+                      isFullscreen
+                        ? "max-h-[min(520px,calc(100vh-120px))] w-[300px] rounded-3xl"
+                        : "max-h-[calc(100vh-132px)] w-[320px] rounded-2xl"
+                    }`}
                   style={{ left: floatingMenu.x, top: floatingMenu.y }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={event => event.stopPropagation()}
+                  onClick={event => event.stopPropagation()}
                 >
                   {isFullscreen ? (
                     floatingMenu.kind === "element" ? (
@@ -5151,10 +5305,10 @@ export default function AdminSpatialGeometryPrototypePage() {
                           type="button"
                           onClick={() => setActiveAdjustment("base")}
                           className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
-                            activeAdjustment === "base"
-                              ? "bg-cyan-400/20 text-cyan-100"
-                              : "bg-white/10"
-                          }`}
+                              activeAdjustment === "base"
+                                ? "bg-cyan-400/20 text-cyan-100"
+                                : "bg-white/10"
+                            }`}
                         >
                           Ajustar aresta/base
                         </button>
@@ -5162,10 +5316,10 @@ export default function AdminSpatialGeometryPrototypePage() {
                           type="button"
                           onClick={() => setActiveAdjustment("base")}
                           className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
-                            activeAdjustment === "base"
-                              ? "bg-cyan-400/20 text-cyan-100"
-                              : "bg-white/10"
-                          }`}
+                              activeAdjustment === "base"
+                                ? "bg-cyan-400/20 text-cyan-100"
+                                : "bg-white/10"
+                            }`}
                         >
                           Diminuir aresta/base
                         </button>
@@ -5173,10 +5327,10 @@ export default function AdminSpatialGeometryPrototypePage() {
                           type="button"
                           onClick={() => setActiveAdjustment("height")}
                           className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
-                            activeAdjustment === "height"
-                              ? "bg-cyan-400/20 text-cyan-100"
-                              : "bg-white/10"
-                          }`}
+                              activeAdjustment === "height"
+                                ? "bg-cyan-400/20 text-cyan-100"
+                                : "bg-white/10"
+                            }`}
                         >
                           Ajustar altura
                         </button>
@@ -5184,17 +5338,17 @@ export default function AdminSpatialGeometryPrototypePage() {
                           type="button"
                           onClick={() => setActiveAdjustment("radius")}
                           className={`rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-white/15 ${
-                            activeAdjustment === "radius"
-                              ? "bg-cyan-400/20 text-cyan-100"
-                              : "bg-white/10"
-                          }`}
+                              activeAdjustment === "radius"
+                                ? "bg-cyan-400/20 text-cyan-100"
+                                : "bg-white/10"
+                            }`}
                         >
                           Ajustar raio
                         </button>
                       </div>
 
                       {activeAdjustment && adjustmentDetails ? (
-                        <div className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3">
+                        <div className="mt-3 rounded-2xl border border-cyan-300/20 dark:border-cyan-800/20 bg-cyan-400/10 p-3">
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <p className="text-xs font-bold uppercase tracking-wide text-cyan-200">
                               {adjustmentDetails.label}
@@ -5212,7 +5366,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                             max={adjustmentDetails.max}
                             step={adjustmentDetails.step}
                             value={adjustmentDetails.value}
-                            onChange={(event) =>
+                            onChange={event =>
                               setAdjustmentValue(
                                 activeAdjustment,
                                 Number(event.target.value)
@@ -5241,13 +5395,13 @@ export default function AdminSpatialGeometryPrototypePage() {
                               max={adjustmentDetails.max}
                               step={adjustmentDetails.step}
                               value={Number(adjustmentDetails.value.toFixed(2))}
-                              onChange={(event) =>
+                              onChange={event =>
                                 setAdjustmentValue(
                                   activeAdjustment,
                                   Number(event.target.value)
                                 )
                               }
-                              className="rounded-xl border border-white/10 bg-white px-3 py-2 text-center text-sm font-black text-slate-900 outline-none"
+                              className="rounded-xl border border-white/10 bg-white dark:bg-slate-900 px-3 py-2 text-center text-sm font-black text-slate-900 dark:text-slate-100 outline-none"
                             />
 
                             <button
@@ -5275,7 +5429,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       ) : null}
 
                       {mode === "inscribed" && floatingMenu.target === "inner" ? (
-                        <div className="mt-3 rounded-2xl border border-violet-300/20 bg-violet-400/10 p-3">
+                        <div className="mt-3 rounded-2xl border border-violet-300/20 dark:border-violet-800/20 bg-violet-400/10 p-3">
                           <div className="mb-3 flex items-center justify-between gap-3">
                             <div>
                               <p className="text-xs font-bold uppercase tracking-wide text-violet-200">
@@ -5314,7 +5468,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                               value: innerRotationZ,
                               setter: setInnerRotationZ,
                             },
-                          ].map((control) => (
+                          ].map(control => (
                             <div key={control.axis} className="mt-3">
                               <div className="mb-1 flex items-center justify-between text-xs font-bold text-violet-100">
                                 <span>{control.label}</span>
@@ -5327,14 +5481,14 @@ export default function AdminSpatialGeometryPrototypePage() {
                                 max="360"
                                 step="1"
                                 value={control.value}
-                                onChange={(event) =>
+                                onChange={event =>
                                   control.setter(Number(event.target.value))
                                 }
                                 className="w-full accent-violet-300"
                               />
 
                               <div className="mt-2 grid grid-cols-3 gap-2">
-                                {[90, 180, 360].map((degrees) => (
+                                {[90, 180, 360].map(degrees => (
                                   <button
                                     key={`${control.axis}-${degrees}`}
                                     type="button"
@@ -5365,14 +5519,14 @@ export default function AdminSpatialGeometryPrototypePage() {
                         <button
                           type="button"
                           onClick={() => adjustSelectedSolid("volume")}
-                          className="rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/20"
+                          className="rounded-xl border border-cyan-300/30 dark:border-cyan-800/30 bg-cyan-400/10 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/20"
                         >
                           Volume
                         </button>
                         <button
                           type="button"
                           onClick={() => adjustSelectedSolid("area")}
-                          className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-100 hover:bg-amber-400/20"
+                          className="rounded-xl border border-amber-300/30 dark:border-amber-800/30 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-100 hover:bg-amber-400/20"
                         >
                           Área total
                         </button>
@@ -5387,7 +5541,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           <button
                             type="button"
                             onClick={placeSelectedInsideAnother}
-                            className="rounded-xl border border-indigo-300/30 bg-indigo-400/10 px-3 py-2 text-left text-sm font-bold text-indigo-100 hover:bg-indigo-400/20"
+                            className="rounded-xl border border-indigo-300/30 dark:border-indigo-800/30 bg-indigo-400/10 px-3 py-2 text-left text-sm font-bold text-indigo-100 hover:bg-indigo-400/20"
                           >
                             Colocar este sólido dentro de outro
                           </button>
@@ -5396,7 +5550,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                             type="button"
                             onClick={fitCurrentSolids}
                             disabled={mode !== "inscribed"}
-                            className="rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-left text-sm font-bold text-emerald-100 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="rounded-xl border border-emerald-300/30 dark:border-emerald-800/30 bg-emerald-400/10 px-3 py-2 text-left text-sm font-bold text-emerald-100 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             Centralizar e encaixar no externo
                           </button>
@@ -5408,14 +5562,14 @@ export default function AdminSpatialGeometryPrototypePage() {
                           Trocar por
                         </p>
                         <div className="grid grid-cols-2 gap-2">
-                          {QUICK_ADD_SOLIDS.map((solidType) => (
+                          {QUICK_ADD_SOLIDS.map(solidType => (
                             <button
                               key={solidType}
                               type="button"
                               onClick={() => replaceSelectedSolid(solidType)}
                               className="rounded-xl bg-white/10 px-2 py-2 text-xs font-bold hover:bg-white/15"
                             >
-                              {SOLIDS.find((solid) => solid.type === solidType)?.shortLabel}
+                              {SOLIDS.find(solid => solid.type === solidType)?.shortLabel}
                             </button>
                           ))}
                         </div>
@@ -5452,14 +5606,14 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
-                        {QUICK_ADD_SOLIDS.map((solidType) => (
+                        {QUICK_ADD_SOLIDS.map(solidType => (
                           <button
                             key={solidType}
                             type="button"
                             onClick={() => addSolidToScene(solidType)}
                             className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm font-bold hover:bg-white/15"
                           >
-                            {SOLIDS.find((solid) => solid.type === solidType)?.label}
+                            {SOLIDS.find(solid => solid.type === solidType)?.label}
                           </button>
                         ))}
                       </div>
@@ -5475,17 +5629,29 @@ export default function AdminSpatialGeometryPrototypePage() {
             </div>
 
             <div
-              className={`border-t border-slate-100 bg-slate-50 p-5 ${
-                isFullscreen ? "hidden" : ""
-              }`}
+              className={`border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-5 ${
+                  isFullscreen ? "hidden" : ""
+                }`}
             >
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
                   <Rotate3D className="h-4 w-4" />
                   Controles do simulador
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={measurementPickMode ? "default" : "outline"}
+                    onClick={() => {
+                      setMeasurementPickMode(current => !current);
+                      setMeasurementStart(null);
+                    }}
+                    className="rounded-2xl"
+                  >
+                    Medir elemento
+                  </Button>
+
                   <Button
                     type="button"
                     variant={interactionMode === "rotate" ? "default" : "outline"}
@@ -5525,22 +5691,22 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               <div className="grid gap-4 lg:grid-cols-4">
                 <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     {mode === "simple" ? "Sólido" : "Sólido externo"}
                   </label>
 
                   <select
                     value={mode === "simple" ? selectedSolid : outerSolid}
-                    onChange={(event) => {
+                    onChange={event => {
                       mode === "simple"
                         ? setSelectedSolid(event.target.value as SolidType)
                         : setOuterSolid(event.target.value as SolidType);
                       setSelectedTarget("outer");
                       clearSelection();
                     }}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                   >
-                    {SOLIDS.map((solid) => (
+                    {SOLIDS.map(solid => (
                       <option key={solid.type} value={solid.type}>
                         {solid.label}
                       </option>
@@ -5550,20 +5716,20 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                 {mode === "inscribed" ? (
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Sólido interno
                     </label>
 
                     <select
                       value={innerSolid}
-                      onChange={(event) => {
+                      onChange={event => {
                         setInnerSolid(event.target.value as SolidType);
                         setSelectedTarget("inner");
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     >
-                      {SOLIDS.map((solid) => (
+                      {SOLIDS.map(solid => (
                         <option key={solid.type} value={solid.type}>
                           {solid.label}
                         </option>
@@ -5575,7 +5741,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setAutoRotate((current) => !current)}
+                  onClick={() => setAutoRotate(current => !current)}
                   disabled={interactionMode !== "rotate"}
                   className="mt-6 gap-2 rounded-2xl"
                 >
@@ -5612,7 +5778,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setShowFaces((current) => !current)}
+                  onClick={() => setShowFaces(current => !current)}
                   className="gap-2 rounded-2xl"
                 >
                   {showFaces ? (
@@ -5626,7 +5792,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setShowInnerSolid((current) => !current)}
+                  onClick={() => setShowInnerSolid(current => !current)}
                   disabled={mode !== "inscribed"}
                   className="gap-2 rounded-2xl"
                 >
@@ -5641,7 +5807,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                 <Button
                   type="button"
                   variant={showAxes ? "default" : "outline"}
-                  onClick={() => setShowAxes((current) => !current)}
+                  onClick={() => setShowAxes(current => !current)}
                   className="rounded-2xl"
                 >
                   Eixos
@@ -5650,7 +5816,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                 <Button
                   type="button"
                   variant={showGrid ? "default" : "outline"}
-                  onClick={() => setShowGrid((current) => !current)}
+                  onClick={() => setShowGrid(current => !current)}
                   className="rounded-2xl"
                 >
                   Grade
@@ -5658,7 +5824,7 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {VIEW_PRESETS.map((view) => (
+                {VIEW_PRESETS.map(view => (
                   <Button
                     key={view.label}
                     type="button"
@@ -5673,22 +5839,22 @@ export default function AdminSpatialGeometryPrototypePage() {
             </div>
 
             <div
-              className={`border-t border-slate-100 bg-slate-50/80 p-5 ${
-                isFullscreen ? "hidden" : ""
-              }`}
+              className={`border-t border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 p-5 ${
+                  isFullscreen ? "hidden" : ""
+                }`}
             >
               <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                     <Ruler className="h-4 w-4" />
                     Medidas do sólido
                   </div>
 
-                  <h3 className="mt-2 text-xl font-black text-slate-900">
+                  <h3 className="mt-2 text-xl font-black text-slate-900 dark:text-slate-100">
                     Ajuste os parâmetros
                   </h3>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                     Agora o uso principal é arrastar e clicar no sólido. Esses
                     campos ficam como ajuste fino para a matemática não virar
                     estimativa visual sem controle.
@@ -5697,66 +5863,66 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Lado / aresta
                     </label>
                     <input
                       type="number"
                       min="1"
                       value={side}
-                      onChange={(event) => {
+                      onChange={event => {
                         setSide(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Altura
                     </label>
                     <input
                       type="number"
                       min="1"
                       value={height}
-                      onChange={(event) => {
+                      onChange={event => {
                         setHeight(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Raio
                     </label>
                     <input
                       type="number"
                       min="1"
                       value={radius}
-                      onChange={(event) => {
+                      onChange={event => {
                         setRadius(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Nº lados da base
                     </label>
                     <select
                       value={polygonSides}
-                      onChange={(event) => {
+                      onChange={event => {
                         setPolygonSides(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     >
-                      {[3, 4, 5, 6, 8, 12].map((value) => (
+                      {[3, 4, 5, 6, 8, 12].map(value => (
                         <option key={value} value={value}>
                           {value} lados
                         </option>
@@ -5765,34 +5931,34 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Comprimento
                     </label>
                     <input
                       type="number"
                       min="1"
                       value={width}
-                      onChange={(event) => {
+                      onChange={event => {
                         setWidth(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Profundidade
                     </label>
                     <input
                       type="number"
                       min="1"
                       value={depth}
-                      onChange={(event) => {
+                      onChange={event => {
                         setDepth(Number(event.target.value));
                         clearSelection();
                       }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-slate-900"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-slate-900 dark:focus:border-slate-400"
                     />
                   </div>
                 </div>
@@ -5802,71 +5968,73 @@ export default function AdminSpatialGeometryPrototypePage() {
 
           <div
             className={`space-y-6 ${
-              isFullscreen
-                ? "absolute bottom-3 right-3 top-[92px] z-30 w-[420px] max-w-[calc(100vw-24px)] overflow-y-auto rounded-2xl"
-                : ""
-            }`}
+                isFullscreen
+                  ? "absolute bottom-3 right-3 top-[92px] z-30 w-[420px] max-w-[calc(100vw-24px)] overflow-y-auto rounded-2xl"
+                  : ""
+              }`}
           >
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                 <ListTree className="h-4 w-4" />
                 Cena
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Objetos do laboratório
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Clique em um objeto para selecionar. Dê duplo clique no sólido
                 no desenho para editar medidas ou trocar a forma.
               </p>
 
               <div className="mt-5 space-y-3">
-                {sceneObjects.map((object) => (
+                {sceneObjects.map(object => (
                   <button
                     key={object.id}
                     type="button"
+                      data-spatial-gesture-action={`select-${object.id}`}
                     onClick={() => {
                       setSelectedTarget(object.id);
                       setSelectedAction(null);
                     }}
                     className={`w-full rounded-2xl border p-4 text-left transition ${
-                      selectedTarget === object.id
-                        ? "border-indigo-300 bg-indigo-50"
-                        : "border-slate-200 bg-slate-50 hover:border-indigo-200 hover:bg-indigo-50/60"
-                    }`}
+                        selectedTarget === object.id
+                          ? "border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950"
+                          : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/60"
+                      }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-black text-slate-900">
+                        <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                           {object.label}
                         </p>
-                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
-                          {object.color} · {object.visible ? "visível" : "oculto"}
+                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          {object.color} · {" "}
+                            {object.visible ? "visível" : "oculto"}
                         </p>
                       </div>
 
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
-                        {SOLIDS.find((solid) => solid.type === object.solid)?.shortLabel}
+                      <span className="rounded-full bg-white dark:bg-slate-900 px-3 py-1 text-xs font-black text-slate-600 dark:text-slate-300 shadow-sm">
+                        {SOLIDS.find(solid => solid.type === object.solid)?.shortLabel}
                       </span>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                      <div className="rounded-xl bg-white p-2">
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <div className="rounded-xl bg-white dark:bg-slate-900 p-2">
                         <p className="font-bold uppercase tracking-wide text-slate-400">
                           Volume
                         </p>
-                        <p className="mt-1 font-black text-slate-900">
+                        <p className="mt-1 font-black text-slate-900 dark:text-slate-100">
                           {formatNumber(object.metrics.volume)} u³
                         </p>
                       </div>
 
-                      <div className="rounded-xl bg-white p-2">
+                      <div className="rounded-xl bg-white dark:bg-slate-900 p-2">
                         <p className="font-bold uppercase tracking-wide text-slate-400">
                           Área total
                         </p>
-                        <p className="mt-1 font-black text-slate-900">
+                        <p className="mt-1 font-black text-slate-900 dark:text-slate-100">
                           {formatNumber(object.metrics.totalArea)} u²
                         </p>
                       </div>
@@ -5904,32 +6072,32 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                 <Layers className="h-4 w-4" />
                 Encaixe e ocupação
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Colocar sólido dentro de outro
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Use os encaixes clássicos para montar relações de prova e ver
                 volume ocupado, volume vazio e porcentagem de ocupação.
               </p>
 
               <div className="mt-5 grid gap-2">
-                {CLASSIC_FIT_PRESETS.map((preset) => (
+                {CLASSIC_FIT_PRESETS.map(preset => (
                   <button
                     key={preset.id}
                     type="button"
                     onClick={() => applyClassicFit(preset)}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
-                      currentClassicFit?.id === preset.id
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-950"
-                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
-                    }`}
+                        currentClassicFit?.id === preset.id
+                          ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-950 dark:text-emerald-200"
+                          : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                      }`}
                   >
                     <p className="text-sm font-black">{preset.label}</p>
                     <p className="mt-1 text-xs leading-5 opacity-80">
@@ -5940,13 +6108,13 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               {mode === "inscribed" ? (
-                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="mt-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-black text-emerald-950">
+                      <p className="text-sm font-black text-emerald-950 dark:text-emerald-200">
                         {relationship.title}
                       </p>
-                      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                         {isCentered ? "centros alinhados" : "centros deslocados"}
                       </p>
                     </div>
@@ -5961,16 +6129,16 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </Button>
                   </div>
 
-                  <p className="mt-3 text-sm leading-7 text-emerald-900">
+                  <p className="mt-3 text-sm leading-7 text-emerald-900 dark:text-emerald-200">
                     {relationship.text}
                   </p>
 
                   <div className="mt-4">
-                    <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-emerald-700">
+                    <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                       <span>Volume em comum</span>
                       <span>{formatNumber(occupation)}%</span>
                     </div>
-                    <div className="h-3 overflow-hidden rounded-full bg-white">
+                    <div className="h-3 overflow-hidden rounded-full bg-white dark:bg-slate-900">
                       <div
                         className="h-full rounded-full bg-emerald-500"
                         style={{ width: `${clamp(occupation, 0, 100)}%` }}
@@ -5978,15 +6146,14 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                        <p className="text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                           Precisão da interseção
                         </p>
-                        <p className="mt-1 text-xs font-semibold text-emerald-900">
-                          Estado: {overlapEstimate?.state ?? "calculando"} · grade{" "}
-                          {overlapEstimate?.sampleResolution ?? 0}³ · erro aprox.{" "}
+                        <p className="mt-1 text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                          Estado: {overlapEstimate?.state ?? "calculando"} · grade{overlapEstimate?.sampleResolution ?? 0}³ · erro aprox.
                           ±{formatNumber(overlapEstimate?.estimatedErrorPercent ?? 0)}%
                         </p>
                       </div>
@@ -5996,10 +6163,10 @@ export default function AdminSpatialGeometryPrototypePage() {
                           type="button"
                           onClick={() => setOverlapQuality("fast")}
                           className={`rounded-xl px-3 py-2 text-xs font-black transition ${
-                            overlapQuality === "fast"
-                              ? "bg-emerald-600 text-white"
-                              : "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
-                          }`}
+                              overlapQuality === "fast"
+                                ? "bg-emerald-600 text-white"
+                                : "bg-emerald-50 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200 dark:ring-emerald-800"
+                            }`}
                         >
                           Rápido
                         </button>
@@ -6007,26 +6174,26 @@ export default function AdminSpatialGeometryPrototypePage() {
                           type="button"
                           onClick={() => setOverlapQuality("precise")}
                           className={`rounded-xl px-3 py-2 text-xs font-black transition ${
-                            overlapQuality === "precise"
-                              ? "bg-emerald-600 text-white"
-                              : "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
-                          }`}
+                              overlapQuality === "precise"
+                                ? "bg-emerald-600 text-white"
+                                : "bg-emerald-50 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200 dark:ring-emerald-800"
+                            }`}
                         >
                           Preciso
                         </button>
                       </div>
                     </div>
 
-                    <p className="mt-3 text-xs leading-5 text-emerald-800">
+                    <p className="mt-3 text-xs leading-5 text-emerald-800 dark:text-emerald-200">
                       Enquanto você arrasta, o laboratório usa uma grade leve
                       para manter o movimento fluido. Ao soltar, ele recalcula
                       conforme o modo escolhido.
                     </p>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-emerald-950">
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-emerald-950 dark:text-emerald-200">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Interseção
                       </p>
                       <p className="mt-1 font-black">
@@ -6034,8 +6201,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         União
                       </p>
                       <p className="mt-1 font-black">
@@ -6043,8 +6210,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Externo vazio
                       </p>
                       <p className="mt-1 font-black">
@@ -6052,8 +6219,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Interno fora
                       </p>
                       <p className="mt-1 font-black">
@@ -6062,9 +6229,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-emerald-950">
-                    <div className="rounded-xl bg-white/80 p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-emerald-950 dark:text-emerald-200">
+                    <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Volume externo
                       </p>
                       <p className="mt-1 font-black">
@@ -6072,8 +6239,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white/80 p-3">
-                      <p className="font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 p-3">
+                      <p className="font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                         Volume interno
                       </p>
                       <p className="mt-1 font-black">
@@ -6082,9 +6249,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                      <p className="text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                         Controle fino do interno
                       </p>
                       <Button
@@ -6147,9 +6314,9 @@ export default function AdminSpatialGeometryPrototypePage() {
                         step: 1,
                         onChange: setInnerRotationZ,
                       },
-                    ].map((control) => (
+                    ].map(control => (
                       <div key={control.label} className="mt-3">
-                        <div className="mb-1 flex items-center justify-between text-xs font-bold text-emerald-900">
+                        <div className="mb-1 flex items-center justify-between text-xs font-bold text-emerald-900 dark:text-emerald-200">
                           <span>{control.label}</span>
                           <span>
                             {formatNumber(control.value)}
@@ -6162,7 +6329,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                           max={control.max}
                           step={control.step}
                           value={control.value}
-                          onChange={(event) =>
+                          onChange={event =>
                             control.onChange(Number(event.target.value))
                           }
                           className="w-full accent-emerald-500"
@@ -6171,13 +6338,13 @@ export default function AdminSpatialGeometryPrototypePage() {
                     ))}
                   </div>
 
-                  <p className="mt-3 text-xs leading-5 text-emerald-800">
+                  <p className="mt-3 text-xs leading-5 text-emerald-800 dark:text-emerald-200">
                     Interseção e união são estimadas em tempo real por amostragem
                     3D ({overlapEstimate?.sampleResolution ?? 0}³ pontos). Ao
                     mover o sólido interno, os valores mudam automaticamente.
                   </p>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <MathFormula formula={relationship.formula} display={true} />
                     <MathFormula
                       formula={relationship.substitution}
@@ -6186,11 +6353,11 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-bold text-slate-900">
+                <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Ainda não há sólido interno.
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                     Escolha um encaixe clássico acima ou dê duplo clique/segure
                     no fundo do laboratório para adicionar uma forma.
                   </p>
@@ -6198,33 +6365,33 @@ export default function AdminSpatialGeometryPrototypePage() {
               )}
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
                 <Ruler className="h-4 w-4" />
                 Cortes inteligentes
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Seções do sólido
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Escolha um corte para revelar a figura plana que aparece dentro
                 do sólido. É aqui que nascem muitas contas de diagonal, geratriz,
                 área da base e volume.
               </p>
 
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                {SMART_CUTS.map((cut) => (
+                {SMART_CUTS.map(cut => (
                   <button
                     key={cut.id}
                     type="button"
                     onClick={() => applySmartCut(cut.id)}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
-                      activeSmartCut === cut.id
-                        ? "border-amber-300 bg-amber-50 text-amber-950"
-                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-amber-300 hover:bg-amber-50"
-                    }`}
+                        activeSmartCut === cut.id
+                          ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-950 dark:text-amber-200"
+                          : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-amber-300 dark:hover:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950"
+                      }`}
                   >
                     <p className="text-sm font-black">{cut.label}</p>
                     <p className="mt-1 text-xs leading-5 opacity-80">
@@ -6234,13 +6401,13 @@ export default function AdminSpatialGeometryPrototypePage() {
                 ))}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-black text-amber-950">
+              <div className="mt-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 p-4">
+                <p className="text-sm font-black text-amber-950 dark:text-amber-200">
                   Corte selecionado:{" "}
-                  {SMART_CUTS.find((cut) => cut.id === activeSmartCut)?.label ??
+                  {SMART_CUTS.find(cut => cut.id === activeSmartCut)?.label ??
                     "nenhum"}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-amber-900">
+                <p className="mt-2 text-sm leading-6 text-amber-900 dark:text-amber-200">
                   O destaque amarelo no desenho mostra a medida ou seção
                   associada. Para cilindro e cone, o corte axial mostra
                   retângulo/triângulo; para esfera, o corte central mostra o
@@ -6250,17 +6417,17 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
             </Card>
 
-            <Card className="border-slate-200 p-6">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-fuchsia-700">
                 <Layers className="h-4 w-4" />
                 Planificação
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Abrir o sólido
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 A planificação mostra de onde vem a área total: bases mais
                 faces laterais. É o antídoto contra decorar fórmula sem enxergar
                 as peças.
@@ -6269,7 +6436,7 @@ export default function AdminSpatialGeometryPrototypePage() {
               <Button
                 type="button"
                 variant={showNet ? "default" : "outline"}
-                onClick={() => setShowNet((current) => !current)}
+                onClick={() => setShowNet(current => !current)}
                 className="mt-4 w-full rounded-2xl"
               >
                 {showNet ? "Ocultar planificação" : "Mostrar planificação"}
@@ -6277,7 +6444,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
               {showNet ? (
                 <div className="mt-5 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4">
-                  <div className="grid min-h-[190px] place-items-center rounded-2xl bg-white p-4">
+                  <div className="grid min-h-[190px] place-items-center rounded-2xl bg-white dark:bg-slate-900 p-4">
                     {inspectedSolid === "cylinder" ? (
                       <div className="flex flex-wrap items-center justify-center gap-3">
                         <div className="grid h-16 w-16 place-items-center rounded-full border-4 border-fuchsia-400 bg-fuchsia-100 text-[10px] font-black text-fuchsia-900">
@@ -6358,7 +6525,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                     )}
                   </div>
 
-                  <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mt-4 rounded-2xl bg-white dark:bg-slate-900 p-3">
                     <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
                       <div className="rounded-xl bg-fuchsia-50 p-3">
                         <p className="font-black uppercase tracking-wide text-fuchsia-500">
@@ -6399,17 +6566,17 @@ export default function AdminSpatialGeometryPrototypePage() {
               ) : null}
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700 dark:text-cyan-300">
                 <MousePointerClick className="h-4 w-4" />
                 Ações geométricas
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 {inspectedDefinition.label}
               </h2>
 
-              <p className="mt-2 text-sm leading-7 text-slate-600">
+              <p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                 Clique no sólido azul ou laranja e escolha o que deseja analisar.
                 O simulador destaca a medida no desenho e mostra a conta.
               </p>
@@ -6443,16 +6610,16 @@ export default function AdminSpatialGeometryPrototypePage() {
               ) : null}
 
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                {actions.map((action) => (
+                {actions.map(action => (
                   <button
                     key={action.id}
                     type="button"
                     onClick={() => setSelectedAction(action.id)}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
-                      selectedAction === action.id
-                        ? "border-cyan-400 bg-cyan-50 text-cyan-950"
-                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-300 hover:bg-cyan-50"
-                    }`}
+                        selectedAction === action.id
+                          ? "border-cyan-400 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950 text-cyan-950 dark:text-cyan-200"
+                          : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-cyan-300 dark:hover:border-cyan-800 hover:bg-cyan-50 dark:hover:bg-cyan-950"
+                      }`}
                   >
                     <p className="text-sm font-black">{action.label}</p>
                     <p className="mt-1 text-xs leading-5 opacity-80">
@@ -6463,22 +6630,22 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               {inspector ? (
-                <div className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
-                  <p className="text-sm font-black text-cyan-950">
+                <div className="mt-5 rounded-2xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950 p-4">
+                  <p className="text-sm font-black text-cyan-950 dark:text-cyan-200">
                     {inspector.title}
                   </p>
 
-                  <p className="mt-2 text-sm leading-7 text-cyan-900">
+                  <p className="mt-2 text-sm leading-7 text-cyan-900 dark:text-cyan-200">
                     {inspector.description}
                   </p>
 
                   <div className="mt-4 space-y-3">
-                    {inspector.formulas.map((item) => (
+                    {inspector.formulas.map(item => (
                       <div
                         key={item.label}
-                        className="rounded-2xl border border-cyan-100 bg-white p-4"
+                        className="rounded-2xl border border-cyan-100 dark:border-cyan-800 bg-white dark:bg-slate-900 p-4"
                       >
-                        <p className="text-xs font-bold uppercase tracking-wide text-cyan-700">
+                        <p className="text-xs font-bold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
                           {item.label}
                         </p>
                         <div className="mt-2">
@@ -6494,19 +6661,19 @@ export default function AdminSpatialGeometryPrototypePage() {
               ) : null}
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300">
                 <Calculator className="h-4 w-4" />
                 Fórmulas e resultados
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Como calcular {activeDefinition.label.toLowerCase()}
               </h2>
 
               <div className="mt-5 grid gap-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Volume
                   </p>
                   <div className="mt-2">
@@ -6520,8 +6687,8 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Área total
                   </p>
                   <div className="mt-2">
@@ -6536,28 +6703,28 @@ export default function AdminSpatialGeometryPrototypePage() {
                 </div>
               </div>
 
-              <p className="mt-5 text-sm leading-7 text-slate-700">
+              <p className="mt-5 text-sm leading-7 text-slate-700 dark:text-slate-300">
                 {outerMetrics.explanation}
               </p>
             </Card>
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-orange-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-orange-700 dark:text-orange-300">
                 <Layers className="h-4 w-4" />
                 Sólidos inscritos
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Relação entre formas
               </h2>
 
               <div className="mt-5 grid gap-2">
-                {INSCRIBED_PRESETS.map((preset) => (
+                {INSCRIBED_PRESETS.map(preset => (
                   <button
                     key={preset.label}
                     type="button"
                     onClick={() => applyPreset(preset)}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-950"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-3 text-left text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:border-orange-300 dark:hover:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-950 hover:text-orange-950 dark:hover:text-orange-200"
                   >
                     {preset.label}
                   </button>
@@ -6565,11 +6732,11 @@ export default function AdminSpatialGeometryPrototypePage() {
               </div>
 
               {mode === "inscribed" ? (
-                <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-                  <p className="text-sm font-black text-orange-950">
+                <div className="mt-5 rounded-2xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950 p-4">
+                  <p className="text-sm font-black text-orange-950 dark:text-orange-200">
                     {relationship.title}
                   </p>
-                  <p className="mt-2 text-sm leading-7 text-orange-900">
+                  <p className="mt-2 text-sm leading-7 text-orange-900 dark:text-orange-200">
                     {relationship.text}
                   </p>
                   <div className="mt-3">
@@ -6583,7 +6750,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-4 text-sm leading-7 text-slate-600">
+                <p className="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">
                   Ative o modo de sólido inscrito para comparar volumes e ver
                   relações como raio, aresta, diagonal e altura compartilhada.
                 </p>
@@ -6591,29 +6758,29 @@ export default function AdminSpatialGeometryPrototypePage() {
             </Card>
 
             {mode === "inscribed" ? (
-              <Card className="border-slate-200 p-6">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Card className="border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                   <Sparkles className="h-4 w-4" />
                   Mover sólido interno
                 </div>
 
-                <h2 className="mt-2 text-2xl font-black text-slate-900">
+                <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                   Controle de posição interna
                 </h2>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-bold text-slate-900">
+                <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Status da inscrição
                   </p>
 
-                  <p className="mt-2 text-sm leading-7 text-slate-700">
+                  <p className="mt-2 text-sm leading-7 text-slate-700 dark:text-slate-300">
                     {isCentered
                       ? "Centros alinhados. Em problemas clássicos, esse costuma ser o estado ideal de inscrição."
                       : "O sólido interno está deslocado. Em questões tradicionais, a inscrição perfeita geralmente exige centros coincidentes."}
                   </p>
 
                   {exceedsSuggestedScale ? (
-                    <p className="mt-2 text-sm font-bold text-red-700">
+                    <p className="mt-2 text-sm font-bold text-red-700 dark:text-red-300">
                       A escala passou de 100%. O sólido interno provavelmente atravessa o externo.
                     </p>
                   ) : null}
@@ -6621,7 +6788,7 @@ export default function AdminSpatialGeometryPrototypePage() {
 
                 <div className="mt-5 space-y-4">
                   <div>
-                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
                       <span>Escala interna</span>
                       <span>
                         B {formatNumber(innerBaseScale * 100)}% · H{" "}
@@ -6635,7 +6802,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       max="1.05"
                       step="0.01"
                       value={(innerBaseScale + innerHeightScale + innerRadiusScale) / 3}
-                      onChange={(event) =>
+                      onChange={event =>
                         setAllInnerScales(Number(event.target.value))
                       }
                       className="w-full"
@@ -6643,7 +6810,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </div>
 
                   <div>
-                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
                       <span>Profundidade Z</span>
                       <span>{innerOffsetZ.toFixed(2)}</span>
                     </div>
@@ -6653,7 +6820,7 @@ export default function AdminSpatialGeometryPrototypePage() {
                       max="1.2"
                       step="0.01"
                       value={innerOffsetZ}
-                      onChange={(event) =>
+                      onChange={event =>
                         setInnerOffsetZ(Number(event.target.value))
                       }
                       className="w-full"
@@ -6669,11 +6836,11 @@ export default function AdminSpatialGeometryPrototypePage() {
                   </Button>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Comparação de volumes
                   </p>
-                  <div className="mt-3 space-y-2 text-sm text-slate-700">
+                  <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <div className="flex justify-between gap-3">
                       <span>Volume externo</span>
                       <strong>{formatNumber(outerMetrics.volume)} u³</strong>
@@ -6718,13 +6885,13 @@ export default function AdminSpatialGeometryPrototypePage() {
               </Card>
             ) : null}
 
-            <Card className="border-slate-200 p-6">
-              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700">
+            <Card className="border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:text-purple-300">
                 <BadgeInfo className="h-4 w-4" />
                 Como usar em questão
               </div>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-900">
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">
                 Raciocínio de prova
               </h2>
 
@@ -6738,12 +6905,12 @@ export default function AdminSpatialGeometryPrototypePage() {
                 ].map((step, index) => (
                   <div
                     key={step}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4"
                   >
-                    <p className="text-sm font-black text-slate-900">
+                    <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                       Passo {index + 1}
                     </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-700">
+                    <p className="mt-1 text-sm leading-6 text-slate-700 dark:text-slate-300">
                       {step}
                     </p>
                   </div>

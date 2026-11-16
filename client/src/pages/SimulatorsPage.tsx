@@ -181,7 +181,7 @@ const disciplines: SimulatorDiscipline[] = ["Física", "Matemática", "Química"
 
 export default function SimulatorsPage() {
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-10">
+    <main className="theme-page min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
         <header className="rounded-3xl border border-blue-100 bg-white px-6 py-7 shadow-sm sm:px-8">
           <div className="flex items-start gap-4">

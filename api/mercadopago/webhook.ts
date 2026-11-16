@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { processMercadoPagoWebhook } from "../../server/billing/billingService.js";
+import { sanitizeBillingError } from "../../server/billing/billingOrchestration.js";
 
 async function readJsonBody(req: IncomingMessage & { body?: unknown }) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -42,7 +43,13 @@ export default async function mercadoPagoWebhookHandler(req: IncomingMessage & {
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ ok: result.ok }));
   } catch (error) {
-    console.error("[mercadopago.webhook] erro inesperado", error instanceof Error ? error.message : error);
+    const requestIdHeader = req.headers["x-request-id"];
+    console.error({
+      event: "mercadopago_webhook_unexpected_error",
+      request_id: Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader ?? null,
+      stage: "http_handler",
+      message: sanitizeBillingError(error),
+    });
     res.statusCode = 500;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ ok: false }));

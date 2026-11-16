@@ -4,17 +4,17 @@ import { Button } from "@/components/ui/button";
 
 export default function FisicaSelector() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 dark:from-slate-950 dark:via-blue-950/40 dark:to-slate-950">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700 dark:bg-slate-950/85">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Física Educacional</h1>
-              <p className="text-xs text-slate-600">Projeto Vetor</p>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Física Educacional</h1>
+              <p className="text-xs text-slate-600 dark:text-slate-400">Projeto Vetor</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -25,7 +25,7 @@ export default function FisicaSelector() {
               <Button variant="outline" size="sm">Sobre</Button>
             </a>
             <a href="https://chat.whatsapp.com/Grwi9hUFvFbA91gShvZGqI" target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
+              <Button variant="outline" size="sm" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-950">
                 WhatsApp
               </Button>
             </a>
@@ -36,10 +36,10 @@ export default function FisicaSelector() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20">
         <div className="text-center mb-20">
-          <h2 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6">
+          <h2 className="text-5xl md:text-6xl font-bold text-slate-900 dark:text-slate-100 mb-6">
             Escolha seu <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Caminho</span>
           </h2>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto mb-8">
+          <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto mb-8">
             Selecione entre Física I, II ou III para começar seus estudos.
           </p>
         </div>
@@ -49,7 +49,7 @@ export default function FisicaSelector() {
           {/* Física I - Mecânica */}
           <div className="group">
             <Link href="/fisica-i">
-              <div className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 hover:border-blue-400 cursor-pointer h-full flex flex-col">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-blue-400 cursor-pointer h-full flex flex-col">
                 <div className="bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 p-10 text-white">
                   <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                     <BookOpen className="w-8 h-8" />
@@ -99,7 +99,7 @@ export default function FisicaSelector() {
           {/* Física II - Termologia, Ondulatória, Óptica */}
           <div className="group">
             <Link href="/fisica-ii">
-              <div className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 hover:border-purple-400 cursor-pointer h-full flex flex-col">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-purple-400 cursor-pointer h-full flex flex-col">
                 <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-10 text-white">
                   <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                     <Flame className="w-8 h-8" />
@@ -149,7 +149,7 @@ export default function FisicaSelector() {
           {/* Física III - Eletromagnetismo */}
           <div className="group">
             <Link href="/fisica-iii">
-              <div className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 hover:border-yellow-400 cursor-pointer h-full flex flex-col">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-yellow-400 cursor-pointer h-full flex flex-col">
                 <div className="bg-gradient-to-br from-yellow-500 to-orange-600 p-10 text-white">
                   <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                     <Zap className="w-8 h-8" />
@@ -230,7 +230,7 @@ export default function FisicaSelector() {
         </div>
 
         {/* Main Cards Section */}
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-12 max-w-4xl mx-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-12 max-w-4xl mx-auto">
           <h3 className="text-2xl font-bold text-slate-900 mb-6 text-center">Como Usar</h3>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">

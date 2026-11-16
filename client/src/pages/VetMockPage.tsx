@@ -104,7 +104,7 @@ export default function VetMockPage() {
   if (loading || authLoading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-emerald-600" /></div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50">
+    <div className="vet-theme theme-page min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100">
       <header className="border-b bg-white/90 backdrop-blur"><div className="container flex items-center gap-4 py-4"><Link href="/vet"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Button></Link><div><h1 className="text-xl font-bold">Simulado VET</h1><p className="text-sm text-slate-500">Questões escolhidas e ordenadas exclusivamente pelo backend.</p></div></div></header>
       <main className="container space-y-6 py-8">
         {error && <Card className="border-rose-200 bg-rose-50 p-4 text-rose-700">{error}</Card>}

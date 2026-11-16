@@ -1,5 +1,10 @@
-import { CSSProperties, useEffect, useRef, useState } from 'react';
-import { normalizeMathSource } from '@/lib/mathRendering';
+import React, { type CSSProperties } from "react";
+import katex from "katex";
+
+import {
+  KATEX_RENDER_OPTIONS,
+  normalizeMathSource,
+} from "@/lib/mathRendering";
 
 interface MathFormulaProps {
   children?: string;
@@ -9,42 +14,27 @@ interface MathFormulaProps {
   className?: string;
 }
 
-class MathJaxQueue {
-  private queue: Array<() => Promise<void>> = [];
-  private isProcessing = false;
+function unwrapMathDelimiters(value: string) {
+  const formula = normalizeMathSource(value).trim();
 
-  async add(renderFn: () => Promise<void>) {
-    this.queue.push(renderFn);
-    if (!this.isProcessing) {
-      await this.process();
-    }
+  if (formula.startsWith("$$") && formula.endsWith("$$")) {
+    return formula.slice(2, -2).trim();
   }
 
-  private async process() {
-    if (this.queue.length === 0) {
-      this.isProcessing = false;
-      return;
-    }
-
-    this.isProcessing = true;
-    const renderFn = this.queue.shift();
-
-    if (renderFn) {
-      try {
-        await renderFn();
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('MathJax render warning:', error);
-        }
-      }
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    await this.process();
+  if (formula.startsWith("\\[") && formula.endsWith("\\]")) {
+    return formula.slice(2, -2).trim();
   }
+
+  if (formula.startsWith("\\(") && formula.endsWith("\\)")) {
+    return formula.slice(2, -2).trim();
+  }
+
+  if (formula.startsWith("$") && formula.endsWith("$")) {
+    return formula.slice(1, -1).trim();
+  }
+
+  return formula;
 }
-
-const mathJaxQueue = new MathJaxQueue();
 
 export function MathFormula({
   children,
@@ -56,48 +46,13 @@ export function MathFormula({
   const isDisplay =
     inline !== undefined ? !inline : display !== undefined ? display : true;
 
-  const content = children || formula || '';
-  const ref = useRef<HTMLElement>(null);
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-    return () => {
-      setIsMounted(false);
-    };
-  }, []);
-
-  const delimiter = isDisplay ? '$$' : '$';
-
-  let cleanFormula = normalizeMathSource(content).trim();
-  if (cleanFormula.startsWith('$$') && cleanFormula.endsWith('$$')) {
-    cleanFormula = cleanFormula.slice(2, -2).trim();
-  } else if (cleanFormula.startsWith('$') && cleanFormula.endsWith('$')) {
-    cleanFormula = cleanFormula.slice(1, -1).trim();
-  }
-
-  const mathContent = `${delimiter}${cleanFormula}${delimiter}`;
-
-  useEffect(() => {
-    if (!isMounted || !ref.current) return;
-    if (!document.body.contains(ref.current)) return;
-
-    const renderMath = async () => {
-      if (typeof window === 'undefined' || !(window as any).MathJax) return;
-      if (!isMounted || !ref.current || !document.body.contains(ref.current)) return;
-
-      try {
-        ref.current.innerHTML = mathContent;
-        await (window as any).MathJax.typesetPromise?.([ref.current]);
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('MathJax render warning:', error);
-        }
-      }
-    };
-
-    mathJaxQueue.add(renderMath);
-  }, [mathContent, isMounted]);
+  const normalizedFormula = unwrapMathDelimiters(children || formula || "");
+  const renderedFormula = katex.renderToString(normalizedFormula, {
+    ...KATEX_RENDER_OPTIONS,
+    displayMode: isDisplay,
+    throwOnError: false,
+    trust: false,
+  });
 
   const style: CSSProperties = {
     display: isDisplay ? 'block' : 'inline-block',
@@ -113,9 +68,11 @@ export function MathFormula({
     verticalAlign: inline ? 'middle' : undefined,
   };
 
-  if (isDisplay) {
-    return <div ref={ref as any} className={className} style={style} />;
-  }
+  const props = {
+    className: `math-formula ${className}`.trim(),
+    style,
+    dangerouslySetInnerHTML: { __html: renderedFormula },
+  };
 
-  return <span ref={ref as any} className={className} style={style} />;
+  return isDisplay ? <div {...props} /> : <span {...props} />;
 }

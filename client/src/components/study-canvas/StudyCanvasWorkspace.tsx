@@ -40,10 +40,12 @@ import {
   type ScratchpadShape,
   type ScratchpadStroke,
 } from "@/services/question-notes.service";
-import { isMultitouchGesture, shouldNavigateInsteadOfDraw } from "./studyCanvasPointerGuards";
+import { isMultitouchGesture, shouldNavigateInsteadOfDraw, shouldHandleCanvasShortcut } from "./studyCanvasPointerGuards";
 import { getPaperDimensions, getPaperViewportStyle } from "./studyCanvasPaper";
 import { PaperViewport } from "./PaperViewport";
 import { BRUSH_RENDERING } from "./studyCanvasBrush";
+import { calculateImmediatePointWidth, getSafeCanvasPixelRatio, normalizePointerPressure, shouldAppendInkSample, pointerSamples } from "./studyCanvasInk";
+import { getShapeVertices, recognizePerfectShape } from "./studyCanvasShapes";
 import { buildVectorStudyCanvasPdf, safePdfFileName, type PrintPaperSize } from "@/lib/studyCanvasPdf";
 
 export type StudyCanvasPage = {
@@ -61,6 +63,8 @@ export type StudyCanvasDocument = {
 };
 
 export type StudyCanvasPersistence = {
+  /** Omitted preserves the existing Google Drive adapter contract. */
+  destination?: "browser";
   load: () => Promise<StudyCanvasDocument | null>;
   save: (document: StudyCanvasDocument) => Promise<void>;
 };
@@ -84,6 +88,9 @@ type StudyCanvasWorkspaceProps = {
   paperSize?: "a5" | "a4" | "a3" | "infinite";
   /** Fingers only navigate; stylus and mouse can still draw. */
   lockTouchToPan?: boolean;
+  embedded?: boolean;
+  active?: boolean;
+  secondaryActions?: React.ReactNode;
 };
 
 type ScratchpadTool = "pen" | "pan" | "areaEraser" | "strokeEraser" | "select" | "shape" | "text";
@@ -538,15 +545,7 @@ function eraseWholeStrokes(
   return strokes.filter((stroke) => stroke.tool === "meta" || !isStrokeTouchedByPath(stroke, path, radius));
 }
 
-function normalizePressure(pressure: number | undefined, pointerType: string) {
-  if (pointerType === "mouse") return 0.65;
-
-  if (typeof pressure !== "number" || pressure <= 0) {
-    return pointerType === "touch" ? 0.55 : 0.5;
-  }
-
-  return clamp(pressure, 0.08, 1);
-}
+const normalizePressure = normalizePointerPressure;
 
 function getFallbackWidth(point: ScratchpadPoint, stroke: ScratchpadStroke) {
   const pressure = clamp(point.pressure ?? 0.5, 0.08, 1);
@@ -570,44 +569,7 @@ function getPointWidth(point: ScratchpadPoint, stroke: ScratchpadStroke) {
   return getFallbackWidth(point, stroke);
 }
 
-function calculatePointWidth({
-  point,
-  previousPoint,
-  size,
-  brush,
-}: {
-  point: ScratchpadPoint;
-  previousPoint?: ScratchpadPoint;
-  size: number;
-  brush: ScratchpadBrush;
-}) {
-  const pressure = clamp(point.pressure ?? 0.5, 0.08, 1);
-
-  if (brush === "highlighter") {
-    return clamp(size * 2.4, 6, 40);
-  }
-
-  const pressureFactor =
-    brush === "brush" ? 0.18 + pressure * 1.7 : 0.46 + pressure * 0.9;
-
-  let speedFactor = 1;
-
-  if (previousPoint?.time && point.time && point.time > previousPoint.time) {
-    const distanceBetweenPoints = distance(point, previousPoint);
-    const deltaTime = point.time - previousPoint.time;
-    const velocity = distanceBetweenPoints / Math.max(deltaTime, 1);
-
-    speedFactor = clamp(1.12 - velocity * 0.35, 0.62, 1.12);
-  }
-
-  const rawWidth = clamp(size * pressureFactor * speedFactor, 0.65, size * 2.05);
-
-  if (typeof previousPoint?.width === "number") {
-    return previousPoint.width * 0.72 + rawWidth * 0.28;
-  }
-
-  return rawWidth;
-}
+const calculatePointWidth = calculateImmediatePointWidth;
 
 function shouldAppendPoint(
   previousPoint: ScratchpadPoint | undefined,
@@ -792,7 +754,83 @@ function drawRoundDot(
   ctx.fill();
 }
 
-function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+function getRenderingWidth(
+  point: ScratchpadPoint,
+  stroke: ScratchpadStroke,
+  startDistance: number,
+  remainingDistance: number,
+  last: ScratchpadPoint,
+  previous: ScratchpadPoint,
+  sampleFaithful = false
+) {
+  const width = getPointWidth(point, stroke);
+  if (stroke.brush === "highlighter") return width;
+
+  const startTaperLength = Math.max(7, stroke.size * 2.6);
+  const startTaper = clamp(0.28 + (startDistance / startTaperLength) * 0.72, 0.28, 1);
+
+  const isLightRelease = (last.pressure ?? 0.5) < 0.42 || getPointWidth(last, stroke) < getPointWidth(previous, stroke) * 0.86;
+  const endTaperLength = Math.max(6, stroke.size * 2.2);
+  const endTarget = isLightRelease ? 0.22 : 0.9;
+  const endTaper = clamp(endTarget + (remainingDistance / endTaperLength) * (1 - endTarget), endTarget, 1);
+
+  return width * (sampleFaithful ? startTaper : Math.min(startTaper, endTaper));
+}
+
+function getStrokeOutline(stroke: ScratchpadStroke, sampleFaithful = false) {
+  const points = stroke.points;
+  const left: Array<{ x: number; y: number }> = [];
+  const right: Array<{ x: number; y: number }> = [];
+  const distancesFromStart = new Array<number>(points.length).fill(0);
+
+  for (let index = 1; index < points.length; index += 1) {
+    distancesFromStart[index] = distancesFromStart[index - 1] + distance(points[index - 1], points[index]);
+  }
+
+  const totalDistance = distancesFromStart[distancesFromStart.length - 1] ?? 0;
+  const last = points[points.length - 1];
+  const penultimate = points[Math.max(0, points.length - 2)];
+
+  points.forEach((point, index) => {
+    const previous = points[Math.max(0, index - 1)];
+    const next = points[Math.min(points.length - 1, index + 1)];
+    const angle = Math.atan2(next.y - previous.y, next.x - previous.x);
+    const radius = getRenderingWidth(
+      point,
+      stroke,
+      distancesFromStart[index],
+      totalDistance - distancesFromStart[index],
+      last,
+      penultimate,
+      sampleFaithful
+    ) / 2;
+    const normalX = -Math.sin(angle) * radius;
+    const normalY = Math.cos(angle) * radius;
+    left.push({ x: point.x + normalX, y: point.y + normalY });
+    right.push({ x: point.x - normalX, y: point.y - normalY });
+  });
+
+  return [...left, ...right.reverse()];
+}
+
+function traceSmoothClosedPath(
+  ctx: CanvasRenderingContext2D,
+  points: Array<{ x: number; y: number }>
+) {
+  if (points.length < 3) return;
+  const firstMidpoint = midpoint(points[points.length - 1], points[0]);
+  ctx.beginPath();
+  ctx.moveTo(firstMidpoint.x, firstMidpoint.y);
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const nextMidpoint = midpoint(current, next);
+    ctx.quadraticCurveTo(current.x, current.y, nextMidpoint.x, nextMidpoint.y);
+  }
+  ctx.closePath();
+}
+
+function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke, sampleFaithful = false) {
   if (stroke.points.length === 0) return;
 
   const firstPoint = stroke.points[0];
@@ -815,39 +853,26 @@ function drawPenStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) 
     return;
   }
 
-  if (stroke.points.length === 2) {
-    const previous = stroke.points[0];
-    const current = stroke.points[1];
+  if (stroke.brush === "highlighter") {
+    const points = stroke.points;
     ctx.beginPath();
-    ctx.moveTo(previous.x, previous.y);
-    ctx.lineTo(current.x, current.y);
-    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke)) / 2;
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const current = points[index];
+      const nextMidpoint = midpoint(current, points[index + 1]);
+      ctx.quadraticCurveTo(current.x, current.y, nextMidpoint.x, nextMidpoint.y);
+    }
+    const last = points[points.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.lineWidth = getPointWidth(last, stroke);
     ctx.stroke();
     ctx.restore();
     return;
   }
 
-  const points = stroke.points;
-
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const previous = points[i - 1];
-    const current = points[i];
-    const next = points[i + 1];
-    const startMid = {
-      x: (previous.x + current.x) / 2,
-      y: (previous.y + current.y) / 2,
-    };
-    const endMid = {
-      x: (current.x + next.x) / 2,
-      y: (current.y + next.y) / 2,
-    };
-
-    ctx.beginPath();
-    ctx.moveTo(startMid.x, startMid.y);
-    ctx.quadraticCurveTo(current.x, current.y, endMid.x, endMid.y);
-    ctx.lineWidth = (getPointWidth(previous, stroke) + getPointWidth(current, stroke) + getPointWidth(next, stroke)) / 3;
-    ctx.stroke();
-  }
+  traceSmoothClosedPath(ctx, getStrokeOutline(stroke, sampleFaithful));
+  ctx.fillStyle = stroke.color;
+  ctx.fill();
 
   ctx.restore();
 }
@@ -880,10 +905,17 @@ function drawShapeStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke
 
   const start = stroke.points[0];
   const end = stroke.points[stroke.points.length - 1];
-  const x = Math.min(start.x, end.x);
-  const y = Math.min(start.y, end.y);
-  const width = Math.abs(end.x - start.x);
-  const height = Math.abs(end.y - start.y);
+  let x = Math.min(start.x, end.x);
+  let y = Math.min(start.y, end.y);
+  let width = Math.abs(end.x - start.x);
+  let height = Math.abs(end.y - start.y);
+  if (stroke.shape === "square" || stroke.shape === "circle") {
+    const side = Math.max(width, height);
+    x = (start.x + end.x) / 2 - side / 2;
+    y = (start.y + end.y) / 2 - side / 2;
+    width = side;
+    height = side;
+  }
 
   ctx.save();
   ctx.globalAlpha = stroke.opacity ?? 1;
@@ -892,20 +924,20 @@ function drawShapeStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  if (stroke.shape === "rectangle" || stroke.shape === "ellipse" || stroke.shape === "triangle") {
+  if (!["line", "arrow"].includes(stroke.shape ?? "")) {
     const centerX = x + width / 2;
     const centerY = y + height / 2;
 
     ctx.translate(centerX, centerY);
     ctx.rotate(stroke.rotation ?? 0);
 
-    if (stroke.shape === "rectangle") {
+    if (stroke.shape === "rectangle" || stroke.shape === "square") {
       ctx.strokeRect(-width / 2, -height / 2, width, height);
-    } else if (stroke.shape === "triangle") {
+    } else if (stroke.shape === "triangle" || stroke.shape === "diamond" || stroke.shape === "pentagon") {
+      const vertices = getShapeVertices(stroke.shape, { x: -width / 2, y: -height / 2 }, { x: width / 2, y: height / 2 });
       ctx.beginPath();
-      ctx.moveTo(0, -height / 2);
-      ctx.lineTo(width / 2, height / 2);
-      ctx.lineTo(-width / 2, height / 2);
+      ctx.moveTo(vertices[0].x, vertices[0].y);
+      vertices.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
       ctx.closePath();
       ctx.stroke();
     } else {
@@ -1031,7 +1063,7 @@ function drawImageStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke
   ctx.restore();
 }
 
-function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke, sampleFaithful = false) {
   if (stroke.tool === "meta") return;
 
   if (stroke.tool === "eraser") {
@@ -1054,7 +1086,7 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: ScratchpadStroke) {
     return;
   }
 
-  drawPenStroke(ctx, stroke);
+  drawPenStroke(ctx, stroke, sampleFaithful);
 }
 
 function drawEraserPreview(
@@ -1314,7 +1346,7 @@ function rotatePointAround(point: ScratchpadPoint, center: ScratchpadPoint, angl
 }
 
 function rotateStroke(stroke: ScratchpadStroke, center: ScratchpadPoint, angle: number): ScratchpadStroke {
-  if (stroke.tool === "shape" && (stroke.shape === "rectangle" || stroke.shape === "ellipse")) {
+  if (stroke.tool === "shape" && !["line", "arrow"].includes(stroke.shape ?? "")) {
     return {
       ...stroke,
       rotation: (stroke.rotation ?? 0) + angle,
@@ -1373,8 +1405,10 @@ function transformStrokeToPerfectShape(
     }
   }
 
-  const width = Math.max(bounds.maxX - bounds.minX, 8);
-  const height = Math.max(bounds.maxY - bounds.minY, 8);
+  let width = Math.max(bounds.maxX - bounds.minX, 8);
+  let height = Math.max(bounds.maxY - bounds.minY, 8);
+  if (shape === "circle" || shape === "square") width = height = Math.max(width, height);
+  const center = getBoundsCenter(bounds);
   const size = Math.max(2, stroke.size);
 
   return {
@@ -1384,8 +1418,8 @@ function transformStrokeToPerfectShape(
     opacity: stroke.opacity ?? 1,
     size,
     points: [
-      { x: bounds.minX, y: bounds.minY, pressure: 0.6, width: size },
-      { x: bounds.minX + width, y: bounds.minY + height, pressure: 0.6, width: size },
+      { x: center.x - width / 2, y: center.y - height / 2, pressure: 0.6, width: size },
+      { x: center.x + width / 2, y: center.y + height / 2, pressure: 0.6, width: size },
     ],
   };
 }
@@ -1460,12 +1494,14 @@ function getStrokeShapeMetrics(stroke: ScratchpadStroke) {
   };
 }
 
-function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
+function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape | null {
   if (stroke.tool === "shape" && stroke.shape) return stroke.shape;
 
   const metrics = getStrokeShapeMetrics(stroke);
 
-  if (!metrics) return "line";
+  const recognized = recognizePerfectShape(stroke);
+  if (recognized && recognized.confidence >= 0.7) return recognized.shape;
+  if (!metrics) return null;
 
   const { aspect, closedness, straightness, ellipseScore, rectangleScore, triangleScore } = metrics;
 
@@ -1507,8 +1543,7 @@ function guessPerfectShape(stroke: ScratchpadStroke): ScratchpadShape {
   if (rectangleClearlyBetter) return "rectangle";
   if (triangleClearlyBetter) return "triangle";
 
-  if (aspectLooksCircular) return "ellipse";
-  return rectangleScore <= ellipseScore ? "rectangle" : "ellipse";
+  return null;
 }
 
 function shouldAutoPerfectStroke(stroke: ScratchpadStroke, pointerUpTime?: number) {
@@ -1543,14 +1578,9 @@ function smoothFreehandStroke(stroke: ScratchpadStroke): ScratchpadStroke {
       ...point,
       x: previous.x * 0.18 + point.x * 0.64 + next.x * 0.18,
       y: previous.y * 0.18 + point.y * 0.64 + next.y * 0.18,
-      width:
-        typeof point.width === "number"
-          ? ((previous.width ?? point.width) * 0.2 + point.width * 0.6 + (next.width ?? point.width) * 0.2)
-          : point.width,
-      pressure:
-        typeof point.pressure === "number"
-          ? ((previous.pressure ?? point.pressure) * 0.2 + point.pressure * 0.6 + (next.pressure ?? point.pressure) * 0.2)
-          : point.pressure,
+      // Width and pressure stay attached to the physical sample that produced them.
+      width: point.width,
+      pressure: point.pressure,
     };
   });
 
@@ -1619,37 +1649,16 @@ function isPointNearStroke(point: ScratchpadPoint, stroke: ScratchpadStroke, rad
       return distancePointToSegment(point, start, end) <= radius + stroke.size;
     }
 
-    if (stroke.shape === "rectangle") {
-      const corners = [
-        { x: box.minX, y: box.minY },
-        { x: box.maxX, y: box.minY },
-        { x: box.maxX, y: box.maxY },
-        { x: box.minX, y: box.maxY },
-      ];
+    if (["rectangle", "square", "triangle", "diamond", "pentagon"].includes(stroke.shape ?? "")) {
+      const corners = getShapeVertices(stroke.shape!, start, end);
 
       return (
         isPointInsideBounds(point, box) ||
-        distancePointToSegment(point, corners[0], corners[1]) <= radius + stroke.size ||
-        distancePointToSegment(point, corners[1], corners[2]) <= radius + stroke.size ||
-        distancePointToSegment(point, corners[2], corners[3]) <= radius + stroke.size ||
-        distancePointToSegment(point, corners[3], corners[0]) <= radius + stroke.size
+        corners.some((corner, index) => distancePointToSegment(point, corner, corners[(index + 1) % corners.length]) <= radius + stroke.size)
       );
     }
 
-    if (stroke.shape === "triangle") {
-      const top = { x: (box.minX + box.maxX) / 2, y: box.minY };
-      const right = { x: box.maxX, y: box.maxY };
-      const left = { x: box.minX, y: box.maxY };
-
-      return (
-        isPointInsideBounds(point, box) ||
-        distancePointToSegment(point, top, right) <= radius + stroke.size ||
-        distancePointToSegment(point, right, left) <= radius + stroke.size ||
-        distancePointToSegment(point, left, top) <= radius + stroke.size
-      );
-    }
-
-    if (stroke.shape === "ellipse") {
+    if (stroke.shape === "ellipse" || stroke.shape === "circle") {
       const centerX = (start.x + end.x) / 2;
       const centerY = (start.y + end.y) / 2;
       const rx = Math.max(Math.abs(end.x - start.x) / 2, 1);
@@ -1752,12 +1761,12 @@ function straightenStroke(stroke: ScratchpadStroke): ScratchpadStroke {
   };
 }
 
-function getCanvasPixelRatio() {
-  return Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+function getCanvasPixelRatio(width = CANVAS_WIDTH, height = CANVAS_HEIGHT) {
+  return getSafeCanvasPixelRatio(window.devicePixelRatio || 1, width, height);
 }
 
 function ensureCanvasBitmap(canvas: HTMLCanvasElement, canvasWidth = CANVAS_WIDTH, canvasHeight = CANVAS_HEIGHT) {
-  const pixelRatio = getCanvasPixelRatio();
+  const pixelRatio = getCanvasPixelRatio(canvasWidth, canvasHeight);
   const nextWidth = Math.round(canvasWidth * pixelRatio);
   const nextHeight = Math.round(canvasHeight * pixelRatio);
 
@@ -1854,15 +1863,16 @@ function writeLocalDraft({
   }
 }
 
-function getLocalDraftIndexes() {
+function getLocalDraftIndexes(userId?: string | null) {
   if (typeof window === "undefined") return [];
+  if (!userId) return [];
 
   const prefix = `${LOCAL_DRAFT_VERSION}:question-note:`;
   const items: ScratchpadListItem[] = [];
 
   for (let index = 0; index < window.localStorage.length; index += 1) {
     const key = window.localStorage.key(index);
-    if (!key || !key.startsWith(prefix)) continue;
+    if (!key || !key.startsWith(`${prefix}${userId}:`)) continue;
 
     try {
       const raw = window.localStorage.getItem(key);
@@ -1958,7 +1968,15 @@ export function StudyCanvasWorkspace({
   drawWithTouchInitially = true,
   paperSize = "a4",
   lockTouchToPan = false,
+  embedded = false,
+  active = true,
+  secondaryActions,
 }: StudyCanvasWorkspaceProps) {
+  const browserPersistence = persistence?.destination === "browser";
+  const responsiveQuestionInk = embedded && browserPersistence;
+  const localRevisionRef = useRef(0);
+  const browserLoadFailedRef = useRef(false);
+  const localSnapshotRef = useRef<{document: StudyCanvasDocument; dirty: boolean; loaded: boolean} | null>(null);
   const fullscreenRootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const paperViewportRef = useRef<HTMLDivElement | null>(null);
@@ -1967,10 +1985,13 @@ export function StudyCanvasWorkspace({
   const inkPreviewFrameRef = useRef<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const currentStrokeRef = useRef<ScratchpadStroke | null>(null);
+  const heldShapePreviewRef = useRef<ScratchpadStroke | null>(null);
+  const shapeHoldTimerRef = useRef<number | null>(null);
   const shapeStrokeRef = useRef<ScratchpadStroke | null>(null);
   const eraserPathRef = useRef<ScratchpadPoint[]>([]);
   const eraserFrameRef = useRef<number | null>(null);
   const eraserLastApplyAtRef = useRef(0);
+  const eraserAppliedPointsRef = useRef(0);
   const lassoPathRef = useRef<ScratchpadPoint[]>([]);
   const panLastRawPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionLastPointRef = useRef<ScratchpadPoint | null>(null);
@@ -1990,6 +2011,7 @@ export function StudyCanvasWorkspace({
   const historyRef = useRef<ScratchpadStroke[][]>([]);
   const redoHistoryRef = useRef<ScratchpadStroke[][]>([]);
   const clipboardRef = useRef<ScratchpadStroke[]>([]);
+  const processedSaveRequestRef = useRef(0);
   const viewRef = useRef<CanvasView>({
     zoom: 1,
     offsetX: 0,
@@ -2045,7 +2067,7 @@ export function StudyCanvasWorkspace({
   );
 
   function refreshLocalNotesPanel() {
-    setLocalNotes(getLocalDraftIndexes());
+    setLocalNotes(getLocalDraftIndexes(userId));
   }
 
   const replaceStrokes = useCallback((nextStrokes: ScratchpadStroke[]) => {
@@ -2190,6 +2212,7 @@ export function StudyCanvasWorkspace({
   }
 
   function markDirty(message = "Alterações não salvas.") {
+    localRevisionRef.current += 1;
     dirtyRef.current = true;
     setDirty(true);
     setStatus(message);
@@ -2251,17 +2274,17 @@ export function StudyCanvasWorkspace({
       };
 
       const coalescedEvents =
-        typeof nativeEvent.getCoalescedEvents === "function"
+        !responsiveQuestionInk && typeof nativeEvent.getCoalescedEvents === "function"
           ? nativeEvent.getCoalescedEvents()
           : [];
 
-      const sourceEvents = coalescedEvents.length > 0 ? coalescedEvents : [nativeEvent];
+      const sourceEvents = responsiveQuestionInk ? pointerSamples(nativeEvent) : coalescedEvents.length > 0 ? coalescedEvents : [nativeEvent];
 
       return sourceEvents.map((sourceEvent) =>
         getCanvasPointFromNative(sourceEvent, event.pointerType)
       );
     },
-    [getCanvasPointFromNative]
+    [getCanvasPointFromNative, responsiveQuestionInk]
   );
 
   function markCommittedLayerDirty() {
@@ -2301,7 +2324,7 @@ export function StudyCanvasWorkspace({
       applyView(layerCtx, viewRef.current);
 
       for (const stroke of strokesRef.current) {
-        drawStroke(layerCtx, stroke);
+        drawStroke(layerCtx, stroke, responsiveQuestionInk);
       }
 
       layerCtx.restore();
@@ -2340,8 +2363,9 @@ export function StudyCanvasWorkspace({
       ctx.save();
       applyView(ctx, viewRef.current);
 
-      if (extraStroke) {
-        drawStroke(ctx, extraStroke);
+      const previewStroke = extraStroke ?? (responsiveQuestionInk ? heldShapePreviewRef.current ?? currentStrokeRef.current ?? shapeStrokeRef.current : null);
+      if (previewStroke) {
+        drawStroke(ctx, previewStroke, responsiveQuestionInk);
       }
 
       if (eraserPreview) {
@@ -2360,7 +2384,7 @@ export function StudyCanvasWorkspace({
 
       ctx.restore();
     },
-    [canvasDimensions.height, canvasDimensions.width, selectedIds]
+    [canvasDimensions.height, canvasDimensions.width, selectedIds, responsiveQuestionInk]
   );
 
   useEffect(() => {
@@ -2380,9 +2404,12 @@ export function StudyCanvasWorkspace({
 
   useEffect(() => {
     strokesRef.current = strokes;
+    // Live local erasing already refreshed the committed bitmap in its animation frame.
+    // A second React-effect redraw would rebuild the same strokes and hide the cursor.
+    if (responsiveQuestionInk && interactionModeRef.current === "erase") return;
     markCommittedLayerDirty();
     redrawCanvas();
-  }, [strokes, redrawCanvas]);
+  }, [strokes, redrawCanvas, responsiveQuestionInk]);
 
   useEffect(() => {
     backgroundTypeRef.current = backgroundType;
@@ -2493,6 +2520,7 @@ export function StudyCanvasWorkspace({
       }
 
       if (persistence) {
+        browserLoadFailedRef.current = false;
         try {
           const stored = await persistence.load();
           if (cancelled) return;
@@ -2508,8 +2536,9 @@ export function StudyCanvasWorkspace({
           dirtyRef.current = false;
           setDirty(false);
         } catch (loadError) {
+          if (browserPersistence) browserLoadFailedRef.current = true;
           console.error("Erro ao carregar documento do editor:", loadError);
-          if (!cancelled) setError("Não foi possível carregar este documento.");
+          if (!cancelled) setError(browserPersistence ? `Não foi possível abrir o rascunho local. ${getReadableErrorMessage(loadError)}` : "Não foi possível carregar este documento.");
         } finally {
           if (!cancelled) setLoaded(true);
         }
@@ -2602,6 +2631,10 @@ export function StudyCanvasWorkspace({
 
   const handleSave = useCallback(
     async (nextStrokes = strokesRef.current) => {
+      if (browserPersistence && (!loaded || browserLoadFailedRef.current)) {
+        setError("O rascunho anterior não pôde ser aberto. Tente abrir novamente antes de salvar; os dados existentes não foram substituídos.");
+        return;
+      }
       if (!canSave || (!persistence && !userId)) {
         setError("Entre na sua conta para salvar o rascunho.");
         return;
@@ -2609,6 +2642,7 @@ export function StudyCanvasWorkspace({
 
       const pagesForSave = getPagesForPersistence(nextStrokes, backgroundTypeRef.current);
       const storageStrokes = encodePagesForStorage(pagesForSave, activePageId);
+      const revision = localRevisionRef.current;
 
       try {
         setSaving(true);
@@ -2630,11 +2664,12 @@ export function StudyCanvasWorkspace({
             writeLocalDraft({ userId, questionId, pages: pagesForSave, activePageId, backgroundType: backgroundTypeRef.current });
           }
         }
+        if (browserPersistence && revision !== localRevisionRef.current) return;
         setPages(pagesForSave);
         dirtyRef.current = false;
         setDirty(false);
         setLocalStatus(persistence ? "" : "Backup local e nuvem sincronizados.");
-        setStatus(persistence ? "Salvo no Google Drive." : "Rascunho salvo.");
+        setStatus(browserPersistence ? "Salvo neste navegador" : persistence ? "Salvo no Google Drive." : "Rascunho salvo.");
       } catch (saveError) {
         const readableMessage = getReadableErrorMessage(saveError);
         console.error("Erro ao salvar rascunho:", saveError);
@@ -2643,8 +2678,34 @@ export function StudyCanvasWorkspace({
         setSaving(false);
       }
     },
-    [activePageId, canSave, canvasDimensions.height, canvasDimensions.width, disableLocalDraft, pages, persistence, questionId, title, userId]
+    [activePageId, browserPersistence, canSave, canvasDimensions.height, canvasDimensions.width, disableLocalDraft, loaded, pages, persistence, questionId, title, userId]
   );
+
+  // Browser documents use their own lifecycle. Never enter the legacy cloud cleanup.
+  useEffect(() => {
+    if (!browserPersistence) return;
+    localSnapshotRef.current = { document: { pages: getPagesForPersistence(), activePageId }, dirty, loaded: loaded && !browserLoadFailedRef.current };
+    if (!loaded || !dirty) return;
+    const timer = window.setTimeout(() => void handleSave(), active ? 650 : 0);
+    return () => window.clearTimeout(timer);
+  }, [active, activePageId, backgroundType, browserPersistence, dirty, handleSave, loaded, pages, strokes]);
+
+  useEffect(() => {
+    if (!browserPersistence || !persistence) return;
+    const adapter = persistence;
+    const flush = () => {
+      const latest = localSnapshotRef.current;
+      if (latest?.loaded && latest.dirty) void adapter.save(latest.document).catch(() => {
+        // The editor's normal save path reports failures while mounted. On exit,
+        // no remote fallback is permitted and async completion is not guaranteed.
+        console.warn({event:"question_draft_local_flush",outcome:"failed"});
+      });
+    };
+    const hidden = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", hidden);
+    return () => { window.removeEventListener("pagehide", flush); document.removeEventListener("visibilitychange", hidden); flush(); };
+  }, [browserPersistence, persistence]);
 
   useEffect(() => {
     onStateChange?.({ dirty, saving, error });
@@ -2659,11 +2720,14 @@ export function StudyCanvasWorkspace({
   }, [autosaveIntervalMs, handleSave, persistence]);
 
   useEffect(() => {
-    if (saveRequest > 0) void handleSave();
+    if (saveRequest <= processedSaveRequestRef.current) return;
+    processedSaveRequestRef.current = saveRequest;
+    void handleSave();
   }, [handleSave, saveRequest]);
 
   useEffect(() => {
     return () => {
+      if (browserPersistence) return;
       if (!dirtyRef.current || !canSave) return;
 
       if (persistence) {
@@ -2689,7 +2753,7 @@ export function StudyCanvasWorkspace({
         console.error("Erro ao salvar rascunho ao sair da questão:", saveError);
       });
     };
-  }, [activePageId, canSave, canvasDimensions.height, canvasDimensions.width, pages, persistence, questionId, title, userId]);
+  }, [activePageId, browserPersistence, canSave, canvasDimensions.height, canvasDimensions.width, pages, persistence, questionId, title, userId]);
 
   function updateActivePointer(event: React.PointerEvent<HTMLCanvasElement>) {
     activePointersRef.current.set(event.pointerId, {
@@ -2712,6 +2776,9 @@ export function StudyCanvasWorkspace({
     strokesBeforeInteractionRef.current = null;
     selectionMovedRef.current = false;
     currentStrokeRef.current = null;
+    heldShapePreviewRef.current = null;
+    if (shapeHoldTimerRef.current !== null) window.clearTimeout(shapeHoldTimerRef.current);
+    shapeHoldTimerRef.current = null;
     shapeStrokeRef.current = null;
     if (eraserFrameRef.current !== null) {
       window.cancelAnimationFrame(eraserFrameRef.current);
@@ -2769,11 +2836,13 @@ export function StudyCanvasWorkspace({
     const currentCenterRaw = midpoint(firstRawPoint, secondRawPoint);
     const currentDistance = Math.max(distanceXY(firstRawPoint, secondRawPoint), 1);
 
-    const nextZoom = clamp(
+    const measuredZoom = clamp(
       gesture.initialZoom * (currentDistance / gesture.initialDistance),
       MIN_ZOOM,
       MAX_ZOOM
     );
+    const currentZoom = viewRef.current.zoom;
+    const nextZoom = currentZoom + (measuredZoom - currentZoom) * 0.42;
 
     updateView({
       zoom: nextZoom,
@@ -2807,9 +2876,9 @@ export function StudyCanvasWorkspace({
     return optimized;
   }
 
-  function getEraserResultFromBase(path: ScratchpadPoint[]) {
-    const base = strokesBeforeInteractionRef.current ?? strokesRef.current;
-    const optimizedPath = getOptimizedEraserPath(path);
+  function getEraserResultFromBase(path: ScratchpadPoint[], baseOverride?: ScratchpadStroke[]) {
+    const base = baseOverride ?? strokesBeforeInteractionRef.current ?? strokesRef.current;
+    const optimizedPath = responsiveQuestionInk ? path : getOptimizedEraserPath(path);
 
     if (tool === "areaEraser") {
       return eraseStrokesByArea(base, optimizedPath, eraserSize);
@@ -2850,7 +2919,7 @@ export function StudyCanvasWorkspace({
       if (!lastPoint) return;
 
       const now = performance.now();
-      const canApplyLive = now - eraserLastApplyAtRef.current >= ERASER_LIVE_APPLY_MS;
+      const canApplyLive = responsiveQuestionInk || now - eraserLastApplyAtRef.current >= ERASER_LIVE_APPLY_MS;
 
       if (!canApplyLive) {
         redrawCanvas(null, { point: lastPoint, radius: eraserSize });
@@ -2859,7 +2928,11 @@ export function StudyCanvasWorkspace({
 
       eraserLastApplyAtRef.current = now;
 
-      const nextStrokes = getEraserResultFromBase(eraserPathRef.current);
+      // Only new path segments per frame in the local question board. Keep one overlapping
+      // endpoint so fast/coalesced movement cannot leave gaps between frames.
+      const path = responsiveQuestionInk ? eraserPathRef.current.slice(Math.max(0, eraserAppliedPointsRef.current - 1)) : eraserPathRef.current;
+      const nextStrokes = getEraserResultFromBase(path, responsiveQuestionInk ? strokesRef.current : undefined);
+      eraserAppliedPointsRef.current = eraserPathRef.current.length;
       replaceStrokes(nextStrokes);
       redrawCanvas(null, { point: lastPoint, radius: eraserSize });
     });
@@ -2876,6 +2949,19 @@ export function StudyCanvasWorkspace({
     });
   }
 
+  function restartShapeHoldPreview() {
+    if (shapeHoldTimerRef.current !== null) window.clearTimeout(shapeHoldTimerRef.current);
+    heldShapePreviewRef.current = null;
+    shapeHoldTimerRef.current = window.setTimeout(() => {
+      const stroke = currentStrokeRef.current;
+      if (!stroke) return;
+      const recognition = recognizePerfectShape(stroke);
+      if (!recognition || recognition.confidence < 0.7) return;
+      heldShapePreviewRef.current = transformStrokeToPerfectShape(stroke, recognition.shape);
+      redrawCanvas(heldShapePreviewRef.current);
+    }, AUTO_SHAPE_HOLD_MS);
+  }
+
   function appendPointsToCurrentStroke(points: ScratchpadPoint[]) {
     if (!currentStrokeRef.current) return;
 
@@ -2884,7 +2970,7 @@ export function StudyCanvasWorkspace({
     for (const rawPoint of enrichPointPath(points)) {
       const previousPoint = nextPoints[nextPoints.length - 1];
 
-      if (!shouldAppendPoint(previousPoint, rawPoint)) {
+      if (!(responsiveQuestionInk ? shouldAppendInkSample(previousPoint, rawPoint) : shouldAppendPoint(previousPoint, rawPoint))) {
         continue;
       }
 
@@ -2925,6 +3011,9 @@ export function StudyCanvasWorkspace({
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     event.preventDefault();
+    if (browserPersistence && !active) return;
+    if (responsiveQuestionInk) setFullscreenPanel(null);
+    event.currentTarget.focus({preventScroll:true});
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -3078,6 +3167,7 @@ export function StudyCanvasWorkspace({
       };
 
       currentStrokeRef.current = stroke;
+      restartShapeHoldPreview();
       setSelectedIds([]);
       redrawCanvas(stroke);
       return;
@@ -3085,6 +3175,7 @@ export function StudyCanvasWorkspace({
 
     strokesBeforeInteractionRef.current = cloneStrokes(strokesRef.current);
     eraserLastApplyAtRef.current = 0;
+    eraserAppliedPointsRef.current = 0;
     currentStrokeRef.current = null;
     eraserPathRef.current = [point];
     setSelectedIds([]);
@@ -3247,7 +3338,8 @@ export function StudyCanvasWorkspace({
 
     if (mode === "stroke" && currentStrokeRef.current) {
       appendPointsToCurrentStroke(points);
-      scheduleInkPreview(() => currentStrokeRef.current);
+      restartShapeHoldPreview();
+      scheduleInkPreview(() => heldShapePreviewRef.current ?? currentStrokeRef.current);
       return;
     }
 
@@ -3261,7 +3353,7 @@ export function StudyCanvasWorkspace({
       eraserPathRef.current = [...eraserPathRef.current, ...nextPoints];
 
       const lastPoint = eraserPathRef.current[eraserPathRef.current.length - 1];
-      redrawCanvas(null, { point: lastPoint, radius: eraserSize });
+      if (!responsiveQuestionInk) redrawCanvas(null, { point: lastPoint, radius: eraserSize });
       scheduleLiveEraser();
     }
   }
@@ -3362,12 +3454,15 @@ export function StudyCanvasWorkspace({
     const mode = interactionModeRef.current;
 
     if (mode === "stroke" && currentStrokeRef.current) {
-      let finishedStroke = smoothFreehandStroke(currentStrokeRef.current);
+      // The outline already uses quadratic curves. Keep the local preview's samples at commit,
+      // rather than moving them only on pointer-up (the notebook's renderer remains unchanged).
+      let finishedStroke = heldShapePreviewRef.current ?? (responsiveQuestionInk ? currentStrokeRef.current : smoothFreehandStroke(currentStrokeRef.current));
       const previous = strokesRef.current;
       const pointerUpTime = event?.nativeEvent.timeStamp;
 
       if (shouldAutoPerfectStroke(finishedStroke, pointerUpTime)) {
-        finishedStroke = transformStrokeToPerfectShape(finishedStroke, guessPerfectShape(finishedStroke));
+        const recognizedShape = guessPerfectShape(finishedStroke);
+        if (recognizedShape) finishedStroke = transformStrokeToPerfectShape(finishedStroke, recognizedShape);
       }
 
       currentStrokeRef.current = null;
@@ -3404,6 +3499,9 @@ export function StudyCanvasWorkspace({
     }
 
     currentStrokeRef.current = null;
+    heldShapePreviewRef.current = null;
+    if (shapeHoldTimerRef.current !== null) window.clearTimeout(shapeHoldTimerRef.current);
+    shapeHoldTimerRef.current = null;
     shapeStrokeRef.current = null;
     eraserPathRef.current = [];
     lassoPathRef.current = [];
@@ -3531,8 +3629,12 @@ export function StudyCanvasWorkspace({
     if (shapeTool === "line") return "Reta";
     if (shapeTool === "arrow") return "Seta";
     if (shapeTool === "rectangle") return "Retângulo";
-    if (shapeTool === "ellipse") return "Círculo";
+    if (shapeTool === "square") return "Quadrado";
+    if (shapeTool === "ellipse") return "Elipse";
+    if (shapeTool === "circle") return "Círculo";
     if (shapeTool === "triangle") return "Triângulo";
+    if (shapeTool === "diamond") return "Losango";
+    if (shapeTool === "pentagon") return "Pentágono";
     return "Forma";
   }
 
@@ -3587,7 +3689,7 @@ export function StudyCanvasWorkspace({
 
     event.preventDefault();
 
-    const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+    const factor = Math.exp(-event.deltaY * 0.0015);
     const nextZoom = clamp(viewRef.current.zoom * factor, MIN_ZOOM, MAX_ZOOM);
     const rawPoint = getRawCanvasPoint(event.clientX, event.clientY);
 
@@ -3673,7 +3775,16 @@ export function StudyCanvasWorkspace({
   }
 
   function autoPerfectSelection() {
-    applyTransformToSelection((stroke) => transformStrokeToPerfectShape(stroke, guessPerfectShape(stroke)));
+    const shapes = selectedIds.map((id) => strokesRef.current.find((stroke) => stroke.id === id)).filter(Boolean)
+      .map((stroke) => guessPerfectShape(stroke!));
+    if (!shapes.some(Boolean)) {
+      setStatus("Não foi possível identificar uma forma com segurança");
+      return;
+    }
+    applyTransformToSelection((stroke) => {
+      const shape = guessPerfectShape(stroke);
+      return shape ? transformStrokeToPerfectShape(stroke, shape) : stroke;
+    });
   }
 
   function deleteSelection() {
@@ -3766,7 +3877,7 @@ export function StudyCanvasWorkspace({
     ctx.imageSmoothingQuality = "high";
 
     for (const stroke of page.strokes) {
-      drawStroke(ctx, stroke);
+      drawStroke(ctx, stroke, responsiveQuestionInk);
     }
 
     if (format === "image/jpeg") {
@@ -3995,6 +4106,7 @@ export function StudyCanvasWorkspace({
     }
 
     function handleKeyDown(event: KeyboardEvent) {
+      if (!shouldHandleCanvasShortcut(browserPersistence, open, active, Boolean(fullscreenRootRef.current?.contains(document.activeElement)))) return;
       if (isTypingTarget(event.target)) return;
 
       const key = event.key.toLowerCase();
@@ -4052,7 +4164,7 @@ export function StudyCanvasWorkspace({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleSave, selectedIds.length]);
+  }, [active, browserPersistence, handleSave, open, selectedIds.length]);
 
   useEffect(() => {
     if (selectedIds.length === 0 && fullscreenPanel === "selection") {
@@ -4072,20 +4184,21 @@ export function StudyCanvasWorkspace({
     return Math.round(total / selectedStrokes.length);
   }, [selectedIds, size, strokes]);
 
+  const immersive = fullscreen || embedded;
   const containerClassName = fullscreen
     ? "fixed inset-0 z-[100] flex h-dvh w-dvw flex-col overflow-hidden bg-black text-slate-100"
-    : compactMode
+    : embedded ? "question-local-canvas flex min-h-0 flex-1 flex-col overflow-hidden bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100" : compactMode
       ? "h-full overflow-hidden bg-slate-100"
       : "mb-6 overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 shadow-sm";
 
-  const canvasWrapperClassName = fullscreen
+  const canvasWrapperClassName = immersive
     ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-0 bg-black p-0"
     : compactMode
       ? "flex min-h-[calc(100dvh-150px)] flex-col overflow-hidden rounded-xl bg-slate-200/70 shadow-inner"
       : "rounded-2xl border border-slate-200 bg-white p-2 shadow-inner";
 
   const paperVisualStyle = compactMode
-    ? getPaperViewportStyle(paperSize, fullscreen, view.zoom)
+    ? { ...getPaperViewportStyle(paperSize, immersive, view.zoom), ...(embedded ? {minWidth:undefined,minHeight:undefined,height:undefined,maxWidth:view.zoom<=1?"100%":undefined} : {}) }
     : undefined;
 
   const canvasCursorClass =
@@ -4104,23 +4217,23 @@ export function StudyCanvasWorkspace({
       <button
         type="button"
         onClick={() => {
-          if (!fullscreen) setOpen((value) => !value);
+          if (!immersive) setOpen((value) => !value);
         }}
         className={`${hideLauncher ? "hidden" : "flex"} w-full items-center justify-between gap-4 px-5 py-4 text-left transition md:px-6 ${
-          fullscreen ? "shrink-0 border-b border-slate-800 bg-slate-950 text-white" : "hover:bg-white/60"
+          immersive ? "shrink-0 border-b border-slate-800 bg-slate-950 text-white" : "hover:bg-white/60"
         }`}
       >
         <div className="flex items-start gap-3">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm ${fullscreen ? "bg-violet-500" : "bg-violet-600"}`}>
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm ${immersive ? "bg-violet-500" : "bg-violet-600"}`}>
             <PenLine className="h-5 w-5" />
           </div>
 
           <div>
-            <p className={`font-black ${fullscreen ? "text-white" : "text-slate-950"}`}>
-              {fullscreen ? "Rascunho" : "Rascunho manuscrito"}
+            <p className={`font-black ${immersive ? "text-white" : "text-slate-950"}`}>
+              {immersive ? "Rascunho" : "Rascunho manuscrito"}
             </p>
-            <p className={`mt-1 text-sm leading-6 ${fullscreen ? "text-slate-400" : "text-slate-600"}`}>
-              {fullscreen ? "Modo tela cheia: escreva em toda a área, como um caderno digital." : "Use presets, atalhos, páginas, texto, imagem, formas perfeitas e borracha em tempo real."}
+            <p className={`mt-1 text-sm leading-6 ${immersive ? "text-slate-400" : "text-slate-600"}`}>
+              {immersive ? "Modo tela cheia: escreva em toda a área, como um caderno digital." : "Use presets, atalhos, páginas, texto, imagem, formas perfeitas e borracha em tempo real."}
             </p>
           </div>
         </div>
@@ -4151,8 +4264,9 @@ export function StudyCanvasWorkspace({
       </button>
 
       {open ? (
-        <div className={`${fullscreen ? "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden bg-black p-0" : compactMode ? "h-full p-0" : "border-t border-violet-100 p-4 md:p-5"}`}>
-          {!userId ? (
+        <div className={`${immersive ? "flex min-h-0 flex-1 flex-col gap-0 overflow-hidden bg-black p-0" : compactMode ? "h-full p-0" : "border-t border-violet-100 p-4 md:p-5"}`}>
+          {persistence ? <p role="status" className={embedded && browserPersistence ? "sr-only" : immersive ? "shrink-0 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200" : "mb-3 text-xs font-semibold text-slate-600 dark:text-slate-300"}>{browserPersistence ? (!loaded ? "Abrindo rascunho…" : saving ? "Salvando…" : error ? "Não foi possível salvar" : dirty ? "Alterações ainda não salvas" : status || "Pronto para rascunhar neste navegador") : (!loaded ? "Abrindo caderno…" : saving ? "Salvando no Google Drive…" : error ? "Não foi possível salvar no Google Drive" : dirty ? "Alterações não salvas no Google Drive" : status || "Pronto para editar o caderno")}</p> : null}
+          {!userId && !persistence ? (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               <p>
@@ -4162,7 +4276,7 @@ export function StudyCanvasWorkspace({
           ) : null}
 
           {error ? (
-            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               <p>{error}</p>
             </div>
@@ -4182,7 +4296,7 @@ export function StudyCanvasWorkspace({
             }}
           />
 
-          <div className={`${compactMode && !fullscreen ? "hidden" : ""} ${fullscreen ? "mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-950 px-3 py-2 text-slate-100" : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-2`}>
+          <div className={`${(compactMode && !immersive) || (responsiveQuestionInk && fullscreenPanel !== "pages") ? "!hidden" : ""} ${immersive ? `mb-0 flex-nowrap overflow-x-auto border-b border-slate-800 bg-slate-950 px-3 ${responsiveQuestionInk ? "py-1" : "py-2"} text-slate-100` : "mb-4 flex-wrap rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"} flex shrink-0 items-center gap-2`}>
             <span className="px-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
               Páginas
             </span>
@@ -4216,7 +4330,7 @@ export function StudyCanvasWorkspace({
             </button>
           </div>
 
-          <div className={`${fullscreen ? "mb-0 max-h-36 shrink-0 overflow-y-auto border-b border-slate-800 bg-slate-900 p-2 text-slate-100" : "mb-4 rounded-2xl border border-slate-200 bg-white p-2"} ${notesPanelOpen ? "block" : "hidden"}`}>
+          <div className={`${immersive ? "mb-0 max-h-36 shrink-0 overflow-y-auto border-b border-slate-800 bg-slate-900 p-2 text-slate-100" : "mb-4 rounded-2xl border border-slate-200 bg-white p-2"} ${notesPanelOpen && !browserPersistence ? "block" : "hidden"}`}>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="px-2 text-xs font-black uppercase tracking-wide text-slate-400">Meus rascunhos locais</p>
               <button
@@ -4233,7 +4347,7 @@ export function StudyCanvasWorkspace({
             ) : (
               <div className="grid max-h-36 gap-2 overflow-y-auto md:grid-cols-2 lg:grid-cols-3">
                 {localNotes.map((note) => (
-                  <div key={note.key} className={`${fullscreen ? "bg-slate-950 ring-slate-800" : "bg-slate-50 ring-slate-200"} rounded-xl p-3 ring-1`}>
+                  <div key={note.key} className={`${immersive ? "bg-slate-950 ring-slate-800" : "bg-slate-50 ring-slate-200"} rounded-xl p-3 ring-1`}>
                     <p className="truncate text-sm font-black">{note.title}</p>
                     <p className="mt-1 text-xs text-slate-500">
                       {note.pagesCount} página(s) • {formatLocalDate(note.updatedAt)}
@@ -4254,9 +4368,10 @@ export function StudyCanvasWorkspace({
             )}
           </div>
 
-          {fullscreen ? (
-            <div className="shrink-0 border-b border-slate-800 bg-[#202020] text-white">
-              <div className="flex h-[50px] items-center gap-2 overflow-x-auto px-3">
+          {immersive ? (
+            <div className={`${responsiveQuestionInk ? "relative z-10" : ""} shrink-0 border-b border-slate-800 bg-[#202020] text-white`}>
+              <div className={`flex ${responsiveQuestionInk ? "h-11 gap-1 px-2" : "h-[50px] gap-2 px-3"} items-center overflow-x-auto`}>
+                {responsiveQuestionInk ? <button type="button" title="Páginas" aria-expanded={fullscreenPanel === "pages"} onClick={() => toggleFullscreenPanel("pages")} className="h-9 shrink-0 rounded-full bg-slate-800 px-3 text-xs font-bold">Pág. {pages.findIndex(page => page.id === activePageId) + 1}</button> : null}
                 <button
                   type="button"
                   onClick={() => toggleFullscreenPanel("tools")}
@@ -4375,16 +4490,17 @@ export function StudyCanvasWorkspace({
 
                 <button
                   type="button"
-                  onClick={exitScratchpadFullscreen}
+                  onClick={toggleScratchpadFullscreen}
                   className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-slate-100 px-4 text-sm font-black text-slate-900 transition hover:bg-white"
                 >
                   <Minimize2 className="h-4 w-4" />
-                  Sair
+                  {fullscreen ? "Sair" : "Tela cheia"}
                 </button>
               </div>
 
               {fullscreenPanel ? (
-                <div className="flex min-h-[44px] items-center gap-2 overflow-x-auto border-t border-slate-700 bg-[#2b2b2b] px-3 py-2">
+                <div className={`${responsiveQuestionInk ? "absolute left-0 right-0 top-full shadow-xl" : ""} flex min-h-[44px] items-center gap-2 overflow-x-auto border-t border-slate-700 bg-[#2b2b2b] px-3 py-2`}>
+                  {responsiveQuestionInk ? <button type="button" aria-label="Fechar opções do quadro" onClick={() => setFullscreenPanel(null)} className="shrink-0 rounded border px-2 py-1">×</button> : null}
                   {fullscreenPanel === "tools" ? (
                     <>
                       <button type="button" onClick={() => { activatePen("pen"); setFullscreenPanel("size"); }} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-500"><PenLine className="h-4 w-4" />Caneta</button>
@@ -4462,8 +4578,8 @@ export function StudyCanvasWorkspace({
                       <button type="button" onClick={() => transformSelectionToPerfectShape("line")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Reta</button>
                       <button type="button" onClick={() => transformSelectionToPerfectShape("arrow")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Seta</button>
                       <button type="button" onClick={() => transformSelectionToPerfectShape("rectangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Retângulo</button>
-                      <button type="button" onClick={() => transformSelectionToPerfectShape("ellipse")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Círculo</button>
-                      <button type="button" onClick={() => transformSelectionToPerfectShape("triangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Triângulo</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("circle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Círculo</button>
+                      <button type="button" onClick={() => transformSelectionToPerfectShape("triangle")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Triângulo</button><button type="button" onClick={() => transformSelectionToPerfectShape("square")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Quadrado</button><button type="button" onClick={() => transformSelectionToPerfectShape("diamond")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Losango</button><button type="button" onClick={() => transformSelectionToPerfectShape("pentagon")} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Pentágono</button>
                       <button type="button" onClick={() => rotateSelectionBy(-Math.PI / 18)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Girar -</button>
                       <button type="button" onClick={() => rotateSelectionBy(Math.PI / 18)} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Girar +</button>
                       <button type="button" onClick={duplicateSelection} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Duplicar</button>
@@ -4494,11 +4610,12 @@ export function StudyCanvasWorkspace({
 
                   {fullscreenPanel === "actions" ? (
                     <>
+                      {secondaryActions}
                       <button type="button" onClick={exportAsPng} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">PNG</button>
                       <button type="button" onClick={exportAsPdf} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">PDF</button>
                       <button type="button" onClick={() => imageInputRef.current?.click()} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Imagem</button>
                       <button type="button" onClick={handleClear} disabled={strokes.length === 0} className="shrink-0 rounded-full bg-red-950 px-3 py-2 text-xs font-black text-red-200 hover:bg-red-900 disabled:opacity-40">Limpar</button>
-                      <button type="button" onClick={() => { refreshLocalNotesPanel(); setNotesPanelOpen((value) => !value); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Meus rascunhos</button>
+                      {!browserPersistence ? <button type="button" onClick={() => { refreshLocalNotesPanel(); setNotesPanelOpen((value) => !value); }} className="shrink-0 rounded-full bg-slate-800 px-3 py-2 text-xs font-black text-slate-100 hover:bg-slate-700">Meus rascunhos</button> : null}
                     </>
                   ) : null}
                 </div>
@@ -4506,7 +4623,7 @@ export function StudyCanvasWorkspace({
             </div>
           ) : null}
 
-          <div className={fullscreen || compactMode ? "hidden" : "mb-4 flex shrink-0 flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"}>
+          <div className={immersive || compactMode ? "hidden" : "mb-4 flex shrink-0 flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm"}>
             <ToolbarGroup label="Favoritos">
               {PEN_PRESETS.map((preset) => (
                 <button
@@ -4568,6 +4685,10 @@ export function StudyCanvasWorkspace({
               <button type="button" onClick={() => activateShape("triangle")} className={toolButtonClass(tool === "shape" && shapeTool === "triangle")}> 
                 <Triangle className="h-4 w-4" /> Triângulo
               </button>
+              <button type="button" onClick={() => activateShape("square")} className={toolButtonClass(tool === "shape" && shapeTool === "square")}>Quadrado</button>
+              <button type="button" onClick={() => activateShape("circle")} className={toolButtonClass(tool === "shape" && shapeTool === "circle")}>Círculo</button>
+              <button type="button" onClick={() => activateShape("diamond")} className={toolButtonClass(tool === "shape" && shapeTool === "diamond")}>Losango</button>
+              <button type="button" onClick={() => activateShape("pentagon")} className={toolButtonClass(tool === "shape" && shapeTool === "pentagon")}>Pentágono</button>
             </ToolbarGroup>
 
             <ToolbarGroup label="Cores">
@@ -4643,8 +4764,8 @@ export function StudyCanvasWorkspace({
                 <Move className="h-4 w-4" /> 100%
               </button>
               <button type="button" onClick={toggleScratchpadFullscreen} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
-                {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                {fullscreen ? "Sair" : "Tela cheia"}
+                {immersive ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                {immersive ? "Sair" : "Tela cheia"}
               </button>
               <button type="button" onClick={exportAsPng} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200">
                 <Download className="h-4 w-4" /> PNG
@@ -4677,7 +4798,7 @@ export function StudyCanvasWorkspace({
             </ToolbarGroup>
           </div>
 
-          {selectedIds.length > 0 && !fullscreen ? (
+          {selectedIds.length > 0 && !immersive ? (
             <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm">
               <span className="font-black text-violet-900">
                 {selectedIds.length} item(ns) selecionado(s)
@@ -4726,12 +4847,12 @@ export function StudyCanvasWorkspace({
               <button type="button" onClick={() => transformSelectionToPerfectShape("rectangle")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Square className="h-4 w-4" /> Retângulo
               </button>
-              <button type="button" onClick={() => transformSelectionToPerfectShape("ellipse")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
+              <button type="button" onClick={() => transformSelectionToPerfectShape("circle")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Circle className="h-4 w-4" /> Círculo
               </button>
               <button type="button" onClick={() => transformSelectionToPerfectShape("triangle")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <Triangle className="h-4 w-4" /> Triângulo
-              </button>
+              </button><button type="button" onClick={() => transformSelectionToPerfectShape("square")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">Quadrado</button><button type="button" onClick={() => transformSelectionToPerfectShape("diamond")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">Losango</button><button type="button" onClick={() => transformSelectionToPerfectShape("pentagon")} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">Pentágono</button>
               <button type="button" onClick={() => rotateSelectionBy(-Math.PI / 18)} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100">
                 <RotateCw className="h-4 w-4 -scale-x-100" /> Girar -
               </button>
@@ -4757,7 +4878,7 @@ export function StudyCanvasWorkspace({
           ) : null}
 
           <div className={canvasWrapperClassName}>
-            {compactMode && !fullscreen ? (
+            {compactMode && !immersive ? (
               <div className="relative z-30 mx-auto w-full max-w-5xl shrink-0 p-2 pb-0">
                 <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-slate-700 bg-slate-950/95 p-1.5 text-white shadow-xl backdrop-blur">
                   {(["pages", "tools", "style", "view"] as const).map(panel => (
@@ -4811,7 +4932,7 @@ export function StudyCanvasWorkspace({
                     <button type="button" onClick={() => { setTool("select"); setCompactPanel(null); }} className={toolButtonClass(tool === "select")}><MousePointer2 className="h-4 w-4" /> Selecionar</button>
                     <button type="button" onClick={() => { setTool("text"); setCompactPanel(null); }} className={toolButtonClass(tool === "text")}><Type className="h-4 w-4" /> Texto</button>
                     <button type="button" onClick={() => { setTool("pan"); setCompactPanel(null); }} className={toolButtonClass(tool === "pan")}><Move className="h-4 w-4" /> Mover</button>
-                    {(["line", "arrow", "ellipse", "rectangle", "triangle"] as const).map(shape => <button key={shape} type="button" onClick={() => { activateShape(shape); setCompactPanel(null); }} className={toolButtonClass(tool === "shape" && shapeTool === shape)}>{shape}</button>)}
+                    {(["line", "arrow", "ellipse", "circle", "rectangle", "square", "triangle", "diamond", "pentagon"] as const).map(shape => <button key={shape} type="button" onClick={() => { activateShape(shape); setCompactPanel(null); }} className={toolButtonClass(tool === "shape" && shapeTool === shape)}>{shape}</button>)}
                   </div> : null}
                   {compactPanel === "style" ? <div className="flex flex-wrap items-center gap-3">
                     {COLORS.map(item => <button key={item} type="button" aria-label={`Cor ${item}`} onClick={() => setColor(item)} className={`h-8 w-8 rounded-full ring-2 ${color === item ? "ring-cyan-300" : "ring-transparent"}`} style={{ backgroundColor: item }} />)}
@@ -4835,12 +4956,13 @@ export function StudyCanvasWorkspace({
               </div>
             ) : compactMode && paperVisualStyle ? (
               <PaperViewport
-                fullscreen={fullscreen}
+                fullscreen={immersive}
                 frameStyle={paperVisualStyle}
                 viewportRef={paperViewportRef}
               >
                 <canvas
                   ref={canvasRef}
+                  tabIndex={0}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={finishStroke}
@@ -4860,6 +4982,7 @@ export function StudyCanvasWorkspace({
             ) : (
               <canvas
                 ref={canvasRef}
+                tabIndex={0}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={finishStroke}
@@ -4874,7 +4997,7 @@ export function StudyCanvasWorkspace({
             )}
           </div>
 
-          <div className={fullscreen ? "hidden" : "mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between"}>
+          <div className={immersive ? "hidden" : "mt-3 flex flex-col gap-2 text-xs text-slate-500 md:flex-row md:items-center md:justify-between"}>
             <p>
               Atalhos: P caneta, B pincel, H marca-texto, E borracha, S selecionar, M mover, T texto, L reta, A seta, Ctrl+S salvar. A borracha apaga em tempo real e “Forma perfeita” agora distingue melhor círculo e retângulo.
               {localStatus ? <span className="mt-1 block font-bold text-violet-600">{localStatus}</span> : null}

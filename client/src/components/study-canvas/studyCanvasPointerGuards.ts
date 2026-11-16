@@ -21,3 +21,8 @@ export function shouldCancelInkForPointerDown(
 export function shouldNavigateInsteadOfDraw(pointerType: string, lockTouchToPan: boolean, drawWithTouch: boolean) {
   return pointerType === "touch" && (lockTouchToPan || !drawWithTouch);
 }
+
+/** Local question shortcuts belong to the focused, visible drawing session. */
+export function shouldHandleCanvasShortcut(local: boolean, open: boolean, active: boolean, focusedWithin: boolean) {
+  return !local || (open && active && focusedWithin);
+}

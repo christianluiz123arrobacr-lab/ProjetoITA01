@@ -4,9 +4,31 @@ const MP_API_BASE_URL = "https://api.mercadopago.com";
 const DEFAULT_TIMEOUT_MS = 12_000;
 
 export class MercadoPagoHttpError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(public readonly status: number, message: string, public readonly requestId?: string,
+    public readonly diagnostics?: ReturnType<typeof paymentErrorDiagnostics>) {
     super(message);
     this.name = "MercadoPagoHttpError";
+  }
+}
+
+// Only numeric API cause codes and static labels may reach diagnostic logs.
+// Provider messages, descriptions and cause.data can contain personal data.
+function paymentErrorDiagnostics(body: any) {
+  const causes: any[] = Array.isArray(body?.cause) ? body.cause.slice(0, 10) : [];
+  const codes = Array.from(new Set(causes.map((c:any)=>String(c?.code ?? "")).filter((code:string)=>/^\d{1,8}$/.test(code))));
+  const text = [body?.message, ...causes.map((c:any)=>c?.description)]
+    .filter((s:unknown)=>typeof s === "string").map((s:string)=>s.slice(0,1000)).join(" ").toLowerCase();
+  const fields = ["date_of_expiration","transaction_amount","payer","notification_url","external_reference","payment_method_id","idempotency"]
+    .filter(field=>text.includes(field));
+  const reason = text.includes("without key enabled for qr render") ? "collector_pix_not_enabled"
+    : text.includes("payer and collector cannot be equal") ? "payer_equals_collector"
+    : "unclassified";
+  return { codes, fields, reason };
+}
+
+export class PrepaidResourceError extends Error {
+  constructor(public readonly category: string, public readonly operation: string, options?: ErrorOptions) {
+    super("Não foi possível confirmar o recurso pré-pago.", options);
   }
 }
 
@@ -20,6 +42,7 @@ export const mercadoPagoPaymentSchema = z.object({
   status_detail: z.string().nullable().optional(),
   external_reference: z.string().nullable().optional(),
   transaction_amount: z.number().nullable().optional(),
+  transaction_amount_refunded: z.number().nonnegative().nullable().optional(),
   currency_id: z.string().nullable().optional(),
   date_approved: z.string().nullable().optional(),
   date_of_expiration: z.string().nullable().optional(),
@@ -40,6 +63,12 @@ export const mercadoPagoPreapprovalSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   status: z.string().nullable().optional(),
   external_reference: z.string().nullable().optional(),
+  init_point: z.string().nullable().optional(),
+  sandbox_init_point: z.string().nullable().optional(),
+}).passthrough();
+
+export const mercadoPagoPreferenceSchema = z.object({
+  id: z.string().optional(),
   init_point: z.string().nullable().optional(),
   sandbox_init_point: z.string().nullable().optional(),
 }).passthrough();
@@ -73,7 +102,7 @@ export type MercadoPagoClaim = z.infer<typeof mercadoPagoClaimSchema>;
 
 function getAccessToken() {
   const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-  if (!token) throw new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado.");
+  if (!token) throw new PrepaidResourceError("provider_configuration", "configuration");
   return token;
 }
 
@@ -94,11 +123,16 @@ async function mercadoPagoFetch(path: string, options: RequestInit & { idempoten
     });
 
     const text = await response.text();
-    const json = text ? JSON.parse(text) : null;
+    let json;
+    try { json = text ? JSON.parse(text) : null; }
+    catch (cause) {
+      if (!response.ok) throw new MercadoPagoHttpError(response.status, "Resposta HTTP inválida", response.headers.get("x-request-id") ?? undefined);
+      throw new PrepaidResourceError("invalid_response", "decode", { cause });
+    }
 
     if (!response.ok) {
       const message = typeof json?.message === "string" ? json.message : `Mercado Pago HTTP ${response.status}`;
-      throw new MercadoPagoHttpError(response.status, message);
+      throw new MercadoPagoHttpError(response.status, message, response.headers.get("x-request-id") ?? undefined, paymentErrorDiagnostics(json));
     }
 
     return json;
@@ -164,6 +198,14 @@ export async function createPixPayment(input: {
   expiresAt: string;
   idempotencyKey: string;
 }) {
+  // PostgreSQL JSON timestamps can contain six fractional digits. Payments
+  // expects a provider-compatible ISO timestamp, not the raw SQL serialization.
+  // Always derive it from the frozen deadline; never renew an uncertain Pix.
+  const expiry = Date.parse(input.expiresAt);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(input.expiresAt) || !Number.isFinite(expiry)) {
+    throw new PrepaidResourceError("invalid_expiration", "serialize_pix");
+  }
+  const providerExpiry = new Date(expiry).toISOString().replace("Z", "+00:00");
   const payload = {
     transaction_amount: input.amount,
     description: input.description,
@@ -171,7 +213,7 @@ export async function createPixPayment(input: {
     payer: { email: input.payerEmail },
     external_reference: input.externalReference,
     notification_url: input.notificationUrl,
-    date_of_expiration: input.expiresAt,
+    date_of_expiration: providerExpiry,
   };
 
   const json = await mercadoPagoFetch("/v1/payments", {
@@ -183,9 +225,57 @@ export async function createPixPayment(input: {
   return mercadoPagoPaymentSchema.parse(json);
 }
 
+/** Hosted, one-time checkout. Card details never reach Projeto Vetor. */
+export async function createPrepaidPreference(input: {
+  externalReference: string;
+  payerEmail: string;
+  amount: number;
+  title: string;
+  notificationUrl: string;
+  backUrl: string;
+  idempotencyKey: string;
+}) {
+  const json = await mercadoPagoFetch("/checkout/preferences", {
+    method: "POST",
+    body: JSON.stringify({
+      items: [{ title: input.title, quantity: 1, unit_price: input.amount, currency_id: "BRL" }],
+      payer: { email: input.payerEmail },
+      external_reference: input.externalReference,
+      notification_url: input.notificationUrl,
+      back_urls: { success: input.backUrl, pending: input.backUrl, failure: input.backUrl },
+      auto_return: "approved",
+    }),
+    idempotencyKey: input.idempotencyKey,
+  });
+  return mercadoPagoPreferenceSchema.parse(json);
+}
+
 export async function getPayment(id: string) {
   const json = await mercadoPagoFetch(`/v1/payments/${encodeURIComponent(id)}`);
   return mercadoPagoPaymentSchema.parse(json);
+}
+
+/** A search miss is NOT evidence that a timed-out POST did not succeed. */
+export async function recoverPrepaidResource(method: "card" | "pix", reference: string) {
+  let operation = "search";
+  try {
+  const path = method === "card" ? "/checkout/preferences/search" : "/v1/payments/search";
+  const json = await mercadoPagoFetch(`${path}?external_reference=${encodeURIComponent(reference)}&limit=2`);
+  const rows = method === "card" ? json?.elements : json?.results;
+  if (!Array.isArray(rows)) throw new PrepaidResourceError("invalid_response", operation);
+  if (rows.length === 0) return null;
+  if (rows.length !== 1 || Number(json?.total ?? json?.paging?.total ?? rows.length) > 1) throw new PrepaidResourceError("multiple_results", operation);
+  const id = rows[0]?.id;
+  if (!id) throw new PrepaidResourceError("missing_id", operation);
+  operation = "get_resource";
+  if (method === "pix") return await getPayment(String(id));
+  const preference = await mercadoPagoFetch(`/checkout/preferences/${encodeURIComponent(String(id))}`);
+  if (preference?.external_reference !== reference) throw new PrepaidResourceError("reference_mismatch", operation);
+  return preference;
+  } catch (cause) {
+    if (cause instanceof PrepaidResourceError) throw cause;
+    throw new PrepaidResourceError("provider_lookup_failed", operation, { cause });
+  }
 }
 
 

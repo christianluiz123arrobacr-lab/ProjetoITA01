@@ -6,10 +6,11 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
-import { createContext } from "./context";
+import { createTrpcContext as createContext } from "./context";
 import { supabaseAdmin } from "./supabaseAdmin";
 import { serveStatic, setupVite } from "./vite";
 import { registerGoogleDriveRoutes } from "../googleDrive/googleDriveRoutes.js";
+import { runBillingReminderJob } from "../billing/whatsappReminders.js";
 
 const READINESS_TIMEOUT_MS = 3_000;
 
@@ -83,6 +84,14 @@ async function startServer() {
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/cron/billing-reminders", async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    const provided = req.header("authorization")?.replace(/^Bearer\s+/i, "") ?? req.query.secret;
+    if (!secret || provided !== secret) { res.status(401).json({ error: "unauthorized" }); return; }
+    try { res.status(200).json(await runBillingReminderJob()); }
+    catch (error) { console.error("[billing-reminders] failed", error); res.status(500).json({ error: "billing_reminders_failed" }); }
   });
 
   app.get("/api/ready", async (_req, res) => {

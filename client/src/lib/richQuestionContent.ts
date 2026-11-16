@@ -1,11 +1,12 @@
 import { normalizeMathSource } from "./mathRendering";
+import type { StatementImage } from "@shared/questionImages";
 
 export type RichQuestionNode =
   | { type: "text"; value: string }
   | { type: "inlineMath"; value: string }
   | { type: "blockMath"; value: string }
   | { type: "lineBreak" }
-  | { type: "image"; url: string; placement: "statement" | "option" };
+  | { type: "image"; url: string; placement: "statement" | "option"; alt?: string; caption?: string | null };
 
 const RICH_DELIMITER = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\[[\s\S]+?\\\]|\\\([^\n]+?\\\)|\n)/g;
 
@@ -36,10 +37,14 @@ export function buildQuestionRichContent(input: {
   statement?: string | null;
   imageUrl?: string | null;
   statementAfterImage?: string | null;
+  statementImages?: StatementImage[];
+  imageAlt?: string | null;
+  imageCaption?: string | null;
 }): RichQuestionNode[] {
   return [
     ...parseRichQuestionText(input.statement),
-    ...(input.imageUrl ? [{ type: "image" as const, url: input.imageUrl, placement: "statement" as const }] : []),
+    ...(input.statementImages?.length ? [...input.statementImages].sort((a,b) => a.ordem - b.ordem).map(image => ({ type: "image" as const, url: image.url_imagem, placement: "statement" as const, alt: image.texto_alternativo, caption: image.legenda }))
+      : input.imageUrl ? [{ type: "image" as const, url: input.imageUrl, placement: "statement" as const, ...(input.imageAlt ? { alt: input.imageAlt } : {}), ...(input.imageCaption ? { caption: input.imageCaption } : {}) }] : []),
     ...parseRichQuestionText(input.statementAfterImage),
   ];
 }

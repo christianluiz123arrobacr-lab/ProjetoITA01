@@ -25,18 +25,27 @@ import type { Question } from "@/types/question";
 export default function Home() {
   let { user, loading, error, isAuthenticated, logout } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionError, setQuestionError] = useState(false);
+  const [questionReload, setQuestionReload] = useState(0);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
 
   useEffect(() => {
+    let current = true;
     async function load() {
+      setQuestionsLoading(true);
+      try {
       const data = await getQuestions({
         subject: "fisica",
         topic: "cinematica",
       });
-      setQuestions(data);
+      if (current) { setQuestions(data); setQuestionError(false); }
+      } catch { if (current) setQuestionError(true); }
+      finally { if (current) setQuestionsLoading(false); }
     }
 
-    load();
-  }, []);
+    void load();
+    return () => { current = false; };
+  }, [questionReload]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
@@ -226,7 +235,7 @@ export default function Home() {
           <h3 className="text-3xl font-bold text-slate-900 mb-8">
             🔥 Pratique com Questões Reais
           </h3>
-          <InteractiveQuiz questions={questions} />
+          {questionError ? <div role="alert">Não foi possível carregar as questões. <Button onClick={() => setQuestionReload(value => value + 1)}>Tentar novamente</Button></div> : questionsLoading ? <p role="status">Carregando questões...</p> : <InteractiveQuiz questions={questions} />}
         </div>
 
         {/* Tópicos Principais */}

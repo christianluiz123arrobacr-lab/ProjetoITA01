@@ -483,7 +483,7 @@ export default function ErrorNotebook() {
   function renderNoteEditor(item: ErrorNotebookItem) {
     return (
       <div className="mt-3">
-        <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2 dark:text-slate-300">
           <FileText className="w-4 h-4" />
           Anotação
         </label>
@@ -497,7 +497,7 @@ export default function ErrorNotebook() {
             }))
           }
           placeholder="Ex.: confundi a fórmula, revisar esse conceito, erro de sinal..."
-          className="w-full min-h-[96px] rounded-xl border border-slate-300 px-3 py-3 bg-white text-sm"
+          className="w-full min-h-[96px] rounded-xl border border-slate-300 px-3 py-3 bg-white text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         />
 
         <div className="mt-2 flex justify-end">
@@ -514,8 +514,8 @@ export default function ErrorNotebook() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-slate-50">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
+    <div className="theme-page min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-slate-50 dark:from-slate-950 dark:via-red-950/25 dark:to-slate-950">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700 dark:bg-slate-950/85">
         <div className="container py-4 flex items-center gap-4">
           <Link href="/progress">
             <Button variant="ghost" size="sm">
@@ -523,7 +523,7 @@ export default function ErrorNotebook() {
               Voltar
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Caderno de Erros</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Caderno de Erros</h1>
         </div>
       </header>
 
@@ -544,7 +544,7 @@ export default function ErrorNotebook() {
           </Card>
         ) : (
           <>
-            <Card className="p-6">
+            <Card className="p-6 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle className="w-5 h-5 text-red-500" />
                 <h2 className="text-xl font-bold text-slate-900">Filtros</h2>
@@ -558,7 +558,7 @@ export default function ErrorNotebook() {
                   <select
                     value={subjectFilter}
                     onChange={(e) => setSubjectFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todas">Todas</option>
                     {availableSubjects.map((subject) => (
@@ -576,7 +576,7 @@ export default function ErrorNotebook() {
                   <select
                     value={conteudoFilter}
                     onChange={(e) => setConteudoFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todos">Todos</option>
                     {availableConteudos.map((conteudo) => (
@@ -594,7 +594,7 @@ export default function ErrorNotebook() {
                   <select
                     value={assuntoFilter}
                     onChange={(e) => setAssuntoFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todos">Todos</option>
                     {availableAssuntos.map((assunto) => (
@@ -612,7 +612,7 @@ export default function ErrorNotebook() {
                   <select
                     value={bancaFilter}
                     onChange={(e) => setBancaFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todas">Todas</option>
                     {availableBancas.map((banca) => (
@@ -630,7 +630,7 @@ export default function ErrorNotebook() {
                   <select
                     value={difficultyFilter}
                     onChange={(e) => setDifficultyFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todas">Todas</option>
                     {availableDifficulties.map((difficulty) => (
@@ -648,7 +648,7 @@ export default function ErrorNotebook() {
                   <select
                     value={reviewFilter}
                     onChange={(e) => setReviewFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todas">Todas</option>
                     <option value="pendentes">Pendentes</option>
@@ -663,7 +663,7 @@ export default function ErrorNotebook() {
                   <select
                     value={errorTypeFilter}
                     onChange={(e) => setErrorTypeFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="todos">Todos</option>
                     {ERROR_TYPE_OPTIONS.map((item) => (
@@ -681,7 +681,7 @@ export default function ErrorNotebook() {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="recentes">Mais recentes</option>
                     <option value="mais_erradas">Mais erradas</option>
@@ -730,8 +730,8 @@ export default function ErrorNotebook() {
                       key={item.question_id}
                       className={`rounded-2xl p-5 border ${
                         item.reviewed
-                          ? "border-green-200 bg-green-50"
-                          : "border-red-200 bg-red-50"
+                          ? "border-green-200 bg-green-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+                          : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -779,7 +779,7 @@ export default function ErrorNotebook() {
                             value={item.error_type ?? ""}
                             onChange={(e) => updateErrorType(item.question_id, e.target.value)}
                             disabled={savingQuestionId === item.question_id}
-                            className="rounded-xl border border-slate-300 px-3 py-2 bg-white text-sm"
+                            className="rounded-xl border border-slate-300 px-3 py-2 bg-white text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                           >
                             <option value="">Tipo do erro</option>
                             {ERROR_TYPE_OPTIONS.map((option) => (
@@ -844,8 +844,8 @@ export default function ErrorNotebook() {
                       key={item.question_id}
                       className={`rounded-2xl p-5 border ${
                         item.reviewed
-                          ? "border-green-200 bg-green-50"
-                          : "border-red-200 bg-red-50"
+                          ? "border-green-200 bg-green-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+                          : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -893,7 +893,7 @@ export default function ErrorNotebook() {
                             value={item.error_type ?? ""}
                             onChange={(e) => updateErrorType(item.question_id, e.target.value)}
                             disabled={savingQuestionId === item.question_id}
-                            className="rounded-xl border border-slate-300 px-3 py-2 bg-white text-sm"
+                            className="rounded-xl border border-slate-300 px-3 py-2 bg-white text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                           >
                             <option value="">Tipo do erro</option>
                             {ERROR_TYPE_OPTIONS.map((option) => (
@@ -952,7 +952,7 @@ export default function ErrorNotebook() {
                   {recentErrors.map((item) => (
                     <div
                       key={item.question_id}
-                      className="rounded-2xl border border-slate-200 bg-white p-5"
+                      className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800/70"
                     >
                       <div className="flex items-start justify-between gap-4 flex-wrap">
                         <div className="space-y-2">
